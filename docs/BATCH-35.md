@@ -5205,3 +5205,30 @@ the call is 24 hours or more away. Within 24 hours the field is required as befo
 - Unchanged: the bell entries; a won chargeback (end-of-day payment email); declined payments (wording and email rule); the admins' emails.
 - Tests: tests/chargeback-emails-294.test.ts (each email is in the outbox right after the event and the summary doesn't repeat it; the before-repayment change
   rings in payhold and emails; a decline is still not sent immediately). Updated: batch18 (one more in holds.ts).
+
+## §295 Emails and bells: pauses for testers, additions, summary heading, deadline reminders, amount changes at end of day (owner, Nov 6)
+From the Nov 6 recording of every email and bell (playtest-lite-evidence/emails-nov6).
+- **Testers are told when a test pauses.** Every working tester of each test that pauses reads "“Harbor Run” is paused" (bell; email "“Harbor Run” is paused.
+  Your deadline moves on by the pause once it runs again."), at the moment the pause starts, whatever the cause: the team's pause of the test, the developer's
+  payment or chargeback hold, the developer's suspension. Never why (`tellTestersPaused`, holds.ts). The mirror of "running again": a test another cause was
+  already pausing says nothing (one clock, batch 9), as "running again" says nothing while another cause still pauses it. Not `always`: it follows the tester's
+  email setting. "Paused" and "running again" are one tester stack, "Pauses · N" (group `paused`, counting lines; one entry a day across tests, the bell page adds
+  the day), and stack the same way in the email (EMAIL_STACKED).
+- **Point 2 (stale reminders) was dropped by the owner**: reminders stay in the summary and the bell as they are, a log of what happened.
+- **An addition reads as one.** The tester's own line for an addition is "You added to your answer to “<question, cut at 80>” on “Harbor Run”", "You added to
+  your notes on “Harbor Run”" (Anything else), "You added to your written answers on …" (no question), "You added a recording on …" (`youAddedLine`); it was
+  "Work sent: your written answers for …" again. A first send keeps "Work sent: …". The developer's "Ana Silva added to her answer to …" was already right.
+- **Summary emails open with a heading** (the body's first line, larger and bold in the HTML), above the sections or the lines, in the account's time zone, from
+  the email's real window (the last summary, or its oldest line, to now): Daily and every end-of-day email (email Off; a Weekly / Monthly account's payment lines)
+  "Your Playtest updates for Fri, Nov 6"; Weekly "Your Playtest updates for Nov 1 – Nov 7"; Monthly "Your Playtest updates for October" when it covers exactly
+  one calendar month (the 1st to its last day, or to the next month's 1st), else its days as Weekly's (`summaryHeading`, notify.ts).
+- **Tester deadline reminders.** Cause: a tester's deadline marks (deadlineMarksFor) left out every mark within 24 hours of joining, the 1-day mark too, so a
+  tester whose deadline was within a day of joining (the recording: Ana joined minutes before, deadline 20 hours away; or 1 tester day) got no reminder at all,
+  while the developer's Open until heads-up has no such rule. The 1-day mark is now always kept. Also: after a deadline moved (a pause moves it to the end of a
+  later day), the daily job's first look at the new deadline recorded every passed mark without sending, so a 1-day mark that came due between the move and that
+  run was swallowed: now the latest passed mark is sent unless that mark was already sent for an earlier deadline of hers. Exactly one line (`deadlines`,
+  `always`), in the bell and the summary.
+- **A chargeback's amount changing goes in the end-of-day email** (`always`, no longer `now`): before the repayment ("Your bank changed the amount it took back
+  …") and after it ("Your bank lowered / raised what it took back …"). Still immediate: the chargeback that starts the hold, and a further chargeback during a
+  hold (including a payment hold turning into a chargeback hold).
+- Tests: tests/email-fixes-295.test.ts. Updated: chargeback-emails-294 (the amount changes are end-of-day).

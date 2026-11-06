@@ -97,7 +97,8 @@ describe("§294 chargeback emails go out at once, every one", () => {
     expect((await mails(w.dev.user.email)).some((m) => m.text.includes(declined!.text))).toBe(true);
   });
 
-  it("the bank changing a chargeback's amount after the repayment: lowered and raised are each emailed at once", async () => {
+  // (Owner, Nov 6, §295) The amount changing (after the repayment and before it) goes back to the end-of-day email (`always`, no `now`).
+  it("the bank changing a chargeback's amount after the repayment: lowered and raised each go in the end-of-day email (§295), not immediately", async () => {
     const w = await world();
     const { pi, p } = await w.paid(2000);
     await db.payment.update({ where: { id: p.id }, data: { chargeback: "open", chargebackAt: new Date(), reversedCents: 2000 } });
@@ -106,18 +107,20 @@ describe("§294 chargeback emails go out at once, every one", () => {
     expect(await disputeAmountChanged(pi, 1200, "under_review")).toBe("followed");
     const lowered = (await lines(w.devId)).find((x) => x.text.startsWith("Your bank lowered what it took back"));
     expect(lowered).toMatchObject({ mustEmail: true, payment: true });
-    expect(lowered!.summarizedAt).not.toBeNull();
+    expect(lowered!.summarizedAt).toBeNull();
     expect(await disputeAmountChanged(pi, 1600, "under_review")).toBe("followed");
     const raised = (await lines(w.devId)).find((x) => x.text.startsWith("Your bank raised what it took back"));
     expect(raised).toMatchObject({ mustEmail: true, payment: true });
-    expect(raised!.summarizedAt).not.toBeNull();
-    // Both sent immediately.
-    const subjects = (await mails(w.dev.user.email)).map((m) => m.subject);
-    expect(subjects).toContain(lowered!.text);
-    expect(subjects).toContain(raised!.text);
+    expect(raised!.summarizedAt).toBeNull();
+    // Neither sent immediately; both in the end-of-day email (the developer is on Off).
+    expect((await mails(w.dev.user.email)).some((m) => m.text.includes("what it took back"))).toBe(false);
+    await sendSummaries(new Date(), [w.devId]);
+    const eod = (await mails(w.dev.user.email)).filter((m) => m.text.includes(lowered!.text));
+    expect(eod).toHaveLength(1);
+    expect(eod[0].text).toContain(raised!.text);
   });
 
-  it("the bank changing a chargeback's amount BEFORE the repayment: a payhold bell line in Pay what you owe's words, and an immediate email", async () => {
+  it("the bank changing a chargeback's amount BEFORE the repayment: a payhold bell line in Pay what you owe's words, in the end-of-day email (§295)", async () => {
     const w = await world();
     const { pi } = await w.paid(4000);
     expect(await chargebackOpened(pi)).toBe(true);
@@ -129,12 +132,14 @@ describe("§294 chargeback emails go out at once, every one", () => {
     const added = (await lines(w.devId)).slice(before);
     expect(added).toHaveLength(1);
     expect(added[0]).toMatchObject({ text: want, link: "/app/payments#chargeback-steps", groupKey: "payhold", payment: true, mustEmail: true, side: "developer" });
-    expect(added[0].summarizedAt).not.toBeNull();
+    expect(added[0].summarizedAt).toBeNull();
     // In the day's payhold entry with the hold's own line.
     const start = (await lines(w.devId)).find((x) => x.text === "Your tests are paused after a chargeback")!;
     expect(bellKeyIn(added[0])).toBe(bellKeyIn(start));
-    const mail = (await mails(w.dev.user.email)).find((m) => m.subject === want);
-    expect(mail?.text).toContain(`${want}.`);
+    // (§295) Not sent immediately: in the end-of-day email, with its link.
+    expect((await mails(w.dev.user.email)).some((m) => m.text.includes(want))).toBe(false);
+    await sendSummaries(new Date(), [w.devId]);
+    const mail = (await mails(w.dev.user.email)).find((m) => m.text.includes(want));
     expect(mail?.text).toContain("http://localhost:3400/app/payments#chargeback-steps");
     // Lowered again before any repayment: another line, from the last followed amount.
     expect(await disputeAmountChanged(pi, 2000, "under_review")).toBe("followed");

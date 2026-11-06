@@ -142,6 +142,8 @@ export async function startHold(devId: string, reason: string) {
   // (Owner, Oct 27) Calls starting within 3 days are cancelled with no fault; later ones are cancelled 3 days before they start if the hold is still on (the daily job).
   await (await import("./restrictions")).cancelCallsNearPause(devId, now);
   await (await import("./pauseClosure")).bellPausedTests(devId);
+  // (Owner, Nov 6, §295) Their testers read "“<test>” is paused": each test no other cause (a suspension, the team's pause) was pausing already.
+  if (!dev.devSuspendedAt) await tellTestersPaused(tests.filter((t) => t.status !== "draft" && !t.adminPausedAt).map((t) => t.id));
   // (Owner, Oct 27) "Your tests are paused" and the chargeback hold email ignore Off (they ride in the one end-of-day email); the lines stack with that day's other hold / payment lines.
   if (reason === "chargeback") {
     await notify(dev.email, "Your tests are paused after a chargeback", ["Your bank reversed a payment, so your tests are paused: you can't change anything on them, and testers stay in them.", "To resume: verify a card with 3D Secure, pay what you owe, and wait for the team's approval. Open Payments to see which steps remain.", `A test that stays paused for ${PAUSE_CLOSE_DAYS} days is closed.`], "/app/payments#chargeback-steps", { side: "developer", always: true, now: true, payment: true, group: "payhold" }); // (§294) emailed immediately
@@ -169,6 +171,22 @@ export async function resumeTests(tx: Prisma.TransactionClient, devId: string, s
     if (t.status !== "stopped") await recordEvent(tx, t.id, "resumed", "Your tests are running again", false);
   }
   return running;
+}
+
+/** (Owner, Nov 6, §295) The tester's line when a test she works on pauses: "“Harbor Run” is paused" (never why: no hold, suspension or team named). */
+export const testerPausedLine = (title: string) => `“${title}” is paused`;
+/**
+ * (Owner, Nov 6, §295) Testers are told when a test pauses, whatever the cause (the team's pause of the test, the developer's payment or chargeback hold, the
+ * developer's suspension), at the moment the pause starts: every working tester of each test given. The callers pass only the tests no other cause was pausing
+ * already, the mirror of "running again" (resumeTests / unpauseTest: only when no other cause still pauses it), so a second cause says nothing (one clock, batch 9).
+ * It stacks with "running again" in the tester's "Pauses" entry (group `paused`) and follows her email setting (not `always`).
+ */
+export async function tellTestersPaused(testIds: string[]) {
+  if (!testIds.length) return;
+  for (const c of await db.contract.findMany({ where: { status: "working", testId: { in: testIds }, test: { status: { not: "stopped" } } }, include: { tester: true }, orderBy: { joinedAt: "asc" } })) {
+    const line = testerPausedLine(c.title);
+    await notify(c.tester.email, line, [`${line}. Your deadline moves on by the pause once it runs again.`], `/app/sessions/${c.id}`, { recipientId: c.testerId, group: "paused" });
+  }
 }
 
 /** (Owner, Oct 28 night, batch 9) A pause started: the tests it pauses that weren't paused yet start their one 7-day clock now. */
@@ -1136,10 +1154,11 @@ async function followAmount(reversalId: string, cents: number, status: string, e
     await note(`${head}: followed (the developer now owes ${money(r.next)} + ${money(CHARGEBACK_FEE_CENTS)} chargeback fee).`);
     // (Owner, Nov 6, §294) Changed BEFORE the repayment: the developer is told too (before, nothing), in Pay what you owe's own words for it (its stop's
     // bankChangedLine): "Your bank changed the amount it took back from your $40.00 payment for …: $40.00 → $25.00 (now $25.00 + $15.00 fee = $40.00)". A bell line
-    // in the day's "payhold" entry, linking to the chargeback steps (or Pay what you owe outside a chargeback hold), and an email sent immediately.
+    // in the day's "payhold" entry, linking to the chargeback steps (or Pay what you owe outside a chargeback hold).
+    // (Owner, Nov 6, §295) Its email goes in the end-of-day email (whatever the email setting: `always`), no longer immediately (`now`).
     const line = bankChangedLine(p.amountCents, piece, r.was, r.next, one);
     const link = dev.holdStartedAt && dev.holdReason === "chargeback" ? "/app/payments#chargeback-steps" : "/app/payments#owed";
-    if (!dev.deletedAt) await notify(dev.email, line, [line + ".", "Open Payments to see what you owe."], link, { side: "developer", always: true, now: true, payment: true, group: "payhold", recipientId: dev.id });
+    if (!dev.deletedAt) await notify(dev.email, line, [line + ".", "Open Payments to see what you owe."], link, { side: "developer", always: true, payment: true, group: "payhold", recipientId: dev.id });
     return "followed" as const;
   }
   if (r.out === "refund") {
@@ -1152,14 +1171,15 @@ async function followAmount(reversalId: string, cents: number, status: string, e
     if (ok > 0) {
       const line = bankLoweredLine(p.amountCents, piece, ok, one);
       const recorded = sent.every((x) => x.status !== "refunded");
-      // (Owner, Nov 6, §294) A chargeback's amount changing is emailed immediately (`now`), whatever the email setting (`always`); in the bell it's unchanged.
-      await notify(dev.email, line, [line, ...(recorded ? ["Payments aren't set up yet, so this was recorded and nothing was refunded."] : [])], "/app/payments", { side: "developer", always: true, now: true, payment: true });
+      // (Owner, Nov 6, §295; §294 had sent it immediately) A chargeback's amount changing goes in the end-of-day email, whatever the email setting (`always`); in the
+      // bell it's unchanged.
+      await notify(dev.email, line, [line, ...(recorded ? ["Payments aren't set up yet, so this was recorded and nothing was refunded."] : [])], "/app/payments", { side: "developer", always: true, payment: true });
     }
     return "followed" as const;
   }
   await note(`${head}: followed after repayment: charged ${money(r.cents)} more.`);
   const line = bankRaisedLine(p.amountCents, piece, r.cents, one);
-  await notify(dev.email, line, [line], "/app/payments", { side: "developer", always: true, now: true, payment: true }); // (§294) emailed immediately, as when lowered
+  await notify(dev.email, line, [line], "/app/payments", { side: "developer", always: true, payment: true }); // (Owner, Nov 6, §295) the end-of-day email, as when lowered
   // Charged now like any charge made while away (during a hold, a suspension or the team's pause of its test it waits, as they do).
   await chargeDeferred(p.developerId);
   return "followed" as const;

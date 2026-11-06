@@ -12,6 +12,8 @@ export type LayoutOpts = {
   settings?: boolean;
   /** The site's address (APP_URL). */
   base: string;
+  /** (Owner, Nov 6, §295) The text's first line when it is the email's heading ("Your Playtest updates for Fri, Nov 6"): shown larger and bold, above the rest. */
+  heading?: string;
 };
 
 export const EMAIL_LOGO_PATH = "/email-logo-full.png";
@@ -60,8 +62,14 @@ function line(raw: string) {
 }
 
 /** The body: the text line by line (a blank line is a gap); the main link's own line becomes the button, or the button follows the text. */
-function body(text: string, b?: EmailButton) {
+function body(text: string, b?: EmailButton, heading?: string) {
   const lines = text.replace(/\r\n/g, "\n").split("\n");
+  // (Owner, Nov 6, §295) A first line that is the heading opens the body as one (the blank line after it is the heading's own margin).
+  let head = "";
+  if (heading && lines[0]?.trim() === heading.trim()) {
+    head = headingLine(lines.shift()!.trim());
+    while (lines.length && !lines[0].trim()) lines.shift();
+  }
   // The closing "Playtest" signature stays last, under the button.
   let sig = "";
   while (lines.length && !lines[lines.length - 1].trim()) lines.pop();
@@ -80,7 +88,13 @@ function body(text: string, b?: EmailButton) {
   });
   if (b && !placed) out.push(button(b));
   if (sig) out.push(`<div style="height:10px;line-height:10px;font-size:10px;">&nbsp;</div>`, line(sig));
+  if (head) out.unshift(head);
   return out.join("\n");
+}
+
+/** (§295) The heading line: larger and bold. */
+function headingLine(text: string) {
+  return `<p style="margin:0 0 14px 0;font-family:${FONT};font-size:19px;line-height:26px;font-weight:700;color:${TEXT};">${esc(text)}</p>`;
 }
 
 /** The whole HTML email around the text. */
@@ -97,7 +111,7 @@ export function emailHtml(subject: string, text: string, o: LayoutOpts) {
 <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" bgcolor="#eef1f6" style="background:#eef1f6;"><tr><td align="center" style="padding:24px 12px;">
 <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="max-width:560px;width:100%;border-collapse:separate;">
 <tr><td bgcolor="#ffffff" style="background:#ffffff;padding:28px 28px 22px 28px;border-radius:14px 14px 0 0;">
-${body(text, o.button)}
+${body(text, o.button, o.heading)}
 </td></tr>
 <tr><td align="center" bgcolor="#f6f7f9" style="background:#f6f7f9;padding:22px 28px 24px 28px;border-top:1px solid #e3e7ef;border-radius:0 0 14px 14px;text-align:center;">
 ${footer}

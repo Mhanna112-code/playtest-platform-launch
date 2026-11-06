@@ -26,6 +26,20 @@ export const ANYTHING_ELSE_KEY = "else";
 /** (§188) An addition to Anything else: the new ones (its key) and the old ones with no question (or a key no question has any more). */
 export const isElseKey = (key: string | undefined) => !key || key === ANYTHING_ELSE_KEY;
 /**
+ * (Owner, Nov 6, §295) The tester's own bell and summary line for an addition (it read "Work sent: your written answers for …", like a second send): "You added to
+ * your answer to “<question, cut>” on “Harbor Run”", "You added to your notes on “Harbor Run”" (Anything else), "You added to your written answers on …" (an
+ * addition with no question), "You added a recording on …" / "You added 2 recordings on …".
+ */
+export const youAddedLine = (test: string, part: "written answers" | "recording", n = 1, question?: string) =>
+  part === "recording"
+    ? `You added ${n === 1 ? "a recording" : `${n} recordings`} on “${test}”`
+    : question === ANYTHING_ELSE_TITLE
+      ? `You added to your notes on “${test}”`
+      : question
+        ? `You added to your answer to ${quoteQuestion(question)} on “${test}”`
+        : `You added to your written answers on “${test}”`;
+
+/**
  * (§188) What the lines name an addition by: a question ("to her answer to “…”") or Anything else ("to “Anything else” in her written answers"). `poss`: her / your.
  */
 export const addedToWhat = (poss: string, question?: string) =>

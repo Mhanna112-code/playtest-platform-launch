@@ -9,7 +9,7 @@ import { answerUnit, NOTES_UNIT } from "@/lib/draftUnits";
 import { patchKept, setKept } from "./kept";
 import { questionChangeTexts } from "@/lib/questionHistory";
 import { itemsFor, prevSetsOf, sameQuestions, snapshotOnlyFiles } from "@/lib/answerSets";
-import { ADDITIONS_MAX, ADD_UNDER_QUESTION, ANYTHING_ELSE_KEY, ANYTHING_ELSE_TITLE, QUESTION_GONE, addedToWhat, additionsFull, additionsOf, addsCounted, carriedAnswers, currentQuestionsFor, latestItems, questionKey, questionKeys, noAnswerYet } from "@/lib/additions";
+import { ADDITIONS_MAX, ADD_UNDER_QUESTION, ANYTHING_ELSE_KEY, ANYTHING_ELSE_TITLE, QUESTION_GONE, addedToWhat, youAddedLine, additionsFull, additionsOf, addsCounted, carriedAnswers, currentQuestionsFor, latestItems, questionKey, questionKeys, noAnswerYet } from "@/lib/additions";
 import { countersOf, countingSince, countsAfter, countsOf, criticalLine, lockedFields, storedCounts, type CriticalCounts } from "@/lib/limits";
 import { alertOf } from "@/lib/alerts";
 import { KEY_GIVEN, applyKeyChange, assignKeyAtJoin, checkTypedKeys, giveKeysToWorking, planKeyChange } from "./accessKeys";
@@ -1439,7 +1439,9 @@ export async function tellSentByBell(
 ) {
   const name = displayName(tester), poss = pronouns(tester.pronoun).poss, dev = displayName(c0.test.developer);
   const anchor = part === "recording" ? "part-recording" : "part-written";
-  await notify(tester.email, `Work sent: your ${part} for “${c0.title}”`, [added ? `What you added ${part === "recording" ? `to your ${part}` : addedToWhat("your", question)} was sent to ${dev}.` : `Your ${part} ${part === "recording" ? "was" : "were"} sent to ${dev}.`], `/app/sessions/${c0.id}#${anchor}`);
+  // (Owner, Nov 6, §295) An addition doesn't read as a second send: "You added to your answer to “…” on “Harbor Run”" (Anything else: "You added to your notes on
+  // …"); a first send keeps "Work sent: your written answers for …".
+  await notify(tester.email, added ? youAddedLine(c0.title, part, n, question) : `Work sent: your ${part} for “${c0.title}”`, [added ? `What you added ${part === "recording" ? `to your ${part}` : addedToWhat("your", question)} was sent to ${dev}.` : `Your ${part} ${part === "recording" ? "was" : "were"} sent to ${dev}.`], `/app/sessions/${c0.id}#${anchor}`);
   if (afterPaid) return notifyPaidUpdate(c0, tester, sub.id, part, afterPaid, n, question);
   const title = added ? `${name} ${addedWhat(poss, part, n, question)} for “${c0.title}”` : `${name} sent ${part === "recording" ? "a recording" : part} for “${c0.title}”`;
   const what = added ? addedWhat(poss, part, n, question) : `sent ${poss} ${part === "recording" ? "screen recording" : part}`;

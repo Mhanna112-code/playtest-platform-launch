@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { POST as helpPOST } from "@/app/api/help/route";
 import { TOPICS } from "@/lib/helpTopics";
-import { notify, sendSummaries } from "@/lib/server/notify";
+import { notify, sendSummaries, summaryHeading } from "@/lib/server/notify";
 import { requestReset, sendVerification, hashPassword } from "@/lib/server/passwords";
 import { adminDailyEmails } from "@/lib/server/adminDaily";
 import { chargebackOpened } from "@/lib/server/holds";
@@ -110,7 +110,8 @@ describe("batch 30 §19: branded HTML emails", () => {
     await sendSummaries(new Date(), [d.user.id]);
     const [s] = await mails(d.user.email);
     expect(s.subject).toBe("Your Playtest summary: 1 update");
-    expect(s.text).toBe(`• Ana sent her written answers for “Harbor <Run>” ${BASE}/app/tests/abc\n\nPlaytest`);
+    // (Owner, Nov 6, §295) The body opens with its heading ("Your Playtest updates for Fri, Nov 6").
+    expect(s.text).toBe(`${summaryHeading("daily", new Date(), new Date(), null)}\n\n• Ana sent her written answers for “Harbor <Run>” ${BASE}/app/tests/abc\n\nPlaytest`);
     expect(s.html).toContain("Harbor &lt;Run&gt;");
     branded(s, { label: "Open Playtest", url: SETTINGS }, true);
 

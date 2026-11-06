@@ -8,7 +8,7 @@ import { originalEmail } from "./reuseEmail";
  * (Batch 30 §19) Every email is sent as HTML in the shared branded layout (emailLayout.ts) with its plain text alongside. `button`: the email's main link as a button
  * (when its address is a line of the text, the button takes that line's place). `settings`: the footer's "Notification settings" link (default on; off for confirm / reset).
  */
-export type Email = { to: string; subject: string; text: string; button?: EmailButton; settings?: boolean };
+export type Email = { to: string; subject: string; text: string; button?: EmailButton; settings?: boolean; /** (Owner, Nov 6, §295) the text's first line, shown as the heading */ heading?: string };
 
 /** The site's address for the layout's links and logo (APP_URL; the public site when it can't be read). */
 const siteBase = () => {
@@ -19,7 +19,7 @@ const siteBase = () => {
   }
 };
 /** (Batch 30 §19) The email's HTML version. */
-export const htmlOf = (e: Email) => emailHtml(e.subject, e.text, { button: e.button, settings: e.settings ?? true, base: siteBase() });
+export const htmlOf = (e: Email) => emailHtml(e.subject, e.text, { button: e.button, settings: e.settings ?? true, base: siteBase(), heading: e.heading });
 
 export const outboxEnabled = () => process.env.NODE_ENV !== "production" || process.env.ALLOW_DEV_OUTBOX === "1";
 

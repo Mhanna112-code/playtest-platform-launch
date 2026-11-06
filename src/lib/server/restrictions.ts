@@ -6,7 +6,7 @@ import { HttpError } from "./http";
 import { adminUsers, bell, notify } from "./notify";
 import { cancelCallsAhead, recordEvent, spotOpened, tellCancelled } from "./tests";
 import { closeRequests } from "./requests";
-import { chargeDeferred, markPaused, resumeTests, shiftAfterPause } from "./holds";
+import { chargeDeferred, markPaused, resumeTests, shiftAfterPause, tellTestersPaused } from "./holds";
 import { accountEvent } from "./reports";
 import { accountChangesSince, adminEmail, keepNote, recordAction, tabOf, alreadyLine, byAt, checkFrom, liftRefusal, ownChange, pausedRefusal, presserOf, stopIfChanged, stoppedRefusal, testChangesSince, youAlready, type AdminSeen, type Presser } from "./adminRace";
 import { closeOffersOfEnded } from "./offerClose";
@@ -194,6 +194,8 @@ export async function suspendAccount(adminId: string, userId: string, note: stri
   if (side === "developer" && u.isDeveloper) {
     await markPaused({ developerId: userId }); // (batch 9) one clock per paused test
     await pauseDeveloper(u);
+    // (Owner, Nov 6, §295) Their testers read "“<test>” is paused": each test no other cause (a hold, the team's pause) was pausing already.
+    if (!u.holdStartedAt) await tellTestersPaused((await db.test.findMany({ where: { developerId: userId, status: { in: ["open", "closed"] }, adminPausedAt: null }, select: { id: true } })).map((t) => t.id));
     // (Owner, Nov 3, §159 rule 4a) The developer's own Pay / Pay more whose bank page is still open is cancelled (at Stripe first; one the bank already approved is
     // recorded as paid once), like a hold does: nothing is charged by it, and the part is payable again after the lift. A tester's waiting charge being confirmed
     // (needs_confirmation: Confirm with your bank, Confirm all) is NOT cancelled: its Complete goes through and is recorded normally (rule 4b).
@@ -433,6 +435,8 @@ export async function pauseTest(adminId: string, testId: string, note: string, s
     await release(p.id).catch((e) => console.error("[team pause] cancel open Pay check:", (e as Error).message));
   const dev = await db.user.findUniqueOrThrow({ where: { id: t.developerId } });
   await (await import("./pauseClosure")).bellPausedTests(dev.id);
+  // (Owner, Nov 6, §295) Its testers read "“<test>” is paused" (never why), unless the developer's own hold or suspension was pausing it already.
+  if (!dev.holdStartedAt && !dev.devSuspendedAt) await tellTestersPaused([testId]);
   // (Batch 15 section 20) Never the note in the bell line: it says what happened; the note is on the test page and in the email.
   // (Owner, Nov 4, §172) The email lists exactly what a developer suspension still allows, for this test.
   await notify(dev.email, `The team paused “${t.title}”`, [`The team paused “${t.title}”${note ? `: ${note}` : "."} ${TEAM_PAUSED_EMAIL_LINE}${callsCancelled ? ` ${teamPauseCallsLine(callsCancelled)}` : ""}`, "Contact us in Settings if you think this is a mistake."], `/app/tests/${testId}`, { always: true, group: "payhold" }); // (batch 29 §33) in the day's "Payments and holds" entry with the hold lines

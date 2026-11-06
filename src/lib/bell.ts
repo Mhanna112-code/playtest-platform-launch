@@ -8,7 +8,8 @@ export const GROUP_TITLES: Record<string, string> = {
   invites: "Invitations waiting",
   charge: "Charge or Let it go",
   unreviewed: "Work waiting for your review",
-  paused: "Tests paused or running again",
+  // (Owner, Nov 6, §295) The tester's "“X” is paused" and "“X” is running again", one entry a day across tests: "Pauses · 2".
+  paused: "Pauses",
   payout: "Payout",
   // (Owner, Oct 27) Lines of the SAME KIND stack across tests, one entry per kind per day.
   payhold: "Payments and holds",
@@ -57,6 +58,8 @@ export const PAID_GROUP = "devpaid";
 export const CALL_REQUESTS_GROUP = "callrequests";
 /** (§286) Every booked-call bell line ("Booked: …"), both sides, one entry a day across tests. */
 export const BOOKED_GROUP = "booked";
+/** (Owner, Nov 6, §295) The tester's pause lines ("“X” is paused", "“X” is running again"), one entry a day across tests, in the bell and the email alike. */
+export const PAUSES_GROUP = "paused";
 
 /** (Batch 14) A stacked entry's title that says it all with its count ("3 tests you applied to changed: your applications were closed"); else GROUP_TITLES. */
 // (Owner, Nov 6, §290) No "today" in these titles: the bell page adds the day itself ("today" / "on Nov 5"); it read "· 2 today today".
@@ -73,6 +76,8 @@ export const GROUP_COUNT_TITLES: Record<string, (n: number, lines: number) => st
   reqclosed: (_n, lines) => `Call requests · ${lines} closed`,
   appwithdrawn: (_n, lines) => `Applications · ${lines} withdrawn`,
   dms: (_n, lines) => `Direct messages · ${lines}`,
+  // (Owner, Nov 6, §295) "Pauses · 2" (counting lines: each is a pause or a test running again).
+  paused: (_n, lines) => `Pauses · ${lines}`,
   // (Owner, Nov 6, §286) "Call requests · 3 today", "Booked calls · 2 today" (counting lines, across tests).
   callrequests: (_n, lines) => `Call requests · ${lines}`,
   booked: (_n, lines) => `Booked calls · ${lines}`,

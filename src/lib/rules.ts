@@ -1583,8 +1583,11 @@ export function reviewMarkDue(sentAt: Date, reviewDate: Date, now: Date, sent: s
  */
 export function deadlineMarksFor(joinedAt: Date, dueAt: Date) {
   const away = dueAt.getTime() - joinedAt.getTime();
-  return MARKS.filter((m) => (m.mark !== "1m" || away > m.ms) && dueAt.getTime() - m.ms >= joinedAt.getTime() + DAY_MS).map((m) => ({ ...m, at: new Date(dueAt.getTime() - m.ms) }));
+  // (Owner, Nov 6, §295) The last mark (1 day before) is always kept, even within 24 hours of joining: a tester whose deadline is within a day when she joins (or
+  // whose tester days are 1) got no reminder at all before. She gets that one line at the daily job's next run.
+  return MARKS.filter((m) => (m.mark !== "1m" || away > m.ms) && (m.mark === LAST_MARK || dueAt.getTime() - m.ms >= joinedAt.getTime() + DAY_MS)).map((m) => ({ ...m, at: new Date(dueAt.getTime() - m.ms) }));
 }
+const LAST_MARK = MARKS[MARKS.length - 1].mark;
 /** The key prefix of one contract's sent deadline marks for one deadline, kept in Test.notifiedMarks (Open until's own marks there are bare: "1w"). */
 export const deadlineMarkKey = (contractId: string, dueAt: Date) => `due:${contractId}:${dueAt.getTime()}:`;
 /**
@@ -1601,9 +1604,14 @@ export function ownDeadlineMarkDue(c: { id: string; joinedAt: Date; dueAt: Date 
   if (now.getTime() >= c.dueAt.getTime()) return { send: null, record: [] };
   const passed = deadlineMarksFor(c.joinedAt, c.dueAt).filter((m) => m.at.getTime() <= now.getTime());
   const behind = passed.filter((m) => !here.includes(m.mark)).map((m) => `${key}${m.mark}`);
-  // The deadline moved: what's already behind the new one is recorded, never sent.
-  if (!here.length && mine.length) return { send: null, record: [...firstLook, ...behind] };
   const last = passed[passed.length - 1];
+  // The deadline moved: what's already behind the new one is recorded, never sent. (Owner, Nov 6, §295) Except the latest mark passed when it was never sent for
+  // an earlier deadline of hers: a mark that came due between the move and this run (a pause moves a deadline to the end of a later day, and the daily job runs once
+  // a day) was swallowed, and a tester 20 hours from her deadline got no reminder.
+  if (!here.length && mine.length) {
+    const sentBefore = new Set(mine.map((x) => x.slice(x.lastIndexOf(":") + 1)));
+    return { send: last && !sentBefore.has(last.mark) ? MARKS.find((m) => m.mark === last.mark)! : null, record: [...firstLook, ...behind] };
+  }
   if (!last || here.includes(last.mark)) return { send: null, record: firstLook };
   return { send: MARKS.find((m) => m.mark === last.mark)!, record: [...firstLook, ...behind] };
 }
