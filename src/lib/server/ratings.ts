@@ -13,6 +13,7 @@ import { devPauseMoments, devStopSince, loadedOf, stopBox, testerStopSince } fro
 import { closeOutOf, closedOut, devPauseSpans, mergeSpans, teamPauseSpans, windowEnd, type Span } from "./closeOut";
 import { closeOffersOfEnded } from "./offerClose";
 import { RATE_TEAM_PAUSED, teamPausedNow } from "@/lib/restricted";
+import { testerRow } from "@/lib/lineAnchors";
 
 // (Owner, Oct 22, NEWEST+5) Ratings. (Owner, Oct 28, batch 17 sections 1, 2, 14, 16 and 17: the rules below replace the earlier ones where they differ.)
 // TESTER rates the developer once some work was sent or a call took place. Rate is DISABLED (shown, with one grey line) while they can still Charge or Let it go of a
@@ -272,8 +273,8 @@ export async function testerRate(tester: { id: string; name: string; email: stri
     }
     // (Owner, Oct 28, batch 20 section 24) A working tester who rates is leaving: one line ("Testers leaving"). One whose part had ended: "ff rated you" (Ratings from
     // testers). Either stops the developer's presses once; never the stars (the blind reveal).
-    if (wasWorking) await recordEvent(tx, c.testId, "left", `${finishedAndRatedLine(displayName(tester), tester.pronoun)}`, true, {}, c.id);
-    else await recordEvent(tx, c.testId, "rated", `${ratedYouLine(displayName(tester))}`, false, {}, c.id);
+    if (wasWorking) await recordEvent(tx, c.testId, "left", `${finishedAndRatedLine(displayName(tester), tester.pronoun)}`, true, {}, c.id, "", testerRow(c.id)); // (Owner, Nov 6, §284) the place the line opens
+    else await recordEvent(tx, c.testId, "rated", `${ratedYouLine(displayName(tester))}`, false, {}, c.id, "", testerRow(c.id));
   }).catch(ratedOnce(`You already rated ${displayName(c0.test.developer)}.`));
   // (Batch 17 section 16) The developer's Rate (and its 14 days) opens once everything this tester sent is settled too: now, or when the last piece is.
   await maybeOpenDevRating(contractId);

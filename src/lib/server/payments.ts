@@ -29,6 +29,7 @@ import { closedOut, payMoreClosesAt, pieceCloseOut } from "./closeOut";
 import { TEAM_CLOSED_NO_DISPUTE, TEAM_CLOSED_NO_PAY, paidLine, updateWaiting } from "@/lib/moneyLines";
 import { PAID_GROUP } from "@/lib/bell";
 import { teamPausedWaits } from "@/lib/restricted";
+import { devPartRow } from "@/lib/lineAnchors";
 
 type U = { id: string; email: string; name: string; pronoun: string; isAdmin?: boolean };
 
@@ -499,7 +500,7 @@ export async function decideDispute(admin: U, disputeId: string, body: Record<st
     const line = `The team ${decisionWhat(what)}.`;
     // (Owner, Nov 4, §177) The decision names the part it decided: "The team decided Nina Park's dispute on her live call on Tue, Oct 27, 8:00 AM: raised the pay to
     // $20.50 ($5.00 more)" (the call in the developer's zone).
-    const ev = await tx.testEvent.create({ data: { testId: c.testId, kind: "admin", text: `The team decided ${displayName(c.tester)}'s dispute on ${pronouns(c.tester.pronoun).poss} ${decidedPart}: ${decisionWhat(what)}`, contractId: c.id } });
+    const ev = await tx.testEvent.create({ data: { testId: c.testId, kind: "admin", text: `The team decided ${displayName(c.tester)}'s dispute on ${pronouns(c.tester.pronoun).poss} ${decidedPart}: ${decisionWhat(what)}`, contractId: c.id, link: devPartRow(d) } }); // (Owner, Nov 6, §284) the place the line opens: the part decided
     return { due, line, what, eventId: ev.id };
   });
   if (!claim) {

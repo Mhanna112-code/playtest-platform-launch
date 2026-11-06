@@ -10,6 +10,7 @@ import { chargeDeferred, markPaused, resumeTests, shiftAfterPause } from "./hold
 import { accountEvent } from "./reports";
 import { accountChangesSince, adminEmail, keepNote, recordAction, tabOf, alreadyLine, byAt, checkFrom, liftRefusal, ownChange, pausedRefusal, presserOf, stopIfChanged, stoppedRefusal, testChangesSince, youAlready, type AdminSeen, type Presser } from "./adminRace";
 import { closeOffersOfEnded } from "./offerClose";
+import { testerRow } from "@/lib/lineAnchors";
 
 // (Design doc 2 and 11.4; owner, Oct 27) Suspensions and deletion.
 //   Developer suspended (or on a payment / chargeback hold: ONE state, see lib/restricted.ts): all their tests are paused (testers stay in them; (owner, Oct 28 afternoon) under
@@ -80,7 +81,7 @@ async function removeTester(u: { id: string; name: string; email: string; pronou
       await closeOffersOfEnded(tx, [c.id]); // (batch 35 §118)
       await tx.callRequest.updateMany({ where: { contractId: c.id, status: "pending" }, data: { status: "closed", closedReason: "the tester left", decidedAt: new Date() } });
       // Developers only ever see "left" (never why).
-      await recordEvent(tx, c.testId, "left", `${who} left the test`, true, {}, c.id);
+      await recordEvent(tx, c.testId, "left", `${who} left the test`, true, {}, c.id, "", testerRow(c.id)); // (Owner, Nov 6, §284) the place the line opens
       return list;
     });
     await tellCancelled(cancelled, "ended");

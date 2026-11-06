@@ -38,6 +38,7 @@ import { addedWhat, updatedAfterPaidLive, updatedAtCapLive } from "@/lib/moneyLi
 import { markerIds, withoutAttachmentMarkers } from "@/lib/answerAttachments";
 import { callCancelledLine, questionsUpdatedLine, STOP_NOTE_KIND, stopEventText, stopNoteText, PAY_RULES_TICK_MISSING, payRulesTicked, PART_PRICE_MISSING, SENT_ANSWERS_LOCKED, NOTHING_TO_ADD, WHY_MIN_CHARS, WHY_TOO_SHORT, MAX_SPOTS, TEST_CLOSED_NO_EDIT } from "@/lib/rules";
 import { closeOffersOfEnded } from "./offerClose";
+import { testerRow } from "@/lib/lineAnchors";
 
 type Tx = Prisma.TransactionClient;
 type U = { id: string; email: string; name: string; pronoun: string; isDeveloper: boolean; isTester: boolean; timeZone?: string | null };
@@ -1060,7 +1061,7 @@ export async function joinTest(tester: U, testId: string, body: Record<string, u
     if (old) await tx.termsOffer.updateMany({ where: { contractId: old.id, status: "open" }, data: { status: "superseded", decidedAt: new Date() } });
     // (Design doc 5) Each joining tester gets an access key (the key they had, if it still works, else the oldest free one).
     await assignKeyAtJoin(tx, testId, contract.id, body.keyStillWorks === true);
-    await recordEvent(tx, testId, options.quietJoinEvent === true ? "auto_joined" : "joined", old ? `${displayName(tester)} joined again` : `${displayName(tester)} joined`, true, {}, contract.id);
+    await recordEvent(tx, testId, options.quietJoinEvent === true ? "auto_joined" : "joined", old ? `${displayName(tester)} joined again` : `${displayName(tester)} joined`, true, {}, contract.id, "", testerRow(contract.id)); // (Owner, Nov 6, §284) the place the line opens: their row in Testers
     await tx.invite.updateMany({ where: { testId, testerId: tester.id, status: "sent" }, data: { status: "joined" } });
     // (Correction 4) The last spot taken: every other pending application and open invite closes, in this transaction.
     const filled = (await tx.contract.count({ where: working(testId) })) >= t.spots
@@ -1113,7 +1114,7 @@ export async function leaveTest(tester: U, contractId: string, body: Record<stri
     await cancelCallsAhead(tx, [c.id], `${displayName(tester)} left the test.`);
     await closeOffersOfEnded(tx, [c.id]); // (batch 35 §118) leaving ends the part: its open new-terms offer closes
     await tx.callRequest.updateMany({ where: { contractId: c.id, status: "pending" }, data: { status: "closed", closedReason: "the tester left", decidedAt: new Date() } });
-    await recordEvent(tx, c.testId, "left", `${displayName(tester)} left the test`, true, {}, c.id);
+    await recordEvent(tx, c.testId, "left", `${displayName(tester)} left the test`, true, {}, c.id, "", testerRow(c.id)); // (Owner, Nov 6, §284) the place the line opens
     return c;
   });
   await notify(c0.test.developer.email, `${displayName(tester)} left “${c.title}”`, [`${displayName(tester)} left your test “${c.title}”. Work ${pronouns(tester.pronoun).subj} already sent still waits for your review.`], `/app/tests/${c.testId}#tester-${c.id}`, { about: tester.id });

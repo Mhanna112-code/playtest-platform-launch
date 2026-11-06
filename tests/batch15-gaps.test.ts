@@ -40,7 +40,7 @@ describe("rule checklist gaps (section 35)", () => {
     expect(dash).toContain('<ExcerptDecision excerptId={x.id} seenAt={now.toISOString()} />');
     expect(dash).toContain("#item-app-${a.id}");
     expect(src("app/app/tests/[id]/Applications.tsx")).toContain("id={`item-app-${a.id}`}");
-    expect(src("components/LiveTop.tsx")).toContain("jumpTo(l.link!)");
+    expect(src("components/LiveTop.tsx")).toContain("jumpToFirst(l.link!)"); // (Owner, Nov 6, §284) with its fallback (a request row that has left: its box)
   });
 });
 

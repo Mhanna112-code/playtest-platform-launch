@@ -12,6 +12,7 @@ import { carriedAnswers } from "@/lib/additions";
 import { qText, sameQuestionWords } from "@/lib/questions";
 import { closeOffersOfEnded } from "./offerClose";
 import { ndaBlockLine, ndaBlocked, ndaChangeOf, ndaNoticeHref } from "@/lib/ndaNotice";
+import { testerRow } from "@/lib/lineAnchors";
 export { closeOffersOfEnded };
 
 const nameOf = async (id: string) => displayName(await db.user.findUniqueOrThrow({ where: { id } }));
@@ -169,7 +170,7 @@ export async function decideTerms(tester: { id: string }, contractId: string, bo
       db.termsOffer.update({ where: { id: target.id }, data: { status: "switched", decidedAt: now } }),
     ]);
     // (Batch 14 section 4) One quiet line in the developer's live box (not a stop-once kind); several a day stack.
-    await logEvent(c.testId, "terms", switchedLine(1, await nameOf(c.testerId)), c.id);
+    await logEvent(c.testId, "terms", switchedLine(1, await nameOf(c.testerId)), c.id, testerRow(c.id)); // (Owner, Nov 6, §284) the place the line opens
     return { switched: true };
   }
   await db.termsOffer.update({ where: { id: target.id }, data: { status: "kept", decidedAt: now } });

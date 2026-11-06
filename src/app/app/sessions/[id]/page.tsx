@@ -57,6 +57,7 @@ import { keyOf } from "@/lib/server/accessKeys";
 import { KeyBox } from "./KeyBox";
 import { PageLoaded } from "@/components/PageLoaded";
 import { NdaBox } from "@/components/NdaBox";
+import { TESTER_REQUESTS_BOX } from "@/lib/lineAnchors";
 import { QuestionTexts, ValueText } from "@/components/QA";
 /** (Owner, Nov 5, §231) The listing information lines whose value can be long: each in the shared box (the others are short lines). */
 const LONG_INFO: string[] = ["title", "productName", "mature"];
@@ -706,7 +707,8 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
           })()}
           {!limited && <>
           {(canRequestCall || (pendingReqs.length > 0 && !paused && !refusal)) && (
-            <section className="space-y-1.5" aria-label="Call requests" data-live-section="Requests">
+            <section id={TESTER_REQUESTS_BOX} className="scroll-mt-24 space-y-1.5 rounded-xl transition-shadow data-[marked]:ring-2 data-[marked]:ring-sky-300" aria-label="Call requests" data-live-section="Requests">
+              {/* (Owner, Nov 6, §284) The top box's request lines land here when their row has left (TESTER_REQUESTS_BOX). */}
               <h3 className="text-sm font-semibold text-white">Requests</h3>
               <CallRequests
                 leadMinutes={CALL_MIN_AHEAD_MINUTES}

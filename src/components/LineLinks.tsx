@@ -7,7 +7,7 @@ export type { LineLink } from "@/lib/lineLinks";
 /** (Owner, Nov 5, §270) The green of every name and test link in a line (as TestName / NameLink: the app's link green), the same for people and tests. */
 export const LINE_LINK_CLASS = "text-volt-300 hover:underline";
 
-type AnchorProps = { href: string; className?: string; onClick?: () => void; children?: ReactNode; target?: string; rel?: string } & Record<`data-${string}`, string>;
+type AnchorProps = { href: string; className?: string; onClick?: (e: React.MouseEvent<HTMLAnchorElement>) => void; children?: ReactNode; target?: string; rel?: string } & Record<`data-${string}`, string>;
 export type LineLinkOptions = {
   /** (§270, part 2) The row's own place: the words that aren't a name link there, side by side with the name links (never nested). */
   rest?: string | null;
@@ -15,6 +15,8 @@ export type LineLinkOptions = {
   restClass?: string;
   /** every piece's press (the bell's mark-as-read, whichever piece is clicked) */
   onClick?: () => void;
+  /** (Owner, Nov 6, §284) the rest's own press (the top box: jump to the row in place, its fallback when the row has left), instead of `onClick` */
+  onRest?: (e: React.MouseEvent<HTMLAnchorElement>) => void;
   /** how a plain piece is drawn (amounts kept whole by default) */
   draw?: (t: string) => ReactNode;
   /** test links open in a new tab (the confirm rows, as withTestLinks did) */
@@ -33,7 +35,7 @@ export function withLineLinks(text: string, links: LineLink[] | undefined | null
   const A = (opts.Anchor ?? "a") as ComponentType<AnchorProps>;
   const pieces = splitLinks(text, links);
   const rest = (t: string, key: number | string) =>
-    opts.rest ? <A key={key} href={opts.rest} className={opts.restClass} onClick={opts.onClick} data-line-rest="">{draw(t)}</A> : <Fragment key={key}>{draw(t)}</Fragment>;
+    opts.rest ? <A key={key} href={opts.rest} className={opts.restClass} onClick={opts.onRest ?? opts.onClick} data-line-rest="">{draw(t)}</A> : <Fragment key={key}>{draw(t)}</Fragment>;
   if (pieces.length === 1 && !pieces[0].link) return opts.rest ? rest(text, 0) : draw(text);
   return (
     <>
