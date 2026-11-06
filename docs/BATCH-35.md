@@ -4651,3 +4651,39 @@ A removed question reads "Question 1 · Removed · <its words>" (it was "Questio
 The trim box stays delete-only (§196), with one exception: typing, at the caret, the very next character of the answer that was left out there restores it (and
 the next, in order). Any other typing, pasting or dropping is still refused, so the excerpt is always the answer's own words (the server's check is unchanged).
 The hint reads "… you can only leave words out (deleted something by accident? Type it back where it was)." `insertedRange` / `restoreAt` in lib/excerptTrim.ts.
+
+## §263 Old questions live in Terms history (owner, Nov 5; final; replaces §234's Past questions box, §254's earlier-set answers in it, and the earlier §263 drafts)
+The bug: bb added to question "3" after the developer's last payment; the developer changed "3" and bb switched. The addition vanished from Needs you (it never
+showed a past question) and from the Testers list's Past questions box (drawn as paid), so an unpaid answer was invisible to the developer.
+- One rule, by the question's words: a question is current for a tester when it is in their contract's questions now (`currentQuestionsFor` in lib/additions.ts,
+  the one place that says it; lib/server/tests.ts `writtenQuestions` is it), otherwise it is old (`isPastQuestion`).
+- The answer lists show the current questions only, on both sides: the tester's "Your written answers" and the form; the developer's Testers list (as paid,
+  §226) and By question (`answersByQuestion(…, current)`: an old question's additions stay out of Anything else too). PastQuestions.tsx, `pastCount`,
+  `pastThreads`, `earlierSent` and SentWork's `part` / `earlier` are gone.
+- Terms history has an entry for every change of the questions: "Questions changed <date/time>", then a "Then and now" drop-down: Then is the questions as they
+  were, each its own drop-down (QA.tsx QuestionTexts: "Questions (N)" in a draggable scroll panel, the question box and the answer boxes resizable), with what
+  this tester had for it at that moment: the sent answer and each addition up to the change; otherwise the unsent draft, "Draft (not sent)"; otherwise
+  "(no answer)". Now is the questions after it. Built by `questionChanges` (lib/questionHistory.ts) from the contract's earlier sets (`Contract.prevSets`), which
+  a change already writes: the questions then, the "sent" version and the "draft" version (the draft snapshot). A change now always keeps its set (it was kept
+  only when something was answered) and records `to` (the questions after). At most 8 sets are kept (was 3). No migration.
+- Attachments: answers are drawn with SentWork's renderer (`SentAnswer`: file markers inline from the part's uploads by id), so a file still opens from the
+  entry after its question changed (the files are kept while an earlier set names them, recordings.ts). On the tester's side the files also include their
+  uploaded, unsent ones (a draft's).
+- The developer: the same entries under each tester's written answers in the Testers list ("Terms history" drop-down), built without drafts: never a draft's
+  text or files.
+- Needs you: a new, unpaid answer or addition to a question that has since changed still shows (after the current ones, read-only), with a small "Old" tag
+  beside the question, the developer's only "old" marker. Pay / Pay more covers it as before (the paid cut and the update row are times, never questions); once
+  paid it is only in Terms history.
+- A question changed back to earlier words is simply current again: answered, its thread is back in the list with its answer and additions, and Add to this
+  answer works (after the Send that moves the part onto the current questions, §235); never answered, it is a box in the form, and a draft snapshotted for it at
+  an earlier change is put back into the kept draft (terms.ts, on the change). `carriedAnswers` reads each question's last sent answer by its words over
+  everything sent (a thread's `latest`), so a question that comes back is never asked again. The history entries stay as they were.
+- The switch's offer entry in Terms history drops its own "Questions then and now" when the change has its "Questions changed" entry (the same moment).
+
+## §264 "Your agreed scope": four listing lines under "Your contract" (owner, Nov 5)
+What to do (the description), the Build link, Languages and Devices moved from "The listing information" into "Your contract", below Due, in that order. They keep
+their live behaviour (the current listing value, "Updated <time>" with before → now, the shared ValueText boxes for long text) and their `data-info-line`, so the
+top box's See it still opens #scope and marks them (it looks inside the whole box). One helper draws a listing line in both places (`infoItem` on the session
+page). The sentence under them reads "Agreed <date>. Your contract stays as it is: if <dev> changes these terms later, you choose Switch or Keep. What to do, the
+build link, languages and devices are the exception: they follow <dev>'s changes, marked Updated." The other listing lines (title, product, Mature) stay below.
+The developer's own Listing panel is one list and is unchanged.

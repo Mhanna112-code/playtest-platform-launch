@@ -170,13 +170,16 @@ async function questionSetsOnSwitch(c: { id: string; testerId: string; questions
   const draftDiffers = !!draftItems && (!sentItems || JSON.stringify(draftItems.map((x) => x.answer)) !== JSON.stringify(sentItems.map((x) => x.answer))) && draftItems.some((x) => x.answer.trim());
   const versions = [...(sentItems ? [{ kind: "sent" as const, at: (sub!.updatedAt ?? sub!.sentAt).toISOString(), items: sentItems }] : []), ...(draftDiffers ? [{ kind: "draft" as const, ...(kept?.updatedAt ? { at: kept.updatedAt.toISOString() } : {}), items: draftItems! }] : [])];
   const ops: Prisma.PrismaPromise<unknown>[] = [];
-  if (items.some((x) => x.answer.trim()) || sub) ops.push(db.contract.update({ where: { id: c.id }, data: { prevSets: pushPrev(prevSetsOf(c.prevSets), { until: now.toISOString(), items, ...(versions.length ? { versions } : {}) }) as unknown as Prisma.InputJsonValue } }));
+  // (Owner, Nov 5, §263) Every change of the questions is a Terms history entry ("Questions changed", Then → Now), so the earlier set is always kept now (it was
+  // kept only when something was answered or sent), with the questions it changed to (`to`). Its "draft" version is the snapshot of the unsent draft then.
+  ops.push(db.contract.update({ where: { id: c.id }, data: { prevSets: pushPrev(prevSetsOf(c.prevSets), { until: now.toISOString(), items, ...(versions.length ? { versions } : {}), to: next }) as unknown as Prisma.InputJsonValue } }));
   const nextQs = next.length ? next : ["Your feedback"];
-  if (!sub?.review) {
-    const notes = typeof draft?.notes === "string" ? draft.notes : sub?.notes ?? "";
-    ops.push(db.keptForm.upsert({ where: { userId_key: { userId: c.testerId, key: `written:${c.id}` } }, update: { data: { answers: carryOver(items, nextQs), notes, questions: nextQs } }, create: { userId: c.testerId, key: `written:${c.id}`, data: { answers: carryOver(items, nextQs), notes, questions: nextQs } } }));
-    if (sub && !sub.setUntil) ops.push(db.submission.update({ where: { id: sub.id }, data: { setUntil: now } }));
-  }
+  // (§263) A question that comes back with no answer gets its box back with the draft snapshotted for it at an earlier change (newest first), if any.
+  const snapshots = prevSetsOf(c.prevSets).flatMap((p) => (p.versions ?? []).filter((v) => v.kind === "draft").map((v) => v.items));
+  const carried = carryOver(items, nextQs).map((a, i) => a || (snapshots.map((set) => set.find((x) => qText(x.question) === qText(nextQs[i]))?.answer ?? "").find((x) => x.trim()) ?? ""));
+  const notes = typeof draft?.notes === "string" ? draft.notes : sub?.notes ?? "";
+  if (!sub?.review || carried.some((a, i) => a && !carryOver(items, nextQs)[i])) ops.push(db.keptForm.upsert({ where: { userId_key: { userId: c.testerId, key: `written:${c.id}` } }, update: { data: { answers: carried, notes, questions: nextQs } }, create: { userId: c.testerId, key: `written:${c.id}`, data: { answers: carried, notes, questions: nextQs } } }));
+  if (sub && !sub.review && !sub.setUntil) ops.push(db.submission.update({ where: { id: sub.id }, data: { setUntil: now } }));
   return ops;
 }
 

@@ -120,7 +120,8 @@ export type AddedText = { at: string; text: string; files: string[] };
  * (§167) One question of a written part as the developer reads it: its fold holds the answer, then each addition to it, oldest first. `fresh`: a question that
  * came with changed questions (its answer was sent with them, at `at`).
  */
-export type QuestionThread = { key: string; question: string; required: boolean; answer: string; fresh: boolean; at?: string; adds: AddedText[] };
+export type QuestionThread = { key: string; question: string; required: boolean; answer: string; fresh: boolean; at?: string; adds: AddedText[];
+  /** (Owner, Nov 5, §263) its answer as last sent (the first answer, or a later changed-questions send's), whatever set it was in: what a Send keeps for it */ latest?: string };
 /** (§167) A changed-questions send's notes and its files not placed in an answer, shown under the notes with its date. */
 export type SetExtra = { at: string; notes: string; files: string[]; texts: string[] };
 
@@ -136,7 +137,7 @@ export function writtenThreads(answers: unknown, questions: string[], stored: un
   const threads: QuestionThread[] = [];
   const byKey = new Map<string, QuestionThread>();
   const current = new Map<string, string>();
-  const put = (t: QuestionThread) => { threads.push(t); byKey.set(t.key, t); current.set(t.key, t.answer); };
+  const put = (t: QuestionThread) => { threads.push({ ...t, latest: t.answer }); byKey.set(t.key, threads[threads.length - 1]); current.set(t.key, t.answer); };
   questionKeys(first).forEach((key, i) => put({ key, question: first[i].question, required: first[i].required, answer: first[i].answer, fresh: false, adds: [] }));
   const general: Addition[] = [];
   const extras: SetExtra[] = [];
@@ -151,6 +152,7 @@ export function writtenThreads(answers: unknown, questions: string[], stored: un
         else if (it.answer.trim() && it.answer !== current.get(t.key)) {
           t.adds.push({ at: a.at, text: it.answer, files: [] });
           current.set(t.key, it.answer);
+          t.latest = it.answer;
         } else return;
         placed.push(it.answer);
       });
@@ -176,10 +178,14 @@ export function writtenThreads(answers: unknown, questions: string[], stored: un
  * the text; `when` formats the date in the viewer's zone). (Owner, Nov 4, §188) Anything else is the last entry: the notes, then what was added there (to
  * Anything else, or before §167 with no question) and a changed-questions send's own notes, each under its "*Added · <date>*" like a question's.
  */
-export function answersByQuestion(sub: { answers: unknown; notes: string; additions?: unknown }, questions: string[], when: (at: string) => string) {
-  const items = latestItems(sub, questions);
+export function answersByQuestion(sub: { answers: unknown; notes: string; additions?: unknown }, questions: string[], when: (at: string) => string, current?: string[]) {
+  // (Owner, Nov 5, §263) With `current` (the developer's By question): only the tester's current questions, each with its last sent answer by its words; what was
+  // added to an old question stays out (it is in Terms history), never in Anything else.
+  const latest = current ? new Map(writtenThreads(sub.answers, questions, sub.additions).threads.map((t) => [qText(t.question), t.latest ?? t.answer])) : null;
+  const items = current && latest ? itemsFor(current, current.map((q) => latest.get(qText(q)) ?? "")) : latestItems(sub, questions);
   const keys = questionKeys(items);
-  const adds = additionsOf(sub.additions);
+  const oldKey = (a: Addition) => !!current && !a.items && !isElseKey(a.questionKey) && !keys.includes(a.questionKey!);
+  const adds = additionsOf(sub.additions).filter((a) => !oldKey(a));
   const under = (a: Addition) => (a.text != null && a.questionKey && keys.includes(a.questionKey) ? a.questionKey : null);
   const answers = items.map((it, i) => [it.answer, ...adds.filter((a) => under(a) === keys[i]).map((a) => `*${addedLabel(when(a.at))}*\n${a.text}`)].filter((x) => x.trim()).join("\n\n"));
   const dated = (a: Addition) => {
@@ -228,34 +234,21 @@ export function additionsUntil(stored: unknown, until: Date | string | null | un
 
 /**
  * (Owner, Nov 5, §234) A question of a written part is PAST when it is no longer one of the contract's questions (`current`: the contract's questions now; a
- * question is matched by its words, as everywhere). Past questions leave the answers panel for the "Past questions" box (read-only, never added to).
+ * question is matched by its words, as everywhere). (Owner, Nov 5, §263, final; replaces §234's "Past questions" box) An old question leaves the answer lists
+ * (only Needs you keeps its new, unpaid answers, tagged "Old") and lives in Terms history (lib/questionHistory.ts); it is never added to.
  */
 export const isPastQuestion = (question: string, current: string[]) => !new Set(current.map(qText)).has(qText(question));
 /**
- * (Owner, Nov 5, §254) The answers sent in an earlier set that no thread of the part holds. Since §136 a Send after a switch is ADDED under what was sent, so every
- * sent answer is in the part's threads (the contract's earlier sets only copy them). Before §136 a Send after a switch REPLACED the sent set and kept the old one
- * only in `Submission.prevSets`: those answers are in no thread. Each such answer (not blank; its question's thread, if any, holds neither it nor an addition with
- * its words) becomes a read-only thread of its own, so the Past questions box still shows it now that the earlier sets' folds are gone. Each is listed once.
+ * (Owner, Nov 5, §263) The ONE place that says what is current for a tester: their contract's questions now (none: the one "Your feedback" question). Every
+ * reader of "this tester's questions" (the form, the threads and their tags, Needs you, the Testers list, the server's Send / Add checks) goes through it
+ * (lib/server/tests.ts writtenQuestions is this). A question is old for the tester when it isn't in this list, by its words (isPastQuestion).
  */
-export function earlierSent(threads: QuestionThread[], sets: SetItem[][]): QuestionThread[] {
-  const said = (q: string, a: string) => `${qText(q)}\n${a.trim()}`;
-  const held = new Set(threads.flatMap((t) => [t.answer, ...t.adds.map((x) => x.text)].map((a) => said(t.question, a))));
-  const out: QuestionThread[] = [];
-  for (const items of sets) for (const it of items) {
-    if (!it.answer.trim() || held.has(said(it.question, it.answer))) continue;
-    held.add(said(it.question, it.answer));
-    out.push({ key: `${questionKey(it.question)}-earlier-${out.length + 1}`, question: it.question, required: it.required, answer: it.answer, fresh: false, adds: [] });
-  }
-  return out;
-}
-/**
- * (§234) The part's past questions (their threads: the answer and each addition), as the panel would draw them. (Owner, Nov 5, §254) Then the answers sent in an
- * earlier set that no thread holds (`earlier`: those sets' items, earlierSent), each its own past question.
- */
-export const pastThreads = (answers: unknown, current: string[], stored: unknown, earlier: SetItem[][] = []) => {
-  const { threads } = writtenThreads(answers, current, stored);
-  return [...threads.filter((t) => isPastQuestion(t.question, current)), ...earlierSent(threads, earlier)];
+export const currentQuestionsFor = (contract: { questions: unknown }): string[] => {
+  const qs = Array.isArray(contract.questions) ? contract.questions.filter((q): q is string => typeof q === "string") : [];
+  return qs.length ? qs : ["Your feedback"];
 };
+/** (Owner, Nov 5, §263, final) The developer's only "old" marker: in Needs you, beside a question no longer current that has a new, unpaid answer or addition. */
+export const OLD_TAG = "Old";
 
 /**
  * (Owner, Nov 5, §235) What a current question already has: its answer as last sent (by its words, also after a switch to changed questions), when it was answered
@@ -263,10 +256,14 @@ export const pastThreads = (answers: unknown, current: string[], stored: unknown
  * keeps every non-null one exactly as it was (the server fills them in): answered questions are added to with Add to this answer, never re-sent.
  */
 export function carriedAnswers(sub: { answers: unknown; additions?: unknown }, questions: string[]): (string | null)[] {
-  const byText = new Map(latestItems(sub, questions).map((x) => [qText(x.question), x.answer]));
+  // (Owner, Nov 5, §263; was the latest set's answers only) By its words over everything sent: a question that comes back after a switch (it was old for a
+  // while, so the latest set doesn't hold it) keeps the answer it last had and everything added to it, and is never asked again in the form below.
+  const { threads } = writtenThreads(sub.answers, questions, sub.additions);
+  const byText = new Map(threads.map((t) => [qText(t.question), t]));
   const keys = questionKeys(itemsFor(questions));
   return questions.map((q, i) => {
-    const a = byText.get(qText(q)) ?? "";
-    return a.trim() || addsTo(sub.additions, keys[i]).length ? a : null;
+    const t = byText.get(qText(q));
+    const a = t?.latest ?? "";
+    return a.trim() || t?.adds.length || addsTo(sub.additions, keys[i]).length ? a : null;
   });
 }

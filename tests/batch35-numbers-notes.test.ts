@@ -202,8 +202,11 @@ describe("batch 35 §29: labels apart from values wherever listing or contract f
     expect(scope).toContain("<QuestionTexts id={`scope-q-${c.id}`} items={writtenQuestions(c).map((q) => ({ text: qText(q), required: qRequired(q) }))} />"); // (§231)
     expect(scope).toContain("<FieldLabel>NDA</FieldLabel>");
     expect(scope).toContain("<FieldLabel>Due</FieldLabel><FieldValue>{fmtDate(c.dueAt)}</FieldValue>");
-    expect(scope).toContain('<FieldLabel tag={l.before != null ? <UpdatedTag id={`scope-info-${c.id}-${l.key}`} when={l.updatedAt ? fmtDateTimeIn(l.updatedAt, u.timeZone) : ""} before={l.before} now={l.now} /> : null}>{l.label}</FieldLabel>');
-    expect(scope).toContain('<ValueText id={`scope-info-${c.id}-description`} label="What to do">{c.test.description}</ValueText>'); // (§231)
+    // (Owner, Nov 5, §264) A listing line is drawn by one helper (infoItem), in "Your contract" (four lines) and in the listing information.
+    const item = s.slice(s.indexOf("const infoItem = "), s.indexOf("const CONTRACT_INFO = "));
+    expect(scope.match(/\.map\(infoItem\)/g)).toHaveLength(2);
+    expect(item).toContain('<FieldLabel tag={l.before != null ? <UpdatedTag id={`scope-info-${c.id}-${l.key}`} when={l.updatedAt ? fmtDateTimeIn(l.updatedAt, u.timeZone) : ""} before={l.before} now={l.now} /> : null}>{l.label}</FieldLabel>');
+    expect(item).toContain('<ValueText id={`scope-info-${c.id}-description`} label="What to do">{c.test.description}</ValueText>'); // (§231)
     // No "Label: value" run together any more.
     expect(scope).not.toMatch(/\{l\.label\}:|\{x\.name\}:|>Questions: <|NDA: none|NDA: accepted|<li>Due \{/);
   });

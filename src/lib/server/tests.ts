@@ -6,7 +6,7 @@ import { CALL_ACTS, PAY_ACTS, unanswered, answersIt, devChanges, devForced, logE
 import { notListed, sidOf } from "./shownLines";
 import { ANSWER_ONE, NOT_REQUIRED, answerMin, answersMissing, qText } from "@/lib/questions";
 import { itemsFor, sameQuestions } from "@/lib/answerSets";
-import { ADDITIONS_MAX, ADD_UNDER_QUESTION, ANYTHING_ELSE_KEY, ANYTHING_ELSE_TITLE, QUESTION_GONE, addedToWhat, additionsFull, additionsOf, addsCounted, carriedAnswers, latestItems, questionKeys, noAnswerYet } from "@/lib/additions";
+import { ADDITIONS_MAX, ADD_UNDER_QUESTION, ANYTHING_ELSE_KEY, ANYTHING_ELSE_TITLE, QUESTION_GONE, addedToWhat, additionsFull, additionsOf, addsCounted, carriedAnswers, currentQuestionsFor, latestItems, questionKeys, noAnswerYet } from "@/lib/additions";
 import { countersOf, countingSince, countsAfter, countsOf, criticalLine, lockedFields, storedCounts, type CriticalCounts } from "@/lib/limits";
 import { alertOf } from "@/lib/alerts";
 import { KEY_GIVEN, applyKeyChange, assignKeyAtJoin, checkTypedKeys, giveKeysToWorking, planKeyChange } from "./accessKeys";
@@ -86,10 +86,8 @@ export async function countingState(t: { id: string; criticalCounts: unknown }, 
 /** When the count started (null: nobody joined yet, edits are free and nobody is told). */
 export const startedCounting = async (t: { id: string; criticalCounts: unknown }, tx: Prisma.TransactionClient | typeof db = db): Promise<Date | null> => (await countingState(t, tx)).since;
 
-export const writtenQuestions = (c: { questions: unknown }) => {
-  const qs = (c.questions as string[]) ?? [];
-  return qs.length ? qs : ["Your feedback"];
-};
+/** (Owner, Nov 5, §263) This tester's questions now: defined once, in lib/additions.ts (currentQuestionsFor). */
+export const writtenQuestions = currentQuestionsFor;
 
 const str = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 const list = (v: unknown, allowed: string[]) => (Array.isArray(v) ? [...new Set(v.filter((x): x is string => typeof x === "string" && allowed.includes(x)))] : []);

@@ -6,15 +6,16 @@ import type { User } from "@prisma/client";
 import { describe, expect, it, vi } from "vitest";
 import { db } from "@/lib/db";
 import { SentWork, AddedLabel } from "@/components/SentWork";
-import { pastCount } from "@/components/PastQuestions";
 import { AnswerText, QuestionText } from "@/components/QA";
-import { NEW_QUESTION_TAG, earlierSent, pastThreads, writtenThreads } from "@/lib/additions";
+import { NEW_QUESTION_TAG } from "@/lib/additions";
+import { questionChanges } from "@/lib/questionHistory";
 import { joined, sact, seen, setup } from "./fixtures";
 
 // (Owner, Nov 5, batch 35 §254) Past questions without the earlier sets' "Previous questions and answers" folds, on both sides; an answer sent in an earlier set
 // that no thread holds (sent before §136, when a Send after a switch replaced the set) is still shown, as one more past question; N counts what's drawn.
 // (§255) No "new question" tag on the developer's side; the tester keeps it. (§256) Questions (sky-tinted boxes, sky labels) and answers (volt accent, volt
 // labels) told apart at a glance.
+// (Owner, Nov 5, §263, final) No Past questions box: an old question is only in Terms history ("Questions changed", Then with what was sent → Now).
 
 const auth = vi.hoisted(() => ({ user: null as User | null }));
 vi.mock("@/lib/server/page-auth", () => ({ requireOpenPage: async () => auth.user, requirePageUser: async () => auth.user, getPageUser: async () => auth.user, adminAway() {}, leaveIfClosed() {} }));
@@ -39,7 +40,9 @@ const testPage = async (testId: string, userId: string) => {
   const { default: TestPage } = await import("@/app/app/tests/[id]/page");
   return unescape(renderToStaticMarkup(await TestPage({ params: Promise.resolve({ id: testId }), searchParams: Promise.resolve({}) })));
 };
-const pastBox = (page: string) => { const s = page.slice(page.indexOf("data-past-questions=")); return s.slice(0, s.indexOf("</section>")); };
+// (Owner, Nov 5, §263) The tester's "Your written answers" panel, or the developer's Testers list part's panel (current questions only).
+const ownList = (page: string) => { const s = page.slice(page.indexOf('data-panel="own-answers-list-')); return s.slice(0, s.indexOf('data-question-body="else"')); };
+const rowList = (page: string, subId: string) => { const s = page.slice(page.indexOf(`data-panel="row-${subId}"`)); return s.slice(0, s.indexOf('data-question-body="else"')); };
 
 /** Sent for Q1 and Q2; the questions changed to Q1 and Q3. `legacy`: the answers to Q1 and Q3 were sent before §136 (they REPLACED the set, the old one kept in
  *  the piece's prevSets); otherwise as now (added under it). The contract keeps its earlier set (a "Sent" version and an unsent draft) either way. */
@@ -57,67 +60,40 @@ async function switched(legacy: boolean) {
   return { dev, testId, j, sub };
 }
 
-describe("§254 the earlier sets' sent answers (lib)", () => {
-  it("an answer no thread holds becomes a past question; one a thread holds (its answer or an addition) is never shown twice; blanks are skipped", () => {
-    // As now (§136): the earlier set only copies what was sent, so nothing is added.
-    const additions = [{ at: "2026-11-05T10:00:00.000Z", items: [item(Q1, "a"), item(Q3, "c")], notes: "", files: [] }];
-    const { threads } = writtenThreads([item(Q1, "a"), item(Q2, "b")], [Q1, Q3], additions);
-    expect(earlierSent(threads, [[item(Q1, "a"), item(Q2, "b")]])).toEqual([]);
-    expect(pastThreads([item(Q1, "a"), item(Q2, "b")], [Q1, Q3], additions, [[item(Q1, "a"), item(Q2, "b")]]).map((t) => t.question)).toEqual([Q2]);
-    // Before §136: the set was replaced; the old answers are in no thread.
-    const legacy = pastThreads([item(Q1, "a2"), item(Q3, "c")], [Q1, Q3], [], [[item(Q1, "a"), item(Q2, "b"), item(Q3, "")], [item(Q2, "b")]]);
-    expect(legacy.map((t) => [t.question, t.answer])).toEqual([[Q1, "a"], [Q2, "b"]]);
-    expect(new Set(legacy.map((t) => t.key)).size).toBe(2);
-    expect(legacy.every((t) => !t.fresh && !t.adds.length)).toBe(true);
-  });
-
-  it("pastCount is exactly the folds SentWork's Past questions draws", () => {
-    const answers = [item(Q1, "a2"), item(Q3, "c")], earlier = [[item(Q1, "a"), item(Q2, "b")]];
-    const html = renderToStaticMarkup(h(SentWork, { id: "p", part: "past", kind: "written", answers, questions: [Q1, Q3], notes: "", additions: [], files: [], earlier }));
-    expect(count(html, 'data-question-title=""')).toBe(2);
-    expect(pastCount(answers, [Q1, Q3], [], earlier)).toBe(2);
-    expect(html).toContain("<span>b</span>");
-    expect(html).not.toContain("data-add-more");
-    // The current panel never draws them.
-    expect(renderToStaticMarkup(h(SentWork, { id: "c", part: "current", kind: "written", answers, questions: [Q1, Q3], notes: "", additions: [], files: [], earlier }))).not.toContain("<span>b</span>");
+describe("§254 / §263 the earlier sets are Terms history entries (lib)", () => {
+  it("Then: each question with what was sent for it at the change (a set replaced before §136: its own sent answer); Now: the questions after", () => {
+    const until = "2026-11-05T10:00:00.000Z";
+    const old = [item(Q1, "the boats"), item(Q2, "level two gate")];
+    const sets = [{ until, items: old, versions: [{ kind: "sent", at: until, items: old }, { kind: "draft", items: [item(Q1, "the boats"), item(Q2, "an unsent draft line")] }] }];
+    const now = questionChanges(sets, [Q1, Q3], { answers: old, additions: [{ at: "2026-11-05T10:05:00.000Z", items: [item(Q1, "the boats"), item(Q3, "c")], notes: "", files: [] }] }, { drafts: true });
+    expect(now).toHaveLength(1);
+    expect(now[0].then.map((q) => [q.question, q.sent?.answer ?? null, q.draft])).toEqual([[Q1, "the boats", null], [Q2, "level two gate", null]]);
+    expect(now[0].now.map((q) => q.question)).toEqual([Q1, Q3]);
+    const legacy = questionChanges([{ until, items: old }], [Q1, Q3], { answers: [item(Q1, "the boats, again"), item(Q3, "the map colours")], additions: [] }, { drafts: true });
+    expect(legacy[0].then.map((q) => q.sent?.answer)).toEqual(["the boats", "level two gate"]);
   });
 
   it("PrevSetFolds is gone from the code", () => {
     const walk = (d: string): string[] => readdirSync(d).flatMap((f) => { const p = path.join(d, f); return statSync(p).isDirectory() ? walk(p) : /\.tsx?$/.test(f) ? [p] : []; });
-    for (const f of walk(path.resolve(__dirname, "../src"))) expect(readFileSync(f, "utf8"), f).not.toMatch(/<PrevSetFolds|export function PrevSetFolds/);
+    for (const f of walk(path.resolve(__dirname, "../src"))) expect(readFileSync(f, "utf8"), f).not.toMatch(/<PrevSetFolds|export function PrevSetFolds|PastQuestions/);
   });
 });
 
-describe("§254 on both sides", () => {
-  it("as now: Past questions holds Q2 once, no earlier-set fold, no unsent draft", async () => {
-    const { dev, testId, j, sub } = await switched(false);
-    const mine = pastBox(await sessionPage(j.sessionId, j.tester.user.id));
-    expect(mine).toContain('data-past-questions-title="">Past questions (1)</p>');
-    expect(count(mine, "level two gate")).toBeGreaterThan(0);
-    expect(mine).not.toContain("Previous questions and answers");
-    expect(mine).not.toContain("an unsent draft line");
-    const page = await testPage(testId, dev.user.id);
-    const theirs = pastBox(page.slice(page.indexOf(`id="part-${sub.id}"`)));
-    expect(theirs).toContain('data-past-questions-title="">Past questions (1)</p>');
-    expect(theirs).toContain("level two gate");
-    expect(theirs).not.toContain("Previous questions and answers");
-    expect(theirs).not.toContain("data-prev-set");
-  });
-
-  it("sent before §136 (the set replaced): the old answers no thread holds still show, as past questions, and N counts them", async () => {
-    const { dev, testId, j, sub } = await switched(true);
-    const mine = pastBox(await sessionPage(j.sessionId, j.tester.user.id));
-    expect(mine).toContain('data-past-questions-title="">Past questions (2)</p>');
+describe("§254 / §263 on both sides", () => {
+  for (const legacy of [false, true]) it(`${legacy ? "sent before §136 (the set replaced)" : "as now"}: Q2 is only in Terms history, with what was sent; never the draft on the developer's side`, async () => {
+    const { dev, testId, j, sub } = await switched(legacy);
+    const page = await sessionPage(j.sessionId, j.tester.user.id);
+    expect(ownList(page)).not.toContain(Q2);
+    const mine = page.slice(page.indexOf("data-questions-changed="));
+    expect(mine).toContain("Questions changed ");
     expect(mine).toContain("level two gate");
-    expect(mine).toContain("<span>the boats</span>");
-    expect(count(mine, 'data-question-title=""')).toBe(2);
-    expect(mine).not.toContain("Previous questions and answers");
-    const page = await testPage(testId, dev.user.id);
-    const theirs = pastBox(page.slice(page.indexOf(`id="part-${sub.id}"`)));
-    expect(theirs).toContain('data-past-questions-title="">Past questions (2)</p>');
-    expect(theirs).toContain("level two gate");
-    expect(theirs).toContain("<span>the boats</span>");
-    expect(count(theirs, 'data-question-title=""')).toBe(2);
+    expect(mine.slice(mine.indexOf('data-history-now=""'))).toContain(Q3);
+    const theirs = await testPage(testId, dev.user.id);
+    expect(rowList(theirs, sub.id)).not.toContain(Q2);
+    const hist = theirs.slice(theirs.indexOf("data-dev-terms-history="));
+    expect(hist).toContain("level two gate");
+    expect(hist).not.toContain("an unsent draft line");
+    expect(theirs).not.toContain("data-prev-set");
   });
 });
 
@@ -127,8 +103,8 @@ describe("§255 the new question tag", () => {
     expect(renderToStaticMarkup(h(SentWork, props))).toContain(`data-new-question="">${NEW_QUESTION_TAG}</span>`);
     expect(renderToStaticMarkup(h(SentWork, { ...props, newQuestionTag: false }))).not.toContain("data-new-question");
     const dev = src("app/app/tests/[id]/page.tsx");
-    expect(count(dev, "<SentWork ")).toBe(4);
-    expect(count(dev, "newQuestionTag={false}")).toBe(4); // Needs you, the update row, the Testers list, its Past questions
+    expect(count(dev, "<SentWork ")).toBe(3);
+    expect(count(dev, "newQuestionTag={false}")).toBe(3); // Needs you, the update row, the Testers list ((§263) no Past questions box any more)
     expect(src("app/app/sessions/[id]/page.tsx")).not.toContain("newQuestionTag");
     expect(src("app/app/tests/[id]/ByQuestion.tsx")).not.toContain("NEW_QUESTION_TAG");
   });

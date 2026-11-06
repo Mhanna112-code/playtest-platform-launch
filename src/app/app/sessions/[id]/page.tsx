@@ -61,10 +61,11 @@ import { NdaBox } from "@/components/NdaBox";
 import { QuestionTexts, ValueText } from "@/components/QA";
 /** (Owner, Nov 5, §231) The listing information lines whose value can be long: each in the shared box (the others are short lines). */
 const LONG_INFO: string[] = ["title", "productName", "mature"];
-import { PastQuestions, pastCount } from "@/components/PastQuestions";
 import { NameLine } from "@/components/WholeLine";
+import { QuestionsChangedEntry } from "@/components/QuestionsHistory";
+import { questionChanges } from "@/lib/questionHistory";
 import { cutNamesIn } from "@/lib/cutNames";
-import { carryOver, itemsFor, prevSetsOf, sameQuestions, versionsOf } from "@/lib/answerSets";
+import { carryOver, itemsFor, sameQuestions } from "@/lib/answerSets";
 import { ExcerptPicker } from "@/components/Excerpts";
 import { excerptChoices } from "@/lib/server/excerpts";
 import { otherSideNotice } from "@/components/OtherSideNotice";
@@ -133,19 +134,17 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
   const newQuestions = !!written && (!!written.setUntil || !sameQuestions(sentItems, itemsFor(writtenQuestions(c))));
   // (§167) Adding, per question of the current set: its keys, and how many of the part's 10 additions were made.
   const currentKeys = questionKeys(sentItems);
-  const prevSets = prevSetsOf(c.prevSets);
   // (Owner, Nov 5, §236) A Terms history line: its names (the developer's, yours, the test's titles, any long quoted name) cut at 20, each "…" opening its name in
   // place and the arrow the whole line (WholeLine, §220); the developer's whole name links to their profile.
   const histLine = (text: string) => {
     const x = cutNamesIn(text, [dev, displayName(u), c.title, c.test.title]);
     return <NameLine shown={x.shown} full={x.full} name={dev} href={devHref} />;
   };
-  // (Owner, Nov 5, §234) Everything past in one box: the questions no longer in the contract (with what was sent and added to them). (Owner, Nov 5, §254; replaces
-  // §234's earlier sets' folds here) No "Previous questions and answers" folds: an answer sent in an earlier set that no thread holds (sent before §136, kept only
-  // in the piece's own earlier sets) is one more past question; the contract's sets' "Sent" versions are checked too (they only copy what was sent). N counts
-  // exactly what the box draws.
-  const earlierSets = written ? [...prevSetsOf(written.prevSets).map((s) => s.items), ...prevSets.flatMap((s) => versionsOf(s, true).filter((v) => v.kind === "sent").map((v) => v.items))] : [];
-  const pastN = written ? pastCount(written.answers, writtenQuestions(c), written.additions, earlierSets) : 0;
+  // (Owner, Nov 5, §263, final; replaces §234's Past questions box and §254's earlier-set answers in it) "Your written answers" holds the current questions
+  // only; each change of the questions is a Terms history entry (Then: what you had for each question then, sent, a draft or nothing; Now). File markers are drawn
+  // from every upload of the written part (sent, or still unsent: a draft's).
+  const questionsHistory = questionChanges(c.prevSets, writtenQuestions(c), written ?? null, { drafts: true });
+  const historyFiles = c.recordings.filter((r) => r.part === "written" && r.uploadedAt);
   // (Owner, Nov 5, §235) The current questions with no answer yet (none answered after the first send: all of them); the form below the answers holds only these.
   const openQs = written ? writtenQuestions(c).filter((_, i) => carriedAnswers(written, writtenQuestions(c))[i] == null) : writtenQuestions(c);
   // (§235; replaces §182's rows below the panel) "Add to this answer" sits in each answered question's fold, right under its answer and additions (and Anything
@@ -156,11 +155,6 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
     return <WrittenAddForm key={key} sessionId={c.id} seenAt={seenAt} canSend={!rulesPaused} lines={sendLines(written, c.writtenCents)} questionKey={key} question={question} made={addsCounted(written.additions, key)}
       known={c.recordings.filter((r) => r.part === "written" && r.uploadedAt && !r.submissionId).map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, contentType: r.contentType }))} />;
   };
-  const pastBox = (
-    <PastQuestions id={`own-past-${c.id}`} count={pastN}>
-      {written && <SentWork id={`own-past-${written.id}`} part="past" earlier={earlierSets} timeZone={u.timeZone} kind="written" answers={written.answers} questions={writtenQuestions(c)} notes={written.notes} additions={written.additions} files={c.recordings.filter((r) => r.part === "written" && r.submissionId === written.id)} />}
-    </PastQuestions>
-  );
   // (Batch 13) "Show an excerpt on your profile": paid written answers, never while the test has an NDA, one pending request per part.
   const excerptPending = written ? (await db.excerpt.count({ where: { submissionId: written.id, status: "pending" } })) > 0 : false;
   const excerptPicks = written && !c.test.ndaText && !excerptPending && !u.testerSuspendedAt ? await excerptChoices(written) : [];
@@ -263,6 +257,28 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
     .flatMap((e) => { const x = parseValues(e); return x ? [{ ...x, id: e.id }] : []; });
   const infoFallbackAt = (await db.testEvent.findFirst({ where: { testId: c.testId, kind: { in: ["info", "renamed"] }, createdAt: { gt: c.joinedAt } }, orderBy: { createdAt: "desc" }, select: { createdAt: true } }))?.createdAt ?? null;
   const info = infoLines(c.test, infoChanges, { title: c.title, description: c.description, buildUrl: c.buildUrl }, infoFallbackAt);
+  // (Owner, Nov 5, §264) One listing-information line as the scope box draws it (current value, "Updated <time>" with before → now, long texts in the shared
+  // ValueText box; `data-info-line` for the top box's See it): the same in "Your contract" (what to do, build link, languages, devices) and below.
+  const infoItem = (l: (typeof info)[number]) => (
+    <li key={l.key} className="scroll-mt-24 rounded-lg px-1 transition-shadow data-[marked]:ring-2 data-[marked]:ring-sky-300" data-info-line={l.key} {...(l.before != null ? { "data-updated-at": l.updatedAt?.toISOString() ?? "" } : {})}>
+      <FieldLabel tag={l.before != null ? <UpdatedTag id={`scope-info-${c.id}-${l.key}`} when={l.updatedAt ? fmtDateTimeIn(l.updatedAt, u.timeZone) : ""} before={l.before} now={l.now} /> : null}>{l.label}</FieldLabel>
+      <FieldValue>
+        {/* (Owner, Nov 5, §231) A text that can be long (the title, the product name, what to do, the build link, the Mature reason) in the shared box
+            (ValueText: drags taller, its own scroll inside this fold's scroll); the link stays a link. Short lists (devices, languages) stay plain. */}
+        {l.key === "description" && l.now !== "(none)" ? (
+          <ValueText id={`scope-info-${c.id}-description`} label="What to do">{c.test.description}</ValueText>
+        ) : l.key === "buildUrl" && c.test.buildUrl ? (
+          <ValueText id={`scope-info-${c.id}-buildUrl`} label="Build link"><a href={c.test.buildUrl} target="_blank" rel="noreferrer" className="break-all">{c.test.buildUrl}</a></ValueText>
+        ) : LONG_INFO.includes(l.key) && l.now !== "(none)" && l.now !== "No" ? (
+          <ValueText id={`scope-info-${c.id}-${l.key}`} label={l.label}>{l.now}</ValueText>
+        ) : (
+          <span className="whitespace-pre-wrap break-words">{l.now}</span>
+        )}
+      </FieldValue>
+    </li>
+  );
+  /** (§264) The listing lines shown under "Your contract", in this order: they follow the developer's changes live, marked Updated. */
+  const CONTRACT_INFO = ["description", "buildUrl", "languages", "devices"] as const;
   const title = c.test.title;
   // (NEXT-UI 7) The calls, and the booked daily / weekly sets as one line each ("Weekly · Mon 3:00 PM (3 left)").
   // (Batch 15 section 42) The Live session: only calls ahead and calls in progress ("Call in progress / measuring" once started).
@@ -431,7 +447,8 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
       {!(u.stripeAccountId && u.payoutsReady) && <p className="text-sm text-slate-400" data-payout-hint="">{PAYOUT_SETUP_HINT} <a href="/app/payments#payout" className="underline">Finish setup</a></p>}
 
       {/* The full app's "Your agreed scope" fold. (Batch 30 §15) Two parts: the contract (fixed at joining, changed only through Switch / Keep) and the listing
-          information (always the current listing, live; a line changed since joining carries "Updated <time>": before → now). The top box's See it opens it. */}
+          information (always the current listing, live; a line changed since joining carries "Updated <time>": before → now). The top box's See it opens it.
+          (Owner, Nov 5, §264) What to do, the build link, languages and devices sit under "Your contract" (below Due), still live and marked the same way. */}
       <details className="card scroll-mt-24" id="scope" data-scope="">
         <summary className="flex cursor-pointer items-center gap-2 font-semibold text-white"><FileSignature className="h-5 w-5 text-indigo-300" /> Your agreed scope</summary>
         {/* (Owner, Oct 31, batch 35 §91) The whole scope in one scroll box (about 32rem tall), so the page below stays close. (Owner, Nov 5, §237) It is the draggable
@@ -465,29 +482,15 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
             </li>
           ) : <li><FieldLabel>NDA</FieldLabel><FieldValue>None</FieldValue></li>}
           <li data-scope-due=""><FieldLabel>Due</FieldLabel><FieldValue>{fmtDate(c.dueAt)}</FieldValue></li>
-          <li className="text-slate-400">Agreed {fmtDate(c.joinedAt)}. Your contract stays as it is: if <NameLink text={dev} href={devHref} /> changes these terms later, you choose Switch or Keep.</li>
+          {/* (Owner, Nov 5, §264) Below Due: what to do, the build link, languages and devices, moved here from the listing information. They stay live (the
+              current listing, "Updated <time>" with before → now), so the sentence under them says so. */}
+          {CONTRACT_INFO.map((k) => info.find((l) => l.key === k)).filter((l): l is (typeof info)[number] => !!l).map(infoItem)}
+          <li className="text-slate-400" data-scope-agreed="">Agreed {fmtDate(c.joinedAt)}. Your contract stays as it is: if <NameLink text={dev} href={devHref} /> changes these terms later, you choose Switch or Keep. What to do, the build link, languages and devices are the exception: they follow <NameLink text={dev} href={devHref} />&apos;s changes, marked Updated.</li>
         </ul>
         <p className="mt-3 text-sm font-medium text-white">The listing information</p>
         <p className="text-xs text-slate-400">Always the current listing: it follows <NameLink text={dev} href={devHref} />&apos;s changes as they&apos;re made.</p>
         <ul className="mt-1 space-y-2.5 text-sm" data-scope-info="">
-          {info.filter((l) => l.key !== "productName" || l.now !== "(none)" || l.before != null).filter((l) => l.key !== "mature" || c.test.mature || l.before != null).map((l) => (
-            <li key={l.key} className="scroll-mt-24 rounded-lg px-1 transition-shadow data-[marked]:ring-2 data-[marked]:ring-sky-300" data-info-line={l.key} {...(l.before != null ? { "data-updated-at": l.updatedAt?.toISOString() ?? "" } : {})}>
-              <FieldLabel tag={l.before != null ? <UpdatedTag id={`scope-info-${c.id}-${l.key}`} when={l.updatedAt ? fmtDateTimeIn(l.updatedAt, u.timeZone) : ""} before={l.before} now={l.now} /> : null}>{l.label}</FieldLabel>
-              <FieldValue>
-                {/* (Owner, Nov 5, §231) A text that can be long (the title, the product name, what to do, the build link, the Mature reason) in the shared box
-                    (ValueText: drags taller, its own scroll inside this fold's scroll); the link stays a link. Short lists (devices, languages) stay plain. */}
-                {l.key === "description" && l.now !== "(none)" ? (
-                  <ValueText id={`scope-info-${c.id}-description`} label="What to do">{c.test.description}</ValueText>
-                ) : l.key === "buildUrl" && c.test.buildUrl ? (
-                  <ValueText id={`scope-info-${c.id}-buildUrl`} label="Build link"><a href={c.test.buildUrl} target="_blank" rel="noreferrer" className="break-all">{c.test.buildUrl}</a></ValueText>
-                ) : LONG_INFO.includes(l.key) && l.now !== "(none)" && l.now !== "No" ? (
-                  <ValueText id={`scope-info-${c.id}-${l.key}`} label={l.label}>{l.now}</ValueText>
-                ) : (
-                  <span className="whitespace-pre-wrap break-words">{l.now}</span>
-                )}
-              </FieldValue>
-            </li>
-          ))}
+          {info.filter((l) => !(CONTRACT_INFO as readonly string[]).includes(l.key)).filter((l) => l.key !== "productName" || l.now !== "(none)" || l.before != null).filter((l) => l.key !== "mature" || c.test.mature || l.before != null).map(infoItem)}
         </ul>
         {/* (Design doc 9) The terms history: every offer and what you chose, with the questions and NDA you were on. */}
         {/* (Batch 35 §91) Folded shut by default: the Updated tags above already show what changed; this keeps the full record. */}
@@ -503,7 +506,8 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
             {[
               ...offers.map((o) => ({ at: o.createdAt, key: o.id, node: (<li key={o.id}>
                 {histLine(`${fmtDate(o.createdAt)}: ${dev} offered new terms (${o.diff}) · ${o.status === "switched" ? `you switched${o.decidedAt ? ` on ${fmtDate(o.decidedAt)}` : ""}` : o.status === "kept" ? `you kept your terms${o.decidedAt ? ` on ${fmtDate(o.decidedAt)}` : ""}` : o.status === "closed" || (o.status === "open" && c.status !== "working") ? "closed when your part ended" : o.status === "open" ? "waiting for your answer" : "replaced by a newer offer"}`)}
-                {Array.isArray(o.fromQuestions) && JSON.stringify(o.fromQuestions) !== JSON.stringify(o.questions) && (
+                {/* (Owner, Nov 5, §263) A switch that wrote its own "Questions changed" entry (the earlier set kept at the same moment) shows its questions there. */}
+                {Array.isArray(o.fromQuestions) && JSON.stringify(o.fromQuestions) !== JSON.stringify(o.questions) && !(o.decidedAt && questionsHistory.some((q) => new Date(q.at).getTime() === o.decidedAt!.getTime())) && (
                   <details className="ml-3 text-xs text-slate-400"><summary className="cursor-pointer">Questions then and now</summary>
                     {/* (Batch 15 section 3) Each question cut to 3 lines with Show more. (Batch 20 section 1) More than 3: a scroll box about 3 questions tall. */}
                     {/* (Batch 35 §29) Labels apart from the questions, numbered with their Required tags. */}
@@ -530,7 +534,8 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
                   </details>
                 </li>) }] : [];
               }),
-              ...prevSetsOf(c.prevSets).map((p) => ({ at: new Date(p.until), key: `set-${p.until}`, node: <li key={`set-${p.until}`} data-history-line="">{`${fmtDate(new Date(p.until))}: your questions changed; your earlier answers are kept under “Past questions”`}</li> })),
+              // (Owner, Nov 5, §263, final) Each change of the questions: "Questions changed <date/time>", Then (with what you had for each) → Now.
+              ...questionsHistory.map((q) => ({ at: new Date(q.at), key: `set-${q.at}`, node: <QuestionsChangedEntry key={`set-${q.at}`} id={`history-q-${c.id}-${new Date(q.at).getTime()}`} change={q} files={historyFiles} timeZone={u.timeZone} /> })),
               ...historyPays.map((p) => ({ at: p.createdAt, key: p.id, node: <li key={p.id} data-history-line="">{`${fmtDate(p.createdAt)}: ${p.kind === "extra" ? "paid more" : p.kind === "dispute" ? "the team raised the pay by" : "paid"} ${money(p.amountCents)} for your ${p.callId ? "live call" : subKinds.get(p.submissionId ?? "") ?? "work"} (you get ${money(testerShare(p.amountCents))})`}</li> })),
             ].sort((a, b) => a.at.getTime() - b.at.getTime()).map((x) => x.node)}
           </ul>
@@ -746,12 +751,11 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
             <Fold id={`own-answers-${written.id}`} summary={<span className="font-medium text-white" data-own-answers-title="">Your written answers</span>}>
               <div className="space-y-2">
                 <ResizeBox id={`own-answers-list-${written.id}`} label="Your written answers" defaultMax={LIST_PANEL.ownAnswers}>
-                  {/* (§234) Only the contract's current questions and Anything else: the past ones are in the Past questions box below. */}
-                  <SentWork id={`own-${written.id}`} part="current" timeZone={u.timeZone} kind="written" answers={written.answers} questions={writtenQuestions(c)} notes={written.notes} additions={written.additions} files={c.recordings.filter((r) => r.part === "written" && r.submissionId === written.id)}
+                  {/* (Owner, Nov 5, §263, final; replaces §234's Past questions box) The current questions only (and Anything else): an old question is in
+                      Terms history. */}
+                  <SentWork id={`own-${written.id}`} timeZone={u.timeZone} kind="written" answers={written.answers} questions={writtenQuestions(c)} notes={written.notes} additions={written.additions} files={c.recordings.filter((r) => r.part === "written" && r.submissionId === written.id)}
                     addTo={canAdd ? ({ key, question }) => addUnder(key, question) : undefined} />
                 </ResizeBox>
-                {/* (Owner, Nov 5, §234) The Past questions box, directly under the panel: read-only, no Add. */}
-                {pastBox}
               </div>
             </Fold>
           </div>
@@ -759,7 +763,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
         {!written && (refusal || meOff || !draftsShown) && <p className="note">Nothing sent.</p>}
         {/* Not sent yet: the form for the current questions. (Owner, Nov 5, §235; replaces the "update" form that refilled every question, and §222's Answer this
             question rows) Once sent: one form below the answers with a box for each current question that has no answer yet, and only those (an answered one is
-            added to in its fold, a past one is in Past questions); after a switch to changed questions it also moves the part onto them. Always "Send Answers". */}
+            added to in its fold, an old one is read-only in the list, §263); after a switch to changed questions it also moves the part onto them. Always "Send Answers". */}
         {canSendAgain(written) && !refusal && !meOff && draftsShown && (!written || newQuestions || openQs.length > 0) && (
           <div className="space-y-2" data-answer-form={written ? "open" : "first"}>
             {written?.setUntil && <p className="note" data-set-until-form="">What you sent is for the questions until {fmtDate(written.setUntil)}. Send your answers to these questions: they&apos;re added under what you sent.</p>}
@@ -768,8 +772,8 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
               initialAttachments={c.recordings.filter((r) => r.part === "written" && r.uploadedAt).map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, contentType: r.contentType }))} />
           </div>
         )}
-        {/* (Owner, Nov 5, §254; replaces batch 13 §8 / §234's earlier sets shown here before anything was sent) Nothing sent, nothing past: the Past questions box
-            only shows what was sent, under "Your written answers". */}
+        {/* (Owner, Nov 5, §254; replaces batch 13 §8 / §234's earlier sets shown here before anything was sent) No earlier sets' folds: nothing sent, nothing
+            old shown (§263: an unanswered old question is never shown). */}
         {/* (Batch 13) Show an excerpt of paid written answers on the profile (the developer allows or denies it). */}
         {written && excerptPicks.length > 0 && <ExcerptPicker submissionId={written.id} choices={excerptPicks} />}
         {excerptPending && <p className="note" data-excerpt-pending="">Your excerpt request is waiting for <NameLink text={dev} href={devHref} />.</p>}

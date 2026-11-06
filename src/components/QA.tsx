@@ -89,7 +89,7 @@ export function ValueText({ id, label, defaultMax = QA_BOX_MAX, children }: { id
  * page, Terms history, Edit's notes): one drop-down "Questions (N)", its list in the draggable scroll panel, and each question its own drop-down ("Question 3 ·
  * Required · <its first words>", closed), its words in the question box when opened.
  */
-export function QuestionTexts({ id, items, empty = "none", open = false, label = "Questions" }: { id: string; items: { text: string; required?: boolean }[]; empty?: string; /** the outer drop-down starts open */ open?: boolean; label?: string }) {
+export function QuestionTexts({ id, items, empty = "none", open = false, label = "Questions" }: { id: string; items: { text: string; required?: boolean; /** (Owner, Nov 5, §263) under the question in its drop-down (Terms history's answer boxes) */ extra?: ReactNode }[]; empty?: string; /** the outer drop-down starts open */ open?: boolean; label?: string }) {
   if (!items.length) return <span>{empty}</span>;
   return (
     <details className="group/qs" open={open} data-question-texts="">
@@ -106,6 +106,7 @@ export function QuestionTexts({ id, items, empty = "none", open = false, label =
                     <span className="min-w-0 flex-1 truncate font-normal text-slate-400">{q.text}</span>
                   </summary>
                   <div className="mt-1.5"><QuestionText id={`${id}-${i}`} label={`Question ${i + 1}`} required={q.required}>{q.text}</QuestionText></div>
+                  {q.extra && <div className="mt-1.5 space-y-1.5" data-history-answer="">{q.extra}</div>}
                 </details>
               </li>
             ))}

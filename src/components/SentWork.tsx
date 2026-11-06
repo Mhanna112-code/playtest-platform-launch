@@ -3,8 +3,7 @@ import { AnswerWithAttachments } from "@/components/AnswerSets";
 import { AttachmentList } from "@/components/AttachmentList";
 import { Fold } from "@/components/Panel";
 import { AnswerText, QuestionText } from "@/components/QA";
-import { ANYTHING_ELSE_KEY, ANYTHING_ELSE_TITLE, NEW_QUESTION_TAG, addedCount, addedFiles, addedLabel, additionsOf, additionsUntil, earlierSent, isPastQuestion, writtenThreads, type QuestionThread } from "@/lib/additions";
-import type { SetItem } from "@/lib/answerSets";
+import { ANYTHING_ELSE_KEY, ANYTHING_ELSE_TITLE, NEW_QUESTION_TAG, OLD_TAG, addedCount, addedFiles, addedLabel, additionsOf, additionsUntil, isPastQuestion, writtenThreads, type QuestionThread } from "@/lib/additions";
 import { markerIds } from "@/lib/answerAttachments";
 import { fmtStampIn } from "@/lib/format";
 
@@ -14,6 +13,14 @@ const asAttachment = (f: File) => ({ id: f.id, filename: f.filename, size: f.siz
 /** (Owner, Nov 3, batch 35 §167; was §136's plain "Added") The small heading above each addition, with when it was added: "Added · Nov 3, 2026, 11:29 PM". */
 export function AddedLabel({ at, timeZone }: { at: string; timeZone?: string | null }) {
   return <p className="text-xs font-semibold text-emerald-300" data-added-label="" data-added-at={at}>{addedLabel(fmtStampIn(at, timeZone))}</p>;
+}
+
+/**
+ * (Owner, Nov 5, §263) One sent answer, addition or note in its own box, its file markers drawn inline from the part's uploads by id (AnswerWithAttachments): the
+ * one renderer for the written answers and Terms history's Then (QuestionsChangedEntry), so a file still opens there after its question changed.
+ */
+export function SentAnswer({ id, label, name, text, files }: { id: string; label: ReactNode; name: string; text: string; files: File[] }) {
+  return <AnswerText id={id} label={label} name={name}><AnswerWithAttachments text={text} attachments={files.filter((f) => f.uploadedAt !== null).map(asAttachment)} /></AnswerText>;
 }
 
 
@@ -35,18 +42,18 @@ export function AddedLabel({ at, timeZone }: { at: string; timeZone?: string | n
  * later are left out. `newOnly` (Needs you): only what is new since `newOnly.since` (the last payment; null: never paid, so everything sent is new): the
  * questions answered or added to since then, each with only its new answer or additions; unchanged and still-unanswered questions are left out, and so are the
  * notes and the files sent first once it was paid (Anything else shows only when something new is in it).
- * (Owner, Nov 5, §234) `part`: "current" draws only the contract's current questions (`questions`) and Anything else (the answers panel, Needs you); "past" only
- * the questions no longer in the contract, read-only, with no Anything else and no Add (the "Past questions" box). Without it, every question (the team's view).
- * (Owner, Nov 5, §254) `earlier` (with part "past"): the earlier sets' items; an answer sent in one that no thread holds (sent before §136, when a Send after a
- * switch replaced the set) is drawn after the past questions as one more read-only past question (earlierSent), so nothing sent is lost without those sets' folds.
  * (Owner, Nov 5, §255) `newQuestionTag={false}`: no "new question" tag (the developer's views); the tester's own page keeps it.
+ * (Owner, Nov 5, §263, final; replaces §234's `part` split and its "Past questions" box, and §254's earlier-set answers there) Only the current questions
+ * (`questions`: the tester's contract's now, currentQuestionsFor) and Anything else, wherever the list shows (their "Your written answers", the developer's
+ * Testers list as paid). An old question (no longer in the contract, by its words) lives only in Terms history (QuestionsChangedEntry). The one exception is
+ * Needs you (`newOnly`): a new, unpaid answer or addition to an old question still shows, after the current ones, read-only with a small "Old" tag beside the
+ * question (the developer's only "old" marker), so it can be paid; once paid it's only in Terms history. Without `questions` (the team's view) every question.
  */
-export function SentWork({ id = "sent", kind, answers, questions = [], notes, additions, files, timeZone, addTo, until = null, newOnly, part, earlier = [], newQuestionTag = true }: {
+export function SentWork({ id = "sent", kind, answers, questions, notes, additions, files, timeZone, addTo, until = null, newOnly, newQuestionTag = true }: {
   id?: string; kind: string; answers: unknown; questions?: string[]; notes: string; additions: unknown; files: File[]; timeZone?: string | null;
   addTo?: (q: { key: string; question: string }) => ReactNode;
   /** (§226) only what was sent up to this time */ until?: Date | string | null; /** (§226) only what is new since this time (null: everything sent) */ newOnly?: { since: Date | string | null };
-  /** (§234) only the current questions (and Anything else), or only the past ones */ part?: "current" | "past";
-  /** (§254) the earlier sets' items (part "past") */ earlier?: SetItem[][]; /** (§255) false: no "new question" tag (the developer) */ newQuestionTag?: boolean;
+  /** (§255) false: no "new question" tag (the developer) */ newQuestionTag?: boolean;
 }) {
   const upTo = until ? new Date(until).getTime() : null, after = newOnly?.since ? new Date(newOnly.since).getTime() : null;
   const isNew = (at: string | undefined) => after == null || (!!at && new Date(at).getTime() > after);
@@ -60,7 +67,7 @@ export function SentWork({ id = "sent", kind, answers, questions = [], notes, ad
   const all = uploaded.map(asAttachment);
   const byId = (ids: string[]) => uploaded.filter((f) => ids.includes(f.id));
   // (§223) An answer, an addition or a note in its own box (`panel`: its unique id, which keeps its dragged height).
-  const answerBox = (text: string, panel: string, label: ReactNode, name: string) => <AnswerText id={panel} label={label} name={name}><AnswerWithAttachments text={text} attachments={all} /></AnswerText>;
+  const answerBox = (text: string, panel: string, label: ReactNode, name: string) => <SentAnswer id={panel} label={label} name={name} text={text} files={uploaded} />;
   const addedText = (a: { at: string; text: string; files: string[] }, i: number, panel = `${id}-add-${i}`) => (
     <div key={i} className="space-y-1" data-addition={i}>
       {a.text.trim() !== "" ? answerBox(a.text, panel, <AddedLabel at={a.at} timeZone={timeZone} />, "Added") : <AddedLabel at={a.at} timeZone={timeZone} />}
@@ -81,14 +88,18 @@ export function SentWork({ id = "sent", kind, answers, questions = [], notes, ad
       </div>
     );
   }
-  const { threads, other } = writtenThreads(answers, questions, shown);
+  const { threads, other } = writtenThreads(answers, questions ?? [], shown);
   const writtenFiles = first.filter((f) => f.part !== "recording");
   // (§226) Only the new (newOnly): an answer sent since then (never paid: every answer; paid: a question that came with changed questions since), or an addition
   // since then. A question with neither (unchanged, or still unanswered) is left out.
   const freshAnswer = (t: QuestionThread) => !newOnly || (!!t.answer.trim() && (after == null || (t.fresh && isNew(t.at))));
   const showThread = (t: QuestionThread) => !newOnly || freshAnswer(t) || t.adds.some((a) => isNew(a.at));
-  const fold = (t: QuestionThread, n: number) => {
+  // (Owner, Nov 5, §263) Old: no longer in the contract, by its words (with no `questions`, the team's view, nothing is).
+  const isOld = (t: QuestionThread) => !!questions && isPastQuestion(t.question, questions);
+  const fold = (t: QuestionThread, n: number, current: boolean) => {
     const newAdds = t.adds.map((a, i) => ({ a, i })).filter(({ a }) => isNew(a.at));
+    // (§263) Needs you only: an old question's new answer carries "Old", read-only (no Add).
+    const old = !current;
     return (
       <Fold key={t.key} id={`${id}-q-${t.key}`} defaultOpen={false} jumpOpen={false} className="rounded-lg border border-white/10 px-2 py-1.5" summaryClassName="flex items-start gap-1 !text-sm"
         // The tags go under the question when the line is narrow (a phone), never squeezing it.
@@ -96,7 +107,8 @@ export function SentWork({ id = "sent", kind, answers, questions = [], notes, ad
           {/* (Owner, Nov 5, §223; was §187's title with its own Show more) The title: the question cut at 2 lines; its whole text is the first box inside. */}
           <span className="line-clamp-2 min-w-0 flex-1 basis-40 text-slate-200 [overflow-wrap:anywhere]" data-question-title="">{t.question}{t.required && <span aria-label="required"> *</span>}</span>
           {/* (Owner, Nov 5, §255) The "new question" tag only on the tester's side: the developer's views pass newQuestionTag={false}. */}
-          {((newQuestionTag && t.fresh) || newAdds.length > 0) && <span className="flex shrink-0 items-center gap-1 whitespace-nowrap">
+          {((newQuestionTag && t.fresh) || newAdds.length > 0 || old) && <span className="flex shrink-0 items-center gap-1 whitespace-nowrap">
+            {old && <span className="badge border-amber-300/40 text-amber-200" data-old-question="">{OLD_TAG}</span>}
             {newQuestionTag && t.fresh && <span className="badge border-sky-300/40 text-sky-200" data-new-question="">{NEW_QUESTION_TAG}</span>}
             {newAdds.length > 0 && <span className="text-emerald-300" data-added-count={newAdds.length}>{addedCount(newAdds.length)}</span>}
           </span>}
@@ -109,25 +121,24 @@ export function SentWork({ id = "sent", kind, answers, questions = [], notes, ad
             <div data-set-answer="">{t.answer.trim() ? answerBox(t.answer, `${id}-q-${t.key}-answer`, "Answer", "Answer") : <AnswerText id={`${id}-q-${t.key}-answer`} empty />}</div>
           )}
           {newAdds.map(({ a, i }) => addedText(a, i, `${id}-q-${t.key}-add-${i}`))}
-          {addTo?.({ key: t.key, question: t.question })}
+          {current && addTo?.({ key: t.key, question: t.question })}
         </div>
       </Fold>
     );
   };
   const others = other.map((o, i) => ({ o, i })).filter(({ o }) => isNew(o.kind === "add" ? o.add.at : o.set.at));
-  // (§234) The current panel leaves the past questions out (they're in the Past questions box); the box draws only them.
-  const inPart = (t: QuestionThread) => !part || (part === "past") === isPastQuestion(t.question, questions);
-  const hiddenPast = part === "current" && threads.some((t) => !inPart(t) && showThread(t));
   const elseCount = others.length;
-  const elseShown = part !== "past" && (!newOnly || elseCount > 0 || (after == null && (!!notes.trim() || writtenFiles.length > 0)));
-  // (Owner, Nov 5, §254) The Past questions box: then each answer sent in an earlier set that no thread holds, read-only (pastThreads counts the same).
-  const drawn = [...threads.filter((t) => inPart(t) && showThread(t)), ...(part === "past" ? earlierSent(threads, earlier) : [])];
+  const elseShown = !newOnly || elseCount > 0 || (after == null && (!!notes.trim() || writtenFiles.length > 0));
+  // (Owner, Nov 5, §263) The current questions only; an old one is in Terms history. Needs you (newOnly) also keeps an old question's new answer or addition
+  // (after the current ones, tagged "Old"), so it can be paid.
+  const current = threads.filter((t) => !isOld(t) && showThread(t));
+  const old = newOnly ? threads.filter((t) => isOld(t) && showThread(t)) : [];
+  const drawn = [...current.map((t) => ({ t, current: true })), ...old.map((t) => ({ t, current: false }))];
   return (
     <div className="space-y-2" data-sent-work="written">
-      {drawn.map((t, n) => fold(t, n + 1))}
-      {/* (§234) Needs you never shows a past question: what was sent to one is read in the Testers list's Past questions box. */}
-      {newOnly && hiddenPast && <p className="note" data-past-elsewhere="">Answers to past questions are in the Testers list, under Past questions.</p>}
-      {newOnly && !drawn.length && !hiddenPast && !elseShown && <p className="note" data-nothing-new="">Nothing new since you paid.</p>}
+      {drawn.map(({ t, current: c }, n) => fold(t, n + 1, c))}
+      {/* (Owner, Nov 5, §263; replaces §234's "Answers to past questions are in the Testers list" note) Nothing new is ever left out of Needs you. */}
+      {newOnly && !drawn.length && !elseShown && <p className="note" data-nothing-new="">Nothing new since you paid.</p>}
       {/* (Owner, Nov 4, §188) The fixed last spot: Anything else, a fold like a question's, after the last question. */}
       {elseShown && <Fold id={`${id}-q-${ANYTHING_ELSE_KEY}`} defaultOpen={false} jumpOpen={false} className="rounded-lg border border-white/10 px-2 py-1.5" summaryClassName="flex items-start gap-1 !text-sm"
         summary={<span className="flex min-w-0 flex-1 flex-wrap items-start gap-x-1">

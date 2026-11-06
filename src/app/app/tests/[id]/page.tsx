@@ -52,10 +52,10 @@ import { ListingPanel } from "./ListingPanel";
 import { ListingSeeIt, SeeItTarget } from "@/components/ListingInfo";
 import { panelRows } from "@/lib/listingPanel";
 import { lastListingSave } from "@/lib/server/listingPanel";
-import { Fold, ResizeBox } from "@/components/Panel";
+import { Fold, OwnPanel, ResizeBox } from "@/components/Panel";
 import { SentWork } from "@/components/SentWork";
 import { lastPaidAt } from "@/lib/paidCut";
-import { additionsOf, additionsUntil, answersByQuestion } from "@/lib/additions";
+import { additionsOf, answersByQuestion } from "@/lib/additions";
 import { bankWaitsOf, pieceOf, pieceRoom } from "@/lib/server/payments";
 import { TopPanel } from "./TopPanel";
 import { NeedsYou } from "./NeedsYou";
@@ -73,8 +73,8 @@ import { PaidSoFar } from "@/components/PaidSoFar";
 import { paidForWork } from "@/lib/server/paymentRows";
 import { partPaymentLines } from "@/lib/server/partPayments";
 import { byQuestion } from "@/lib/byQuestion";
-import { PastQuestions, pastCount } from "@/components/PastQuestions";
-import { prevSetsOf } from "@/lib/answerSets";
+import { QuestionsChangedEntry } from "@/components/QuestionsHistory";
+import { questionChanges } from "@/lib/questionHistory";
 import { qStored } from "@/lib/questions";
 import { pendingForDeveloper } from "@/lib/server/excerpts";
 import { ExcerptQuestion, ExcerptQuote, ExcerptReplaces } from "@/components/ExcerptList"; // (batch 16 section 37) the question above each excerpt request
@@ -497,8 +497,10 @@ export default async function TestPage({ params, searchParams }: { params: Promi
               <ResizeBox id={`needs-${x.s!.id}`} label={x.s!.kind === "written" ? "Written answers" : "Recordings"}>
                 {/* (Batch 13 section 8) What was last sent, under the questions it answered; an earlier set says so (reviewed and paid at the price it was sent at). */}
                 {x.s!.kind === "written" && x.s!.setUntil && <p className="note" data-set-until="">Sent for the questions until {fmtDate(x.s!.setUntil)}</p>}
-                {/* (Owner, Nov 5, §226) Only what is new: never paid, every answered question (not the unanswered ones). (Owner, Nov 5, §255) No "new question" tag. */}
-                <SentWork id={`needs-${x.s!.id}`} part={x.s!.kind === "written" ? "current" : undefined} timeZone={u.timeZone} kind={x.s!.kind} answers={x.s!.answers} questions={writtenQuestions(x.c)} notes={x.s!.notes} additions={x.s!.additions} files={x.s!.recordings} newOnly={{ since: paidCut(x.s!) }} newQuestionTag={false} />
+                {/* (Owner, Nov 5, §226) Only what is new: never paid, every answered question (not the unanswered ones). (Owner, Nov 5, §255) No "new question" tag.
+                    (Owner, Nov 5, §263) A new, unpaid answer or addition to a question that has since changed shows too, after the current ones, with a small
+                    "Old" tag beside the question, so it can be paid; once paid it is only in Terms history. */}
+                <SentWork id={`needs-${x.s!.id}`} timeZone={u.timeZone} kind={x.s!.kind} answers={x.s!.answers} questions={writtenQuestions(x.c)} notes={x.s!.notes} additions={x.s!.additions} files={x.s!.recordings} newOnly={{ since: paidCut(x.s!) }} newQuestionTag={false} />
               </ResizeBox>
               <HoldFold openOn={[anchor]} className="min-w-0" summaryClassName="text-sm font-medium text-white" data={{ "data-fold": `needs-pay-${x.id}` }} summary="Pay">
               <PayBox owes={owesNow} key={x.s!.id} kind="submission" id={x.s!.id} name={displayName(x.c.tester)} seenAt={seenAt} room={rooms.get(x.s!.id)?.box} confirming={confirmingPay(x.s!.id)}
@@ -535,8 +537,9 @@ export default async function TestPage({ params, searchParams }: { params: Promi
         {/* (Owner, Nov 5, §225) Its payments are listed only in the Testers list, never in Needs you. */}
         <ResizeBox id={`update-${x.id}`} label={x.kind === "written" ? "Written answers" : "Recordings"}>
           {/* (Owner, Nov 5, §226) Only what came after the last payment: the questions answered or added to since, with just the new parts. */}
-          {/* (§234) Never a past question in Needs you (part="current"). (Owner, Nov 5, §255) No "new question" tag on the developer's side. */}
-          <SentWork id={`update-${x.id}`} part={x.kind === "written" ? "current" : undefined} timeZone={u.timeZone} kind={x.kind} answers={x.answers} questions={writtenQuestions(c)} notes={x.notes} additions={x.additions} files={x.recordings} newOnly={{ since: paidCut(x) }} newQuestionTag={false} />
+          {/* (Owner, Nov 5, §263; replaces §234's "never a past question in Needs you") An old question's new answer or addition shows, tagged "Old".
+              (Owner, Nov 5, §255) No "new question" tag on the developer's side. */}
+          <SentWork id={`update-${x.id}`} timeZone={u.timeZone} kind={x.kind} answers={x.answers} questions={writtenQuestions(c)} notes={x.notes} additions={x.additions} files={x.recordings} newOnly={{ since: paidCut(x) }} newQuestionTag={false} />
         </ResizeBox>
         {/* (Owner, Nov 5, §226) In Needs you the press for what's new on a paid part is "Pay" (Pay more's route, checks and stops; the Testers list keeps Pay more). */}
         <HoldFold openOn={[`update-${x.id}`]} className="min-w-0" summaryClassName="text-sm font-medium text-white" data={{ "data-fold": `update-pay-${x.id}` }} summary="Pay">
@@ -733,23 +736,21 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                       {r.sub && <div className="w-full" data-paid-part-content="" data-paid-until={paidCut(r.sub)?.toISOString() ?? ""}>
                         <ResizeBox id={`row-${r.sub.id}`} label={r.sub.kind === "written" ? "Written answers" : "Recordings"}>
                           {r.sub.kind === "written" && r.sub.setUntil && <p className="note" data-set-until="">Sent for the questions until {fmtDate(r.sub.setUntil)}</p>}
-                          {/* (Owner, Nov 5, §234) Only the contract's current questions and Anything else; the past ones in the Past questions box under it.
+                          {/* (Owner, Nov 5, §263, final; replaces §234's Past questions box under it and §254's earlier-set answers there) As paid (§226), the
+                              tester's current questions only: an old question is in the Terms history below. A question that comes back is current again by itself.
                               (Owner, Nov 5, §255) No "new question" tag on the developer's side. */}
-                          <SentWork id={`row-${r.sub.id}`} part={r.sub.kind === "written" ? "current" : undefined} timeZone={u.timeZone} kind={r.sub.kind} answers={r.sub.answers} questions={writtenQuestions(c)} notes={r.sub.notes} additions={r.sub.additions} files={r.sub.recordings} until={paidCut(r.sub)} newQuestionTag={false} />
+                          <SentWork id={`row-${r.sub.id}`} timeZone={u.timeZone} kind={r.sub.kind} answers={r.sub.answers} questions={writtenQuestions(c)} notes={r.sub.notes} additions={r.sub.additions} files={r.sub.recordings} until={paidCut(r.sub)} newQuestionTag={false} />
                         </ResizeBox>
-                        {/* (Owner, Nov 5, §234) At the bottom of the written answers: the questions no longer in this tester's contract (as paid for, §226), read-only.
-                            (Owner, Nov 5, §254; replaces §234's earlier sets' "Previous questions and answers" folds here) Nothing else: an answer sent in an earlier set
-                            that no thread holds (sent before §136, kept only in the piece's earlier sets) is one more past question, and N counts exactly what's drawn. */}
-                        {r.sub.kind === "written" && (() => {
-                          const earlier = prevSetsOf(r.sub.prevSets).map((x) => x.items);
-                          const n = pastCount(r.sub.answers, writtenQuestions(c), additionsUntil(r.sub.additions, paidCut(r.sub)), earlier);
-                          return (
-                            <div className="mt-2"><PastQuestions id={`row-past-${r.sub.id}`} count={n}>
-                              {/* (Owner, Nov 5, §255) No "new question" tag on the developer's side. */}
-                              <SentWork id={`row-past-${r.sub.id}`} part="past" earlier={earlier} newQuestionTag={false} timeZone={u.timeZone} kind="written" answers={r.sub.answers} questions={writtenQuestions(c)} notes={r.sub.notes} additions={r.sub.additions} files={r.sub.recordings} until={paidCut(r.sub)} />
-                            </PastQuestions></div>
-                          );
-                        })()}
+                        {/* (Owner, Nov 5, §263) The tester's Terms history for the questions, as on their session page: each change, Then (with what they SENT for
+                            each question, never a draft) → Now, the files drawn from this part's uploads. */}
+                        {r.sub.kind === "written" && ((hist) => hist.length > 0 && (
+                          <details className="mt-2 space-y-2 text-sm" data-terms-history="" data-dev-terms-history={c.id}>
+                            <summary className="fold-chevron cursor-pointer font-medium text-white">Terms history</summary>
+                            <OwnPanel><ResizeBox id={`dev-terms-history-${c.id}`} label="Terms history">
+                              <ul className="space-y-1.5 text-slate-300">{hist.map((q) => <QuestionsChangedEntry key={q.at} id={`dev-history-q-${c.id}-${new Date(q.at).getTime()}`} change={q} files={r.sub!.recordings} timeZone={u.timeZone} />)}</ul>
+                            </ResizeBox></OwnPanel>
+                          </details>
+                        ))(questionChanges(c.prevSets, writtenQuestions(c), r.sub, { drafts: false }))}
                       </div>}
                       {/* (Owner, Oct 29, batch 11 section 6 / batch 12 section 3) A paid piece keeps its Pay box as "Pay more" until its cap is reached. */}
                       {r.sub && r.sub.review && !r.sub.review.rejected && !restricted && !r.sub.review.teamClosedById && payMore.open && (rooms.get(r.sub.id)?.room ?? 0) > 0 && (
@@ -870,7 +871,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                 {/* (Owner, Oct 31, batch 35 §33) Only the terms line: the contract changes (renames, a Stop's note…) are still recorded for the tester's own page, never
                     listed under the developer's row. */}
                 {/* (Batch 13 section 8) Earlier SENT sets this tester replaced after switching to changed questions. */}
-                {/* (Owner, Nov 5, §234) The earlier sets' folds moved into the written part's Past questions box. */}
+                {/* (Owner, Nov 5, §234) The earlier sets' folds are gone; (§263) their answers no thread holds are in the written part's one list, tagged "Old question". */}
                 {/* (Owner, Nov 3, §166) No "On <name>'s profile: “…”" lines here any more: the excerpts stay on the tester's profile (and the requests in Needs you). */}
                 {/* (Batch 11, DEFAULT) A tester who deleted their account with no payout account: their unreviewed work left Needs you. */}
                 {!testerPayable(c.tester) && (c.submissions.some((x) => !x.review) || c.calls.some((x) => tookPlace(x) && !x.review)) && <p className="note" data-deleted-no-payouts="">{deletedNoPayoutsLine(displayName({ ...c.tester, deletedAt: null }), c.tester.pronoun)}</p>}
@@ -953,7 +954,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                 .map((s) => ({
                   // (Batch 13 section 8) Grouped by the exact text of the question each answer was sent for.
                   // (Batch 35 §136) The latest answers per question. (§167) What was added to a question follows its answer, dated; (Owner, Nov 4, §188) Anything else last: the notes and what was added there, dated.
-                  ...((w) => ({ questions: w.items.map((i) => qStored(i.question, i.required)), answers: w.answers, notes: w.notes }))(answersByQuestion(s, writtenQuestions(c), (at) => fmtStampIn(at, u.timeZone))),
+                  // (Owner, Nov 5, §263) Only the tester's current questions: an old one is in their Terms history.
+                  ...((w) => ({ questions: w.items.map((i) => qStored(i.question, i.required)), answers: w.answers, notes: w.notes }))(answersByQuestion(s, writtenQuestions(c), (at) => fmtStampIn(at, u.timeZone), writtenQuestions(c))),
                   contractId: c.id, tester: displayName(c.tester), sentAt: s.updatedAt,
                   attachments: s.recordings.filter((r) => r.uploadedAt).map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, contentType: r.contentType })),
                   status: (!s.review ? "waiting" : s.review.rejected && !(s.dispute?.decidedCents) ? "rejected" : "paid") as "paid" | "rejected" | "waiting",

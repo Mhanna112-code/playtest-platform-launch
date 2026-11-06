@@ -233,7 +233,7 @@ describe("§223 Your written answers: each question and its answer in draggable 
 
   it("the developer's views draw the same component (Needs you, the update row, the tester rows, the team's See the work)", () => {
     const page = src("app/app/tests/[id]/page.tsx");
-    expect(page.match(/<SentWork /g)).toHaveLength(4); // (§234) and the Past questions box
+    expect(page.match(/<SentWork /g)).toHaveLength(3); // (Owner, Nov 5, §263) no Past questions box any more
     expect(src("app/admin/DisputeWork.tsx")).toContain("<SentWork ");
     const dev = draw("row-s1");
     expect(dev).toContain(`data-panel="row-s1-q-${K1}-answer"`);

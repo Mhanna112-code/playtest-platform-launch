@@ -7,7 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 import { db } from "@/lib/db";
 import { SentWork } from "@/components/SentWork";
 import { WrittenForm } from "@/app/app/sessions/[id]/SessionActions";
-import { QUESTION_GONE, addsCounted, additionsOf, carriedAnswers, isPastQuestion, pastThreads, questionKeys } from "@/lib/additions";
+import { OLD_TAG, QUESTION_GONE, addsCounted, additionsOf, carriedAnswers, isPastQuestion, questionKeys } from "@/lib/additions";
 import { PRESS_VERBS, SEND_ANSWERS, pressLabelOf } from "@/lib/pressLabels";
 import { ANSWER_ONE } from "@/lib/questions";
 import { joined, sact, seen, setup } from "./fixtures";
@@ -16,6 +16,8 @@ import { joined, sact, seen, setup } from "./fixtures";
 // the earlier sets' folds; the answers panel shows only the current questions and Anything else; Needs you never shows a past question; adding to one is refused.
 // (§235) The tester's written part: Add to this answer under each answer (in its fold); one form below the answers with a box for each current question that has
 // no answer yet, and only those (first answers free); its button always "Send Answers".
+// (Owner, Nov 5, §263, final; replaces §234's box) No Past questions box: the answer lists show the current questions only; an old question is in Terms history;
+// Needs you still shows a new, unpaid answer to one, tagged "Old".
 
 const auth = vi.hoisted(() => ({ user: null as User | null }));
 vi.mock("@/lib/server/page-auth", () => ({ requireOpenPage: async () => auth.user, requirePageUser: async () => auth.user, getPageUser: async () => auth.user, adminAway() {}, leaveIfClosed() {} }));
@@ -53,51 +55,48 @@ async function switched() {
   return { dev, testId, j, sub };
 }
 
-describe("§234 past questions (lib and SentWork)", () => {
-  it("a question is past when the contract no longer has it (by its words); SentWork draws the current ones or the past ones", () => {
+describe("§234 / §263 old questions (lib and SentWork)", () => {
+  it("a question is old when the contract no longer has it (by its words); the lists draw the current ones only, Needs you also a new answer to an old one, tagged Old", () => {
     expect(isPastQuestion(Q2, [Q1, Q3])).toBe(true);
     expect(isPastQuestion(`[required] ${Q1}`, [Q1])).toBe(false);
     const additions = [{ at: "2026-11-05T10:00:00.000Z", items: [item(Q1, "a"), item(Q3, "c")], notes: "", files: [] }];
-    expect(pastThreads([item(Q1, "a"), item(Q2, "b")], [Q1, Q3], additions).map((t) => t.question)).toEqual([Q2]);
-    const draw = (part: "current" | "past") => renderToStaticMarkup(h(SentWork, { id: "x", kind: "written", answers: [item(Q1, "a"), item(Q2, "b")], questions: [Q1, Q3], notes: "n", additions, files: [], part }));
-    expect(draw("current")).toContain(Q3);
-    expect(draw("current")).not.toContain(Q2);
-    expect(draw("current")).toContain('data-anything-else=""');
-    expect(draw("past")).toContain(Q2);
-    expect(draw("past")).not.toContain(Q1);
-    expect(draw("past")).not.toContain("data-anything-else");
+    const props = { id: "x", kind: "written", answers: [item(Q1, "a"), item(Q2, "b")], questions: [Q1, Q3], notes: "n", additions, files: [] };
+    const list = renderToStaticMarkup(h(SentWork, props));
+    expect(list).toContain(Q3);
+    expect(list).not.toContain(Q2);
+    expect(list).toContain('data-anything-else=""');
+    const needs = renderToStaticMarkup(h(SentWork, { ...props, newOnly: { since: null } }));
+    expect(needs.indexOf(Q3)).toBeLessThan(needs.indexOf(Q2));
+    expect(needs.match(/data-old-question=""/g)).toHaveLength(1);
+    expect(needs).toContain(`data-old-question="">${OLD_TAG}</span>`);
   });
 });
 
-describe("§234 on both sides", () => {
-  it("the tester: the panel has only the current questions; the Past questions box under it holds Q2 with what was sent and added, read-only", async () => {
+describe("§263 on both sides", () => {
+  it("the tester: the list has only the current questions; Q2 with what was sent and added is in Terms history", async () => {
     const { j } = await switched();
     const page = await sessionPage(j.sessionId, j.tester.user.id);
-    const panel = page.slice(page.indexOf('data-panel="own-answers-list-'), page.indexOf("data-past-questions="));
+    const panel = page.slice(page.indexOf('data-panel="own-answers-list-'), page.indexOf('data-question-body="else"'));
     expect(panel).toContain(Q1);
     expect(panel).toContain(Q3);
     expect(panel).not.toContain(Q2);
-    const past = page.slice(page.indexOf("data-past-questions="));
-    expect(past).toContain('data-past-questions-title="">Past questions (1)</p>');
-    expect(past).toContain(Q2);
-    expect(past).toContain("level two gate");
-    expect(past).toContain("late note on Q2");
-    expect(past.slice(0, past.indexOf("</section>"))).not.toContain("data-add-more");
+    expect(page).not.toContain("data-past-questions");
+    expect(page).not.toContain("data-old-question");
   });
 
-  it("the developer: the Testers list's part has the Past questions box under its panel; Needs you never shows a past question", async () => {
+  it("the developer: the Testers list's part has the current questions only; Needs you shows Q2's unpaid answer, tagged Old", async () => {
     const { dev, testId, sub } = await switched();
     const page = await testPage(testId, dev.user.id);
     const row = page.slice(page.indexOf(`id="part-${sub.id}"`));
-    const rowPanel = row.slice(row.indexOf(`data-panel="row-${sub.id}"`), row.indexOf("data-past-questions="));
-    expect(rowPanel).not.toContain(Q2);
+    const rowPanel = row.slice(row.indexOf(`data-panel="row-${sub.id}"`), row.indexOf('data-question-body="else"'));
     expect(rowPanel).toContain(Q3);
-    expect(row).toContain(`data-panel="row-past-${sub.id}"`);
-    expect(row.slice(row.indexOf("data-past-questions="))).toContain("level two gate");
+    expect(rowPanel).not.toContain(Q2);
+    expect(page).not.toContain("data-past-questions");
     const needs = page.slice(page.indexOf(`data-panel="needs-${sub.id}"`), page.indexOf(`id="part-${sub.id}"`));
-    expect(needs).not.toContain(Q2);
-    expect(needs).not.toContain("late note on Q2");
-    expect(needs).toContain("data-past-elsewhere");
+    expect(needs).toContain(Q2);
+    expect(needs).toContain("late note on Q2");
+    expect(needs).toContain(`data-old-question="">${OLD_TAG}</span>`);
+    expect(needs).not.toContain("data-past-elsewhere");
   });
 
   it("the server refuses an addition to a past question (not only hidden)", async () => {

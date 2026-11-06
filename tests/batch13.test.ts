@@ -257,11 +257,11 @@ describe("batch 13 section 8: whole sets of questions and answers", () => {
     const kept = await db.keptForm.findUniqueOrThrow({ where: { userId_key: { userId: j.tester.user.id, key: `written:${j.sessionId}` } } });
     expect((kept.data as { answers: string[] }).answers).toEqual(["My Q1 draft", "", ""]);
     expect(carryOver(prev[0].items, ["Q1?", "Q2 changed?", "Q3?"])).toEqual(["My Q1 draft", "", ""]);
-    // (Owner, Nov 5, §254) No "Previous questions and answers" folds any more (PrevSetFolds is gone): the Past questions box shows what was sent, and an earlier
-    // set's sent answer that no thread holds as one more past question.
+    // (Owner, Nov 5, §254) No "Previous questions and answers" folds any more (PrevSetFolds is gone); (§263, final) each earlier set is a Terms history entry
+    // "Questions changed" (Then, with what the tester had, → Now).
     expect(src("app/app/sessions/[id]/page.tsx")).not.toContain("PrevSetFolds");
     expect(src("components/AnswerSets.tsx")).not.toContain("export function PrevSetFolds");
-    expect(src("app/app/sessions/[id]/page.tsx")).toContain("part=\"past\" earlier={earlierSets}");
+    expect(src("app/app/sessions/[id]/page.tsx")).toContain("questionChanges(c.prevSets, writtenQuestions(c), written ?? null, { drafts: true })");
   });
 
   it("sent, then switched: the developer sees it under its own questions, labelled, at its price; (batch 35 §136) the answers to the new set are ADDED under it", async () => {
