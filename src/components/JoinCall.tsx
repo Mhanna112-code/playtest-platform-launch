@@ -3,13 +3,17 @@ import { Err } from "@/components/Err";
 import { useEffect, useState } from "react";
 import { api, ApiError, errOf } from "@/lib/client";
 import { ANSWER_TERMS_CODE } from "@/lib/answerTerms";
+import { ChangesBox } from "@/components/ChangesBox";
+import { useStopOnce } from "@/lib/useStopOnce";
 
 /**
  * Join call: opens the room, or shows why not (blue, under the button). (Owner, Oct 27) Checked live: the button disappears when the call is cancelled; checked on press: a press
  * after a cancellation shows "This call was cancelled" with the reason under Join.
  */
-export function JoinCall({ callId }: { callId: string }) {
+export function JoinCall({ callId, seenAt }: { callId: string; /** (§271) the page's load time (else the one PageLoaded noted) */ seenAt?: string }) {
   const [err, setErr] = useState("");
+  // (Owner, Nov 5, §271) A pause since the page loaded, or the team's lift of it, stops Join once (its box under the button); the next press opens the room.
+  const stop = useStopOnce(seenAt);
   const [gone, setGone] = useState(false);
   // (Owner, Oct 29, batch 29 section 20) Refused for open new terms away from the session page (the tester dashboard's Upcoming calls): a way to the offer
   // (a full page load, so HashJump brings the Switch / Keep box into view, highlighted).
@@ -37,9 +41,12 @@ export function JoinCall({ callId }: { callId: string }) {
           setErr("");
           setTermsAt("");
           try {
-            const r = await api<{ url: string }>(`/api/calls/${callId}/join`, {});
+            const r = await api<{ url: string }>(`/api/calls/${callId}/join`, stop.marks());
+            stop.clear();
             window.open(r.url, "_blank");
           } catch (e) {
+            if (stop.stopped(e)) return;
+            stop.clear();
             setErr(errOf(e));
             if (e instanceof ApiError && e.data.cancelled === true) setGone(true);
             if (e instanceof ApiError && e.code === ANSWER_TERMS_CODE && typeof e.data.sessionId === "string" && window.location.pathname !== `/app/sessions/${e.data.sessionId}`) setTermsAt(`/app/sessions/${e.data.sessionId}#terms-offer`);
@@ -48,6 +55,7 @@ export function JoinCall({ callId }: { callId: string }) {
       >
         Join call
       </button>
+      <ChangesBox changes={stop.box} press="Join call" />
       <Err text={err} press="Join call" />
       {termsAt && err && <a href={termsAt} className="text-sm" data-answer-terms-link="">Answer them on the session page →</a>}
     </span>

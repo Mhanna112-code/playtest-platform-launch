@@ -465,9 +465,13 @@ async function claimRequest(id: string, status: string, other: Parameters<typeof
   throw new HttpError(409, "gone", refusalFor(await db.callRequest.findUniqueOrThrow({ where: { id } }), displayName(other), mine));
 }
 
+/** A paused test (any cause) refuses booking a call: testers read only "paused". */
+function pausedRefusal(c: Ctx["c"], side: Side) {
+  if (testPaused(c.test.developer, c.test)) throw new HttpError(409, "paused", side === "tester" ? `${PAUSED_RIGHT_NOW} You can request calls once it resumes.` : c.test.developer.devSuspendedAt ? DEV_SUSPENDED : c.test.developer.holdStartedAt ? "Pay what you owe first." : "The team paused this test.");
+}
 async function refusals(c: Ctx["c"], side: Side) {
   if (c.status !== "working") throw new HttpError(409, "closed", side === "tester" ? "Your session has ended." : `${displayName(c.tester)}'s session has ended.`);
-  if (testPaused(c.test.developer, c.test)) throw new HttpError(409, "paused", side === "tester" ? `${PAUSED_RIGHT_NOW} You can request calls once it resumes.` : c.test.developer.devSuspendedAt ? DEV_SUSPENDED : c.test.developer.holdStartedAt ? "Pay what you owe first." : "The team paused this test.");
+  pausedRefusal(c, side);
   // (Owner) "Closed" only means no NEW testers: testers already in carry on, so calls work. Only a stopped test refuses.
   if (c.test.status === "stopped") throw new HttpError(409, "closed", "This test was stopped.");
   await assertWorkOpen(db, c.testId);
@@ -781,6 +785,8 @@ export async function answerRequest(user: U, contractId: string, body: Record<st
   // (Owner, Nov 4, §185) Accepting with the pair already over 3 (booked + waiting, from before the limit): refused at once, before the gate. An Accept turns this
   // request into one booked time, so it never raises the count.
   if (action === "accept" && (await callsTaken(contractId)) > MAX_CALLS) throw new HttpError(409, "limit", callLimitLine(displayName(other)));
+  // (Owner, Nov 5, §271) Accept on a paused test is refused, so the refusal comes first: it tells them it's paused (never a pause stop, then the refusal).
+  if (action === "accept") pausedRefusal(c, side);
   // (Batch 35 §79) Accept / Decline never stops for the line about this request itself (the developer's: the tester's "requested …" on this contract).
   if (side === "developer") await db.$transaction((tx) => devGate(tx, c.testId, body, {}, [], undefined, { acts: CALL_ACTS, keys: [`req:${r.id}`, `c:${contractId}`], answers: { item: r.id, kinds: ["requested"], contractId } }));
   else await testerGate(c.testerId, contractId, c.testId, body, undefined, { ...CALL_PRESS, answers: { item: r.id } });

@@ -159,7 +159,7 @@ async function run(u: Awaited<ReturnType<typeof requireActive>>, id: string, act
       case "cancel-invite":
         return ok(await cancelInvite(u, id, body));
       case "message": {
-        const m = body.testerId ? await sendChat(u, id, String(body.testerId), body.body, body.clientId) : await sendMessage(u, String(body.contractId ?? ""), body.body, body.clientId);
+        const m = body.testerId ? await sendChat(u, id, String(body.testerId), body.body, body.clientId, body) : await sendMessage(u, String(body.contractId ?? ""), body.body, body.clientId, body); // (§271) with the page's load time
         return ok({ id: m.id });
       }
       case "join": {

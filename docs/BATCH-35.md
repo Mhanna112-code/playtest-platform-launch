@@ -4861,3 +4861,24 @@ filters." (`filteredOut` from invitePanel; blocked and deleted accounts are neve
 - On the redraw the card step shows ticked in the same done style as the other steps, Verify a card is gone, and an open card form's Verify this card goes too
   (kept only while its own press is in flight).
 - A press that lands before the update keeps its refusal (CARD_ALREADY_VERIFIED, §157). Test: tests/verify-card-turns-off-272.test.ts.
+## §271 A pause or hold since the page loaded stops every press once, except Decide dispute (owner, Nov 5)
+- A pause is the team's pause of the test, the developer's payment or chargeback hold, or a developer suspension. A pause since the page loaded, and the team's
+  lift of its pause (§207), stop every press on that test ONCE, both sides, whatever the Alerts (forced lines); the second press goes ahead. Testers read only
+  "This test was paused at …" / "This test resumed at …"; the developer reads their own words ("Your tests were paused at …", "Your developer account was
+  suspended at …", "The team paused this test at …", "The team lifted its pause on this test at …").
+- Tester side, one shared place: testerGate adds the pause moments itself (`testerPauseMoments`), so every press through it has them: Send Answers, Add to this
+  answer, a recording's Send and add, Charge / Let it go, Dispute, Rate, Leave, Switch / Keep, Request a time, Accept / Decline / Withdraw, Cancel call and Cancel
+  the remaining calls. The session route's stateMoment keeps only the stop. Presses outside the gate stop with `pauseStopOnce`: Join call, a message, an excerpt
+  request, and Block / Report on a developer's profile (her working tests of that developer). Their pages send the load time (`useStopOnce`: the page's seenAt or
+  PageLoaded's; the developer profile and chat pages now note it).
+- A press refused while paused gets ONLY its refusal (it already says paused), never a stop first: Send / Add / a recording's Send (§213's notice), Request a
+  time, Accept (its paused refusal now comes before the gate), Join call, a message, Rate on a team pause. After the lift those presses stop once for the
+  lift (and the pause it ended, when that came after the load).
+- Developer side: devGate already had the pause and lift moments (Pay, Pay more, Confirm with your bank, Confirm all, Stop, End early, Invite, call presses);
+  added to Edit Save (the timed lines replace the raw "The team paused this test" records), Rate, Add your side, excerpt Allow / Deny, Join call and messages.
+  A team pause or hold still refuses most developer presses first (the banner, requireActive), so those show only the refusal. Pay what you owe keeps its own
+  seenIds stop (a hold since the page loaded comes with the new debt it lists).
+- The team's Decide dispute never stops for a pause or hold.
+- Once a stop box on the page listed a pause or lift line, no other button there stops for it again (§250's `shownIds` / `sid`).
+- Tests: tests/pause-stops-every-press-271.test.ts. batch15-paused's "the developer's side never stops" now stops once for the suspension since the page
+  loaded; other-tab's declined-Pay gate now lists "This test was paused at …" after the delayed line (the hold the decline started).

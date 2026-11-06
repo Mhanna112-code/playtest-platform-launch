@@ -1,5 +1,5 @@
 import { dateZone } from "./dateZone";
-import { devLiftSince, devPauseSince, devStopSince, loadedOf } from "./stopMoment";
+import { TEAM_LIFTED_EVENT, TEAM_PAUSED_EVENT, devLiftSince, devPauseMoments, devPauseSince, devStopSince, loadedOf } from "./stopMoment";
 import { replaceLine, takesTheirs } from "@/lib/editMerge";
 import { FIELD_NAMES, INFO_FIELDS, saveText } from "@/lib/listingSave";
 import { CALL_ACTS, PAY_ACTS, unanswered, answersIt, devChanges, devForced, logEvent, seenOf, tabOf, withRenamed, type Press } from "./live";
@@ -470,6 +470,15 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
         ...(news.removed.length ? [{ kind: "own", text: keysRemovedLine(news.removed), createdAt: at }] : []),
       ];
       if (lines.length) dcN = [...dcN, ...lines];
+    }
+    // (Owner, Nov 5, §271) A pause since Edit opened (their own hold or suspension starting, e.g. a charge declined in another tab; a team pause is the banner's
+    // refusal instead) or the team's lift of its pause stops Save once, whatever the Alerts, in their own words ("Your tests were paused at 3:10 PM.", "The team
+    // lifted its pause on this test at 3:10 PM."). It stands in for the team's own pause / lift records among the listing's version changes (no line twice).
+    const pauseLines = notListed(await devPauseMoments(testId, loadedOf(body)), body);
+    if (pauseLines.length) {
+      const teamRecord = (e: TestEventLike) => (e.kind === "paused" && e.text === TEAM_PAUSED_EVENT) || (e.kind === "resumed" && e.text === TEAM_LIFTED_EVENT);
+      const others = gateChanges.filter((e) => !teamRecord(e));
+      dcN = [...dcN.filter((e) => !teamRecord(e)), ...pauseLines.map((e) => ({ ...e, forced: true })), ...(dcN.length ? [] : others)];
     }
     dcN = [...dcN].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
     const stop = dcN.length ? dcN.map((c) => ({ ...devLine(c, false), ...(c.fields ? { fields: c.fields } : {}), ...(c.kind === "yours" ? { kind: "yours" } : {}) })) : gateChanges.length ? gateChanges.map((c) => ({ text: renderTimes(c.text, dateZone()), at: c.createdAt, ...sidOf(c) })) : null;

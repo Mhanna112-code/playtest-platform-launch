@@ -11,7 +11,7 @@ import { reportKeyBroken } from "@/lib/server/accessKeys";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, stopTimeIn } from "@/lib/format";
 import { CALL_CANCELLED_BY_STOP, LIMITED_CHOICE_REFUSAL, RATE_INACTIVE, PAUSE_DEFAULTS, PAUSED_SEND, WORK_OVER_ACTIONS, testerPaused, testerRefusal, workOver, workOverLine, workOverPress } from "@/lib/rules";
-import { loadedOf, stopBox, testerLiftSince, testerPauseSince, testerStopSince } from "@/lib/server/stopMoment";
+import { loadedOf, stopBox, testerStopSince } from "@/lib/server/stopMoment";
 import { requireUser } from "@/lib/server/session";
 import { testerGate } from "@/lib/server/testerGate";
 import { addWritten, leaveTest, sendWritten } from "@/lib/server/tests";
@@ -78,15 +78,17 @@ async function pausedRefusal(userId: string, contractId: string, action: string)
  * tester's work ended, every press still allowed follows the same stop-once rules as on a running test. The stop, close, early end or pause itself is a change like any
  * other: a press on a page opened before it stops once naming it ("Nora Lane stopped this test at 3:10 PM.", "This test was paused at 3:10 PM."); the second goes ahead.
  * Rate checks the same in its own gate (its short list: no pause); Leave and Block never stop; chat and the excerpt presses keep their own rules.
+ * (Owner, Nov 5, §271) The pause (and the team's lift of it) moved into testerGate: every tester press stops once for it there, Alerts Off too; this keeps the stop.
  */
 const MOMENT_ACTIONS = new Set(["choose", "dispute", "cancel-call", "cancel-set", "request-time", "answer-request", "terms"]);
 async function stateMoment(contractId: string, action: string, body: Record<string, unknown>) {
   if (!MOMENT_ACTIONS.has(action)) return;
   const loaded = loadedOf(body);
-  const stop = (await testerStopSince(contractId, loaded)) ?? (await testerPauseSince(contractId, loaded));
-  // (Owner, Nov 5, §207) The team lifting its pause is named like the pause: "This test resumed at 3:10 AM.".
+  const stop = await testerStopSince(contractId, loaded);
+  // (Owner, Nov 5, §271) A pause and the team's lift of it (§207) are no longer said here: testerGate says them for every press that goes through it (after the
+  // press's own refusals, so a press refused while paused shows only its refusal, never a stop first). Only the stop is this route's.
   // (Owner, Nov 5, §250) A moment a stop box on this page already listed is seen: the press follows its usual gate.
-  const found = notListed([...(stop ? [stop] : []), ...(await testerLiftSince(contractId, loaded))], body);
+  const found = notListed(stop ? [stop] : [], body);
   if (!found.length) return;
   // (Batch 30, Oct 29 addition) ONE box: the stop with every other change the page hadn't shown (the press's own reasons), oldest first; the second press goes ahead.
   const c = await db.contract.findUnique({ where: { id: contractId }, select: { testerId: true, testId: true } });
@@ -197,7 +199,7 @@ async function run(u: Awaited<ReturnType<typeof requireActive>>, id: string, act
       case "recording-alive":
         return ok(await uploadAlive(u, id, body));
       case "message": {
-        const m = await sendMessage(u, id, body.body, body.clientId);
+        const m = await sendMessage(u, id, body.body, body.clientId, body); // (§271) with the page's load time
         return ok({ id: m.id });
       }
       case "terms":

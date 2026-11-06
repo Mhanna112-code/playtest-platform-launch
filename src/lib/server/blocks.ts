@@ -47,12 +47,15 @@ export async function blockPartners(userId: string) {
   return rows.map((r) => (r.blockerId === userId ? r.blockedId : r.blockerId));
 }
 
-export async function blockUser(me: { id: string; email: string; name: string }, otherId: string) {
+export async function blockUser(me: { id: string; email: string; name: string }, otherId: string, body: Record<string, unknown> = {}) {
   if (!otherId || otherId === me.id) throw new HttpError(400, "bad_user", "Choose someone to block.");
   const other = await db.user.findUnique({ where: { id: otherId } });
   if (!other) throw new HttpError(404, "not_found", "That person doesn't exist.");
   // (Owner, Oct 27) The only stop: already blocked (in another tab).
   if (await iBlocked(me.id, otherId)) throw new HttpError(409, "already", `You already blocked ${displayName(other)}.`);
+  // (Owner, Nov 5, §271) A tester blocking a developer whose test she works on: a pause of that test since the profile loaded (or the team's lift) stops it once.
+  const m = await import("./stopMoment");
+  m.pauseStopOnce(await m.testerPauseMomentsWith(me.id, otherId, body), body);
   // (Owner, Nov 3, batch 35 §157) The block row is the claim (its unique key): of two Blocks at the same moment (two tabs) one goes on to end sessions and send the
   // lines; the other reads "You already blocked <name>." and does nothing.
   await db.block.create({ data: { blockerId: me.id, blockedId: otherId } }).catch((e) => {
@@ -114,7 +117,7 @@ export async function unblockUser(me: { id: string }, otherId: string) {
 }
 
 /** Join call: the call page (the built-in room) only when the call can be joined now; otherwise the refusal line (shown under Join). */
-export async function joinCall(user: { id: string }, callId: string) {
+export async function joinCall(user: { id: string }, callId: string, body: Record<string, unknown> = {}) {
   await (await import("./calls")).sweepNobodyJoined();
   // (Batch 18 section 3; batch 21 section 2) A call the server ended (150%, the $1,000, or what closed it): Join is refused (and the button goes).
   const own = await db.call.findUnique({ where: { id: callId }, include: { contract: { include: { test: true } } } });
@@ -144,6 +147,10 @@ export async function joinCall(user: { id: string }, callId: string) {
   }
   // (Batch 27 section 1) The tester's Join call waits while new terms are open: Switch or Keep first.
   if (side === "tester") await answerTermsFirst(c.id);
+  // (Owner, Nov 5, §271) A pause since the page loaded (a pause still on refuses Join above, so it shows only that), or the team's lift of it, stops Join once
+  // whatever the Alerts, in each side's words (the tester's "This test resumed at 3:10 PM."); the second press opens the room.
+  const m = await import("./stopMoment");
+  m.pauseStopOnce(side === "tester" ? await m.testerPauseMoments(c.id, m.loadedOf(body)) : await m.devPauseMoments(c.testId, m.loadedOf(body)), body);
   // (Batch 21) The room itself records who came in (its first poll); a press alone isn't being in the call.
   return { url: `/app/calls/${call.id}` };
 }

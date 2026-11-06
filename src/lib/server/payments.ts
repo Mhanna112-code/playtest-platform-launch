@@ -433,6 +433,7 @@ export const decideLockedLine = (pronoun?: string | null) => `The developer is c
 export const DECIDE_LOCKED = decideLockedLine();
 const devPronounOf = async (contractId: string) => (await db.contract.findUnique({ where: { id: contractId }, select: { test: { select: { developer: { select: { pronoun: true } } } } } }))?.test.developer.pronoun;
 
+/** (Owner, Nov 5, §271) The team's Decide dispute is the one press a pause or hold never stops (no pause moment here, whatever happened since the page loaded). */
 export async function decideDispute(admin: U, disputeId: string, body: Record<string, unknown>) {
   if (!isAdmin(admin)) throw new HttpError(403, "not_admin", "Only admins can decide disputes.");
   const d = await db.dispute.findUnique({ where: { id: disputeId } });
@@ -587,10 +588,13 @@ export async function addDevSide(dev: U, testId: string, body: Record<string, un
   const c = d ? await db.contract.findUnique({ where: { id: d.contractId }, include: { test: true } }) : null;
   if (!d || !c || c.testId !== testId || c.test.developerId !== dev.id) throw new HttpError(404, "not_found", "That dispute doesn't exist.");
   if (d.status !== "open") throw new HttpError(409, "decided", "This dispute was already decided.");
-  // (Owner, Oct 30, batch 15 section 27) Optional, never stopped (no stop-once), up to 2,000 characters (refused beyond, never cut).
+  // (Owner, Oct 30, batch 15 section 27) Optional, never stopped by changes (§271: only by a pause or lift, below), up to 2,000 characters (refused beyond, never cut).
   const text = readText(body.text, LIMITS.devSide, "dev_side");
   const ok = checkDevSide(text, !!d.devSideAt);
   if (!ok.ok) throw new HttpError(ok.message.startsWith("You already") ? 409 : 400, "dev_side", ok.message);
+  // (Owner, Nov 5, §271) The one stop it has: a pause since the page loaded (the team's, their own hold or suspension) or the team's lift of it, once, whatever the Alerts.
+  const m = await import("./stopMoment");
+  m.pauseStopOnce(await m.devPauseMoments(testId, m.loadedOf(body)), body);
   // (Owner, Nov 3, §157) Claimed: once, while the dispute is open. Two presses at once (two tabs): one side is kept, the other reads "You already added your side.";
   // a decision made meanwhile: "This dispute was already decided."
   const claimed = await db.dispute.updateMany({ where: { id: d.id, devSideAt: null, status: "open" }, data: { devSide: text, devSideAt: new Date() } });

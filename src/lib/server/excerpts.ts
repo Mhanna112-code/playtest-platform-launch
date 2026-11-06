@@ -94,6 +94,9 @@ export async function requestExcerpt(tester: { id: string; name: string; email: 
   // (Owner, Nov 4, §196) Trimmed in a delete-only box: a part left out of the middle reads " … ". Each "…"-separated piece must be in the answer, in order; the
   // 10 to 500 above counts the stored text, ellipses included. Anything added is refused with the same line.
   if (!fromAnswer(pick.text, text)) throw new HttpError(400, "not_from_answer", "Trim the excerpt from your answer: it can only leave words out, not add any.");
+  // (Owner, Nov 5, §271) A pause of this test since the page loaded (or the team's lift of it) stops the request once, whatever her Alerts ("This test was paused at …").
+  const m = await import("./stopMoment");
+  m.pauseStopOnce(await m.testerPauseMoments(sub.contractId, m.loadedOf(body)), body);
   const hideProduct = false; // (batch 18 section 7) always "From <test>"
   const x = await db.$transaction(async (tx) => {
     // One tester's requests one at a time: the count and the one-per-part rule hold under two quick presses.
@@ -130,6 +133,9 @@ export async function decideExcerpt(dev: { id: string; name: string; email: stri
   // (Owner, Oct 28, batch 16 section 21) The same press already made (in another tab): a plain refusal, no stop box.
   if (x.status !== "pending") throw new HttpError(409, "decided", decidedLine(x));
   // (Owner, Oct 29, batch 29 section 12) Your own changes in another tab never stop Allow / Deny (the same decision made elsewhere is the plain refusal above).
+  // (Owner, Nov 5, §271) A pause since the page loaded (the team's, their own hold or suspension) or the team's lift of it does, once, whatever the Alerts.
+  const m = await import("./stopMoment");
+  m.pauseStopOnce(await m.devPauseMoments(x.testId, m.loadedOf(body)), body);
   // (Batch 35 §126) Allow on a replacement: the new one is shown and the one(s) shown now for that question go, in one transaction. Deny leaves them.
   await db.$transaction(async (tx) => {
     const done = await tx.excerpt.updateMany({ where: { id: x.id, status: "pending" }, data: { status: allow ? "shown" : "denied", decidedAt: new Date() } });

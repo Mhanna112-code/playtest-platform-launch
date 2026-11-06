@@ -12,6 +12,6 @@ export async function POST(req: Request) {
     const u = await requireActive(req, unblock ? { what: "Unblock" } : { devSide: "auto", what: "Block" });
     const id = String(body.userId ?? "");
     if (unblock) return ok(await unblockUser(u, id));
-    return ok(await blockUser(u, id));
+    return ok(await blockUser(u, id, body)); // (§271) with the page's load time
   });
 }
