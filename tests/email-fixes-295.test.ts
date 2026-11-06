@@ -107,7 +107,7 @@ describe("§295 point 3: an addition doesn't read as a second send", () => {
     await settle();
     expect((await sact(w.sessionId, "written-add", w.tester.cookie, { text: "And a note", question: ANYTHING_ELSE_KEY, seenAt: seen(), confirmed: true })).status).toBe(200);
     const ana = (await lines(w.anaId)).map((n) => n.text);
-    expect(ana.filter((t) => t.startsWith("Work sent:"))).toEqual(["Work sent: your written answers for “Harbor Run”"]); // the first send only
+    expect(ana.filter((t) => t.startsWith("Work sent:"))).toEqual([]); // (Owner, Nov 6, §312d) no line for a first send any more
     expect(ana).toContain("You added to your answer to “What did you like?” on “Harbor Run”");
     expect(ana).toContain("You added to your notes on “Harbor Run”");
     const dev = (await lines(w.devId)).map((n) => n.text);
@@ -220,7 +220,7 @@ describe("§295 point 6: a chargeback's amount changing goes in the end-of-day e
     const pi = "pi_" + randomUUID();
     await db.payment.create({ data: { kind: "review", submissionId: sub.id, contractId: w.sessionId, developerId: w.devId, testerId: w.anaId, amountCents: 4000, feeCents: 0, testerCents: 0, status: "charged", stripePaymentIntentId: pi } });
     expect(await chargebackOpened(pi)).toBe(true);
-    expect((await mails(w.dev.user.email)).map((m) => m.subject)).toEqual(["Your tests are paused after a chargeback"]);
+    expect((await mails(w.dev.user.email)).map((m) => m.subject)).toEqual([expect.stringMatching(/^Your tests are paused after a chargeback: .+ unless you finish the steps$/)]); // (§313a)
     expect(await disputeAmountChanged(pi, 2500, "under_review")).toBe("followed");
     const changed = (await lines(w.devId)).find((n) => n.text.startsWith("Your bank changed the amount"))!;
     expect(changed).toMatchObject({ mustEmail: true, payment: true, groupKey: "payhold", summarizedAt: null });

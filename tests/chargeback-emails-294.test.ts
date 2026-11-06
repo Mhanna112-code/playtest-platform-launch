@@ -14,6 +14,10 @@ import { joined, sact, settle, setup } from "./fixtures";
 // (§294, second decision) "At once" means immediately (sendEmail, the admins' path), never queued for the end-of-day email; and the bank changing a chargeback's amount
 // BEFORE the repayment now rings (payhold) and emails the developer too, in Pay what you owe's own words (bankChangedLine).
 
+// (Owner, Nov 6, §313a) The hold's one line names each paused test's closing date.
+const HOLD_LINE = /^Your tests are paused until you pay what you owe: “Harbor Run” closes on .+$/;
+// (Owner, Nov 6, §313a) The chargeback hold's one line names each paused test's closing date.
+const CB_LINE = /^Your tests are paused after a chargeback: “Harbor Run” closes on .+ unless you finish the steps$/;
 beforeEach(() => { process.env.DISPUTE_WAIT_MS = "0"; });
 afterEach(() => { setStripeForTests(null); delete process.env.DISPUTE_WAIT_MS; });
 
@@ -44,11 +48,11 @@ describe("§294 chargeback emails go out at once, every one", () => {
     const first = await w.paid(1000);
     expect(await chargebackOpened(first.pi)).toBe(true);
     // Sent immediately, before any summary or end-of-day run.
-    expect((await mails(w.dev.user.email)).map((m) => m.subject)).toEqual(["Your tests are paused after a chargeback"]);
+    expect((await mails(w.dev.user.email)).map((m) => m.subject)).toEqual([expect.stringMatching(CB_LINE)]);
     const second = await w.paid(800);
     expect(await chargebackOpened(second.pi)).toBe(true);
     const l = await lines(w.devId);
-    const start = l.find((x) => x.text === "Your tests are paused after a chargeback");
+    const start = l.find((x) => CB_LINE.test(x.text));
     expect(start).toMatchObject({ mustEmail: true, groupKey: "payhold", payment: true });
     const further = l.filter((x) => x.text.startsWith("Your bank reversed"));
     expect(further).toHaveLength(1);
@@ -58,7 +62,7 @@ describe("§294 chargeback emails go out at once, every one", () => {
     expect(new Set([start!, further[0]].map((n) => bellKeyIn(n))).size).toBe(1);
     // Each its own email, sent immediately; the bell lines are marked emailed, so the end-of-day email (Off: must-send and payment lines) never repeats them.
     const sent = await mails(w.dev.user.email);
-    expect(sent.map((m) => m.subject)).toEqual(["Your tests are paused after a chargeback", further[0].text]);
+    expect(sent.map((m) => m.subject)).toEqual([expect.stringMatching(CB_LINE), further[0].text]);
     expect(sent[1].text).toContain("To resume: verify a card with 3D Secure, pay what you owe, and wait for the team's approval.");
     expect(sent[1].text).toContain("http://localhost:3400/app/payments#chargeback-steps");
     expect(start!.summarizedAt).not.toBeNull();
@@ -88,7 +92,7 @@ describe("§294 chargeback emails go out at once, every one", () => {
     const row = await db.payment.create({ data: { kind: "review", contractId: w.sessionId, developerId: w.devId, testerId: w.tester.user.id, amountCents: 500, feeCents: 0, testerCents: 0, status: "failed", owedUntil: new Date() } });
     expect(await declinedPayment(w.devId, row.id, 500, "Ana Silva's recording")).toBe(false);
     const l = await lines(w.devId);
-    expect(l.find((x) => x.text === "Your tests are paused")).toMatchObject({ mustEmail: true, groupKey: "payhold" });
+    expect(l.find((x) => HOLD_LINE.test(x.text))).toMatchObject({ mustEmail: true, groupKey: "payhold" });
     const declined = l.find((x) => x.text.startsWith("Another payment"));
     expect(declined).toMatchObject({ text: "Another payment was declined: $5.00 for Ana Silva's recording was added to what you owe", groupKey: "payhold", payment: true, mustEmail: false, summarizedAt: null });
     // Its email rule unchanged: no immediate email; it waits for the end-of-day payment email.
@@ -134,7 +138,7 @@ describe("§294 chargeback emails go out at once, every one", () => {
     expect(added[0]).toMatchObject({ text: want, link: "/app/payments#chargeback-steps", groupKey: "payhold", payment: true, mustEmail: true, side: "developer" });
     expect(added[0].summarizedAt).toBeNull();
     // In the day's payhold entry with the hold's own line.
-    const start = (await lines(w.devId)).find((x) => x.text === "Your tests are paused after a chargeback")!;
+    const start = (await lines(w.devId)).find((x) => CB_LINE.test(x.text))!;
     expect(bellKeyIn(added[0])).toBe(bellKeyIn(start));
     // (§295) Not sent immediately: in the end-of-day email, with its link.
     expect((await mails(w.dev.user.email)).some((m) => m.text.includes(want))).toBe(false);

@@ -145,10 +145,10 @@ describe("§22 closing soon (developer) and the tester's one daily Charge line",
       for (let d = 0; d <= closesInDays + 1; d++) {
         for (const h of [0, 6, 12, 18]) {
           const m = closeSoonMarkDue(at, from, new Date(from.getTime() + d * DAY + h * 3_600_000), sent);
-          if (m) sent.push(`co:${m}`);
+          sent.push(...m.record);
         }
       }
-      return sent;
+      return sent.filter((x) => !x.endsWith(":seen")).map((x) => `co:${x.split(":").pop()}`); // (§313b) keyed by the closing date
     };
     expect(run(40)).toEqual(["co:30", "co:7", "co:3", "co:1"]);
     expect(run(5)).toEqual(["co:3", "co:1"]);
@@ -185,7 +185,7 @@ describe("§22 closing soon (developer) and the tester's one daily Charge line",
     expect(soon[0].text).toContain("Ana's written answers on “Harbor Run”");
     expect(soon[0].text).toContain("Ben's written answers on “Sky Lab”");
     expect(soon[0]).toMatchObject({ link: "/app#needs-review", mustEmail: true, payment: true, groupKey: "closeout" });
-    expect((await db.submission.findUniqueOrThrow({ where: { id: a.sub.id } })).devMarks).toContain("co:3");
+    expect((await db.submission.findUniqueOrThrow({ where: { id: a.sub.id } })).devMarks.some((x) => /^co:\d+:3$/.test(x))).toBe(true); // (§313b) keyed by the closing date
     // The old per-piece lines are gone.
     expect((await lines(dev.user.id)).some((l) => /^Pay Ana Silva's work on/.test(l.text))).toBe(false);
     // "Pay now" is kept alongside it: one line for both.
@@ -313,7 +313,8 @@ describe("§23-27 the tester's stacks across tests", () => {
     expect(keys(ins).size).toBe(1);
   });
 
-  it("§25 new terms offers on two tests form one 'New terms to answer' entry, each opening the Switch / Keep box", async () => {
+  // (Owner, Nov 6, §312b) No more "New terms to answer" stack: each offer is in its test's own day stack (no group), still opening the Switch / Keep box.
+  it("§25 (§312b) new terms offers on two tests: each in its own test's stack, each opening the Switch / Keep box", async () => {
     const t = await makeUser({ tester: true });
     for (const title of ["Harbor Run", "Sky Lab"]) {
       const { dev, testId } = await setup({ title, productName: title });
@@ -325,9 +326,9 @@ describe("§23-27 the tester's stacks across tests", () => {
     }
     const offers = (await lines(t.user.id)).filter((l) => /^Nora Lane updated the listing: /.test(l.text));
     expect(offers).toHaveLength(2);
-    expect(offers.every((l) => l.groupKey === "newterms" && l.link.endsWith("#terms-offer"))).toBe(true);
-    expect(keys(offers).size).toBe(1);
-    expect(groupTitle("newterms", 2, 2)).toBe("New terms to answer · 2 tests");
+    expect(offers.every((l) => l.groupKey === null && !!l.testId && l.link.endsWith("#terms-offer"))).toBe(true);
+    expect(keys(offers).size).toBe(2);
+    expect(groupTitle("newterms", 2, 2)).toBe("New terms to answer · 2 tests"); // kept for the lines already written
   });
 
   it("§25 a Pay and a Pay more on one day form one 'You were paid' entry", async () => {

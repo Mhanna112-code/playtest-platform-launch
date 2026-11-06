@@ -114,6 +114,8 @@ describe("O) pop-up failures", () => {
   });
 });
 
+// (Owner, Nov 6, §313a) The hold's one line names each paused test's closing date.
+const HOLD_LINE = /^Your tests are paused until you pay what you owe: “Harbor Run” closes on .+$/;
 describe("Q) a declined payment starts the hold at once (no owed window)", () => {
   async function owing() {
     const { dev, testId } = await setup();
@@ -142,8 +144,8 @@ describe("Q) a declined payment starts the hold at once (no owed window)", () =>
     const { declinedPayment } = await import("@/lib/server/holds");
     expect(await declinedPayment(dev.user.id, mine.id, 500, "Ana Silva's recording")).toBe(false); // the hold was already on
     const l = await lines(dev.user.id);
-    expect(l.filter((x) => x.text === "Your tests are paused")).toHaveLength(1);
-    expect(l.find((x) => x.text === "Your tests are paused")).toMatchObject({ own: false, groupKey: "payhold", mustEmail: true, payment: true });
+    expect(l.filter((x) => HOLD_LINE.test(x.text))).toHaveLength(1);
+    expect(l.find((x) => HOLD_LINE.test(x.text))).toMatchObject({ own: false, groupKey: "payhold", mustEmail: true, payment: true });
     expect(l.find((x) => x.text.startsWith("Another payment was declined"))).toMatchObject({ groupKey: "payhold" });
     // No cron retry, no reminder, no new hold.
     await cron();

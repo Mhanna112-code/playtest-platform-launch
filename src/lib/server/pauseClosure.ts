@@ -2,8 +2,9 @@ import { db } from "@/lib/db";
 import { T } from "@/lib/tz";
 import { displayName } from "@/lib/format";
 import { PAUSE_CLOSE_DAYS, pauseClosedReason, pauseClosesAt } from "@/lib/pause";
+import { andList, dayIn } from "@/lib/rules";
 import { HttpError } from "./http";
-import { bell, notify } from "./notify";
+import { notify } from "./notify";
 import { cancelCallsAhead, recordEvent, tellCancelled } from "./tests";
 import { checkFrom, liftRefusal, presserOf, stopIfChanged, stoppedRefusal, testChangesSince, type AdminSeen } from "./adminRace";
 import { closeOffersOfEnded } from "./offerClose";
@@ -129,7 +130,7 @@ function liftsWhen(causes: ReturnType<typeof pauseClosesAt> extends infer R ? (R
 }
 
 /**
- * (Owner, Nov 6, §310b) "closes on <date> unless <what lifts it>": the paused line's own words (bellPausedTests), also in the team pause's line ("The team paused “…”: it closes on
+ * (Owner, Nov 6, §310b) "closes on <date> unless <what lifts it>": the paused line's own words, in the team pause's line ("The team paused “…”: it closes on
  * … unless the team lifts the pause"), so the two read the same. Null when the test isn't paused.
  */
 export function closesUnless(dev: Parameters<typeof pauseClosesAt>[0], test: Parameters<typeof pauseClosesAt>[1]) {
@@ -137,31 +138,47 @@ export function closesUnless(dev: Parameters<typeof pauseClosesAt>[0], test: Par
   return info ? `closes on ${day(info.at)} unless ${liftsWhen(info.causes)}` : null;
 }
 
-/** Where the reminder opens: what the developer has to do (Payments for a hold, the dashboard for a suspension, the test for the team's pause). */
-function reminderLink(causes: string[], testId: string) {
-  if (causes.includes("chargeback")) return "/app/payments#chargeback-steps";
-  if (causes.includes("hold")) return "/app/payments#owed";
-  if (causes.includes("suspension")) return "/app";
-  return `/app/tests/${testId}`;
-}
-
+/** (§313a) How many test names a line lists before "and N more" (like the other lines that list names). */
+const NAMES_SHOWN = 5;
 /**
- * (Owner, Oct 27) The developer's line when a hold or a suspension pauses their tests: "<test> is paused and closes on <date> unless your account is cleared"
- * (for a hold: "...unless you pay what you owe"). It stacks with the same line for their other tests ("Paused tests"). (Owner, Nov 6, §311a) Sent ONCE per
- * pause, never again daily (there is no daily paused reminder any more): a second cause starting during the same pause doesn't repeat it. (§310b) The team's
- * pause of one test doesn't send it: its own line names the closing date.
+ * (Owner, Nov 6, §313a) The developer's paused tests and when each closes, for the ONE line a hold or a suspension starts with (it replaces the per-test "<test> is
+ * paused and closes on <date> unless …" lines): "“Harbor Run” and “Sky Lab” close on Nov 13"; different dates, grouped by day in date order: "“Harbor Run” closes on
+ * Nov 13, “Sky Lab” on Nov 15"; over 5 names: the first 5, then "and N more". Null when none of their tests is paused (the line reads as before, without dates).
  */
-export async function bellPausedTests(devId: string) {
+export async function pausedClosingWords(devId: string): Promise<string | null> {
   const dev = await db.user.findUnique({ where: { id: devId } });
-  if (!dev) return 0;
-  let n = 0;
-  for (const t of await db.test.findMany({ where: { developerId: devId, status: { in: ["open", "closed"] } } })) {
+  if (!dev) return null;
+  const rows: { title: string; at: Date }[] = [];
+  for (const t of await db.test.findMany({ where: { developerId: devId, status: { in: ["open", "closed"] } }, orderBy: { createdAt: "asc" } })) {
     const info = pauseClosesAt(dev, t);
-    if (!info) continue;
-    // Once per pause: this pause (its one clock, `since`) already had its line.
-    if (await db.notification.count({ where: { userId: devId, reminderKey: `paused:${t.id}`, createdAt: { gte: info.since } } })) continue;
-    await bell(devId, `${t.title} is paused and ${closesUnless(dev, t)}`, reminderLink(info.causes, t.id), undefined, { side: "developer", group: "pausedreminder", reminder: `paused:${t.id}`, testId: t.id });
-    n++;
+    if (info) rows.push({ title: t.title, at: info.at });
   }
-  return n;
+  if (!rows.length) return null;
+  const tz = dev.timeZone;
+  const groups: { at: Date; titles: string[] }[] = [];
+  for (const r of [...rows].sort((a, b) => a.at.getTime() - b.at.getTime())) {
+    const g = groups.find((x) => dayIn(x.at, tz) === dayIn(r.at, tz));
+    if (g) g.titles.push(r.title);
+    else groups.push({ at: r.at, titles: [r.title] });
+  }
+  // (Owner, Nov 6, §313a) Names past the 5th are counted where their date is: "“T1”, “T2”, “T3”, “T4”, “T5” and 2 more close on Nov 13"; a later date with no
+  // name left reads "…, and 3 more on Nov 20" (several such dates: "…, and 4 more by Nov 22").
+  let left = NAMES_SHOWN;
+  const parts: string[] = [];
+  const hidden: { n: number; at: Date }[] = [];
+  for (const [i, g] of groups.entries()) {
+    const shown = g.titles.slice(0, Math.max(0, left)).map((x) => `“${x}”`);
+    left -= shown.length;
+    const rest = g.titles.length - shown.length;
+    if (!shown.length) {
+      hidden.push({ n: rest, at: g.at });
+      continue;
+    }
+    const verb = i === 0 ? (g.titles.length === 1 ? " closes" : " close") : "";
+    const names = rest ? `${shown.join(", ")} and ${rest} more` : andList(shown);
+    parts.push(`${names}${verb} on ${day(g.at)}`);
+  }
+  const n = hidden.reduce((a, h) => a + h.n, 0);
+  const tail = !hidden.length ? "" : hidden.length === 1 ? `${n} more on ${day(hidden[0].at)}` : `${n} more by ${day(hidden[hidden.length - 1].at)}`;
+  return tail ? `${parts.join(", ")}, and ${tail}` : parts.join(", ");
 }

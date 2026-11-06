@@ -106,11 +106,10 @@ describe("§311a no daily paused reminder: the paused line is sent once per paus
     const s = await setup();
     expect("pausedReminders" in PC).toBe(false);
     await startHold(s.dev.user.id, "unpaid");
-    const once = () => db.notification.count({ where: { userId: s.dev.user.id, reminderKey: `paused:${s.testId}` } });
+    // (§313a) The hold's own line names the closing date; no per-test paused line at all.
+    const once = () => db.notification.count({ where: { userId: s.dev.user.id, text: { startsWith: "Your tests are paused until you pay what you owe: “Harbor Run” closes on " } } });
     expect(await once()).toBe(1);
-    const line = await db.notification.findFirstOrThrow({ where: { userId: s.dev.user.id, reminderKey: `paused:${s.testId}` } });
-    expect(line.text).toMatch(/^Harbor Run is paused and closes on .+ unless you pay what you owe$/);
-    expect(line).toMatchObject({ groupKey: "pausedreminder" });
+    expect(await db.notification.count({ where: { userId: s.dev.user.id, reminderKey: `paused:${s.testId}` } })).toBe(0);
     await runDaily(new Date(Date.now() + DAY));
     await runDaily(new Date(Date.now() + 2 * DAY));
     expect(await once()).toBe(1);

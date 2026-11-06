@@ -32,11 +32,12 @@ export function dropReasonFor(reason: string, side: Side, other: string) {
  * at that time"; "Your request to Nora Lane no longer offers Thu, Nov 5, 3:00 PM: she is no longer free at that time"; the reader's own: "… closed: you have
  * another call at that time"; both in the call: "… closed: you have a call with her at that time".
  */
-export function dropLine(o: { reason: string; side: Side; fromReader: boolean; other: string; otherPronoun?: string | null; when: string; partial: boolean }) {
+export function dropLine(o: { reason: string; side: Side; fromReader: boolean; other: string; otherPronoun?: string | null; when: string; partial: boolean; /** (Owner, Nov 6, §312a) the bell's ` on “<test>”` */ on?: string }) {
   const p = pronouns(o.otherPronoun);
+  const on = o.on ?? "";
   const head = o.partial
-    ? o.fromReader ? `Your request to ${o.other} no longer offers ${o.when}` : `${o.other}'s request no longer offers ${o.when}`
-    : o.fromReader ? `Your request to ${o.other} for ${o.when} closed` : `${o.other}'s request for ${o.when} closed`;
+    ? o.fromReader ? `Your request to ${o.other}${on} no longer offers ${o.when}` : `${o.other}'s request${on} no longer offers ${o.when}`
+    : o.fromReader ? `Your request to ${o.other}${on} for ${o.when} closed` : `${o.other}'s request${on} for ${o.when} closed`;
   const why = o.reason === DROP_BOTH ? `you have a call with ${p.obj} at that time` : readerBusy(o.reason, o.side) ? "you have another call at that time" : `${p.subj} ${p.is} no longer free at that time`;
   return `${head}: ${why}`;
 }

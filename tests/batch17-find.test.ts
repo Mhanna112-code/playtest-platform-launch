@@ -108,7 +108,7 @@ describe("No thanks on an invite follows batch 16 section 32 (section 4)", () =>
     expect((await sact(sessionId, "request-time", tester.cookie, { startsAt: atHours(50), seenAt: seen(), confirmed: true })).status).toBe(200);
     const r = await db.callRequest.findFirstOrThrow({ where: { contractId: sessionId, fromSide: "tester" } });
     const n = await db.notification.findFirstOrThrow({ where: { userId: dev.user.id, groupKey: "callrequests" } });
-    expect(n.text).toMatch(/^Ana Silva asked for a call: /);
+    expect(n.text).toMatch(/^Ana Silva asked for a call on “Harbor Run”: /); // (§312a) names the test
     expect(n.link).toBe(`/app/tests/${testId}#req-${r.id}`);
     // The same highlight as the Needs you row: the panel's row id, opened by the page's hash jump. (§187 item 10) One row per time: the anchor is on the first.
     expect(src("components/CallRequestsPanel.tsx")).toContain("id={i === 0 ? `req-${r.id}` : undefined}");

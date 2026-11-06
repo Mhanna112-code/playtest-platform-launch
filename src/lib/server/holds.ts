@@ -4,7 +4,7 @@ import { T } from "@/lib/tz";
 import { db } from "@/lib/db";
 import { callAtFor, displayName, fmtDate, fmtDateTime, money, pronouns, toCents } from "@/lib/server/dateFormat";
 import {
-  owedReceiptWhat, pressAgainLine, bankChangedLine, reviewFirstLine, CHARGEBACKS_REVIEW_FROM, OWED_ALL_WAITING, OWED_BANK_WAITING, reservedAddedLine, AUTO_CHARGED_CALL, AUTO_NOTHING_CALL, UNLISTED_CALL_CLOSED, UNLISTED_CALL_TAIL, AUTO_CHARGE_NO_CHOICE, MIN_CHARGE_CENTS, CHARGE_TICK_CENTS, chargeTickLine, chargeClosedLine, CLOSE_OUT_REMINDER_DAYS, testerPayable, HOLD_APPROVAL_AFTER, MANY_HOLDS_LABEL, autoPayFor, chargeAmount, paidMeanwhileLine, CHARGED_BY_TESTER, byTesterChoice, chargedDelayedLine, openUntilMarkDue, ownDeadlineMarkDue, reviewMarkDue, INVITE_REMIND_DAYS, failedLine, joinClosingLine, ownDeadlineLine, LET_GO_BY_TESTER, REVIEW_DAYS, chargeIsOpen, chargeOpensAt, PAUSED_RIGHT_NOW, PAY_WAITS, pauseShiftMs, PAYABLE_TESTER, PIECE_LOCKED, ownChargeWaitingLine, chargedByTester, chargebackWonRefundLine, chargebackWonLine, CHARGEBACK_FEE_CENTS, chargebackOwedLine, chargebackReversedLine, bankLoweredLine, bankRaisedLine, raiseNote, raiseOf, raiseName, RAISE_NOTE,
+  owedReceiptWhat, pressAgainLine, bankChangedLine, reviewFirstLine, CHARGEBACKS_REVIEW_FROM, OWED_ALL_WAITING, OWED_BANK_WAITING, reservedAddedLine, AUTO_CHARGED_CALL, AUTO_NOTHING_CALL, UNLISTED_CALL_CLOSED, UNLISTED_CALL_TAIL, AUTO_CHARGE_NO_CHOICE, MIN_CHARGE_CENTS, CHARGE_TICK_CENTS, chargeTickLine, chargeClosedLine, CLOSE_OUT_REMINDER_DAYS, testerPayable, HOLD_APPROVAL_AFTER, MANY_HOLDS_LABEL, autoPayFor, chargeAmount, paidMeanwhileLine, CHARGED_BY_TESTER, byTesterChoice, chargedDelayedLine, openUntilMarkDue, datedMarkDue, ownDeadlineMarkDue, reviewMarkDue, INVITE_REMIND_DAYS, failedLine, joinClosingLine, ownDeadlineLine, LET_GO_BY_TESTER, REVIEW_DAYS, chargeIsOpen, chargeOpensAt, PAUSED_RIGHT_NOW, PAY_WAITS, pauseShiftMs, PAYABLE_TESTER, PIECE_LOCKED, ownChargeWaitingLine, chargedByTester, chargebackWonRefundLine, chargebackWonLine, CHARGEBACK_FEE_CENTS, chargebackOwedLine, chargebackReversedLine, bankLoweredLine, bankRaisedLine, raiseNote, raiseOf, raiseName, RAISE_NOTE,
 } from "@/lib/rules";
 import { HttpError } from "./http";
 import { adminUsers, bell, notify, renderFor, sendSummaries, teamEmails } from "./notify";
@@ -140,15 +140,16 @@ export async function startHold(devId: string, reason: string) {
   }
   // (Owner, Oct 27) Calls starting within 3 days are cancelled with no fault; later ones are cancelled 3 days before they start if the hold is still on (the daily job).
   await (await import("./restrictions")).cancelCallsNearPause(devId, now);
-  await (await import("./pauseClosure")).bellPausedTests(devId);
   // (Owner, Nov 6, §295) Their testers read "“<test>” is paused": each test no other cause (a suspension, the team's pause) was pausing already.
   if (!dev.devSuspendedAt) await tellTestersPaused(tests.filter((t) => t.status !== "draft" && !t.adminPausedAt).map((t) => t.id));
   // (Owner, Oct 27) "Your tests are paused" and the chargeback hold email ignore Off (they ride in the one end-of-day email); the lines stack with that day's other hold / payment lines.
+  // (Owner, Nov 6, §313a) ONE line names each paused test's closing date (it was this line plus one "<test> is paused and closes on …" line per test).
+  const closing = await (await import("./pauseClosure")).pausedClosingWords(devId);
   if (reason === "chargeback") {
-    await notify(dev.email, "Your tests are paused after a chargeback", ["Your bank reversed a payment, so your tests are paused: you can't change anything on them, and testers stay in them.", "To resume: verify a card with 3D Secure, pay what you owe, and wait for the team's approval. Open Payments to see which steps remain.", `A test that stays paused for ${PAUSE_CLOSE_DAYS} days is closed.`], "/app/payments#chargeback-steps", { side: "developer", always: true, now: true, payment: true, group: "payhold" }); // (§294) emailed immediately
+    await notify(dev.email, closing ? `Your tests are paused after a chargeback: ${closing} unless you finish the steps` : "Your tests are paused after a chargeback", ["Your bank reversed a payment, so your tests are paused: you can't change anything on them, and testers stay in them.", "To resume: verify a card with 3D Secure, pay what you owe, and wait for the team's approval. Open Payments to see which steps remain.", `A test that stays paused for ${PAUSE_CLOSE_DAYS} days is closed.`], "/app/payments#chargeback-steps", { side: "developer", always: true, now: true, payment: true, group: "payhold" }); // (§294) emailed immediately
     return true;
   }
-  await notify(dev.email, "Your tests are paused", ["Your tests are paused until you pay what you owe: you can't change anything on them, and testers stay in them.", "Open Payments and press Pay what you owe: your tests resume at once.", `A test that stays paused for ${PAUSE_CLOSE_DAYS} days is closed.`], "/app/payments#owed", { side: "developer", always: true, payment: true, group: "payhold" });
+  await notify(dev.email, closing ? `Your tests are paused until you pay what you owe: ${closing}` : "Your tests are paused", ["Your tests are paused until you pay what you owe: you can't change anything on them, and testers stay in them.", "Open Payments and press Pay what you owe: your tests resume at once.", `A test that stays paused for ${PAUSE_CLOSE_DAYS} days is closed.`], "/app/payments#owed", { side: "developer", always: true, payment: true, group: "payhold" });
   return true;
 }
 
@@ -1322,7 +1323,7 @@ async function runDailyLocked(now: Date) {
   // 3a. (Owner, Nov 6, §306) The team's admin email is no longer sent here: its lines are the "For the team" section of each admin's ONE end-of-day email
   // (sendSummaries, last in this job; see adminDaily.ts), following each admin's own email setting (Off: none).
   // 3c. (Owner, Oct 26) Paused tests close after 7 days, whatever the cause (the admin can extend a test's date or close it sooner).
-  // (Owner, Nov 6, §311a) No daily "<test> is paused and closes on …" reminder any more: the line is sent once, when the pause starts (bellPausedTests).
+  // (Owner, Nov 6, §311a) No daily "<test> is paused and closes on …" reminder any more. (§313a) The pause's own line names the closing dates.
   const pc = await import("./pauseClosure");
   out.closed = await pc.closePausedTests(now);
   // 4. Open until heads-ups for the developer: 1 month (when it was more than a month away), 1 week, 3 days and 1 day before.
@@ -1539,19 +1540,21 @@ export function closeOutMark(at: Date | null, now: Date) {
 /** (Owner, Oct 29, batch 29 §22) The developer's closing-soon countdown: 1 month (only when the closing date was more than a month away when the piece's Charge opened), 1 week, 3 days and 1 day before. */
 export const CLOSE_SOON_MARKS = [30, 7, 3, 1] as const;
 const dayNo = (d: Date) => Math.floor(d.getTime() / 86_400_000);
+/** (Owner, Nov 6, §313b) The key prefix of a piece's Closing soon marks for one closing date, in its devMarks ("co:<ms>:3"; plain "co:3" from before). */
+export const closeSoonKey = (at: Date) => `co:${at.getTime()}:`;
 /**
- * (Batch 29 §22) The mark a piece reaches TODAY (by calendar day, so one daily line covers every piece reaching a mark that day), or null. Only the marks still ahead
- * when the piece's Charge opened (`from`); the month only when the closing date was more than a month away then; each mark once per piece (`sent`), so a closing
- * date moved by a pause or an outage never sends the same mark twice, and a mark that passed unsent isn't sent late.
+ * (Batch 29 §22) The mark a piece reaches (by calendar day, so one daily line covers every piece reaching a mark that day), and what to record. Only the marks still
+ * ahead when the piece's Charge opened (`from`); the month only when the closing date was more than a month away then. (Owner, Nov 6, §313b) Keyed by the closing
+ * date they count to (datedMarkDue, as §311g's reminders): a pause or an outage moving it gives a fresh countdown; marks already behind the new date are recorded,
+ * not sent; the latest passed mark is sent once, unless it was sent for an earlier date; a plain "co:3" (before §313b) counts as sent for an earlier date.
  */
-export function closeSoonMarkDue(at: Date | null, from: Date, now: Date, sent: string[]): number | null {
-  if (!at || at.getTime() <= now.getTime()) return null;
-  const left = dayNo(at) - dayNo(now);
-  const m = CLOSE_SOON_MARKS.find((d) => d === left);
-  if (!m || sent.includes(`co:${m}`)) return null;
-  if (dayNo(at) - m < dayNo(from)) return null; // already behind when Charge opened
-  if (m === 30 && at.getTime() - from.getTime() <= 30 * 86_400_000) return null;
-  return m;
+export function closeSoonMarkDue(at: Date | null, from: Date, now: Date, recorded: string[]): { send: number | null; record: string[] } {
+  if (!at) return { send: null, record: [] };
+  const marks = CLOSE_SOON_MARKS
+    .filter((m) => dayNo(at) - m >= dayNo(from) && (m !== 30 || at.getTime() - from.getTime() > 30 * 86_400_000))
+    .map((m) => ({ mark: String(m), at: new Date((dayNo(at) - m) * 86_400_000) }));
+  const due = datedMarkDue(closeSoonKey(at), recorded.filter((x) => x.startsWith("co:")), marks, at, now);
+  return { send: due.send ? Number(due.send.mark) : null, record: due.record };
 }
 /**
  * (Batch 29 §22) "Closing soon: Ana's written answers on “Harbor Run” close on Nov 18" for one piece; "Closing soon: 2 pieces close by Nov 18 (Ana's written answers on
@@ -1593,17 +1596,19 @@ async function closeOutReminders(now: Date, co: CloseOuts) {
     for (const p of pieces) {
       const at = await co.at(p.k, "developer");
       if (!at || at.getTime() <= now.getTime()) continue;
-      const mark = closeSoonMarkDue(at, p.from, now, p.sent);
+      const due = closeSoonMarkDue(at, p.from, now, p.sent);
+      const mark = due.send;
+      // (§313b) What to record (the mark sent, every one behind it, the first look at this closing date).
+      if (due.record.length) {
+        if (p.sub) await db.submission.update({ where: { id: p.id }, data: { devMarks: { push: due.record } } });
+        else await db.call.update({ where: { id: p.id }, data: { devMarks: { push: due.record } } });
+      }
       // Already sent today (its mark is today's): it stays in today's line when that line is drawn again.
-      const today = !mark && CLOSE_SOON_MARKS.some((d) => d === dayNo(at) - dayNo(now) && p.sent.includes(`co:${d}`));
+      const today = !mark && CLOSE_SOON_MARKS.some((d) => d === dayNo(at) - dayNo(now) && p.sent.includes(`${closeSoonKey(at)}${d}`));
       if (!mark && !today) continue;
       const entry = byDev.get(c.test.developerId) ?? { email: c.test.developer.email, today: [], fresh: false };
       entry.today.push({ who: firstName(c.tester), part: p.part, title: c.title, at });
-      if (mark) {
-        entry.fresh = true;
-        if (p.sub) await db.submission.update({ where: { id: p.id }, data: { devMarks: { push: `co:${mark}` } } });
-        else await db.call.update({ where: { id: p.id }, data: { devMarks: { push: `co:${mark}` } } });
-      }
+      if (mark) entry.fresh = true;
       byDev.set(c.test.developerId, entry);
     }
   }

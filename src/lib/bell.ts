@@ -16,7 +16,7 @@ export const GROUP_TITLES: Record<string, string> = {
   admindecision: "The team decided",
   disputefiled: "Disputes filed",
   disputedecided: "Disputes decided",
-  pausedreminder: "Paused tests",
+  pausedreminder: "Paused tests", // (§313a) no new line uses it: kept for the lines already written
   tpaid: "You were paid",
   tdelayed: "Payments delayed",
   tarrived: "Delayed payments arrived",
@@ -35,6 +35,7 @@ export const GROUP_TITLES: Record<string, string> = {
   ratings: "Ratings to give",
   apps: "Applications and invites",
   joined: "Joined",
+  // (Owner, Nov 6, §312b) No new line uses it ("updated the listing" is in its test's own stack): kept for the lines already written.
   newterms: "New terms to answer",
   excerpts: "Excerpts",
   deadlines: "Deadlines",

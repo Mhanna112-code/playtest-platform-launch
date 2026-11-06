@@ -143,7 +143,7 @@ describe("the tester adds under one question", () => {
     const bell = await db.notification.findFirst({ where: { userId: dev.user.id }, orderBy: { createdAt: "desc" } });
     expect(bell?.text).toContain(`Ana Silva added to her answer to “${Q2}” for “Harbor Run”`);
     // The tester's "Work sent" alert names it too (its body: "What you added to your answer to “…” was sent to Nora Lane.").
-    expect(src("lib/server/tests.ts")).toContain("[added ? `What you added ${part === \"recording\" ? `to your ${part}` : addedToWhat(\"your\", question)} was sent to ${dev}.`");
+    expect(src("lib/server/tests.ts")).toContain("[`What you added ${part === \"recording\" ? `to your ${part}` : addedToWhat(\"your\", question)} was sent to ${dev}.`]"); // (§312d) the addition's line only
     const log = await db.actionLog.findFirst({ where: { userId: j.tester.user.id }, orderBy: { createdAt: "desc" } });
     expect(log?.text).toContain(`added to your answer to “${Q2}”`);
     // After a Pay, the update row's live line names it too.

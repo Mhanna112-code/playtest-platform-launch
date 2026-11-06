@@ -12,6 +12,8 @@ import { HttpError, readText } from "./http";
 import { LIMITS } from "@/lib/limits";
 import { bell, notify } from "./notify";
 import { BOOKED_GROUP, CALL_REQUESTS_GROUP } from "@/lib/bell";
+/** (Owner, Nov 6, §312a) Every call-request and booked-call bell names its test: ` on “Harbor Run”` (empty without a title). */
+const onTest = (title: string | null | undefined) => (title ? ` on “${title}”` : "");
 import { devGate, recordEvent } from "./tests";
 import { FINISHED_PART_REASON, finishedPartReason, requestWords, testerGate, testerSeesClosed } from "./testerGate";
 import { answerTermsFirst } from "./terms";
@@ -422,8 +424,9 @@ async function dropOverlapping(tx: Prisma.TransactionClient, b: { startsAt: Date
     await recordEvent(tx, r.testId, testerBusy ? "t_req_dropped" : "t_req_closed", `${testerText}`, false, {}, r.contractId, "", requestRow(r.id));
     // (Owner, Nov 4, §185) The request's other person (the one without the call) is no longer stopped by it (req_closed / t_req_closed are quiet live-box lines
     // now, like the person with the call's): they get a bell instead (and its email, per their settings), stacked (§286: one entry a day across tests, "Call requests · 3 today").
-    if (!devBusy) bells.push({ userId: dev.id, text: devText, link: `/app/tests/${r.testId}`, testId: r.testId });
-    if (!testerBusy) bells.push({ userId: tester.id, text: testerText, link: `/app/sessions/${r.contractId}`, testId: r.testId });
+    // (Owner, Nov 6, §312a) The bells name the test (the live lines don't: the page does).
+    if (!devBusy) bells.push({ userId: dev.id, text: dropLine({ reason, side: "developer", fromReader: r.fromSide === "developer", other: displayName(tester), otherPronoun: tester.pronoun, when, partial, on: onTest(con.test.title) }), link: `/app/tests/${r.testId}`, testId: r.testId });
+    if (!testerBusy) bells.push({ userId: tester.id, text: dropLine({ reason, side: "tester", fromReader: r.fromSide === "tester", other: displayName(dev), otherPronoun: dev.pronoun, when, partial, on: onTest(con.title) }), link: `/app/sessions/${r.contractId}`, testId: r.testId });
   }
 }
 
@@ -440,11 +443,11 @@ async function closeBatch(batchId: string, exceptId: string) {
   // with the same words, in the day's call-request stack across tests ("Call requests · 3 today").
   if (!taken.length) return;
   const rowsTaken = await db.callRequest.findMany({ where: { id: { in: taken } } });
-  const cons = new Map((await db.contract.findMany({ where: { id: { in: rowsTaken.map((r) => r.contractId) } }, select: { id: true, testerId: true, test: { select: { developer: true } } } })).map((c) => [c.id, c]));
+  const cons = new Map((await db.contract.findMany({ where: { id: { in: rowsTaken.map((r) => r.contractId) } }, select: { id: true, testerId: true, title: true, test: { select: { developer: true } } } })).map((c) => [c.id, c]));
   for (const r of rowsTaken) {
     const c = cons.get(r.contractId);
     if (!c) continue;
-    await bell(c.testerId, `The call time with ${displayName(c.test.developer)} on ${T(r.startsAt)} is no longer available: another tester took it`, `/app/sessions/${r.contractId}#calls`, undefined, { testId: r.testId, group: CALL_REQUESTS_GROUP });
+    await bell(c.testerId, `The call time${onTest(c.title)} with ${displayName(c.test.developer)} on ${T(r.startsAt)} is no longer available: another tester took it`, `/app/sessions/${r.contractId}#calls`, undefined, { testId: r.testId, group: CALL_REQUESTS_GROUP });
   }
 }
 
@@ -456,10 +459,10 @@ export async function closeRequests(where: { contractIds?: string[] }, reason: s
   // the test paused): the same line rings her bell, stacked (§286: one entry a day across tests, "Call requests · 3 today"). The developer's top box has no line for these.
   const told = rows.filter((r) => r.fromSide === "developer" && testerSeesClosed(reason));
   if (told.length) {
-    const cons = new Map((await db.contract.findMany({ where: { id: { in: [...new Set(told.map((r) => r.contractId))] } }, select: { id: true, testerId: true, test: { select: { developer: true } } } })).map((c) => [c.id, c]));
+    const cons = new Map((await db.contract.findMany({ where: { id: { in: [...new Set(told.map((r) => r.contractId))] } }, select: { id: true, testerId: true, title: true, test: { select: { developer: true } } } })).map((c) => [c.id, c]));
     for (const r of told) {
       const c = cons.get(r.contractId);
-      if (c) await bell(c.testerId, `The call time with ${displayName(c.test.developer)} on ${T(r.startsAt)} is no longer available`, `/app/sessions/${r.contractId}#calls`, undefined, { testId: r.testId, group: CALL_REQUESTS_GROUP });
+      if (c) await bell(c.testerId, `The call time${onTest(c.title)} with ${displayName(c.test.developer)} on ${T(r.startsAt)} is no longer available`, `/app/sessions/${r.contractId}#calls`, undefined, { testId: r.testId, group: CALL_REQUESTS_GROUP });
     }
   }
   return rows;
@@ -698,7 +701,8 @@ export async function devRequestTime(dev: U, testId: string, body: Record<string
     const call = await bookAt(c.id, m.hit, m.match.minutes, bookRate(c.test, c), null, true, false, { id: m.match.id });
     await db.callRequest.update({ where: { id: m.match.id }, data: { status: "booked", callId: call.id, decidedAt: new Date(), closedReason: "matched" } });
     const line = `Booked: a call with ${displayName(c.test.developer)}: you both picked ${T(m.hit)}`; // (§290) names who
-    await notify(c.tester.email, line, [line], `/app/sessions/${c.id}#call-${call.id}`, { about: c.test.developerId, group: BOOKED_GROUP }); // (§286) "Booked calls · N today"
+    const bellLine = `Booked: a call with ${displayName(c.test.developer)}${onTest(c.title)}: you both picked ${T(m.hit)}`; // (Owner, Nov 6, §312a) the bell names the test
+    await notify(c.tester.email, bellLine, [bellLine], `/app/sessions/${c.id}#call-${call.id}`, { about: c.test.developerId, group: BOOKED_GROUP }); // (§286) "Booked calls · N today"
     callIds.push(call.id);
     bookedLine ||= line;
   }
@@ -712,7 +716,9 @@ export async function devRequestTime(dev: U, testId: string, body: Record<string
   // as the developer's do. An auto-matched row is not a request: its "Booked: …" line rings instead.
   const devName = displayName(dev);
   const testerOf = new Map(ok.map(({ c }) => [c.id, c.testerId]));
-  for (const r of made) await bell(testerOf.get(r.contractId)!, `${devName} requested ${requestWords(r, T(r.startsAt))}`, `/app/sessions/${r.contractId}#req-${r.id}`, dev.id, { testId, group: CALL_REQUESTS_GROUP });
+  const titleOf = new Map(ok.map(({ c }) => [c.id, c.title]));
+  // (Owner, Nov 6, §312a) The bell names the test: "Nora Lane requested a call on “Harbor Run” for Wed, Nov 11, 11:00 AM CST".
+  for (const r of made) await bell(testerOf.get(r.contractId)!, `${devName} requested ${requestWords(r, T(r.startsAt), onTest(titleOf.get(r.contractId) ?? ""))}`, `/app/sessions/${r.contractId}#req-${r.id}`, dev.id, { testId, group: CALL_REQUESTS_GROUP });
   // (Batch 20 section 7) The new requests' ids (and a booked call's): the form never counts them as a clash with itself.
   return {
     requested: sendRows.length ? ok.length : 0, batchId: batchIds[0] ?? "", batchIds, ids: made.map((r) => r.id),
@@ -777,7 +783,8 @@ export async function testerRequestTime(user: U, contractId: string, body: Recor
     await db.callRequest.update({ where: { id: m.match.id }, data: { status: "booked", callId: call.id, decidedAt: new Date(), closedReason: "matched" } });
     await closeBatch(m.match.batchId, m.match.id);
     const line = `Booked: a call with ${displayName(c.tester)}: you both picked ${T(m.hit)}`; // (§290) names who
-    await notify(c.test.developer.email, line, [line], `/app/tests/${c.testId}#call-${call.id}`, { about: c.testerId, group: BOOKED_GROUP }); // (§286)
+    const bellLine = `Booked: a call with ${displayName(c.tester)}${onTest(c.test.title)}: you both picked ${T(m.hit)}`; // (Owner, Nov 6, §312a) the bell names the test
+    await notify(c.test.developer.email, bellLine, [bellLine], `/app/tests/${c.testId}#call-${call.id}`, { about: c.testerId, group: BOOKED_GROUP }); // (§286)
     callIds.push(call.id);
     bookedLine ||= line;
   }
@@ -788,7 +795,7 @@ export async function testerRequestTime(user: U, contractId: string, body: Recor
     // (Batch 15 section 35) The developer's bell: "<name> asked for a call: <time>", stacked with the day's other request lines; each time in the reader's own zone.
     // (Batch 17 section 4) It opens the Live session's Call requests panel with this request highlighted. (§208) One per request, so each links to its own.
     const row = k.rows[0];
-    await bell(c.test.developerId, `${displayName(c.tester)} asked for a call: ${T(row.startsAt)}${row.repeat === "once" ? "" : row.repeat === "daily" ? " (daily)" : " (weekly)"}`, `/app/tests/${c.testId}#req-${r.id}`, c.testerId, { group: CALL_REQUESTS_GROUP });
+    await bell(c.test.developerId, `${displayName(c.tester)} asked for a call${onTest(c.test.title)}: ${T(row.startsAt)}${row.repeat === "once" ? "" : row.repeat === "daily" ? " (daily)" : " (weekly)"}`, `/app/tests/${c.testId}#req-${r.id}`, c.testerId, { group: CALL_REQUESTS_GROUP });
   }
   return {
     requested: made.length > 0, id: made[0]?.id, ids: made.map((r) => r.id),
@@ -900,7 +907,9 @@ export async function answerRequest(user: U, contractId: string, body: Record<st
     if (side === "tester") await closeBatch(r.batchId, r.id);
     const what = row.repeat === "once" ? T(times[0]) : row.count ? `${times.length} ${unitOf(row.repeat)} calls from ${T(times[0])}` : `${unitOf(row.repeat)} calls from ${T(times[0])} (until testers' work ends)`;
     // (Owner, Nov 6, §290) A "Booked:" bell names who the call is with ("Booked: a call with Ana Silva, Wed, Nov 11, 4:00 PM").
-    await notify(other.email, `Booked: a call with ${displayName(user)}, ${what}`, [`${displayName(user)} accepted the call request: ${what} (${rateLabel(rate, c.liveRateCents)}).`], side === "tester" ? `/app/tests/${c.testId}#call-${first!.id}` : `/app/sessions/${c.id}#call-${first!.id}`, { about: user.id, group: BOOKED_GROUP }); // (§286) "Booked calls · N today"
+    // (Owner, Nov 6, §312a) …and the test: "Booked: a call with Ana Silva on “Harbor Run”, Wed, Nov 11, 4:00 PM".
+    const on = onTest(side === "tester" ? c.test.title : c.title);
+    await notify(other.email, `Booked: a call with ${displayName(user)}${on}, ${what}`, [`${displayName(user)} accepted the call request${on}: ${what} (${rateLabel(rate, c.liveRateCents)}).`], side === "tester" ? `/app/tests/${c.testId}#call-${first!.id}` : `/app/sessions/${c.id}#call-${first!.id}`, { about: user.id, group: BOOKED_GROUP }); // (§286) "Booked calls · N today"
     return { booked: true, callId: first!.id, calls: times.length };
   }
   const status = action === "withdraw" ? "withdrawn" : "declined";
@@ -937,13 +946,15 @@ async function timeAnswered(user: U, c: Ctx["c"], side: Side, other: Ctx["other"
   await db.$transaction((tx) => recordEvent(tx, c.testId, status === "withdrawn" ? "withdrew_req" : "declined_req", text, false, {}, contractId, "", requestRow(requestId))); // (Owner, Nov 6, §284) the place the line opens
   // (Owner, Nov 4, §185) A withdrawal is never a stop for the other person (a quiet live-box line): they get a bell instead (and its email, per their settings),
   // stacked (§286: one entry a day across tests, "Call requests · 3 today").
+  // (Owner, Nov 6, §312a) The bells name the test ("Ana Silva withdrew a call request on “Harbor Run” for …"); the live lines don't (the page does).
+  const on = onTest(side === "developer" ? c.title : c.test.title);
   if (status === "withdrawn") {
-    const line = `${displayName(user)} withdrew a call request for ${when}`;
+    const line = `${displayName(user)} withdrew a call request${on} for ${when}`;
     await bell(other.id, line, side === "developer" ? `/app/sessions/${c.id}` : `/app/tests/${c.testId}`, undefined, { testId: c.testId, group: CALL_REQUESTS_GROUP });
   } else {
     // (Owner, Nov 6, §286) A decline rings the person who asked, in their top box's words: the developer's "Ana Silva declined a call request for …" (the line
     // above), the tester's "Nora Lane declined your call request for …"; in the day's call-request stack across tests ("Call requests · 2 today").
-    const line = side === "tester" ? text : `${displayName(user)} declined your call request for ${when}`;
+    const line = side === "tester" ? `${displayName(user)} ${verb} a call request${on} for ${when}` : `${displayName(user)} declined your call request${on} for ${when}`;
     await bell(other.id, line, side === "developer" ? `/app/sessions/${c.id}#calls` : `/app/tests/${c.testId}#calls`, undefined, { testId: c.testId, group: CALL_REQUESTS_GROUP });
   }
 }

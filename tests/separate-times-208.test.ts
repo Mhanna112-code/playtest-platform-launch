@@ -61,7 +61,7 @@ describe("§208 each time is its own request", () => {
     const events = await db.testEvent.findMany({ where: { testId: s.testId, kind: "requested" } });
     expect(events).toHaveLength(3);
     expect(new Set(events.map((e) => e.link))).toEqual(new Set(reqs.map((q) => `req-${q.id}`)));
-    const bells = await db.notification.findMany({ where: { userId: s.dev.user.id, text: { startsWith: "Ana Silva asked for a call: " } } });
+    const bells = await db.notification.findMany({ where: { userId: s.dev.user.id, text: { startsWith: "Ana Silva asked for a call on “Harbor Run”: " } } });
     expect(bells).toHaveLength(3);
     expect(new Set(bells.map((b) => b.link))).toEqual(new Set(reqs.map((q) => `/app/tests/${s.testId}#req-${q.id}`)));
     for (const b of bells) expect(b.text).not.toContain(" or ");

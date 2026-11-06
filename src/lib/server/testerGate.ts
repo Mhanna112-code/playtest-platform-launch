@@ -260,9 +260,9 @@ async function zeroUpdateLines(submissionId: string, since: Date): Promise<TestE
 }
 
 /** "weekly calls from Thu, Nov 5, 3:00 PM" / "a call (pick one of 3 times)" / "a call for Thu, Nov 5, 3:00 PM". (§286) The bell passes `when` as a time token. */
-export function requestWords(r: { rows?: unknown; times: Date[]; startsAt: Date; weeks: number; repeat: string }, when: string) {
+export function requestWords(r: { rows?: unknown; times: Date[]; startsAt: Date; weeks: number; repeat: string }, when: string, /** (Owner, Nov 6, §312a) the bell's ` on “<test>”` */ on = "") {
   const rows = rowsOf(r);
-  if (rows.length > 1) return `a call (pick one of ${rows.length} times)`;
+  if (rows.length > 1) return `a call${on} (pick one of ${rows.length} times)`;
   const x = rows[0];
-  return x.repeat === "once" ? `a call for ${when}` : `${x.repeat === "daily" ? "daily" : "weekly"} calls from ${when}${x.count ? "" : " (until testers' work ends)"}`;
+  return x.repeat === "once" ? `a call${on} for ${when}` : `${x.repeat === "daily" ? "daily" : "weekly"} calls${on} from ${when}${x.count ? "" : " (until testers' work ends)"}`;
 }

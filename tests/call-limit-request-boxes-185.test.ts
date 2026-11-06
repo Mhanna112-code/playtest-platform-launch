@@ -368,10 +368,10 @@ describe("§185 the other side's withdrawal and a request a booking closed: a be
     expect((await devReq(f.testId, f.dev.cookie, a.sessionId, { times: [atHours(60)] })).status).toBe(200);
     expect((await devAnswer(f.testId, f.dev.cookie, a.sessionId, (await newest(a.sessionId, "developer")).id, "withdraw")).status).toBe(200);
     const devBells = await db.notification.findMany({ where: { userId: f.dev.user.id, groupKey: "callrequests", text: { contains: " withdrew " } } });
-    expect(devBells.map((n) => n.text)).toEqual([expect.stringMatching(/^Ana Silva withdrew a call request for .+ (AM|PM)/)]);
+    expect(devBells.map((n) => n.text)).toEqual([expect.stringMatching(/^Ana Silva withdrew a call request on “.+” for .+ (AM|PM)/)]);
     expect(devBells[0].link).toBe(`/app/tests/${f.testId}`);
     const herBells = await db.notification.findMany({ where: { userId: a.tester.user.id, groupKey: "callrequests", text: { contains: " withdrew " } } });
-    expect(herBells.map((n) => n.text)).toEqual([expect.stringMatching(/^Nora Lane withdrew a call request for /)]);
+    expect(herBells.map((n) => n.text)).toEqual([expect.stringMatching(/^Nora Lane withdrew a call request on “.+” for /)]);
     expect(herBells[0].link).toBe(`/app/sessions/${a.sessionId}`);
     // Her own withdrawal never rings her.
     expect(await db.notification.count({ where: { userId: a.tester.user.id, text: { startsWith: "Ana Silva withdrew" } } })).toBe(0);

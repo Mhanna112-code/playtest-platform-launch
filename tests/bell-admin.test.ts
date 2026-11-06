@@ -49,7 +49,7 @@ describe("bell stacking: same-day lines about one test stack, except the lines t
     await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true });
     const after = await lines(dev.user.id);
     // (Owner, Oct 27) Hold started / lifted lines are one KIND ("payhold"): they stack across tests, one entry a day.
-    for (const text of ["Your tests are paused", "Your tests are running again"]) expect(after.find((l) => l.text === text), text).toMatchObject({ own: false, groupKey: "payhold" });
+    for (const re of [/^Your tests are paused until you pay what you owe: /, /^Your tests are running again$/]) expect(after.find((l) => re.test(l.text)), String(re)).toMatchObject({ own: false, groupKey: "payhold" }); // (§313a) with the closing dates
     const tl = await lines(tester.user.id);
     expect(tl.find((l) => l.text.endsWith("was stopped"))).toMatchObject({ own: false, groupKey: "tstopped" });
     // (Owner, Oct 26) A tester's paused / resumed lines stack per day across tests (a group), they are not their own line.
@@ -78,7 +78,7 @@ describe("bell stacking: same-day lines about one test stack, except the lines t
     // (Owner, Nov 6, §311b) The team's lift is a "The team decided" line.
     expect(dl.find((l) => /^The team lifted the pause/.test(l.text))).toMatchObject({ own: false, groupKey: "admindecision", mustEmail: true });
     // (Owner, Oct 27) Lines of the same kind stack across tests: account paused / active again are "admin decisions"; a decided dispute is "disputes decided".
-    for (const re of [/^Your developer account is paused$/, /^Your developer account is active again$/]) // (batch 15 section 16: the side is named)
+    for (const re of [/^Your developer account is paused(: .+ unless your account is cleared)?$/, /^Your developer account is active again$/]) // (§313a) the closing dates when tests are paused // (batch 15 section 16: the side is named)
       expect(dl.find((l) => re.test(l.text)), String(re)).toMatchObject({ own: false, groupKey: "admindecision" });
     expect(dl.find((l) => /was decided$/.test(l.text))).toMatchObject({ own: false, groupKey: "disputedecided" });
     // (Owner, Oct 26) The team pausing or stopping your test stacks into one line a day across all your tests (their emails stay always-send).
@@ -111,18 +111,20 @@ describe("bell stacking: same-day lines about one test stack, except the lines t
 });
 
 describe("a paused test is told by bell, not by a countdown on the pages", () => {
-  it("one line when it is paused, never again daily (§311a; no day-before line either); no countdown text on the developer pages", async () => {
+  // (Owner, Nov 6, §313a) The hold's own line names the closing date (no separate "<test> is paused and closes on …" line any more).
+  it("the hold's one line names the closing date, never again daily (§311a; no day-before line either); no countdown text on the developer pages", async () => {
     const { dev, testId } = await setup();
     await startHold(dev.user.id, "unpaid");
-    const first = (await lines(dev.user.id)).find((l) => / is paused and closes on /.test(l.text))!;
-    expect(first.text).toMatch(/^Harbor Run is paused and closes on [A-Z][a-z]{2} \d{1,2} unless you pay what you owe$/);
-    expect(first).toMatchObject({ own: false, groupKey: "pausedreminder", link: "/app/payments#owed", reminderKey: `paused:${testId}` });
+    const first = (await lines(dev.user.id)).find((l) => l.text.startsWith("Your tests are paused"))!;
+    expect(first.text).toMatch(/^Your tests are paused until you pay what you owe: “Harbor Run” closes on [A-Z][a-z]{2} \d{1,2}$/);
+    expect(first).toMatchObject({ own: false, groupKey: "payhold", link: "/app/payments#owed" });
+    expect((await lines(dev.user.id)).filter((l) => / is paused and closes on /.test(l.text) || l.reminderKey === `paused:${testId}`)).toHaveLength(0);
     // A day before: 6.5 days into the pause. (Owner, Nov 6, §311a) No daily paused reminder, and no separate "closes tomorrow" line.
     await db.user.update({ where: { id: dev.user.id }, data: { holdStartedAt: new Date(Date.now() - 6.5 * DAY) } });
     await db.notification.updateMany({ where: { userId: dev.user.id, groupKey: "pausedreminder" }, data: { createdAt: new Date(Date.now() - 25 * 3_600_000) } });
     await cron();
     await cron();
-    expect((await lines(dev.user.id)).filter((l) => / is paused and closes on /.test(l.text)).length).toBe(1);
+    expect((await lines(dev.user.id)).filter((l) => / is paused and closes on /.test(l.text)).length).toBe(0);
     expect((await lines(dev.user.id)).filter((l) => l.text.startsWith("Harbor Run closes tomorrow")).length).toBe(0);
     // The pages carry no countdown any more.
     const walk = (d: string): string[] => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]));
@@ -141,7 +143,7 @@ describe("every bell line opens the exact place", () => {
     const testerLine = (re: RegExp) => lines(tester.user.id).then((l) => l.find((x) => re.test(x.text))!.link);
     expect(await devLine(/joined/)).toBe(`/app/tests/${testId}#tester-${sessionId}`);
     expect(await devLine(/written answers for/)).toBe(`/app/tests/${testId}#piece-${sub.id}`);
-    expect(await testerLine(/^Work sent: your written answers/)).toBe(`/app/sessions/${sessionId}#part-written`);
+    expect((await lines(tester.user.id)).some((x) => /^Work sent: /.test(x.text))).toBe(false); // (Owner, Nov 6, §312d) no "Work sent" line any more
     // Pay → the tester's line opens the written part.
     expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 })).status).toBe(200);
     expect(await testerLine(/paid you \$10\.00 for your written answers/)).toBe(`/app/sessions/${sessionId}#part-written`);
