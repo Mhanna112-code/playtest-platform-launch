@@ -7,6 +7,7 @@
  * "Acknowledge the NDA change first.", and the page goes up to the notice and marks it. One notice on the session page: "<developer> changed the NDA. Click here to
  * acknowledge you've seen the change." (one wording for added, removed and changed), the line a link to the NDA in "The listing information" (`#info-nda`,
  * navigation only), with ONE button, "Acknowledge", which records `Contract.ndaNoticeSeenAt` (an added NDA: `ndaAcceptedAt` too) and lifts the block at once.
+ * (Owner, Nov 6, §314) No button: the notice is one clickable line; pressing it acknowledges (the same "nda-seen" press), the line goes and the page goes to the NDA.
  * No imports: safe on the server and in the pages.
  */
 export type NdaChangeKind = "added" | "removed" | "changed";
@@ -33,8 +34,8 @@ export const ndaChangedLine = (dev: string) => `${dev} ${NDA_CHANGED}`;
 export const NDA_ACK_TAIL = "Click here to acknowledge you've seen the change.";
 /** (§302) The notice, the same for every kind: "fbbb changed the NDA. Click here to acknowledge you've seen the change." */
 export const ndaNoticeLine = (dev: string) => `${ndaChangedLine(dev)}. ${NDA_ACK_TAIL}`;
-/** (§302) The notice's one button. */
-export const NDA_ACK_BUTTON = "Acknowledge";
+/** (§302) The acknowledging press's name (refusal lines). (Owner, Nov 6, §314) It is the notice's line itself now, not a button. */
+export const NDA_ACK_PRESS = "Acknowledge";
 
 /** (§302) The refusal while blocked: one short line under the pressed button (like "Answer the new terms first: Switch or Keep."). */
 export const NDA_BLOCK_FIRST = "Acknowledge the NDA change first.";

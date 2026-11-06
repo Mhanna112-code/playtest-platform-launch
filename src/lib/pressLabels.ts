@@ -1,7 +1,7 @@
 // (Owner, Oct 30, batch 15 section 36) Every stop-once box and every refusal names the press first: "Your Pay didn't go through." / "Your Save didn't go through: …".
 // The button's own label for each press, by its API path (the server's failed-press lines use the same table).
 import { ANSWER_TERMS_FIRST } from "./answerTerms";
-import { NDA_ACK_BUTTON, NDA_BLOCK_FIRST } from "./ndaNotice";
+import { NDA_ACK_PRESS, NDA_BLOCK_FIRST } from "./ndaNotice";
 import { CANCEL_CHECK, CONFIRM_WITH_BANK } from "./rules";
 import { CONFIRM_ALL } from "./confirmAllText";
 import { CANCELLED_NOTHING_CHARGED } from "./bankNotice";
@@ -23,7 +23,7 @@ export const PRESS_VERBS: Record<string, string> = {
   // (Owner, Nov 3, §156) Presses that named nothing ("press"): a recording's Remove. ((Owner, Nov 6, §304) The broken-key Dismiss and "This key doesn't work"
   // are gone.)
   // (Owner, Nov 6, §302) The NDA notice's button.
-  "nda-seen": NDA_ACK_BUTTON,
+  "nda-seen": NDA_ACK_PRESS,
   "recording-remove": "Remove",
 };
 

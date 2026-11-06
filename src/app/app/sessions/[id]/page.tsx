@@ -394,7 +394,8 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
       <LiveTop scope={`session:${c.id}`} seenAt={seenAt} seeIt="#scope" />
       {/* (Owner, Nov 5, §267; Nov 6, §302) The NDA's one notice with its Acknowledge button until it's acknowledged; while the tester works, every NDA change
           blocks their presses until then (no separate banner). */}
-      <NdaNotice sessionId={c.id} dev={dev} devHref={devHref} kind={c.ndaChangeKind} open={ndaNoticeOpen(c)} block={ndaBlocked(c) && c.status === "working"} />
+      {/* (Owner, Nov 6, §314) Keyed by the change's time: a later NDA change brings a new notice (only ever one, for the latest change). */}
+      <NdaNotice key={c.ndaChangedAt?.toISOString() ?? "none"} sessionId={c.id} dev={dev} kind={c.ndaChangeKind} open={ndaNoticeOpen(c)} block={ndaBlocked(c) && c.status === "working"} />
       <ListingSeeIt box="scope" />
       {/* (Owner, Nov 5, §265) An offer never carries questions (they follow the listing): no "The questions changed" block and no Switch wording about them. */}
       {/* (Owner, Nov 5, §267) Nor the NDA: it follows the listing with its own notice. */}

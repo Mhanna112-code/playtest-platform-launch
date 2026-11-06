@@ -156,8 +156,8 @@ export async function POST(req: Request, { params }: Ctx) {
 async function run(u: Awaited<ReturnType<typeof requireActive>>, id: string, action: string, body: Record<string, unknown>) {
   {
     switch (action) {
-      // (Owner, Nov 6, §302; was §267's link opening) The NDA notice's Acknowledge button: acknowledged from now, which lifts the block at once. (Opening the
-      // notice's link, the bell's or the top box's is navigation only.)
+      // (Owner, Nov 6, §302; was §267's link opening) The NDA notice acknowledged: from now, which lifts the block at once. (Owner, Nov 6, §314) Pressed by the
+      // notice's line itself (no button); the bell's and the top box's links are navigation only.
       case "nda-seen": {
         const c = await db.contract.findUnique({ where: { id }, select: { testerId: true, ndaText: true, ndaAcceptedAt: true } });
         if (!c || c.testerId !== u.id) throw new HttpError(404, "not_found", "That session doesn't exist or isn't yours.");
