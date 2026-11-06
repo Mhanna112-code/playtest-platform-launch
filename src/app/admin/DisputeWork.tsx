@@ -20,10 +20,16 @@ export function DisputeWork({ work }: { work: DisputedWork | null }) {
       <div className="mt-2">
         {work.kind === "call" ? (
           <p className="text-slate-300" data-dispute-call="">Live call · {work.when} · {work.length} · {work.rate}</p>
+        ) : work.part === "written" ? (
+          // (Owner, Nov 6, §282) A written piece as the developer reads it: every question in ONE "Questions (N)" drop-down (SentWork's questionsFold, its own
+          // draggable scroll panel, so no AnswersBox around it), open at first since "See the work" was just opened.
+          <div className="space-y-2" data-answers-box="written">
+            {work.setUntil && <p className="note" data-set-until="">Sent for the questions until {new Date(work.setUntil).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</p>}
+            {/* (Batch 35 §136, §167) What was sent first, a fold per question with what was added to it, dated. */}
+            <SentWork id={`dispute-${work.subId ?? "work"}`} timeZone={work.timeZone} kind="written" answers={work.items} notes={work.notes} additions={work.additions ?? []} files={work.files} questionsFold={{ open: true }} />
+          </div>
         ) : (
           <AnswersBox id={`answers-${work.subId ?? "work"}`}>
-            {work.part === "written" && work.setUntil && <p className="note" data-set-until="">Sent for the questions until {new Date(work.setUntil).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</p>}
-            {/* (Batch 35 §136, §167) What was sent first, a fold per question with what was added to it, dated. */}
             <SentWork id={`dispute-${work.subId ?? "work"}`} timeZone={work.timeZone} kind={work.part} answers={work.items} notes={work.notes} additions={work.additions ?? []} files={work.files} />
           </AnswersBox>
         )}

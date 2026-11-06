@@ -1,11 +1,15 @@
 import type { ReactNode } from "react";
 import { AnswerWithAttachments } from "@/components/AnswerSets";
 import { AttachmentList } from "@/components/AttachmentList";
-import { Fold } from "@/components/Panel";
+import { Fold, OwnPanel, ResizeBox } from "@/components/Panel";
 import { AnswerText, QuestionText } from "@/components/QA";
 import { ANYTHING_ELSE_KEY, ANYTHING_ELSE_TITLE, NEW_QUESTION_TAG, OLD_TAG, addedCount, addedFiles, addedLabel, additionsOf, additionsUntil, isPastQuestion, writtenThreads, type QuestionThread } from "@/lib/additions";
 import { markerIds } from "@/lib/answerAttachments";
 import { fmtStampIn } from "@/lib/format";
+
+/** (Owner, Nov 6, §282) The "Questions (N)" drop-down's panel: as §249's QuestionTexts list (its first height; the grip drags it to 80% of the screen). */
+export const QUESTIONS_LIST_MAX = "min(24rem, 55vh)";
+export const QUESTIONS_LIST_TALLEST = 0.8;
 
 type File = { id: string; filename: string; contentType: string; sizeBytes: number; part?: string; uploadedAt?: Date | string | null };
 const asAttachment = (f: File) => ({ id: f.id, filename: f.filename, size: f.sizeBytes, contentType: f.contentType });
@@ -48,12 +52,19 @@ export function SentAnswer({ id, label, name, text, files }: { id: string; label
  * Testers list as paid). An old question (no longer in the contract, by its words) lives only in Terms history (QuestionsChangedEntry). The one exception is
  * Needs you (`newOnly`): a new, unpaid answer or addition to an old question still shows, after the current ones, read-only with a small "Old" tag beside the
  * question (the developer's only "old" marker), so it can be paid; once paid it's only in Terms history. Without `questions` (the team's view) every question.
+ * (Owner, Nov 6, §282) `questionsFold`: all the questions with their sent answers (and Anything else, the list's fixed last fold) inside ONE drop-down,
+ * "Questions (N)" (N: the questions shown), its list in the draggable scroll panel (ResizeBox in OwnPanel), as §249's QuestionTexts; each question still its own
+ * drop-down inside, unchanged. Its open state is kept per part (Fold's keptFold); `open`: how it starts (Needs you open, the Testers list closed). The developer's
+ * Needs you part and update rows, the Testers list's written part and the team's "See the work" use it (the page's own outer panel goes for a written part, so
+ * this one panel is the one scroll, and Pay / Pay more sits right below the drop-down). Not the tester's own page: "Your written answers" is already that one
+ * drop-down with every question in one panel (§182).
  */
-export function SentWork({ id = "sent", kind, answers, questions, notes, additions, files, timeZone, addTo, until = null, newOnly, newQuestionTag = true }: {
+export function SentWork({ id = "sent", kind, answers, questions, notes, additions, files, timeZone, addTo, until = null, newOnly, newQuestionTag = true, questionsFold }: {
   id?: string; kind: string; answers: unknown; questions?: string[]; notes: string; additions: unknown; files: File[]; timeZone?: string | null;
   addTo?: (q: { key: string; question: string }) => ReactNode;
   /** (§226) only what was sent up to this time */ until?: Date | string | null; /** (§226) only what is new since this time (null: everything sent) */ newOnly?: { since: Date | string | null };
   /** (§255) false: no "new question" tag (the developer) */ newQuestionTag?: boolean;
+  /** (§282) a written part's questions in one "Questions (N)" drop-down; `open`: it starts open */ questionsFold?: { open: boolean };
 }) {
   const upTo = until ? new Date(until).getTime() : null, after = newOnly?.since ? new Date(newOnly.since).getTime() : null;
   const isNew = (at: string | undefined) => after == null || (!!at && new Date(at).getTime() > after);
@@ -134,13 +145,9 @@ export function SentWork({ id = "sent", kind, answers, questions, notes, additio
   const current = threads.filter((t) => !isOld(t) && showThread(t));
   const old = newOnly ? threads.filter((t) => isOld(t) && showThread(t)) : [];
   const drawn = [...current.map((t) => ({ t, current: true })), ...old.map((t) => ({ t, current: false }))];
-  return (
-    <div className="space-y-2" data-sent-work="written">
-      {drawn.map(({ t, current: c }, n) => fold(t, n + 1, c))}
-      {/* (Owner, Nov 5, §263; replaces §234's "Answers to past questions are in the Testers list" note) Nothing new is ever left out of Needs you. */}
-      {newOnly && !drawn.length && !elseShown && <p className="note" data-nothing-new="">Nothing new since you paid.</p>}
-      {/* (Owner, Nov 4, §188) The fixed last spot: Anything else, a fold like a question's, after the last question. */}
-      {elseShown && <Fold id={`${id}-q-${ANYTHING_ELSE_KEY}`} defaultOpen={false} jumpOpen={false} className="rounded-lg border border-white/10 px-2 py-1.5" summaryClassName="flex items-start gap-1 !text-sm"
+  const elseFold = elseShown && (
+    /* (Owner, Nov 4, §188) The fixed last spot: Anything else, a fold like a question's, after the last question. */
+    <Fold id={`${id}-q-${ANYTHING_ELSE_KEY}`} defaultOpen={false} jumpOpen={false} className="rounded-lg border border-white/10 px-2 py-1.5" summaryClassName="flex items-start gap-1 !text-sm"
         summary={<span className="flex min-w-0 flex-1 flex-wrap items-start gap-x-1">
           <span className="min-w-0 flex-1 basis-40 text-slate-200" data-question-title="" data-else-title="">{ANYTHING_ELSE_TITLE}</span>
           {elseCount > 0 && <span className="shrink-0 whitespace-nowrap text-emerald-300" data-added-count={elseCount}>{addedCount(elseCount)}</span>}
@@ -157,7 +164,25 @@ export function SentWork({ id = "sent", kind, answers, questions, notes, additio
           ))}
           {addTo?.({ key: ANYTHING_ELSE_KEY, question: ANYTHING_ELSE_TITLE })}
         </div>
-      </Fold>}
+      </Fold>
+  );
+  const list = <>{drawn.map(({ t, current: c }, n) => fold(t, n + 1, c))}{elseFold}</>;
+  return (
+    <div className="space-y-2" data-sent-work="written">
+      {/* (Owner, Nov 6, §282) All the questions (then Anything else, still the list's last fold) in one "Questions (N)" drop-down, its list in the draggable
+          scroll panel; N counts the questions shown. Without `questionsFold` (the tester's own page) the folds sit directly in the caller's panel. */}
+      {questionsFold ? (drawn.length > 0 || elseShown) && (
+        <div data-questions-fold={questionsFold.open ? "open" : "closed"}>
+          <Fold id={`${id}-questions`} defaultOpen={questionsFold.open} jumpOpen={questionsFold.open} summaryClassName="!text-sm font-medium !text-slate-200"
+            summary={<span data-questions-toggle="" data-questions-count={drawn.length}>Questions ({drawn.length})</span>}>
+            <OwnPanel><ResizeBox id={`${id}-questions-list`} label="Questions" defaultMax={QUESTIONS_LIST_MAX} tallest={QUESTIONS_LIST_TALLEST}>
+              <div className="space-y-2" data-questions-list="">{list}</div>
+            </ResizeBox></OwnPanel>
+          </Fold>
+        </div>
+      ) : list}
+      {/* (Owner, Nov 5, §263; replaces §234's "Answers to past questions are in the Testers list" note) Nothing new is ever left out of Needs you. */}
+      {newOnly && !drawn.length && !elseShown && <p className="note" data-nothing-new="">Nothing new since you paid.</p>}
     </div>
   );
 }

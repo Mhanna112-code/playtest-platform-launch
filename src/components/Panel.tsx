@@ -9,6 +9,12 @@ import { createContext, useCallback, useContext, useLayoutEffect, useRef, useSta
  * it survives the panel being drawn again).
  */
 export const PANEL_DEFAULT_MAX = "min(12rem, 40vh)";
+/**
+ * (Owner, Nov 6, §282) A part's two panels, in Needs you and the Testers list (written answers, recordings, calls): first its content (the "Questions (N)"
+ * drop-down, the recordings, the call's details), then right under it, its own panel, the paying (Pay or Pay more with its box; in the Testers list the part's
+ * payments too). The bordered panel look used in Needs you; neither scrolls itself (§187: only the panels inside them that already did).
+ */
+export const PART_PANEL = "min-w-0 rounded-lg border border-white/10 p-2";
 /** The smallest a panel can be dragged (about 3 lines). */
 export const PANEL_MIN_PX = 80;
 /** The tallest a panel can be dragged: 60% of the screen. */

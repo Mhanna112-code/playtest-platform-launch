@@ -88,11 +88,11 @@ describe("§263 on both sides", () => {
     const { dev, testId, sub } = await switched();
     const page = await testPage(testId, dev.user.id);
     const row = page.slice(page.indexOf(`id="part-${sub.id}"`));
-    const rowPanel = row.slice(row.indexOf(`data-panel="row-${sub.id}"`), row.indexOf('data-question-body="else"'));
+    const rowPanel = row.slice(row.indexOf(`data-panel="row-${sub.id}-questions-list"`), row.indexOf('data-question-body="else"'));
     expect(rowPanel).toContain(Q3);
     expect(rowPanel).not.toContain(Q2);
     expect(page).not.toContain("data-past-questions");
-    const needs = page.slice(page.indexOf(`data-panel="needs-${sub.id}"`), page.indexOf(`id="part-${sub.id}"`));
+    const needs = page.slice(page.indexOf(`data-panel="needs-${sub.id}-questions-list"`), page.indexOf(`id="part-${sub.id}"`));
     expect(needs).toContain(Q2);
     expect(needs).toContain("late note on Q2");
     expect(needs).toContain(`data-old-question="">${OLD_TAG}</span>`);

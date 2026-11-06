@@ -53,7 +53,7 @@ import { ListingPanel } from "./ListingPanel";
 import { ListingSeeIt, SeeItTarget } from "@/components/ListingInfo";
 import { panelRows } from "@/lib/listingPanel";
 import { lastListingSave } from "@/lib/server/listingPanel";
-import { Fold, OwnPanel, ResizeBox } from "@/components/Panel";
+import { Fold, OwnPanel, PART_PANEL, ResizeBox } from "@/components/Panel";
 import { SentWork } from "@/components/SentWork";
 import { lastPaidAt } from "@/lib/paidCut";
 import { additionsOf, answersByQuestion } from "@/lib/additions";
@@ -495,15 +495,19 @@ export default async function TestPage({ params, searchParams }: { params: Promi
             <>
               {/* (Owner, Nov 3, batch 35 §139; was batch 10's 16-line box) Inside the part's drop-down: the answers or recordings in a small panel (about 12rem)
                   that drags taller or shorter and scrolls inside, so the Pay box under it is in view; then the Pay box. */}
-              <ResizeBox id={`needs-${x.s!.id}`} label={x.s!.kind === "written" ? "Written answers" : "Recordings"}>
+              {/* (Owner, Nov 6, §282) Two panels: first the content (a written part: its questions in ONE "Questions (N)" drop-down, SentWork's
+                  questionsFold with its own draggable scroll panel, open at first since the developer is about to pay; a recording: its recordings in their
+                  panel, flat inside the person's, §187), then right under it the Pay panel. */}
+              {((body: ReactNode) => <div className={`${PART_PANEL} space-y-2`} data-part-panel="content">{x.s!.kind === "written" ? body
+                : <ResizeBox id={`needs-${x.s!.id}`} label="Recordings">{body}</ResizeBox>}</div>)(<>
                 {/* (Batch 13 section 8) What was last sent, under the questions it answered; an earlier set says so (reviewed and paid at the price it was sent at). */}
                 {x.s!.kind === "written" && x.s!.setUntil && <p className="note" data-set-until="">Sent for the questions until {fmtDate(x.s!.setUntil)}</p>}
                 {/* (Owner, Nov 5, §226) Only what is new: never paid, every answered question (not the unanswered ones). (Owner, Nov 5, §255) No "new question" tag.
                     (Owner, Nov 5, §263) A new, unpaid answer or addition to a question that has since changed shows too, after the current ones, with a small
                     "Old" tag beside the question, so it can be paid; once paid it is only in Terms history. */}
-                <SentWork id={`needs-${x.s!.id}`} timeZone={u.timeZone} kind={x.s!.kind} answers={x.s!.answers} questions={writtenQuestions(x.c)} notes={x.s!.notes} additions={x.s!.additions} files={x.s!.recordings} newOnly={{ since: paidCut(x.s!) }} newQuestionTag={false} />
-              </ResizeBox>
-              <HoldFold openOn={[anchor]} className="min-w-0" summaryClassName="text-sm font-medium text-white" data={{ "data-fold": `needs-pay-${x.id}` }} summary="Pay">
+                <SentWork id={`needs-${x.s!.id}`} timeZone={u.timeZone} kind={x.s!.kind} answers={x.s!.answers} questions={writtenQuestions(x.c)} notes={x.s!.notes} additions={x.s!.additions} files={x.s!.recordings} newOnly={{ since: paidCut(x.s!) }} newQuestionTag={false} questionsFold={{ open: true }} />
+              </>)}
+              <HoldFold openOn={[anchor]} className={PART_PANEL} summaryClassName="text-sm font-medium text-white" data={{ "data-fold": `needs-pay-${x.id}`, "data-part-panel": "pay" }} summary="Pay">
               <PayBox owes={owesNow} key={x.s!.id} kind="submission" id={x.s!.id} name={displayName(x.c.tester)} seenAt={seenAt} room={rooms.get(x.s!.id)?.box} confirming={confirmingPay(x.s!.id)}
                 /* (Batch 30 §3) Late work never opens Charge: no "<tester> can charge" line. */
                 note={x.s!.agreedCents != null && !x.s!.late && chargeOpensAt(x.s!, t, x.c, now) && !x.s!.choiceOfferedAt ? choiceNoteLine(pieceDay(chargeOpensAt(x.s!, t, x.c, now)!, u.timeZone), displayName(x.c.tester), chargeAmount(x.s!.agreedCents, partPaid(x.s!.id)), pronouns(x.c.tester.pronoun).poss) : undefined}
@@ -512,10 +516,13 @@ export default async function TestPage({ params, searchParams }: { params: Promi
             </>
           ) : (
             <>
-              {/* (Batch 15 section 40) The measured length: "Length: 29 min (both in the call 2:21–2:50 PM)"; a lowered one says so, with the reason. */}
-              <p className="text-sm text-slate-200" data-call-length="">{lengthOf(x.x!)}</p>
-              {x.x!.actualMinutes != null && x.x!.lengthNote && <ReasonQuote text={x.x!.lengthNote} />}
-              <HoldFold openOn={[anchor]} className="min-w-0" summaryClassName="text-sm font-medium text-white" data={{ "data-fold": `needs-pay-${x.id}` }} summary="Pay">
+              {/* (Owner, Nov 6, §282) A call too: its details panel, then the Pay panel right under it. */}
+              <div className={`${PART_PANEL} space-y-2`} data-part-panel="content">
+                {/* (Batch 15 section 40) The measured length: "Length: 29 min (both in the call 2:21–2:50 PM)"; a lowered one says so, with the reason. */}
+                <p className="text-sm text-slate-200" data-call-length="">{lengthOf(x.x!)}</p>
+                {x.x!.actualMinutes != null && x.x!.lengthNote && <ReasonQuote text={x.x!.lengthNote} />}
+              </div>
+              <HoldFold openOn={[anchor]} className={PART_PANEL} summaryClassName="text-sm font-medium text-white" data={{ "data-fold": `needs-pay-${x.id}`, "data-part-panel": "pay" }} summary="Pay">
               <PayBox owes={owesNow} key={`${x.x!.actualMinutes ?? 0}`} kind="call" id={x.x!.id} name={displayName(x.c.tester)} seenAt={seenAt} room={rooms.get(x.x!.id)?.box} confirming={confirmingPay(x.x!.id)}
                 /* (Owner, Oct 29, batch 28 §21) A listed call is charged automatically 7 days after it if it is not paid. */
                 note={x.x!.rateCents != null && x.x!.payBy && x.x!.payBy > now ? autoChargeLine(pieceDay(x.x!.payBy, u.timeZone), Math.min(callReference(x.x!.rateCents, callMinutesOf(x.x!)!).cents ?? 0, callsLeft.get(x.c.id) ?? Infinity), callMinutesOf(x.x!)!, x.x!.rateCents) : undefined}
@@ -536,14 +543,16 @@ export default async function TestPage({ params, searchParams }: { params: Promi
         <p className="text-xs text-slate-400" data-part-when="">Updated {fmtDateTime(x.paidUpdateAt!)}</p>
         {/* (Owner, Nov 5, §224) No "<name> added to this after you paid ($X paid · up to $Y more)" line here: the part's payments and Pay more say it. */}
         {/* (Owner, Nov 5, §225) Its payments are listed only in the Testers list, never in Needs you. */}
-        <ResizeBox id={`update-${x.id}`} label={x.kind === "written" ? "Written answers" : "Recordings"}>
+        {/* (Owner, Nov 6, §282) Two panels: the content (a written part's "Questions (N)" drop-down, open at first; a recording's panel), then the Pay panel. */}
+        {((body: ReactNode) => <div className={`${PART_PANEL} space-y-2`} data-part-panel="content">{x.kind === "written" ? body
+          : <ResizeBox id={`update-${x.id}`} label="Recordings">{body}</ResizeBox>}</div>)(<>
           {/* (Owner, Nov 5, §226) Only what came after the last payment: the questions answered or added to since, with just the new parts. */}
           {/* (Owner, Nov 5, §263; replaces §234's "never a past question in Needs you") An old question's new answer or addition shows, tagged "Old".
               (Owner, Nov 5, §255) No "new question" tag on the developer's side. */}
-          <SentWork id={`update-${x.id}`} timeZone={u.timeZone} kind={x.kind} answers={x.answers} questions={writtenQuestions(c)} notes={x.notes} additions={x.additions} files={x.recordings} newOnly={{ since: paidCut(x) }} newQuestionTag={false} />
-        </ResizeBox>
+          <SentWork id={`update-${x.id}`} timeZone={u.timeZone} kind={x.kind} answers={x.answers} questions={writtenQuestions(c)} notes={x.notes} additions={x.additions} files={x.recordings} newOnly={{ since: paidCut(x) }} newQuestionTag={false} questionsFold={{ open: true }} />
+        </>)}
         {/* (Owner, Nov 5, §226) In Needs you the press for what's new on a paid part is "Pay" (Pay more's route, checks and stops; the Testers list keeps Pay more). */}
-        <HoldFold openOn={[`update-${x.id}`]} className="min-w-0" summaryClassName="text-sm font-medium text-white" data={{ "data-fold": `update-pay-${x.id}` }} summary="Pay">
+        <HoldFold openOn={[`update-${x.id}`]} className={PART_PANEL} summaryClassName="text-sm font-medium text-white" data={{ "data-fold": `update-pay-${x.id}`, "data-part-panel": "pay" }} summary="Pay">
         <PayBox more={{ testId: t.id, contractId: c.id }} moreLabel="Pay" update owes={owesNow} kind="submission" id={x.id} name={displayName(c.tester)} seenAt={seenAt} bankWaits={waitsOf(x.id)} bankWaitsId={waitsIdOf(x.id)} bankWaitsKind={waitsKindOf(x.id)} note={payMore.line || undefined}
           room={rooms.get(x.id)?.box} listingCents={x.agreedCents} listingText={`${money(x.agreedCents)} for ${x.kind === "recording" ? "a recording" : "written answers"}`} />
         </HoldFold>
@@ -725,26 +734,25 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                       {r.sub && <span className="text-slate-300">· paid {money(partPaid(r.sub.id))} of {r.sub.agreedCents != null ? money(r.sub.agreedCents) : `(${NOT_LISTED.toLowerCase()})`}</span>}
                       {r.sub?.review?.rejected && <span className="badge border-rose-400/40 text-rose-200">Rejected</span>}
                       </>;
-                      // (Owner, Nov 3) A part that wasn't sent is its line only; a sent part is its own drop-down like Needs you's (open at first): its payments, the answers or
-                      // recordings, then Pay more.
+                      // (Owner, Nov 3) A part that wasn't sent is its line only; a sent part is its own drop-down like Needs you's (open at first). (Owner, Nov 6,
+                      // §282) Inside, two panels: the answers or recordings, then right under it the paying (its payments, Pay more).
                       if (!r.sub) return <div className="flex flex-wrap items-center gap-2">{line}</div>;
                       return (
                       <Fold id={`row-part-${r.sub.id}`} className="space-y-2" summaryClassName="flex flex-wrap items-center gap-2 !text-sm !font-normal" summary={line}>
-                      {/* (Owner, Nov 3, batch 35 §152) Under the paid total: this part's payments (a panel above 4). */}
-                      {r.sub && <PartPayments id={r.sub.id} lines={partPays.get(r.sub.id)} />}
-                      {/* (Batch 17 §19) Unpaid at close-out: it stays unpaid. */}
-                      {r.sub && !r.sub.review && payShut(r.sub.id) && testerPayable(c.tester) && <span className="w-full text-sm text-slate-300" data-closed-not-paid="">{closedNotPaidLine(shutOn(r.sub.id))}</span>}
                       {/* (Batch 35 §139; owner, Nov 3) Inside the part's drop-down: the answers or recordings in a small panel, then its Pay more box.
                           (Owner, Nov 5, §226) Only what was paid for: the part up to its last payment (newer additions wait in Needs you); before the first
                           payment, what was sent. */}
-                      {r.sub && <div className="w-full" data-paid-part-content="" data-paid-until={paidCut(r.sub)?.toISOString() ?? ""}>
-                        <ResizeBox id={`row-${r.sub.id}`} label={r.sub.kind === "written" ? "Written answers" : "Recordings"}>
+                      {r.sub && <div className={`w-full space-y-2 ${PART_PANEL}`} data-part-panel="content" data-paid-part-content="" data-paid-until={paidCut(r.sub)?.toISOString() ?? ""}>
+                        {/* (Owner, Nov 6, §282) A written part: its questions in ONE "Questions (N)" drop-down (its own draggable scroll panel), closed at first,
+                            kept open or closed per part; a recording: its recordings in their panel. */}
+                        {((body: ReactNode) => r.sub!.kind === "written" ? body
+                          : <ResizeBox id={`row-${r.sub!.id}`} label="Recordings">{body}</ResizeBox>)(<>
                           {r.sub.kind === "written" && r.sub.setUntil && <p className="note" data-set-until="">Sent for the questions until {fmtDate(r.sub.setUntil)}</p>}
                           {/* (Owner, Nov 5, §263, final; replaces §234's Past questions box under it and §254's earlier-set answers there) As paid (§226), the
                               tester's current questions only: an old question is in the Terms history below. A question that comes back is current again by itself.
                               (Owner, Nov 5, §255) No "new question" tag on the developer's side. */}
-                          <SentWork id={`row-${r.sub.id}`} timeZone={u.timeZone} kind={r.sub.kind} answers={r.sub.answers} questions={writtenQuestions(c)} notes={r.sub.notes} additions={r.sub.additions} files={r.sub.recordings} until={paidCut(r.sub)} newQuestionTag={false} />
-                        </ResizeBox>
+                          <SentWork id={`row-${r.sub.id}`} timeZone={u.timeZone} kind={r.sub.kind} answers={r.sub.answers} questions={writtenQuestions(c)} notes={r.sub.notes} additions={r.sub.additions} files={r.sub.recordings} until={paidCut(r.sub)} newQuestionTag={false} questionsFold={{ open: false }} />
+                        </>)}
                         {/* (Owner, Nov 5, §263) The tester's Terms history for the questions, as on their session page: each change, Then (with what they SENT for
                             each question, never a draft) → Now, the files drawn from this part's uploads. */}
                         {r.sub.kind === "written" && ((hist) => hist.length > 0 && (
@@ -756,26 +764,34 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                           </details>
                         ))(questionChanges(c.prevSets, writtenQuestions(c), r.sub, { drafts: false }))}
                       </div>}
-                      {/* (Owner, Oct 29, batch 11 section 6 / batch 12 section 3) A paid piece keeps its Pay box as "Pay more" until its cap is reached. */}
-                      {r.sub && r.sub.review && !r.sub.review.rejected && !restricted && !r.sub.review.teamClosedById && payMore.open && (rooms.get(r.sub.id)?.room ?? 0) > 0 && (
-                        <div className="w-full space-y-1" data-part-pay-more="">
-                        <p className="text-sm font-medium text-white">Pay more</p>
-                        <PayBox more={{ testId: t.id, contractId: c.id }} awayInNeeds owes={owesNow} kind="submission" id={r.sub.id} name={name} seenAt={seenAt} bankWaits={waitsOf(r.sub.id)} bankWaitsId={waitsIdOf(r.sub.id)} bankWaitsKind={waitsKindOf(r.sub.id)} note={payMore.line || undefined}
-                          room={rooms.get(r.sub.id)?.box} listingCents={r.sub.agreedCents} listingText={`${money(r.sub.agreedCents)} for ${r.name === "Recording" ? "a recording" : "written answers"}`} />
-                        </div>
-                      )}
-                      {/* (Owner, Oct 29, batch 28 §14) At its cap, where Pay more was (grey). */}
-                      {r.sub && r.sub.review && !r.sub.review.rejected && !restricted && !r.sub.review.teamClosedById && payMore.open && rooms.has(r.sub.id) && (rooms.get(r.sub.id)?.room ?? 0) <= 0 && (
-                        <span className="w-full text-sm text-slate-400" data-paid-most="">{paidMostLine(rooms.get(r.sub.id)!.paid)}</span>
-                      )}
-                      {/* (Batch 30 §2) An update the tester sent at the cap: nothing more can be paid, so it isn't in Needs you. */}
-                      {r.sub?.paidUpdateAt && r.sub.review && !r.sub.review.rejected && !r.sub.review.teamClosedById && rooms.has(r.sub.id) && (rooms.get(r.sub.id)?.room ?? 0) <= 0 && <span className="badge" data-updated-at-cap="">{UPDATED_AT_CAP}</span>}
-                      {/* (Batch 30 §5) The team closed it for $0, with its reason. (Owner, Nov 6, §281) The reason (the team's, or your note when paying $0) in the
-                          draggable reason box under its line ("Paid $0 · <when>"), never inline. */}
-                      {r.sub?.review?.teamClosedById ? <LabeledReason className="w-full text-sm text-slate-300" data={{ "data-team-closed": "" }} line={TEAM_CLOSED_LABEL} id={`review-note-${r.sub.id}`} text={r.sub.review.reason} />
-                        : r.sub?.review && r.sub.review.amountCents === 0 && !r.sub.review.rejected && r.sub.review.reason && <LabeledReason className="w-full text-sm text-slate-300" data={{ "data-paid-zero": "" }} line={`${PAID_ZERO_LABEL} · ${fmtDateTime(r.sub.review.createdAt)}`} label={PAID_ZERO_LABEL} id={`review-note-${r.sub.id}`} text={r.sub.review.reason} />}
-                      {/* (Batch 17 §11) A charge on this part made while you were away, waiting for your bank. */}
-                      {bankAt(r.sub.id)}
+                      {/* (Owner, Nov 6, §282) Right under the content, its own panel for paying: the part's payments (§225), then Pay more and its box (or
+                          the lines that stand for it: closed unpaid, at its cap, closed for $0, the bank). Hidden when nothing is in it. */}
+                      <div className={`w-full space-y-2 ${PART_PANEL} empty:hidden`} data-part-panel="pay">
+                        {/* (Owner, Nov 3, batch 35 §152) Under the paid total: this part's payments (a panel above 4). */}
+                        {r.sub && <PartPayments id={r.sub.id} lines={partPays.get(r.sub.id)} />}
+                        {/* (Batch 17 §19) Unpaid at close-out: it stays unpaid. */}
+                        {r.sub && !r.sub.review && payShut(r.sub.id) && testerPayable(c.tester) && <span className="w-full text-sm text-slate-300" data-closed-not-paid="">{closedNotPaidLine(shutOn(r.sub.id))}</span>}
+                        {/* (Owner, Oct 29, batch 11 section 6 / batch 12 section 3) A paid piece keeps its Pay box as "Pay more" until its cap is reached. */}
+                        {r.sub && r.sub.review && !r.sub.review.rejected && !restricted && !r.sub.review.teamClosedById && payMore.open && (rooms.get(r.sub.id)?.room ?? 0) > 0 && (
+                          <div className="w-full space-y-1" data-part-pay-more="">
+                          <p className="text-sm font-medium text-white">Pay more</p>
+                          <PayBox more={{ testId: t.id, contractId: c.id }} awayInNeeds owes={owesNow} kind="submission" id={r.sub.id} name={name} seenAt={seenAt} bankWaits={waitsOf(r.sub.id)} bankWaitsId={waitsIdOf(r.sub.id)} bankWaitsKind={waitsKindOf(r.sub.id)} note={payMore.line || undefined}
+                            room={rooms.get(r.sub.id)?.box} listingCents={r.sub.agreedCents} listingText={`${money(r.sub.agreedCents)} for ${r.name === "Recording" ? "a recording" : "written answers"}`} />
+                          </div>
+                        )}
+                        {/* (Owner, Oct 29, batch 28 §14) At its cap, where Pay more was (grey). */}
+                        {r.sub && r.sub.review && !r.sub.review.rejected && !restricted && !r.sub.review.teamClosedById && payMore.open && rooms.has(r.sub.id) && (rooms.get(r.sub.id)?.room ?? 0) <= 0 && (
+                          <span className="w-full text-sm text-slate-400" data-paid-most="">{paidMostLine(rooms.get(r.sub.id)!.paid)}</span>
+                        )}
+                        {/* (Batch 30 §2) An update the tester sent at the cap: nothing more can be paid, so it isn't in Needs you. */}
+                        {r.sub?.paidUpdateAt && r.sub.review && !r.sub.review.rejected && !r.sub.review.teamClosedById && rooms.has(r.sub.id) && (rooms.get(r.sub.id)?.room ?? 0) <= 0 && <span className="badge" data-updated-at-cap="">{UPDATED_AT_CAP}</span>}
+                        {/* (Batch 30 §5) The team closed it for $0, with its reason. (Owner, Nov 6, §281) The reason (the team's, or your note when paying $0) in the
+                            draggable reason box under its line ("Paid $0 · <when>"), never inline. */}
+                        {r.sub?.review?.teamClosedById ? <LabeledReason className="w-full text-sm text-slate-300" data={{ "data-team-closed": "" }} line={TEAM_CLOSED_LABEL} id={`review-note-${r.sub.id}`} text={r.sub.review.reason} />
+                          : r.sub?.review && r.sub.review.amountCents === 0 && !r.sub.review.rejected && r.sub.review.reason && <LabeledReason className="w-full text-sm text-slate-300" data={{ "data-paid-zero": "" }} line={`${PAID_ZERO_LABEL} · ${fmtDateTime(r.sub.review.createdAt)}`} label={PAID_ZERO_LABEL} id={`review-note-${r.sub.id}`} text={r.sub.review.reason} />}
+                        {/* (Batch 17 §11) A charge on this part made while you were away, waiting for your bank. */}
+                        {bankAt(r.sub.id)}
+                      </div>
                       </Fold>
                       );
                       })()}
@@ -822,27 +838,32 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                           {/* (Owner, Nov 4, batch 35 §170) The paid amount once: not repeated here when the badge already reads "paid $15.00". */}
                           <span className="ml-auto text-slate-300" data-call-paid="">{tookPlace(x) && !("paidShown" in badge) ? `paid ${money(partPaid(x.id))}` : ""}</span>
                         </>}>
-                        {tookPlace(x) && <p className="text-xs text-slate-400" data-call-length="">{lengthOf(x)} · {x.rateCents == null ? NOT_LISTED : `In ${pronouns(c.tester.pronoun).poss} contract`}</p>}
-                        {/* (Owner, Nov 3, batch 35 §152) This call's payments (a panel above 4). */}
-                        <PartPayments id={x.id} lines={partPays.get(x.id)} />
-                        {badge.reason && <ReasonQuote text={badge.reason} />}
-                        {x.actualMinutes != null && x.lengthNote && <ReasonQuote text={x.lengthNote} />}
-                        {inNeeds && <a href={`#call-${x.id}`} className="text-xs">Pay it in Needs you ↑</a>}
-                        {tookPlace(x) && !x.review && payShut(x.id) && testerPayable(c.tester) && <p className="text-xs text-slate-300" data-closed-not-paid="">{closedNotPaidLine(shutOn(x.id))}</p>}
-                        {bankAt(x.id)}
-                        {x.review?.teamClosedById && <LabeledReason className="text-sm text-slate-300" data={{ "data-team-closed": "" }} line={TEAM_CLOSED_LABEL} id={`review-note-${x.id}`} text={x.review.reason} />}{/* (Owner, Nov 6, §281) */}
-                        {x.review && !x.review.rejected && !restricted && !x.review.teamClosedById && payMore.open && (rooms.get(x.id)?.room ?? 0) > 0 && (
-                          <div className="space-y-1" data-call-pay-more="">
-                          <p className="text-sm font-medium text-white">Pay more</p>
-                          <PayBox more={{ testId: t.id, contractId: c.id }} awayInNeeds owes={owesNow} kind="call" id={x.id} name={name} seenAt={seenAt} bankWaits={waitsOf(x.id)} bankWaitsId={waitsIdOf(x.id)} bankWaitsKind={waitsKindOf(x.id)} note={payMore.line || undefined}
-                            room={rooms.get(x.id)?.box} minutes={m ?? x.minutes} rateCents={x.rateCents} warning={callsWarn.get(c.id)}
-                            listingCents={callReference(x.rateCents, m ?? x.minutes, c.liveRateCents).cents}
-                            listingText={callReference(x.rateCents, m ?? x.minutes, c.liveRateCents).text.replace(/^(Listing|Agreed): /, "")} />
-                          </div>
-                        )}
-                        {x.review && !x.review.rejected && !restricted && !x.review.teamClosedById && payMore.open && rooms.has(x.id) && (rooms.get(x.id)?.room ?? 0) <= 0 && (
-                          <p className="text-sm text-slate-400" data-paid-most="">{paidMostLine(rooms.get(x.id)!.paid)}</p>
-                        )}
+                        {/* (Owner, Nov 6, §282) Two panels, as a part: the call's details, then right under it the paying (its payments, Pay more). */}
+                        <div className={`space-y-1 ${PART_PANEL} empty:hidden`} data-part-panel="content">
+                          {tookPlace(x) && <p className="text-xs text-slate-400" data-call-length="">{lengthOf(x)} · {x.rateCents == null ? NOT_LISTED : `In ${pronouns(c.tester.pronoun).poss} contract`}</p>}
+                          {badge.reason && <ReasonQuote text={badge.reason} />}
+                          {x.actualMinutes != null && x.lengthNote && <ReasonQuote text={x.lengthNote} />}
+                        </div>
+                        <div className={`space-y-1 ${PART_PANEL} empty:hidden`} data-part-panel="pay">
+                          {/* (Owner, Nov 3, batch 35 §152) This call's payments (a panel above 4). */}
+                          <PartPayments id={x.id} lines={partPays.get(x.id)} />
+                          {inNeeds && <a href={`#call-${x.id}`} className="text-xs">Pay it in Needs you ↑</a>}
+                          {tookPlace(x) && !x.review && payShut(x.id) && testerPayable(c.tester) && <p className="text-xs text-slate-300" data-closed-not-paid="">{closedNotPaidLine(shutOn(x.id))}</p>}
+                          {bankAt(x.id)}
+                          {x.review?.teamClosedById && <LabeledReason className="text-sm text-slate-300" data={{ "data-team-closed": "" }} line={TEAM_CLOSED_LABEL} id={`review-note-${x.id}`} text={x.review.reason} />}{/* (Owner, Nov 6, §281) */}
+                          {x.review && !x.review.rejected && !restricted && !x.review.teamClosedById && payMore.open && (rooms.get(x.id)?.room ?? 0) > 0 && (
+                            <div className="space-y-1" data-call-pay-more="">
+                            <p className="text-sm font-medium text-white">Pay more</p>
+                            <PayBox more={{ testId: t.id, contractId: c.id }} awayInNeeds owes={owesNow} kind="call" id={x.id} name={name} seenAt={seenAt} bankWaits={waitsOf(x.id)} bankWaitsId={waitsIdOf(x.id)} bankWaitsKind={waitsKindOf(x.id)} note={payMore.line || undefined}
+                              room={rooms.get(x.id)?.box} minutes={m ?? x.minutes} rateCents={x.rateCents} warning={callsWarn.get(c.id)}
+                              listingCents={callReference(x.rateCents, m ?? x.minutes, c.liveRateCents).cents}
+                              listingText={callReference(x.rateCents, m ?? x.minutes, c.liveRateCents).text.replace(/^(Listing|Agreed): /, "")} />
+                            </div>
+                          )}
+                          {x.review && !x.review.rejected && !restricted && !x.review.teamClosedById && payMore.open && rooms.has(x.id) && (rooms.get(x.id)?.room ?? 0) <= 0 && (
+                            <p className="text-sm text-slate-400" data-paid-most="">{paidMostLine(rooms.get(x.id)!.paid)}</p>
+                          )}
+                        </div>
                         </Fold>
                       </li>
                     );

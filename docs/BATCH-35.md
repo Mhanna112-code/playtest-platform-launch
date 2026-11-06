@@ -4951,3 +4951,19 @@ with ×.
   typed notes; Needs you's update rows have none.
 - paidZeroLine / teamClosedLine keep their text (built from the labels). Tests: tests/notes-in-boxes-281.test.ts; batch9, batch30-money, batch30-money-fixes and
   batch35-admin-tabs follow the new markup.
+
+## §282 Written answers: all questions in one "Questions (N)" drop-down; every part is a content panel, then a pay panel (owner, Nov 6)
+- SentWork's `questionsFold` (`{ open }`): a written part's question folds, and Anything else (the list's fixed last fold), sit inside ONE drop-down
+  "Questions (N)" (N: the questions shown, Anything else not counted), its list in the draggable scroll panel (ResizeBox in OwnPanel, as §249's QuestionTexts:
+  min(24rem, 55vh) at first, QUESTIONS_LIST_MAX). Each question's drop-down is unchanged inside (the Old tag in Needs you, "· N added", the boxes, attachments,
+  §226's new-only parts). The drop-down is a Fold (`<id>-questions`), so its open state is kept per part. Nothing to show (Needs you after paying): no
+  drop-down, "Nothing new since you paid." as before.
+- Where: Needs you's part and update rows (open at first), the Testers list's written part (closed at first), the team's "See the work" (open at first: the
+  fold above it was just opened; its AnswersBox stays for recordings only). Not the tester's own "Your written answers": that is already one drop-down with
+  every question in one panel (§182), so a second one inside it would only nest.
+- Two panels per part, in Needs you and the Testers list, for written answers, recordings and calls (PART_PANEL, the bordered panel look): first the content
+  (the Questions drop-down; the recordings in their panel; a call's length and notes), then right under it, its own panel, the paying (Needs you: the Pay
+  drop-down with its box; the Testers list: the part's payments (§225), closed-unpaid, Pay more and its box, at-cap, $0 / team-closed notes, the bank), hidden
+  when empty. A written part has no outer panel around the Questions drop-down any more (its own panel is the one that scrolls); a recording's panel is as
+  before (flat inside Needs you's person panel, §187). The Testers list's Terms history stays in the content panel, under the Questions drop-down.
+- Tests: tests/questions-dropdown-282.test.ts; batch10, batch35-sent-panels, old-questions-263-264 and written-form-234-235 follow the new markup.
