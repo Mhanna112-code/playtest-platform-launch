@@ -109,7 +109,8 @@ describe("notification schedule", { timeout: 120_000 }, () => {
     await db.user.update({ where: { id: x.user.id }, data: { isAdmin: true, emailPref: "daily" } }); // (batch 29 §34) the admin's end-of-day summary follows their own setting
     return x;
   };
-  const adminMails = (to: string) => db.outboxEmail.findMany({ where: { to, subject: { startsWith: "Playtest admin:" } }, orderBy: { createdAt: "asc" } });
+  // (Owner, Nov 6, §306) The admin's one end-of-day email, with its "For the team" section.
+  const adminMails = (to: string) => db.outboxEmail.findMany({ where: { to, text: { contains: "\nFor the team\n" } }, orderBy: { createdAt: "asc" } });
 
   it("ONE daily email per admin (on Daily): a call report appears once", async () => {
     const adm = await mkAdmin();

@@ -6,7 +6,6 @@ import { POST as helpPOST } from "@/app/api/help/route";
 import { TOPICS } from "@/lib/helpTopics";
 import { notify, sendSummaries, summaryHeading } from "@/lib/server/notify";
 import { requestReset, sendVerification, hashPassword } from "@/lib/server/passwords";
-import { adminDailyEmails } from "@/lib/server/adminDaily";
 import { chargebackOpened } from "@/lib/server/holds";
 import { pauseTest } from "@/lib/server/restrictions";
 import { htmlOf } from "@/lib/server/email";
@@ -140,13 +139,13 @@ describe("batch 30 §19: branded HTML emails", () => {
     branded(m, { label: "Open Playtest", url: `${BASE}/app/find/xyz` }, false);
   });
 
-  it("admin emails: the daily admin email, the chargeback email and Contact us messages", async () => {
+  it("admin emails: the admin's end-of-day email (§306: its For the team section), the chargeback email and Contact us messages", async () => {
     const adm = await makeUser({ email: `admin-${uniq()}@playtest.test` });
     await db.user.update({ where: { id: adm.user.id }, data: { isAdmin: true, emailPref: "daily" } });
     const { testId } = await setup();
     await pauseTest(adm.user.id, testId, "Looking");
-    await adminDailyEmails(new Date());
-    const daily = (await mails(adm.user.email)).filter((m) => m.subject.startsWith("Playtest admin:"));
+    await sendSummaries(new Date(), [adm.user.id]); // (§306) the admin's one end-of-day email, with its "For the team" section
+    const daily = (await mails(adm.user.email)).filter((m) => m.text.includes("\nFor the team\n"));
     expect(daily.length).toBeGreaterThanOrEqual(1);
     branded(daily[0], { label: "Open the admin console", url: `${BASE}/admin` }, true);
 
@@ -171,7 +170,8 @@ describe("batch 30 §19: branded HTML emails", () => {
   });
 
   it("every sendEmail call names its button; an email stored without HTML gets the layout when it's sent; the dev outbox shows the HTML", () => {
-    const callers = ["lib/server/passwords.ts", "lib/server/notify.ts", "lib/server/adminDaily.ts", "lib/server/holds.ts", "app/api/help/route.ts"];
+    // (Owner, Nov 6, §306) adminDaily.ts no longer sends: its lines are the For the team section of the admin's email (notify.ts).
+    const callers = ["lib/server/passwords.ts", "lib/server/notify.ts", "lib/server/holds.ts", "app/api/help/route.ts"];
     for (const f of callers) {
       const s = src(f);
       const calls = s.split("sendEmail({").slice(1);

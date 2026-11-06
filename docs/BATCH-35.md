@@ -5320,3 +5320,25 @@ recording, each call in Had / Cancelled) now reads, top to bottom:
 ## §305 A local testing switch for the limits (owner, Nov 6)
 `NEXT_PUBLIC_TESTING_NO_LIMITS=1` in a LOCAL .env lifts the 3 changes per limited field after testers join, the 3 calls or waiting requests per tester and the
 3 call requests a day (src/lib/testingLimits.ts `limitOr`). Ignored on Vercel (VERCEL=1). Without it every limit is unchanged.
+
+## §306 One daily email per admin, with a "For the team" section (owner, Nov 6)
+An admin on Daily got two emails a day with the same items: the team's admin email ("Playtest admin: N items for the team", adminDaily.ts) and their own
+summary, whose "Disputes · N new" and "Hold lifts waiting" bell lines repeated its disputes and lifts (email catalog, note 13). Now each admin gets ONE email:
+- **Their own updates first** (stacked as the bell, §298), then a **"For the team"** section holding exactly what the admin email held: new disputes since
+  the last one, hold lifts and chargeback holds waiting for an Approve, call reports (once), the accounts this admin suspended and the tests this admin paused,
+  with closing dates. Subject "Your Playtest summary: 2 updates, 3 items for the team" (either part alone); with the section, the button is "Open the admin
+  console". sendSummaries (notify.ts) sends it; adminDaily.ts only builds the section (`teamSections`, `teamSent`); the daily job no longer sends a separate
+  admin email.
+- **No repeats.** A dispute or hold lift listed in "For the team" is left out of that email's own lines; its bell line stays in the bell and is marked as
+  emailed (no later email repeats it). A dispute bell line whose dispute is no longer in the section (decided since) stays among the own lines.
+- **The email setting, as the admin email did:** Daily / Weekly / Monthly carry the section when that summary is due, with everything since this admin's last
+  section (the same `adminDaily:<id>` mark); a due admin with nothing anywhere gets no email (the mark still moves on, as before). **Off: no section**, as the
+  admin email sent nothing with Off; the Off end-of-day email (payment and must-send lines) is unchanged. A Weekly / Monthly admin's short end-of-day email
+  (forced lines only) has no section, as the admin email went only when due. The team's items still always reach the team: every admin's bell and the console
+  show them, and every admin on Daily / Weekly / Monthly gets them by email. The chargeback email to every admin at once is unchanged.
+- **Non-admins unchanged.** Checked in the code: sendSummaries is the only end-of-day email to an account, ONE per account per run, and every line it sends is
+  marked `summarizedAt` (only unmarked lines are read). Testers and developers on Daily get one email whose lines include the forced ones (`always` /
+  `payment`). Off: one end-of-day email with only the forced lines. Weekly / Monthly: on other days a short end-of-day email with only the forced lines,
+  which are marked and so not repeated in the weekly / monthly. `now` lines (§294, §299) are written already marked.
+- Tests: tests/admin-one-email-306.test.ts. Updated: batch3, batch29-bell, schedule and batch30-emails (they find the admin's items by the "For the team"
+  section instead of the "Playtest admin:" subject; adminDaily.ts no longer calls sendEmail).
