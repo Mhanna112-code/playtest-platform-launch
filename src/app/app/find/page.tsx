@@ -15,7 +15,7 @@ import { displayName, money } from "@/lib/server/dateFormat";
 import { ratingSummary } from "@/lib/server/ratings";
 import { byMostTimeToFinish, perTesterLine, termsLine, testerDaysOf, testerShare } from "@/lib/rules";
 import { requireOpenPage } from "@/lib/server/page-auth";
-import { asListing, findTests, needsLines } from "@/lib/server/tests";
+import { asListing, findTests, joinedContract, needsLines } from "@/lib/server/tests";
 import { exactFirst } from "@/lib/nameSearch";
 import { isAdmin } from "@/lib/server/session";
 import { adminFindTests, ADMIN_FIND_LIMIT } from "@/lib/server/findSearch";
@@ -135,13 +135,15 @@ export default async function FindPage({ searchParams }: { searchParams: Promise
       ) : (
         <ul className="grid gap-4 md:grid-cols-2">
           {shown.map((t) => {
-            const gaps = admin ? [] : needsLines(t, profile);
+            // (Owner, Nov 6, §279) A test they're working in: tagged "Joined", no spots / needs lines, and the card opens their session (never the join page).
+            const mine = admin || !("contracts" in t) ? null : joinedContract(t);
+            const gaps = admin || mine ? [] : needsLines(t, profile);
             const left = t.spots - t._count.contracts;
             const state = "state" in t ? t.state : null;
             return (
               // (Owner, Nov 3, long text) min-w-0: a long title is cut with "…" inside the card instead of widening the grid past the screen.
               <li key={t.id} className="min-w-0">
-                <Link href={`/app/find/${t.id}`} className="card card-hover flex h-full gap-4 text-ink-100 no-underline hover:no-underline">
+                <Link href={mine ? `/app/sessions/${mine.id}` : `/app/find/${t.id}`} data-find-card={mine ? "joined" : undefined} className="card card-hover flex h-full gap-4 text-ink-100 no-underline hover:no-underline">
                   <CategoryTile category={mainCategory(t.categories)} />
                   <div className="min-w-0 flex-1 space-y-2">
                     {/* (Owner, Nov 3, long text) The pay never shrinks or splits: beside the title when there is room (at most half the card), under it on a
@@ -155,11 +157,12 @@ export default async function FindPage({ searchParams }: { searchParams: Promise
                       <div className="ml-auto max-w-full shrink-0 text-right sm:max-w-[50%]">
                         <p className="whitespace-nowrap text-lg font-bold text-emerald-300">{fromText(t)}</p>
                         <p className="text-xs text-slate-400">{keepAmounts(termsLine(asListing(t), true))}</p>
-                        <p className="text-xs text-slate-500">{admin ? `${Math.max(0, left)} of ${t.spots} spots open` : `${plural(left, "spot")} open to you`}</p>
+                        {!mine && <p className="text-xs text-slate-500">{admin ? `${Math.max(0, left)} of ${t.spots} spots open` : `${plural(left, "spot")} open to you`}</p>}
                       </div>
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {state && <span className={`badge ${STATE_TONE[state]}`} data-test-state={state}>{state}</span>}
+                      {mine && <span className="badge border-emerald-400/40 text-emerald-200" data-find-joined="">Joined</span>}
                       <CategoryBadges categories={t.categories} />
                       <PartBadges written={t.writtenCents != null} recording={t.recordingCents != null} live={t.liveRateCents != null} />
                       {t.devices.length > 0 && <span className="badge" title={t.devices.join(" · ")}><Monitor className="h-3.5 w-3.5" /> {t.devices.slice(0, 3).join(" · ")}{t.devices.length > 3 ? ` +${t.devices.length - 3} more` : ""}</span>}
@@ -172,7 +175,7 @@ export default async function FindPage({ searchParams }: { searchParams: Promise
                       {invitedTo.has(t.id) && <span className="badge border-emerald-400/40 text-emerald-200">Invited</span>}
                     </div>
                     {admin && <p className="text-xs text-slate-500">Posted {fmtDate(t.createdAt)}</p>}
-                    {"contracts" in t && t.contracts.some((c) => c.status === "left") && <p className="note">You left this test</p>}
+                    {!mine && "contracts" in t && t.contracts.some((c) => c.status === "left") && <p className="note">You left this test</p>}
                     {gaps.slice(0, 3).map((g) => <p key={g} className="text-sm text-amber-300" title={g}>{g}</p>)}
                     {gaps.length > 3 && <p className="text-sm text-amber-300">+{gaps.length - 3} more</p>}
                   </div>

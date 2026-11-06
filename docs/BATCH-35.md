@@ -4926,3 +4926,13 @@ with ×.
 - Edit's "← Back to the test" link stays. The test page no longer shows a note or reads those params (only `failed` stays); spotclosed/spots, read nowhere, are
   no longer sent. Post a test still opens the new test page, which never showed this note.
 - Tests: tests/saved-note-275.test.ts rewritten for the Edit placement.
+
+## §279 Find tests shows the tests you're in, tagged "Joined", opening your session (owner, Nov 6)
+- `findTests` left out every test the tester had a contract on (except left ones). It now also lists the tests they're working in (a working contract), with the
+  search applied as to any other test, even when the test is closed to new joiners (full, joining closed, invite only, paused). Ordering is unchanged (device
+  rank, then newest). The dashboard's "more tests" already skipped working ones, so it's unchanged.
+- The card: a green "Joined" badge (the Invited / Open tone, `data-find-joined`), no "N spots open to you" or needs lines, and the card (title included) opens
+  /app/sessions/<contractId> instead of the join page (`joinedContract` in lib/server/tests.ts). The category counts and "All N" include these tests, since
+  they're shown.
+- Unchanged: a tester who left, was ended or rated (today's rules: rejoin, "You left this test", out of Find after rating); an admin's Find.
+- Tests: tests/find-joined-279.test.ts; batch17-find's source check follows the card's new href.

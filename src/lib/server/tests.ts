@@ -941,28 +941,39 @@ export async function nextRound(dev: U, testId: string) {
 
 /** Open tests the tester can join (not their own, not full, not already joined). (Batch 17 section 8) `q`: the search box (test, product or developer name). */
 export async function findTests(tester: U, q?: unknown) {
-  const tests = await db.test.findMany({
-    where: {
-      ...(await import("./findSearch")).testSearchWhere(q),
-      status: "open", adminPausedAt: null, developerId: { notIn: [tester.id, ...(await blockPartners(tester.id))] }, developer: { devSuspendedAt: null, holdStartedAt: null },
-      // Not joined, or LEFT (they can come back: not after rating, not if the developer ended them).
-      contracts: { none: { testerId: tester.id, OR: [{ status: { not: "left" } }, { endKind: "rated" }] } },
-      // (Owner, Oct 30, batch 15 section 38) Invite-only tests are never in Find, not even for invited testers (they reach them from their invites, the bell or the email).
-      joinMode: { not: "invite" },
-      // (Batch 15 section 18) After Open until the test is closed to everyone who hasn't joined: out of Find.
-      OR: [{ openUntil: null }, { openUntil: { gt: new Date() } }],
-    },
-    include: { _count: { select: { contracts: { where: { status: "working" } } } }, developer: { select: { name: true, email: true, timeZone: true } }, contracts: { where: { testerId: tester.id }, select: { status: true } } },
-    orderBy: { createdAt: "desc" },
-    take: 100,
-  });
+  const search = (await import("./findSearch")).testSearchWhere(q);
+  const include = { _count: { select: { contracts: { where: { status: "working" } } } }, developer: { select: { name: true, email: true, timeZone: true } }, contracts: { where: { testerId: tester.id }, select: { id: true, status: true } } } as const;
+  const [tests, joined] = await Promise.all([
+    db.test.findMany({
+      where: {
+        ...search,
+        status: "open", adminPausedAt: null, developerId: { notIn: [tester.id, ...(await blockPartners(tester.id))] }, developer: { devSuspendedAt: null, holdStartedAt: null },
+        // Not joined, or LEFT (they can come back: not after rating, not if the developer ended them).
+        contracts: { none: { testerId: tester.id, OR: [{ status: { not: "left" } }, { endKind: "rated" }] } },
+        // (Owner, Oct 30, batch 15 section 38) Invite-only tests are never in Find, not even for invited testers (they reach them from their invites, the bell or the email).
+        joinMode: { not: "invite" },
+        // (Batch 15 section 18) After Open until the test is closed to everyone who hasn't joined: out of Find.
+        OR: [{ openUntil: null }, { openUntil: { gt: new Date() } }],
+      },
+      include,
+      orderBy: { createdAt: "desc" },
+      take: 100,
+    }),
+    // (Owner, Nov 6, §279) A test the tester is working in stays in Find (the search applies as to any other test), even when it's closed to new joiners (full,
+    // joining closed, invite only, paused): the card reads "Joined" and opens their session. Left, ended or rated: only the query above (today's rules).
+    db.test.findMany({ where: { ...search, contracts: { some: { testerId: tester.id, status: "working" } } }, include, orderBy: { createdAt: "desc" }, take: 100 }),
+  ]);
   // Most relevant first (owner): tests needing a device the tester has, then tests open to any device, then tests
   // needing a device they don't list; newest first within each group.
   const p = await db.testerProfile.findUnique({ where: { userId: tester.id } });
   const rank = (t: { devices: string[]; languages: string[] }) =>
     t.devices.length ? (t.devices.some((d) => p?.devices.includes(d)) ? 0 : 2) : 1;
-  return tests.filter((t) => t._count.contracts < t.spots).map((t, i) => ({ t, i })).sort((a, b) => rank(a.t) - rank(b.t) || a.i - b.i).map((x) => x.t);
+  const all = [...tests.filter((t) => t._count.contracts < t.spots), ...joined.filter((j) => !tests.some((t) => t.id === j.id))].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  return all.map((t, i) => ({ t, i })).sort((a, b) => rank(a.t) - rank(b.t) || a.i - b.i).map((x) => x.t);
 }
+
+/** (Owner, Nov 6, §279) The tester's working contract on a Find card's test (its card reads "Joined" and opens /app/sessions/<id>), if any. */
+export const joinedContract = (t: { contracts?: { id: string; status: string }[] }) => t.contracts?.find((c) => c.status === "working") ?? null;
 
 /** (NEWEST+8) One line for EACH unmet need (devices, languages); none when the profile fits. */
 export function needsLines(t: { devices: string[]; languages: string[] }, p: { devices: string[]; languages: string[] } | null) {
