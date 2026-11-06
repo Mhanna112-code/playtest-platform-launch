@@ -127,14 +127,14 @@ describe("top panel stops once", () => {
     expect(r.status).toBe(200);
   });
 
-  it("a press that can't happen any more is refused with a plain sentence (and Refresh when the page is out of date)", async () => {
+  it("a press that can't happen any more is refused with a plain sentence (§278: never \"Refresh to see the latest\")", async () => {
     const { dev, testId } = await setup();
     const pageLoaded = seen();
     await later();
     const { tester, sessionId } = await joined(testId);
     await sact(sessionId, "leave", tester.cookie);
     const r = await act(testId, "end-early", dev.cookie, { seenAt: pageLoaded, contractId: sessionId, reason: "Enough feedback", confirmed: true });
-    expect(r.body.error.message).toBe("Ana Silva already left the test. Refresh to see the latest.");
+    expect(r.body.error.message).toBe("Ana Silva already left the test.");
     await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true });
     await later();
     expect((await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: seen() })).body.error.message).toBe("This test was stopped.");

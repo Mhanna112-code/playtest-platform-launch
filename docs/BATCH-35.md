@@ -4951,3 +4951,20 @@ with ×.
    message's words are green links (`parts`).
 - Tests: tests/admin-links-277.test.ts. batch33's person-box Chargebacks line now lists the tester and test links before its Stripe ids; name-test-links-270's
   notifications-page check follows `team.get(n.id) ?? lineLinks(…)`.
+## §278 End early: a tester gone meanwhile is refused alone, the rest go on; no "Refresh to see the latest" (owner, Nov 5)
+- End early with a ticked tester whose part already ended (left, ended, rated, removed…) and others still working: that tester gets a refusal line of their own
+  ("Your End early didn't go through for mhann: mhann already left the test.", `gone` in the reply, `endEarlyGoneLine`) and the press goes on for the others by
+  the ordinary rules (devGate / alwaysStops, keyed on the testers still in; the gone tester's own "left" line is what the refusal line says, so it doesn't stop).
+  Something new: one stop, its box with the refusal line(s) above it; the page unticks the gone tester and the second press ends the others. Nothing new: their
+  work ends at once, the refusal line beside the done line ("You ended Ben Okafor's work early."). Every ticked tester out: one refusal naming them, as before.
+- The same for the other presses on a list of people: Request a time with several ticked testers (one whose session ended: "Your Request a time didn't go through
+  for mhann: mhann's session has ended.", the others' requests go; all out: the refusal as before) and Invite with some ticked testers who rated the test (a line
+  each, the others invited; all raters: one refusal, without "Untick … to invite the others"). Invite already skipped testers who joined or were invited meanwhile
+  (a stop line, then skipped); Cancel the remaining calls acts on one set (no list): unchanged.
+- Stale hidden ticks: a ticked tester whose row left the list (left, ended…) was still sent by every later press. End early (TopPanel), Request a time
+  (DevCallPanel) and the broken-key Dismiss (KeysWarning) now drop ticks whose rows are gone on each redraw (`useDropGoneTicks`), and send, count and "Select
+  all" only the ticks still in the list (`liveTicks`, lib/liveTicks.ts). Invite's ticks are kept on purpose for people outside the current lists (§173; greyed rows
+  are already unticked); Pay what you owe, Confirm all and call cancels have no per-person ticks.
+- "Refresh to see the latest." is gone from every notice and refusal (`staleNote` removed; "This page is out of date." stays where it was the start; the live
+  route's bad `since` reads "This page is out of date."): the page's live updates already redraw. BLUE-NOTICES.md follows.
+- Tests: tests/end-early-gone-278.test.ts; flow.test.ts and group-c.test.ts follow the new rule and wording.

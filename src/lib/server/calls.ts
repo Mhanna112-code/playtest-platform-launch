@@ -10,7 +10,7 @@ import { LIMITS } from "@/lib/limits";
 import { notify } from "./notify";
 import { testerGate as sharedTesterGate } from "./testerGate";
 import { answerTermsFirst } from "./terms";
-import { devGate, devGateIfSeen, ownContract, ownTest, recordEvent, staleNote } from "./tests";
+import { devGate, devGateIfSeen, ownContract, ownTest, recordEvent } from "./tests";
 import { CALL_ACTS } from "./live";
 import { callIceServers } from "./turn";
 
@@ -32,7 +32,7 @@ export async function devCancelCall(dev: U, testId: string, body: Record<string,
     const name = displayName(c.contract.tester);
     // (Owner, Nov 4, §185; replaces batch 16 section 21's stop first) A Cancel on a call already cancelled (by the tester, in another tab, by a stop) from an old
     // page is refused once, never a stop first; the row then leaves the booked list with the page's redraw (the call is in the Live session's Cancelled, §209).
-    if (c.status === "cancelled") throw new HttpError(409, "cancelled", `The call with ${name} was already cancelled.` + (await staleNote(testId, body.seenAt)));
+    if (c.status === "cancelled") throw new HttpError(409, "cancelled", `The call with ${name} was already cancelled.`);
     const ok = checkCancel(c.startsAt, new Date(), reason);
     if (!ok.ok) throw new HttpError(400, "reason", ok.message);
     // (Batch 16 section 21) Another tab's call action with this tester stops it once.

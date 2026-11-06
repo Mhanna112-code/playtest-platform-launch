@@ -28,7 +28,7 @@ export async function GET(req: Request) {
     const u = await requireUser(req);
     const q = new URL(req.url).searchParams;
     const since = new Date(q.get("since") ?? "");
-    if (isNaN(since.getTime())) throw new HttpError(400, "bad_request", "Refresh to see the latest.");
+    if (isNaN(since.getTime())) throw new HttpError(400, "bad_request", "This page is out of date.");
     const tab = (req.headers.get("x-tab") ?? "").slice(0, 64);
     const [kind, id] = (q.get("scope") ?? "").split(":");
     // The seen marker: a few seconds back (a change whose transaction is still committing already has its time but

@@ -5,6 +5,8 @@ import { SubscribersTag } from "@/components/SubscribeLink";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChangesBox } from "@/components/ChangesBox";
+import { PressDone } from "@/components/PressDone";
+import { liveTicks, useDropGoneTicks } from "@/lib/liveTicks";
 import { usePress } from "@/lib/usePress";
 import { DraftTag, useKept } from "@/lib/useKept";
 import { KeyRound, Pencil, Play, Repeat } from "lucide-react";
@@ -37,6 +39,10 @@ async function stillRestricted() {
 export const TOP_PRESS = { "next-round": "Next round", stop: "Stop the test", "end-early": "End early", open: "Accept testers again" } as const;
 
 /** The join-mode badge's words. */
+/** (Owner, Nov 5, §278) One ticked tester End early couldn't act on: their refusal line ("Your End early didn't go through for mhann: …"). */
+type GoneLine = { contractId: string; text: string };
+const endedCount = (n: number) => (n === 1 ? "1 tester's" : `${n} testers'`);
+
 const joinModeLabel = (m: string) => (m === "apply" ? "You approve each tester" : m === "invite" ? "Invite only" : "Anyone who matches joins instantly");
 
 export function TopPanel(p: { timeZone?: string | null; joinClosedLine?: string; id: string; title: string; status: string; workEnded?: boolean; terms: string; spotsLine: string; seenAt: string; working: Tester[]; joinMode?: string; deadlineDays?: number; categories?: string[]; openUntil?: string | null; version?: number; productName?: string; mature?: boolean; nda?: boolean; keysLeft?: number | null; parts?: { written: boolean; recording: boolean; live: boolean }; paused?: boolean; ignoredAlerts?: string[]; /** (§169) the version of ignoredAlerts */ alertsV?: number; restricted?: boolean; /** The team stopped it: no Next round either. */ teamStopped?: boolean; /** (Batch 8) false on the free plan: "Subscribers" on Next round */ perks?: boolean; /** (Owner, Oct 28 afternoon) every spot taken: "Full" instead of "Accepting testers" */ full?: boolean;
@@ -47,7 +53,15 @@ export function TopPanel(p: { timeZone?: string | null; joinClosedLine?: string;
   // (Batch 35 §40) After a press the page redraws in place: End early's ticks and reasons start empty again (as after the reload they replace).
   // (Owner bug, Oct 31, batch 35 §75) Next round, End early and Stop the test are separate presses: each box shows only under its own button, named after that
   // press, and opening another top button clears it (one box at a time).
-  const { press, changes, error, busy, at, finish, clear } = usePress(p.seenAt, () => router.refresh(), { perKey: true, onFresh: () => { setPicked([]); setReason(""); setStopReason(""); setOpen(""); } });
+  // (Owner, Nov 5, §278) End early's refusal lines for ticked testers already out (left, ended…) while the others went on: shown beside its stop box or done
+  // line, and their ticks go.
+  const [goneLines, setGoneLines] = useState<GoneLine[]>([]);
+  const takeGone = (data: Record<string, unknown> | null | undefined) => {
+    const g = Array.isArray(data?.gone) ? (data.gone as GoneLine[]) : [];
+    setGoneLines(g);
+    if (g.length) setPicked((now) => now.filter((id) => !g.some((x) => x.contractId === id)));
+  };
+  const { press, changes, error, busy, at, finish, clear, doneLine } = usePress(p.seenAt, (data) => { takeGone(data); router.refresh(); }, { perKey: true, onFresh: () => { setPicked([]); setReason(""); setStopReason(""); setOpen(""); setGoneLines([]); } });
   // (Batch 16 section 10) End early's mistakes are red at their box and listed under its button, not as a plain line.
   const box = (k: keyof typeof TOP_PRESS) => (at === k ? <ChangesBox press={TOP_PRESS[k]} changes={changes} error={k === "end-early" && error.startsWith(FIELD) ? "" : error} didntGo={k === "stop" || k === "end-early"} /> : null);
   const [open, setOpen] = useState<"" | "end">("");
@@ -67,9 +81,12 @@ export function TopPanel(p: { timeZone?: string | null; joinClosedLine?: string;
   // (Owner, Nov 3, batch 35 §168) A closed test (no new joiners; testers' work ended) has no Edit, like a stopped one: no Edit button, and nothing else links to it.
   const noEdit = stopped || p.status === "closed";
   const ahead = p.working.reduce((n, w) => n + w.ahead, 0);
+  // (Owner, Nov 5, §278) Only ticks whose testers are still rows here count: one who left (their row gone on the redraw) is never sent hidden.
+  useDropGoneTicks(p.working.map((w) => w.contractId), setPicked);
   const chosen = p.working.filter((w) => picked.includes(w.contractId));
+  const chosenIds = liveTicks(picked, p.working.map((w) => w.contractId));
   const chosenAhead = chosen.reduce((n, w) => n + w.ahead, 0);
-  const allPicked = p.working.length > 0 && picked.length === p.working.length;
+  const allPicked = p.working.length > 0 && chosen.length === p.working.length;
 
   // (Owner, Nov 5, §261) The press under way (from the click until it ends: its draft cleared, the redraw): Stop's and End early's Why? are read-only only
   // while their OWN press goes (this panel's `busy` is every button's).
@@ -80,8 +97,10 @@ export function TopPanel(p: { timeZone?: string | null; joinClosedLine?: string;
     try { await goNow(action, body); } finally { setGoing(""); }
   }
   async function goNow(action: string, body: Record<string, unknown>) {
-    const r = await press<{ id?: string }>(`/api/tests/${p.id}/${action}`, body, action);
+    if (action === "end-early") setGoneLines([]);
+    const r = await press<{ id?: string; count?: number; gone?: GoneLine[]; done?: string }>(`/api/tests/${p.id}/${action}`, body, action);
     if (!r) return;
+    if (action === "end-early") takeGone(r);
     if (action === "end-early") await keepEnd.clear();
     if (action === "stop") await keepStop.clear();
     // (Owner, Oct 28 evening) Next round creates the draft and goes straight to Post a test with it. (§168) One tap, a new draft every time.
@@ -89,9 +108,10 @@ export function TopPanel(p: { timeZone?: string | null; joinClosedLine?: string;
     // (Batch 15 section 29) A restricted developer's Stop / End early: the dashboard top says it's done.
     // (Owner, Oct 31, batch 35 §72) Only while the account is still restricted: reinstated meanwhile, the page just redraws here with the full view.
     else if (p.doneTo && (action === "stop" || action === "end-early") && (await stillRestricted()))
-      window.location.href = `${p.doneTo}?done=${encodeURIComponent(action === "stop" ? `Done: you stopped ${p.title}.` : `Done: you ended ${picked.length === 1 ? "1 tester's" : `${picked.length} testers'`} work on ${p.title}.`)}`;
+      window.location.href = `${p.doneTo}?done=${encodeURIComponent(action === "stop" ? `Done: you stopped ${p.title}.` : `Done: you ended ${endedCount(r.count ?? chosenIds.length)} work on ${p.title}.`)}`;
     // (Batch 35 §40, §41) Everything else redraws the page in place; the buttons stay greyed until it has.
-    else finish();
+    // (§278) Some ticked testers were already out: the done line names whose work ended, their refusal lines beside it.
+    else finish(action === "end-early" && r.gone?.length ? (r.done ?? "") : "");
   }
 
   return (
@@ -204,11 +224,11 @@ export function TopPanel(p: { timeZone?: string | null; joinClosedLine?: string;
             {keepEnd.restored && reason !== "" && <DraftTag disabled={busy} kind="discard" onUseSaved={() => setReason("")} />}
             <p className="note">Their work ends now. What they already sent still waits for you to pay; calls ahead are cancelled.</p>
             <div>
-              {(!reason.trim() || !picked.length) && <p className="text-xs text-slate-400" data-say-why="">{!picked.length ? "Tick at least one tester first" : "Say why first"}</p>}
-              <ConfirmButton live className="btn-secondary px-3 py-1.5 text-sm text-rose-200" disabled={busy || reason.trim().length < WHY_MIN_CHARS || !picked.length || reason.length > LIMITS.endEarlyReason} confirmLabel="End their work now"
+              {(!reason.trim() || !chosenIds.length) && <p className="text-xs text-slate-400" data-say-why="">{!chosenIds.length ? "Tick at least one tester first" : "Say why first"}</p>}
+              <ConfirmButton live className="btn-secondary px-3 py-1.5 text-sm text-rose-200" disabled={busy || reason.trim().length < WHY_MIN_CHARS || !chosenIds.length || reason.length > LIMITS.endEarlyReason} confirmLabel="End their work now"
                 title={`End the work of ${chosen.length === 1 ? chosen[0].name : `${chosen.length} testers`} now?`}
                 before={() => {
-                  if (!picked.length) { setNoTick(true); return false; }
+                  if (!chosenIds.length) { setNoTick(true); return false; }
                   return checkFields(document.querySelector("[data-end-early]") as HTMLElement | null);
                 }}
                 body={(
@@ -224,11 +244,17 @@ export function TopPanel(p: { timeZone?: string | null; joinClosedLine?: string;
                     </ul>
                   </div>
                 )}
-                onConfirm={() => go("end-early", { contractIds: picked, reason })}>
+                onConfirm={() => go("end-early", { contractIds: chosenIds, reason })}>
                 End their work now
               </ConfirmButton>
             </div>
+            {goneLines.length > 0 && at === "end-early" && (
+              <div className="info" role="status" data-end-gone="">
+                {goneLines.map((g) => <p key={g.contractId} data-refusal="">{g.text}</p>)}
+              </div>
+            )}
             {box("end-early")}
+            {at === "end-early" && <PressDone line={doneLine} />}
             <FormMistakes text={at === "end-early" && error.startsWith(FIELD) ? error : ""} press="End their work now" />
           </div>
         )}

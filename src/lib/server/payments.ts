@@ -70,7 +70,7 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0] & { hold
   const kind = String(body.kind ?? ""), id = String(body.id ?? "");
   // (Batch 15 section 41, C1) The page's press id is a UUID, wrapped as "press:<developer>:<uuid>": it can never be a server key ("choice:", "dispute:" ...).
   const payKey = clientPressKey(dev.id, body.payKey);
-  if (!payKey) throw new HttpError(400, "bad_request", "This page is out of date. Refresh to see the latest.");
+  if (!payKey) throw new HttpError(400, "bad_request", "This page is out of date.");
   if (id && (kind === "submission" || kind === "call")) await (await import("./confirm")).expireActions(new Date(), kind === "call" ? { callId: id } : { submissionId: id });
   const done = await db.review.findUnique({ where: { payKey } });
   if (done) return { reviewId: done.id, amountCents: done.amountCents, rejected: done.rejected, repeated: true }; // the same press again: never twice

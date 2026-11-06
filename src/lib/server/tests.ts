@@ -233,17 +233,9 @@ export async function ownTest(devId: string, testId: string) {
   return t;
 }
 
-/** " Refresh to see the latest." when something happened on the test since the page loaded. */
-export async function staleNote(testId: string, seenAt: unknown) {
-  const d = typeof seenAt === "string" ? new Date(seenAt) : null;
-  if (!d || isNaN(d.getTime())) return "";
-  const n = await db.testEvent.count({ where: { testId, createdAt: { gt: d } } });
-  return n ? " Refresh to see the latest." : "";
-}
-
 export const seenDate = (v: unknown) => {
   const d = typeof v === "string" ? new Date(v) : null;
-  if (!d || isNaN(d.getTime())) throw new HttpError(400, "bad_request", "This page is out of date. Refresh to see the latest.");
+  if (!d || isNaN(d.getTime())) throw new HttpError(400, "bad_request", "This page is out of date.");
   return d;
 };
 
@@ -829,7 +821,7 @@ export async function stopTest(dev: U, testId: string, body: Record<string, unkn
     // (Batch 16 section 21) Stopped in another tab: this Stop stops once naming it ("You stopped the test in another tab"), then it's already done.
     if (t.status === "stopped") {
       await topPanelGate(tx, testId, body, {}, [], undefined, { acts: ["stop"], keys: ["test"], inState: true });
-      throw new HttpError(409, "stopped", "This test was stopped." + (await staleNote(testId, body.seenAt)));
+      throw new HttpError(409, "stopped", "This test was stopped.");
     }
     // (Owner, Oct 29, batch 29 section 11; replaces batch 15 sections 23, 29 and 37) While the test is paused (any cause) Stop follows the same stop-once rules.
     await topPanelGate(tx, testId, body, {}, [], undefined, { acts: ["stop"], keys: ["test"] });
@@ -858,8 +850,10 @@ export async function stopTest(dev: U, testId: string, body: Record<string, unkn
 
 /**
  * End the ticked testers' work now. Work they sent is still reviewed; calls ahead are cancelled; later presses are refused.
- * (`contractIds`: the ticks; `contractId` still works for one.) If any ticked tester is already out, nothing is ended and
- * the refusal names them.
+ * (`contractIds`: the ticks; `contractId` still works for one.) If every ticked tester is already out, nothing is ended and the refusal names them.
+ * (Owner, Nov 5, §278) If only some are out (left, ended, rated… since the page loaded), each of those gets its own refusal line ("Your End early didn't go
+ * through for mhann: mhann already left the test.", `gone`) and the press goes on for the others by the ordinary rules: a stop once for what's new (with the
+ * refusal lines beside it; the page unticks them), or their work ends at once (the refusal lines beside the done line).
  */
 export async function endEarly(dev: U, testId: string, body: Record<string, unknown>) {
   await ownTest(dev.id, testId);
@@ -870,26 +864,39 @@ export async function endEarly(dev: U, testId: string, body: Record<string, unkn
   const ids = [...new Set((Array.isArray(body.contractIds) ? body.contractIds : [body.contractId]).map((x) => String(x ?? "")).filter(Boolean))];
   if (!ids.length) throw new HttpError(400, "none", "Tick at least one tester.");
   let cancelled: Awaited<ReturnType<typeof cancelCallsAhead>> = [];
+  let goneLines: EndEarlyGone[] = [];
   const ended = await db.$transaction(async (tx) => {
     const lockedTest = await lockTest(tx, testId);
     // (Owner) After a stop, a stale press fails and names the stop.
-    if (lockedTest.status === "stopped") throw new HttpError(409, "stopped", "This test was stopped." + (await staleNote(testId, body.seenAt)));
+    if (lockedTest.status === "stopped") throw new HttpError(409, "stopped", "This test was stopped.");
     const list = [];
     // (Owner, Oct 28, batch 16 section 21) Testers this developer already ended early in another tab: this press stops once ("You ended Ana Silva's work early
     // in another tab"); on the second press they're dropped and the rest go through.
     const endedElsewhere: { id: string; name: string }[] = [];
+    // (Owner, Nov 5, §278) Ticked testers whose part ended otherwise (left, rated, removed, ended…): a refusal line each.
+    const gone: { id: string; name: string; why: string }[] = [];
     for (const id of ids) {
       const c = await tx.contract.findUnique({ where: { id }, include: { tester: true } });
       if (!c || c.testId !== testId) throw new HttpError(404, "not_found", "Choose a tester.");
       const name = displayName(c.tester);
-      if (c.status === "left") throw new HttpError(409, "gone", `${name} already left the test.` + (await staleNote(testId, body.seenAt)));
+      if (c.status === "left") { gone.push({ id, name, why: `${name} already left the test.` }); continue; }
       if (c.status === "ended" && c.endKind === "early" && seenOf(body.seenAt) && c.endedAt && c.endedAt > seenOf(body.seenAt)!) { endedElsewhere.push({ id, name }); continue; }
-      if (c.status !== "working") throw new HttpError(409, "gone", `${name}'s work already ended.` + (await staleNote(testId, body.seenAt)));
+      if (c.status !== "working") { gone.push({ id, name, why: `${name}'s work already ended.` }); continue; }
       list.push(c);
     }
+    // (§278) Nobody ticked is still working: one refusal naming them, as before.
+    if (!list.length && gone.length) throw new HttpError(409, "gone", [...gone.map((g) => g.why), ...(endedElsewhere.length ? [`${andList(endedElsewhere.map((x) => x.name))}'s work already ended.`] : [])].join(" "));
+    // (§278) Some still working: the others' refusal lines go with whatever this press shows (its stop box, or its done line).
+    if (list.length) {
+      goneLines = [...gone, ...endedElsewhere.map((x) => ({ ...x, why: `${x.name}'s work already ended.` }))].sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id)).map((g) => ({ contractId: g.id, text: endEarlyGoneLine(g.name, g.why) }));
+    }
+    const goneIds = new Set(gone.map((g) => g.id));
+    // (§278) A gone tester's own leaving line is what their refusal line says: it doesn't stop the press for the others.
+    const notTheirLeaving = goneIds.size ? (e: TestEventLike & { contractId?: string | null }) => !(e.kind === "left" && !!e.contractId && goneIds.has(e.contractId)) : undefined;
     // (Batch 29 sections 11-12) Paused or not, it stops once for what changed since the page loaded, the developer's own changes in another tab included (batch 16
     // section 21: ended the ticked testers early, paid their work, or requested, booked or cancelled a call with them; batch 29: any of BIG_OWN_ACTS).
-    await topPanelGate(tx, testId, body, {}, [], undefined, { acts: ["end-early", ...PAY_ACTS, ...CALL_ACTS], keys: ids.map((id) => `c:${id}`) });
+    // (§278) The press is about the ticked testers still in it (and those ended in another tab, as before).
+    await topPanelGate(tx, testId, body, goneLines.length ? { gone: goneLines } : {}, [], notTheirLeaving, { acts: ["end-early", ...PAY_ACTS, ...CALL_ACTS], keys: ids.filter((id) => !goneIds.has(id)).map((id) => `c:${id}`) });
     if (!list.length && endedElsewhere.length) throw new HttpError(409, "gone", `${andList(endedElsewhere.map((x) => x.name))}'s work already ended.`);
     for (const c of list) {
       await tx.contract.update({ where: { id: c.id }, data: { status: "ended", endKind: "early", endedAt: new Date(), endReason: reason } });
@@ -904,8 +911,13 @@ export async function endEarly(dev: U, testId: string, body: Record<string, unkn
   for (const c of ended)
     await notify(c.tester.email, `Your work on “${c.title}” was ended early`, [`${displayName(dev)} ended your work on “${c.title}”: “${reason}”`, "Work you already sent is still reviewed and paid. Calls ahead are cancelled."], `/app/sessions/${c.id}`, { about: dev.id, group: "tstopped" });
   await spotOpened(testId);
-  return { ended: true, count: ended.length, endedIds: ended.map((c) => c.id) };
+  // (§278) With refusal lines for ticked testers already out: the done line they show beside.
+  return { ended: true, count: ended.length, endedIds: ended.map((c) => c.id), ...(goneLines.length ? { gone: goneLines, done: `You ended ${andList(ended.map((c) => displayName(c.tester)))}'s work early.` } : {}) };
 }
+/** (Owner, Nov 5, §278) One ticked tester End early couldn't act on (already out): its own refusal line, and the tick the page removes. */
+export type EndEarlyGone = { contractId: string; text: string };
+/** "Your End early didn't go through for mhann: mhann already left the test." */
+export const endEarlyGoneLine = (name: string, why: string) => `Your End early didn't go through for ${name}: ${why}`;
 
 /**
  * Next round: a draft copy of the test for the next build.
