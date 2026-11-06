@@ -5170,3 +5170,7 @@ with ×.
   tester's page the developer's calls with other testers, the developer's page each tester's calls elsewhere.
 - Requests already waiting when a call is booked are still dropped (§184 / §185).
 - Tests: tests/no-clash-requests-292.test.ts.
+
+## §293 Cancel's reason field says it's optional until 24 hours before (owner, Nov 6)
+Under the Why field of a call's Cancel (both sides, a set's "Cancel the remaining calls" too), in small grey: "Optional until 24 hours before the call", while
+the call is 24 hours or more away. Within 24 hours the field is required as before (no hint). The rule itself is unchanged (cancel any time until it starts).
