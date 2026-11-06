@@ -4646,3 +4646,8 @@ open "Worked with you on 1 test" could sit at the top with no name or heading ov
 
 ## §258 The questions changed: no "(before)" on a removed question (owner, Nov 5)
 A removed question reads "Question 1 · Removed · <its words>" (it was "Question 1 (before)"): the Removed tag already says it.
+
+## Hotfix of §230: the dashboard failed while a charge waited for the bank (recording B4x, Nov 5)
+"Your bank wants you to confirm" on the developer's dashboard is drawn by a server component (BankToConfirm) that handed the client BankWaiting a function
+(`render`, for the green test links), which a server component can't do: the dashboard showed "Application error" whenever a charge waited for the bank. It now
+hands the links as data (`tests`) and BankWaiting builds them itself. The quoted test names in payment lines (withTestLinks) are green, as every test link (§245).
