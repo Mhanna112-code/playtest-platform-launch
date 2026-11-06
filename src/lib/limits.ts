@@ -1,3 +1,4 @@
+import { limitOr } from "./testingLimits";
 // (Design doc 11.5) Every limit in one table. Pages and rules read their numbers from here; nothing else spells them out.
 export const LIMITS = {
   spots: { min: 1, max: 10 }, // (Owner, Oct 29, batch 31) a flat 10 per test (the growing limit is gone); a test that already has more keeps them
@@ -45,7 +46,7 @@ export const LIMITS = {
   disputeText: 2000,
   bio: 2000, // (Owner, Nov 3, batch 35 §134; was 1,000) each side's own bio: the developer's (User.devBio) and the tester's (TesterProfile.bio)
   contact: { min: 10, max: 20_000 }, // (Owner, Oct 30, batch 15 section 21; was 3,000) (Owner, Nov 4, §186) 20,000, was 50,000
-  criticalChanges: 3, // (Owner, Oct 28 afternoon) per field: saves that change the steps (What to do), questions, required languages or required devices, each counted from the first join
+  criticalChanges: limitOr(3), // (§305) unlimited with the local testing switch. (Owner, Oct 28 afternoon) per field: saves that change the steps (What to do), questions, required languages or required devices, each counted from the first join
   contactPerDay: 5, // (Owner, Oct 27) Contact us messages per account per day
 } as const;
 

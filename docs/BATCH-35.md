@@ -5362,3 +5362,6 @@ Switch / Keep box is ABOVE it. It now reads "<developer> offered you new terms: 
 box; the bell already has its own "<developer> updated the listing: …", which names no position). With §304 the same box's Alerts hint lost "a key marked as
 working".
 - Tests: updated batch35-rate-all-stops, batch35-terms-dates, rate-leave-open-terms-232, seen-any-box-250, batch35-leave-stops.
+## §305 A local testing switch for the limits (owner, Nov 6)
+`NEXT_PUBLIC_TESTING_NO_LIMITS=1` in a LOCAL .env lifts the 3 changes per limited field after testers join, the 3 calls or waiting requests per tester and the
+3 call requests a day (src/lib/testingLimits.ts `limitOr`). Ignored on Vercel (VERCEL=1). Without it every limit is unchanged.
