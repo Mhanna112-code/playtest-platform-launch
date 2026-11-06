@@ -102,7 +102,7 @@ describe("email settings and the bell", () => {
     await sact(sessionId, "dispute", tester.cookie, { kind: "submission", id: sub.id, reason: "I answered every question" });
     expect(await db.outboxEmail.count({ where: { to: adm.user.email } })).toBe(0);
     await cron();
-    const daily = await db.outboxEmail.findFirstOrThrow({ where: { to: adm.user.email, subject: { startsWith: "Playtest admin:" } } });
+    const daily = await db.outboxEmail.findFirstOrThrow({ where: { to: adm.user.email, text: { contains: "\nFor the team\n" } } }); // (§306) its one end-of-day email
     expect(daily.text).toContain("New dispute:");
     expect(daily.text).toContain("“I answered every question”");
     await cron(); // not new any more: no second email about it

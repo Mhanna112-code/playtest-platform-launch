@@ -419,7 +419,8 @@ describe("§34 email rules for admins", () => {
     expect((await pay(dev.cookie, { kind: "submission", id: a.sub.id, amount: "4.00", tickedCents: 400, reason: "Only half answered" })).status).toBe(200);
     expect((await sact(a.sessionId, "dispute", a.tester.cookie, { kind: "submission", id: a.sub.id, reason: "I answered everything properly", seenAt: seen(), confirmed: true })).status).toBe(200);
     await cron();
-    const summary = (to: string) => db.outboxEmail.count({ where: { to, subject: { startsWith: "Playtest admin:" } } });
+    // (Owner, Nov 6, §306) The team's items are the "For the team" section of the admin's one end-of-day email.
+    const summary = (to: string) => db.outboxEmail.count({ where: { to, text: { contains: "\nFor the team\n" } } });
     expect(await summary(off.user.email)).toBe(0);
     expect(await summary(on.user.email)).toBe(1);
     // A chargeback: right away, to every admin, whatever the setting.

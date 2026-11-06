@@ -233,33 +233,70 @@ export function summaryHeading(period: "daily" | "weekly" | "monthly", since: Da
   return `${SUMMARY_HEADING} ${start.toLocaleDateString("en-US", { ...o, timeZone: "UTC" })} – ${fmt(now, o)}`;
 }
 
+/**
+ * (Owner, Nov 6, §306) ONE end-of-day email per admin. The team's daily admin email ("Playtest admin: N items for the team") is gone: what it held is the "For the
+ * team" section (adminDaily.ts) at the bottom of the admin's own email, under their own updates (stacked as the bell, §298). It follows the admin's email setting
+ * exactly as the admin email did: Daily / Weekly / Monthly, in the summary when it is due (everything since the admin's last section); none with Off, whose
+ * end-of-day email (payment and must-send lines only) never carries it. The team's items still reach the team: every admin's bell and the console show them,
+ * and every admin on Daily / Weekly / Monthly gets them by email. A dispute or hold lift listed in "For the team" is not repeated among that email's own lines
+ * (its "Disputes · N new" / "Hold lifts waiting" bell line stays in the bell, and is marked as emailed); one not listed there (e.g. a dispute decided since)
+ * stays in the own lines. Non-admins are unchanged.
+ */
+const DISPUTE_LINK = "/admin#dispute-", LIFT_LINK = "/admin#lift-";
+const inTeam = (n: { groupKey: string | null; link: string }, t: { disputeIds: Set<string>; liftIds: Set<string> } | undefined) =>
+  !!t && ((n.groupKey === "admindisputes" && n.link.startsWith(DISPUTE_LINK) && t.disputeIds.has(n.link.slice(DISPUTE_LINK.length))) || (n.groupKey === "adminlifts" && n.link.startsWith(LIFT_LINK) && t.liftIds.has(n.link.slice(LIFT_LINK.length))));
+const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+
 export async function sendSummaries(now = new Date(), only?: string[]) {
+  const admins = new Set((await adminUsers()).map((a) => a.id).filter((id) => !only || only.includes(id)));
   const users = await db.user.findMany({
-    where: { ...(only ? { id: { in: only } } : {}), notifications: { some: { summarizedAt: null, ...({ OR: [{ mustEmail: true }, { payment: true }, { user: { emailPref: { in: ["daily", "weekly", "monthly"] } } }] } as object) } } },
+    where: {
+      ...(only ? { id: { in: only } } : {}),
+      OR: [{ notifications: { some: { summarizedAt: null, ...({ OR: [{ mustEmail: true }, { payment: true }, { user: { emailPref: { in: ["daily", "weekly", "monthly"] } } }] } as object) } } }, ...(admins.size ? [{ id: { in: [...admins] } }] : [])],
+    },
     select: { id: true, email: true, emailPref: true, lastSummaryAt: true, isDeveloper: true, isTester: true, timeZone: true },
   });
   const line = (n: { text: string; link: string }) => `• ${n.text}${n.link ? ` ${appUrl()}${n.link}` : ""}`;
+  // (§306) The "For the team" section of each admin whose summary is due (Off is never due).
+  const isDue = (u: (typeof users)[number]) => EMAIL_ON.includes(u.emailPref) && summaryDue(u.emailPref, u.lastSummaryAt, now);
+  const ad = await import("./adminDaily");
+  const team = await ad.teamSections(users.filter((u) => admins.has(u.id) && isDue(u)).map((u) => u.id), now);
   for (const u of users) {
     const off = !["daily", "weekly", "monthly"].includes(u.emailPref);
     const due = !off && summaryDue(u.emailPref, u.lastSummaryAt, now);
     const only = due ? {} : { OR: [{ payment: true }, { mustEmail: true }] };
     if (!off && !due && u.emailPref === "daily") continue; // (a daily person is not due again yet)
-    const all = await db.notification.findMany({ where: { userId: u.id, summarizedAt: null, ...only }, orderBy: { createdAt: "asc" }, take: 200 });
-    if (!all.length) continue;
+    const t = due ? team.get(u.id) : undefined;
+    const fetched = await db.notification.findMany({ where: { userId: u.id, summarizedAt: null, ...only }, orderBy: { createdAt: "asc" }, take: 200 });
+    // (§306) The admin's own lines, without those the team section lists.
+    const repeats = fetched.filter((n) => inTeam(n, t)).map((n) => n.id);
+    const all = fetched.filter((n) => !repeats.includes(n.id));
+    const teamN = t ? ad.teamCount(t) : 0;
+    if (!all.length && !teamN) {
+      if (t) await ad.teamSent([u.id], [], now); // (as the admin email: looked at, nothing to send)
+      continue;
+    }
     // (Owner, Oct 27) Reminders go in the summary email too, each line once. A Weekly or Monthly email shows only the newest copy of each reminder (the older copies are marked done).
     const newest = new Map<string, string>();
     if (due && (u.emailPref === "weekly" || u.emailPref === "monthly")) for (const n of all) if (n.reminderKey) newest.set(`${n.side}:${n.reminderKey}`, n.id);
     const items = all.filter((n) => !n.reminderKey || !newest.has(`${n.side}:${n.reminderKey}`) || newest.get(`${n.side}:${n.reminderKey}`) === n.id);
     const dropped = all.filter((n) => !items.includes(n)).map((n) => n.id);
     try {
-      const subject = due ? `Your Playtest summary: ${items.length} update${items.length === 1 ? "" : "s"}` : off && items.some((n) => !n.payment) ? `Your Playtest account updates: ${items.length}` : `Your Playtest payment updates: ${items.length}`;
+      // (§306) An admin's: "Your Playtest summary: 2 updates, 3 items for the team" (either part alone when the other is empty).
+      const subject = due
+        ? `Your Playtest summary: ${[...(items.length ? [plural(items.length, "update")] : []), ...(teamN ? [`${plural(teamN, "item")} for the team`] : [])].join(", ")}`
+        : off && items.some((n) => !n.payment) ? `Your Playtest account updates: ${items.length}` : `Your Playtest payment updates: ${items.length}`;
       // (Owner, Nov 6, §295) The body opens with its heading, above the sections or the lines: a due Weekly / Monthly summary names its period (from the last
       // summary, or its oldest line, to now), a Daily one and every end-of-day email the day. (Owner, Nov 6, §297) From the day after the last summary.
       const period = due && (u.emailPref === "weekly" || u.emailPref === "monthly") ? u.emailPref : "daily";
-      const heading = summaryHeading(period, u.lastSummaryAt ?? all[0].createdAt, now, u.timeZone, !!u.lastSummaryAt);
-      await sendEmail({ to: u.email, subject, text: [heading, "", ...sidedEmailLines(items, line, hasBoth(u), u.timeZone, await testTitlesOf(items)), "", "Playtest"].join("\n"), button: { label: "Open Playtest", url: `${appUrl()}/app/notifications` }, heading });
-      await db.notification.updateMany({ where: { id: { in: [...items.map((n) => n.id), ...dropped] } }, data: { summarizedAt: now } });
+      const heading = summaryHeading(period, u.lastSummaryAt ?? all[0]?.createdAt ?? now, now, u.timeZone, !!u.lastSummaryAt);
+      const own = sidedEmailLines(items, line, hasBoth(u), u.timeZone, await testTitlesOf(items));
+      const forTeam = t && teamN ? [...(own.length ? [""] : []), ad.TEAM_HEADING, ...ad.teamLines(t, u.timeZone)] : [];
+      // (§306) With the team's section, the admin email's button: Open the admin console.
+      await sendEmail({ to: u.email, subject, text: [heading, "", ...own, ...forTeam, "", "Playtest"].join("\n"), button: { label: forTeam.length ? "Open the admin console" : "Open Playtest", url: `${appUrl()}${forTeam.length ? "/admin" : "/app/notifications"}` }, heading });
+      await db.notification.updateMany({ where: { id: { in: [...items.map((n) => n.id), ...dropped, ...repeats] } }, data: { summarizedAt: now } });
       if (due) await db.user.update({ where: { id: u.id }, data: { lastSummaryAt: now } });
+      if (t) await ad.teamSent([u.id], t.noShowIds, now);
     } catch (e) {
       console.error("[email] summary failed:", (e as Error).message);
     }

@@ -30,6 +30,16 @@ export const MAX_OPEN_TESTS = 10;
 export const TOO_MANY_OPEN_LINE = "You have 10 open tests, the most you can have at once. Stop or close one to post another.";
 export const SECOND_TEST_LINE = `You already have an open test. Subscribe (${SUBSCRIPTION_PRICE}) to run several at once.`;
 export const SUBSCRIPTION_ENDED = "Your subscription ended.";
+/**
+ * (Owner, Nov 6, §307) The bell line (and its end-of-day email line) on the day a subscription ends without a notice of its own (the developer's own cancel ran
+ * out, Stripe ended it, the free launch ended), in the free plan's own words ("The free plan runs one open test at a time", Payments). A lapse keeps LAPSED_LINE.
+ */
+export const FREE_PLAN_NOW = "you're on the free plan now, which runs one open test at a time";
+export const SUBSCRIPTION_ENDED_LINE = `Your subscription ended: ${FREE_PLAN_NOW}.`;
+/** (§307) Ended while everything is still free during launch (the extras stay until the launch ends). */
+export const SUBSCRIPTION_ENDED_FREE_LINE = "Your subscription ended: everything is still free during launch.";
+/** (§307) The free launch ended, for the developers without a subscription. */
+export const FREE_LAUNCH_ENDED_LINE = `Free during launch ended: ${FREE_PLAN_NOW}.`;
 export const SUBSCRIBE_WAITS = "You can subscribe once your account is active again.";
 export const DELETE_ENDS_SUBSCRIPTION = "Your subscription ends now, with no refund for the rest of the month.";
 

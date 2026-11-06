@@ -1291,7 +1291,7 @@ export async function runDaily(now = new Date()) {
 
 async function runDailyLocked(now: Date) {
   await (await import("./workWindow")).closeWorkAfterDeadlines(now);
-  const out = { autoPaid: 0, holds: 0, alerts: 0, headsUps: 0, choices: 0, closed: 0 };
+  const out = { autoPaid: 0, holds: 0, headsUps: 0, choices: 0, closed: 0 };
   // (Batch 17 §19) Each piece's closing dates (the developer's Pay, the tester's Charge), looked up once per run.
   const co = closeOutMemo(now);
   await (await import("./email")).retryEmails(now).catch((e) => console.error("[email] retry:", (e as Error).message)); // (batch 23 section 1)
@@ -1310,8 +1310,8 @@ async function runDailyLocked(now: Date) {
   await testerChargeLines(now, co);
   await payNowLines(now, co);
   await closeOutReminders(now, co);
-  // 3a. (Owner, Oct 27) ONE admin email per admin, following each admin's own email setting (Off: none), sent only when it has something in it (see adminDaily.ts).
-  out.alerts = await (await import("./adminDaily")).adminDailyEmails(now);
+  // 3a. (Owner, Nov 6, §306) The team's admin email is no longer sent here: its lines are the "For the team" section of each admin's ONE end-of-day email
+  // (sendSummaries, last in this job; see adminDaily.ts), following each admin's own email setting (Off: none).
   // 3c. (Owner, Oct 26) Paused tests close after 7 days, whatever the cause (the admin can extend a test's date or close it sooner).
   const pc = await import("./pauseClosure");
   await pc.pausedReminders(now); // (Owner, Oct 27) the developer's daily "<test> is paused and closes on <date> unless ..." (replaces the paused / day-before lines)

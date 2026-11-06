@@ -5375,3 +5375,40 @@ working".
   own "Harbor Run · N updates" (§298 bellStacks). They already were; each sender now names its test (`testId`) with a §308 comment.
 - Wording, links and Alerts are unchanged; the tester's "You're in: X" stays in "Joined". The email stacks the same way (§298).
 - Tests: tests/join-lines-per-test-308.test.ts; call-limit-request-boxes-185 follows the across-test "Applications withdrawn · N".
+## §306 One daily email per admin, with a "For the team" section (owner, Nov 6)
+An admin on Daily got two emails a day with the same items: the team's admin email ("Playtest admin: N items for the team", adminDaily.ts) and their own
+summary, whose "Disputes · N new" and "Hold lifts waiting" bell lines repeated its disputes and lifts (email catalog, note 13). Now each admin gets ONE email:
+- **Their own updates first** (stacked as the bell, §298), then a **"For the team"** section holding exactly what the admin email held: new disputes since
+  the last one, hold lifts and chargeback holds waiting for an Approve, call reports (once), the accounts this admin suspended and the tests this admin paused,
+  with closing dates. Subject "Your Playtest summary: 2 updates, 3 items for the team" (either part alone); with the section, the button is "Open the admin
+  console". sendSummaries (notify.ts) sends it; adminDaily.ts only builds the section (`teamSections`, `teamSent`); the daily job no longer sends a separate
+  admin email.
+- **No repeats.** A dispute or hold lift listed in "For the team" is left out of that email's own lines; its bell line stays in the bell and is marked as
+  emailed (no later email repeats it). A dispute bell line whose dispute is no longer in the section (decided since) stays among the own lines.
+- **The email setting, as the admin email did:** Daily / Weekly / Monthly carry the section when that summary is due, with everything since this admin's last
+  section (the same `adminDaily:<id>` mark); a due admin with nothing anywhere gets no email (the mark still moves on, as before). **Off: no section**, as the
+  admin email sent nothing with Off; the Off end-of-day email (payment and must-send lines) is unchanged. A Weekly / Monthly admin's short end-of-day email
+  (forced lines only) has no section, as the admin email went only when due. The team's items still always reach the team: every admin's bell and the console
+  show them, and every admin on Daily / Weekly / Monthly gets them by email. The chargeback email to every admin at once is unchanged.
+- **Non-admins unchanged.** Checked in the code: sendSummaries is the only end-of-day email to an account, ONE per account per run, and every line it sends is
+  marked `summarizedAt` (only unmarked lines are read). Testers and developers on Daily get one email whose lines include the forced ones (`always` /
+  `payment`). Off: one end-of-day email with only the forced lines. Weekly / Monthly: on other days a short end-of-day email with only the forced lines,
+  which are marked and so not repeated in the weekly / monthly. `now` lines (§294, §299) are written already marked.
+- Tests: tests/admin-one-email-306.test.ts. Updated: batch3, batch29-bell, schedule and batch30-emails (they find the admin's items by the "For the team"
+  section instead of the "Playtest admin:" subject; adminDaily.ts no longer calls sendEmail).
+
+## §307 "Your subscription ended", on the day it ends (owner, Nov 6)
+Nothing was sent when a subscription ended after the developer's own cancel, or when the free launch ended (only the 30-day and 7-day notices; email catalog,
+note 19). Now ONE bell line on the day it ends, in the subscription's "Payments and holds" stack (`payhold`), `always` (and `payment`), linking to
+/app/payments#subscription, so it is also in that day's end-of-day email whatever the setting:
+- **"Your subscription ended: you're on the free plan now, which runs one open test at a time."** (lib/subscription.ts `SUBSCRIPTION_ENDED_LINE`, in
+  Payments' own words for the free plan), from endSubscription for every end with reason "cancelled": the developer's own cancel running out (the daily job),
+  Stripe ending it (customer.subscription.deleted, not past due) and a Stripe subscription found gone (§130). During a free launch still running it reads
+  "Your subscription ended: everything is still free during launch." A lapse keeps its own LAPSED_LINE; a deleted account is not told.
+- **"Free during launch ended: you're on the free plan now, which runs one open test at a time."** (`FREE_LAUNCH_ENDED_LINE`) from freeLaunchNotices, to each
+  developer without a subscription (not active / past due), next to the stop-once line it already wrote. Not to one whose own subscription ended in the last
+  day (they already have "Your subscription ended").
+- **Never twice for the same end:** endSubscription tells only when its own claim ended the subscription (a second job run or Stripe's later event finds it
+  ended); the launch line rides the existing "free-ended" mark (once per end date).
+- The presses that need a subscription are unchanged (Next round, Invite, Approved-only, a second open test are refused as before).
+- Tests: tests/subscription-ended-307.test.ts.
