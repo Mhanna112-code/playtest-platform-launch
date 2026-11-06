@@ -140,15 +140,16 @@ export async function startHold(devId: string, reason: string) {
   }
   // (Owner, Oct 27) Calls starting within 3 days are cancelled with no fault; later ones are cancelled 3 days before they start if the hold is still on (the daily job).
   await (await import("./restrictions")).cancelCallsNearPause(devId, now);
-  await (await import("./pauseClosure")).bellPausedTests(devId);
   // (Owner, Nov 6, §295) Their testers read "“<test>” is paused": each test no other cause (a suspension, the team's pause) was pausing already.
   if (!dev.devSuspendedAt) await tellTestersPaused(tests.filter((t) => t.status !== "draft" && !t.adminPausedAt).map((t) => t.id));
   // (Owner, Oct 27) "Your tests are paused" and the chargeback hold email ignore Off (they ride in the one end-of-day email); the lines stack with that day's other hold / payment lines.
+  // (Owner, Nov 6, §313a) ONE line names each paused test's closing date (it was this line plus one "<test> is paused and closes on …" line per test).
+  const closing = await (await import("./pauseClosure")).pausedClosingWords(devId);
   if (reason === "chargeback") {
-    await notify(dev.email, "Your tests are paused after a chargeback", ["Your bank reversed a payment, so your tests are paused: you can't change anything on them, and testers stay in them.", "To resume: verify a card with 3D Secure, pay what you owe, and wait for the team's approval. Open Payments to see which steps remain.", `A test that stays paused for ${PAUSE_CLOSE_DAYS} days is closed.`], "/app/payments#chargeback-steps", { side: "developer", always: true, now: true, payment: true, group: "payhold" }); // (§294) emailed immediately
+    await notify(dev.email, closing ? `Your tests are paused after a chargeback: ${closing} unless you finish the steps` : "Your tests are paused after a chargeback", ["Your bank reversed a payment, so your tests are paused: you can't change anything on them, and testers stay in them.", "To resume: verify a card with 3D Secure, pay what you owe, and wait for the team's approval. Open Payments to see which steps remain.", `A test that stays paused for ${PAUSE_CLOSE_DAYS} days is closed.`], "/app/payments#chargeback-steps", { side: "developer", always: true, now: true, payment: true, group: "payhold" }); // (§294) emailed immediately
     return true;
   }
-  await notify(dev.email, "Your tests are paused", ["Your tests are paused until you pay what you owe: you can't change anything on them, and testers stay in them.", "Open Payments and press Pay what you owe: your tests resume at once.", `A test that stays paused for ${PAUSE_CLOSE_DAYS} days is closed.`], "/app/payments#owed", { side: "developer", always: true, payment: true, group: "payhold" });
+  await notify(dev.email, closing ? `Your tests are paused until you pay what you owe: ${closing}` : "Your tests are paused", ["Your tests are paused until you pay what you owe: you can't change anything on them, and testers stay in them.", "Open Payments and press Pay what you owe: your tests resume at once.", `A test that stays paused for ${PAUSE_CLOSE_DAYS} days is closed.`], "/app/payments#owed", { side: "developer", always: true, payment: true, group: "payhold" });
   return true;
 }
 
@@ -1322,7 +1323,7 @@ async function runDailyLocked(now: Date) {
   // 3a. (Owner, Nov 6, §306) The team's admin email is no longer sent here: its lines are the "For the team" section of each admin's ONE end-of-day email
   // (sendSummaries, last in this job; see adminDaily.ts), following each admin's own email setting (Off: none).
   // 3c. (Owner, Oct 26) Paused tests close after 7 days, whatever the cause (the admin can extend a test's date or close it sooner).
-  // (Owner, Nov 6, §311a) No daily "<test> is paused and closes on …" reminder any more: the line is sent once, when the pause starts (bellPausedTests).
+  // (Owner, Nov 6, §311a) No daily "<test> is paused and closes on …" reminder any more. (§313a) The pause's own line names the closing dates.
   const pc = await import("./pauseClosure");
   out.closed = await pc.closePausedTests(now);
   // 4. Open until heads-ups for the developer: 1 month (when it was more than a month away), 1 week, 3 days and 1 day before.

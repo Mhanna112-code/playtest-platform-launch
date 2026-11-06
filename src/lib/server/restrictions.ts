@@ -67,7 +67,6 @@ async function pauseDeveloper(u: { id: string; email: string }) {
   // (Owner, Oct 28 afternoon) Invites and applications WAIT while the tests are paused: they work again after the lift unless something else closed them.
   for (const t of tests) await db.$transaction((tx) => recordEvent(tx, t.id, "paused", "Your account is paused", false));
   await cancelCallsNearPause(u.id);
-  await (await import("./pauseClosure")).bellPausedTests(u.id);
 }
 
 async function removeTester(u: { id: string; name: string; email: string; pronoun: string }, kind: "suspended" | "deleted") {
@@ -206,7 +205,9 @@ export async function suspendAccount(adminId: string, userId: string, note: stri
     await (await import("./subscription")).pauseBilling(userId);
   }
   if (side === "tester" && u.isTester) await removeTester(u, "suspended");
-  await notify(u.email, sidePausedLine(side), [`${sidePausedLine(side)}. Contact us in Settings if you think this is a mistake.`], "/app/help", { side, always: true, group: "admindecision" });
+  // (Owner, Nov 6, §313a) The developer side's line names each paused test's closing date (it was this line plus one "<test> is paused and closes on …" per test).
+  const closing = side === "developer" && u.isDeveloper ? await (await import("./pauseClosure")).pausedClosingWords(userId) : null;
+  await notify(u.email, closing ? `${sidePausedLine(side)}: ${closing} unless your account is cleared` : sidePausedLine(side), [`${sidePausedLine(side)}. Contact us in Settings if you think this is a mistake.`], "/app/help", { side, always: true, group: "admindecision" });
   return { ok: true, side };
 }
 
@@ -436,7 +437,7 @@ export async function pauseTest(adminId: string, testId: string, note: string, s
     await release(p.id).catch((e) => console.error("[team pause] cancel open Pay check:", (e as Error).message));
   const dev = await db.user.findUniqueOrThrow({ where: { id: t.developerId } });
   // (Owner, Nov 6, §310b) The developer's line names the closing date in the paused line's words ("The team paused “…”: it closes on <date> unless the team lifts
-  // the pause"); that line ("… is paused and closes on …", bellPausedTests) is NOT also sent (§311a: and never daily).
+  // the pause"). (§313a) There is no separate per-test paused line any more.
   const closes = (await import("./pauseClosure")).closesUnless(dev, await db.test.findUniqueOrThrow({ where: { id: testId } }));
   const pausedLine = `The team paused “${t.title}”${closes ? `: it ${closes}` : ""}`;
   // (Owner, Nov 6, §295) Its testers read "“<test>” is paused" (never why), unless the developer's own hold or suspension was pausing it already.

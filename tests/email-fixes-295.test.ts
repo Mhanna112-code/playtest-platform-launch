@@ -220,7 +220,7 @@ describe("§295 point 6: a chargeback's amount changing goes in the end-of-day e
     const pi = "pi_" + randomUUID();
     await db.payment.create({ data: { kind: "review", submissionId: sub.id, contractId: w.sessionId, developerId: w.devId, testerId: w.anaId, amountCents: 4000, feeCents: 0, testerCents: 0, status: "charged", stripePaymentIntentId: pi } });
     expect(await chargebackOpened(pi)).toBe(true);
-    expect((await mails(w.dev.user.email)).map((m) => m.subject)).toEqual(["Your tests are paused after a chargeback"]);
+    expect((await mails(w.dev.user.email)).map((m) => m.subject)).toEqual([expect.stringMatching(/^Your tests are paused after a chargeback: .+ unless you finish the steps$/)]); // (§313a)
     expect(await disputeAmountChanged(pi, 2500, "under_review")).toBe("followed");
     const changed = (await lines(w.devId)).find((n) => n.text.startsWith("Your bank changed the amount"))!;
     expect(changed).toMatchObject({ mustEmail: true, payment: true, groupKey: "payhold", summarizedAt: null });

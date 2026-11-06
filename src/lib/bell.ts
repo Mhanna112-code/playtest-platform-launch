@@ -16,7 +16,7 @@ export const GROUP_TITLES: Record<string, string> = {
   admindecision: "The team decided",
   disputefiled: "Disputes filed",
   disputedecided: "Disputes decided",
-  pausedreminder: "Paused tests",
+  pausedreminder: "Paused tests", // (§313a) no new line uses it: kept for the lines already written
   tpaid: "You were paid",
   tdelayed: "Payments delayed",
   tarrived: "Delayed payments arrived",
