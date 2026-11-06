@@ -157,10 +157,12 @@ export function ChargebackSteps({ steps }: { steps: Steps }) {
         </ul>
       )}
       {steps.remaining.length > 0 && <p data-steps-line="">{stepsLine(steps.remaining)}{steps.reviewFirst ? "" : " Paying alone doesn't lift it."}</p>}
+      {/* (Owner, Nov 5, §272) Verified in another tab or device: the page's next poll redraws it (the payments, test and dashboard versions read the verified
+          card), the step shows ticked like the others and neither Verify a card nor an open card form's Verify this card stays (one in flight keeps its refusal). */}
       {!steps.cardVerified && !form && (
         <button className="btn" disabled={busy || bank.open || !!done} onClick={start}>Verify a card</button>
       )}
-      {form && (
+      {form && (!steps.cardVerified || busy) && (
         <div className="space-y-2">
           <div ref={mount} data-card-form="" className="min-h-[3rem] rounded-lg bg-white p-3" />
           <button className="btn" disabled={busy || !ready || bank.open || !!done} onClick={confirm}>Verify this card</button>

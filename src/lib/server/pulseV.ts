@@ -114,8 +114,11 @@ export async function testV(viewerId: string, testId: string, sessionId = "") {
   // Needs you and Shown excerpts, and the tester's session page (its "waiting for" note and Show an excerpt), on the normal poll. No live line.
   const excerpts = await db.excerpt.findMany({ where: sessionId ? { contractId: sessionId } : { testId }, orderBy: { id: "asc" }, select: { id: true, status: true } });
   const excerptsV = excerpts.map((x) => `${x.id}:${x.status}`).join(",");
+  // (Owner, Nov 5, §272) The test page shows the developer's own chargeback steps: Verify a card done in another tab or device (or the team's approval)
+  // redraws it on the next poll, the step ticked and the button gone.
+  const cbV = sessionId ? "" : await (await import("./pageFreshness")).chargebackStateV(viewerId);
   // (Batch 10) The developer's suspension and the team's pause are in it too, so a tester's session page shows (or drops) the paused banner live.
-  return [ev?.createdAt.getTime() ?? 0, pay.n, pay.last, bankActionsV, elsewhereV, t.developer.holdStartedAt?.getTime() ?? 0, t.status, disp.map((d) => d.status + (d.devSideAt?.getTime() ?? 0)).join(","), inv?.updatedAt.getTime() ?? 0, sus, msg?.createdAt.getTime() ?? 0, t.developer.devSuspendedAt?.getTime() ?? 0, t.adminPausedAt?.getTime() ?? 0, keysV, own?.createdAt.getTime() ?? 0, reqV?.updatedAt.getTime() ?? 0, profV?.getTime() ?? 0, ratingsN, ratingRowsV, rateV, consV, callsKey, blocksV, excerptsV, workEnd, pronounsV, myKeyV].join("|");
+  return [ev?.createdAt.getTime() ?? 0, pay.n, pay.last, bankActionsV, elsewhereV, t.developer.holdStartedAt?.getTime() ?? 0, t.status, disp.map((d) => d.status + (d.devSideAt?.getTime() ?? 0)).join(","), inv?.updatedAt.getTime() ?? 0, sus, msg?.createdAt.getTime() ?? 0, t.developer.devSuspendedAt?.getTime() ?? 0, t.adminPausedAt?.getTime() ?? 0, keysV, own?.createdAt.getTime() ?? 0, reqV?.updatedAt.getTime() ?? 0, profV?.getTime() ?? 0, ratingsN, ratingRowsV, rateV, consV, callsKey, blocksV, excerptsV, cbV, workEnd, pronounsV, myKeyV].join("|");
 }
 
 /** (Owner, Oct 29, batch 10) Payments'"Pay what you owe": a declined payment, a chargeback, a tester's Charge during the hold, a payment from another tab, a reservation. */
