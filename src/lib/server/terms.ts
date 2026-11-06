@@ -4,7 +4,7 @@ import { displayName, fmtDate, pronouns } from "@/lib/server/dateFormat";
 import { newDueAt, switchedLine, termsDiff, testerRefusal, type ContractTerms, type TestEventLike } from "@/lib/rules";
 import { ANSWER_TERMS_CODE, ANSWER_TERMS_FIRST } from "@/lib/answerTerms";
 import { HttpError } from "./http";
-import { notify } from "./notify";
+import { bell, notify } from "./notify";
 import { testerGate } from "./testerGate";
 import { logEvent } from "./live";
 import { carryOver, itemsFor, prevSetsOf, pushPrev, restoreDraft } from "@/lib/answerSets";
@@ -196,6 +196,9 @@ export async function decideTerms(tester: { id: string }, contractId: string, bo
     ]);
     // (Batch 14 section 4) One quiet line in the developer's live box (not a stop-once kind); several a day stack.
     await logEvent(c.testId, "terms", switchedLine(1, await nameOf(c.testerId)), c.id, testerRow(c.id)); // (Owner, Nov 6, §284) the place the line opens
+    // (Owner, Nov 6, §286) The developer's bell too, in the same words ("Ana Silva switched to the new terms"), linking to the tester's row; the day's switches on a
+    // test stack in one entry, as the top box stacks them.
+    await bell(c.test.developerId, switchedLine(1, await nameOf(c.testerId)), `/app/tests/${c.testId}#tester-${c.id}`, undefined, { side: "developer", testId: c.testId });
     return { switched: true };
   }
   await db.termsOffer.update({ where: { id: target.id }, data: { status: "kept", decidedAt: now } });

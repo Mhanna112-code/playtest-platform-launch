@@ -358,29 +358,31 @@ describe("§185 two request boxes on the developer's page, each with a name sear
   });
 });
 
-describe("§185 the other side's withdrawal and a request a booking closed: a bell, stacked per test and day", () => {
-  it("a withdrawal rings the other person once (both ways), in the test's \"Call requests · N closed today\" stack", async () => {
+// (Owner, Nov 6, §286) The call-request stack is now one entry a day across tests ("Call requests · N today"), replacing §185's per-test one.
+describe("§185 the other side's withdrawal and a request a booking closed: a bell, stacked (§286: across tests per day)", () => {
+  it("a withdrawal rings the other person once (both ways), in the day's \"Call requests · N today\" stack", async () => {
     const f = await setup();
     const a = await joined(f.testId);
     expect((await testerReq(a.sessionId, a.tester.cookie, { times: [atHours(50)] })).status).toBe(200);
     expect((await testerAnswer(a.sessionId, a.tester.cookie, (await newest(a.sessionId, "tester")).id, "withdraw")).status).toBe(200);
     expect((await devReq(f.testId, f.dev.cookie, a.sessionId, { times: [atHours(60)] })).status).toBe(200);
     expect((await devAnswer(f.testId, f.dev.cookie, a.sessionId, (await newest(a.sessionId, "developer")).id, "withdraw")).status).toBe(200);
-    const devBells = await db.notification.findMany({ where: { userId: f.dev.user.id, groupKey: `reqclosed:${f.testId}` } });
+    const devBells = await db.notification.findMany({ where: { userId: f.dev.user.id, groupKey: "callrequests", text: { contains: " withdrew " } } });
     expect(devBells.map((n) => n.text)).toEqual([expect.stringMatching(/^Ana Silva withdrew a call request for .+ (AM|PM)/)]);
     expect(devBells[0].link).toBe(`/app/tests/${f.testId}`);
-    const herBells = await db.notification.findMany({ where: { userId: a.tester.user.id, groupKey: `reqclosed:${f.testId}` } });
+    const herBells = await db.notification.findMany({ where: { userId: a.tester.user.id, groupKey: "callrequests", text: { contains: " withdrew " } } });
     expect(herBells.map((n) => n.text)).toEqual([expect.stringMatching(/^Nora Lane withdrew a call request for /)]);
     expect(herBells[0].link).toBe(`/app/sessions/${a.sessionId}`);
     // Her own withdrawal never rings her.
     expect(await db.notification.count({ where: { userId: a.tester.user.id, text: { startsWith: "Ana Silva withdrew" } } })).toBe(0);
   });
 
-  it("the stack: one entry per test and day, titled with its count", () => {
+  it("the stack: one entry a day across tests (§286), titled with its count; older per-test lines keep their title", () => {
     const at = new Date("2026-11-04T15:00:00Z");
-    const n = (id: string, testId: string) => ({ id, testId, own: false, groupKey: `reqclosed:${testId}`, createdAt: at });
+    const n = (id: string, testId: string) => ({ id, testId, own: false, groupKey: "callrequests", createdAt: at });
     expect(bellKeyIn(n("1", "t1"), "UTC")).toBe(bellKeyIn(n("2", "t1"), "UTC"));
-    expect(bellKeyIn(n("1", "t1"), "UTC")).not.toBe(bellKeyIn(n("3", "t2"), "UTC"));
+    expect(bellKeyIn(n("1", "t1"), "UTC")).toBe(bellKeyIn(n("3", "t2"), "UTC"));
+    expect(groupTitle("callrequests", 2, 3)).toBe("Call requests · 3 today");
     expect(groupTitle("reqclosed:t1", 1, 3)).toBe("Call requests · 3 closed today");
     expect(groupTitle("appwithdrawn:t1", 1, 2)).toBe("Applications · 2 withdrawn today");
   });

@@ -19,7 +19,7 @@ import { devGate, devGateIfSeen, devOwes, recordEvent } from "./tests";
 import { logEvent } from "./live";
 import { callAt, partOnTest, partWords } from "./partWords";
 import { T } from "@/lib/tz";
-import { testerGate } from "./testerGate";
+import { devSideLine, testerGate } from "./testerGate";
 import { PAYMENT_CHECKING, freshPayKey, pressKeyFor } from "./recovery";
 import { clientPressKey, serverKey } from "./pressKeys";
 import { amountFromRate, callMinutesOf, overCeilingLine, rateFromAmount } from "@/lib/callMeasure";
@@ -603,6 +603,12 @@ export async function addDevSide(dev: U, testId: string, body: Record<string, un
     const now = await db.dispute.findUniqueOrThrow({ where: { id: d.id }, select: { status: true, devSideAt: true } });
     throw new HttpError(409, now.devSideAt ? "dev_side" : "decided", now.devSideAt ? DEV_SIDE_ALREADY : "This dispute was already decided.");
   }
+  // (Owner, Nov 6, §286) The tester's top box reads "Nora Lane added her side to your dispute about your written answers": her bell rings with the same words
+  // (a call's time in her own zone), linking to that part on her session page, where the developer's side shows.
+  const full = await db.dispute.findUniqueOrThrow({ where: { id: d.id }, include: { submission: { select: { kind: true } }, call: { select: { startsAt: true } } } });
+  const devUser = await db.user.findUniqueOrThrow({ where: { id: c.test.developerId } });
+  const kind = full.submission?.kind === "recording" ? "recording" : "written answers";
+  await bell(c.testerId, devSideLine(displayName(devUser), devUser.pronoun, full.call ? T(full.call.startsAt) : null, full.submission?.kind), `/app/sessions/${c.id}#${pieceAnchor(full.callId ? "live call" : kind, full.callId)}`, undefined, { testId, group: "disputeside" });
   return { ok: true };
 }
 

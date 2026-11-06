@@ -3,7 +3,7 @@ import { displayName, fmtDateTime, money, pronouns } from "@/lib/server/dateForm
 import { TESTER_CHOICE_REASONS, partWhen, stopOnce, type TestEventLike } from "@/lib/rules";
 import { rowsOf } from "@/lib/callRows";
 import { HttpError } from "./http";
-import { KEY_BOX_ID, keyGivenToYouLine } from "@/lib/keys";
+import { KEY_BOX_ID, keyFixedLine, keyGivenToYouLine } from "@/lib/keys";
 import { NDA_INFO, TERMS_OFFER_BOX, TESTER_REQUESTS_BOX, callRow, ownLink, requestRow, testerPartRow } from "@/lib/lineAnchors";
 import { KEY_GIVEN } from "./accessKeys";
 import { DROP_KINDS, isDropReason } from "@/lib/requestDrop";
@@ -31,6 +31,12 @@ export const CLOSED_BY_TESTER = new Set(["you asked a different rate", "the test
 /** (Owner, Oct 28, batch 16 section 24) What the stop, a closure or an early end did by itself (requests closed, calls ahead cancelled): never a stop-once
  * reason for what still works afterwards (Charge, Let it go, Dispute, Rate); the stopped line at the top already says it. */
 const CLOSED_BY_END = new Set(["the test was stopped", "the session ended", "the test ended"]);
+/**
+ * (Owner, Nov 6, §286) Whether the developer's request closed for this reason is a line in the tester's top box ("The call time with Nora Lane on … is no longer
+ * available"): never one her own press closed (CLOSED_BY_TESTER), one the stop, a closure or an early end closed (its own line says it), nor one a booking dropped
+ * (§184's own line). Such a closure rings her bell too (closeRequests).
+ */
+export const testerSeesClosed = (reason: string) => !CLOSED_BY_TESTER.has(reason) && !CLOSED_BY_END.has(reason) && !isDropReason(reason);
 const byTheEnd = (c: { status: string; endedAt: Date | null }, at: Date | null) => c.status === "ended" && !!c.endedAt && !!at && Math.abs(at.getTime() - c.endedAt.getTime()) < 60_000;
 
 export async function testerChanges(testerId: string, contractId: string, testId: string, seenAt: Date, tab = "", termsFrom: Date = seenAt): Promise<TestEventLike[]> {
@@ -49,7 +55,7 @@ export async function testerChanges(testerId: string, contractId: string, testId
   const out: TestEventLike[] = [];
   // (Owner, Nov 6, §284) Each line carries the place on the session page it is about (`link`): the top box opens it, ignored (greyed) lines too. These lines are
   // built from the rows themselves at read time, so older changes get their place the same way.
-  for (const d of sides) out.push({ kind: "dispute", text: `${dev} added ${pronouns(c.test.developer.pronoun).poss} side to your dispute about ${d.call ? `your live call on ${fmtDateTime(d.call.startsAt)}` : `your ${d.submission?.kind === "recording" ? "recording" : "written answers"}`}`, createdAt: d.devSideAt!, link: testerPartRow({ kind: d.submission?.kind, callId: d.callId }) });
+  for (const d of sides) out.push({ kind: "dispute", text: devSideLine(dev, c.test.developer.pronoun, d.call ? fmtDateTime(d.call.startsAt) : null, d.submission?.kind), createdAt: d.devSideAt!, link: testerPartRow({ kind: d.submission?.kind, callId: d.callId }) });
   // (Batch 35 §53) The offer is a consequence for a working tester; its fields are the listing's one line ("See it") and the offer box, never a list here.
   for (const o of offers) out.push({ kind: "terms", text: `${dev} offered you the new terms: Switch or Keep below`, createdAt: o.createdAt, item: o.id, link: TERMS_OFFER_BOX });
   const owed = await db.payment.findMany({ where: { contractId, status: "failed", owedUntil: { not: null }, settledAt: null }, select: { submissionId: true, callId: true } });
@@ -84,7 +90,7 @@ export async function testerChanges(testerId: string, contractId: string, testId
     else if (r.status === "withdrawn") out.push({ kind: DROP_KINDS.devQuiet, text: `${dev} withdrew the request for ${what}`, createdAt: r.updatedAt, link });
     else if (r.status === "taken") out.push({ kind: "requested", text: `The call time with ${dev} on ${when} is no longer available: another tester took it`, createdAt: r.updatedAt, link });
     // (Owner, Nov 4, §184) One dropped when a call was booked has its own line (below), never this one too.
-    else if (r.status === "closed" && !CLOSED_BY_TESTER.has(r.closedReason) && !CLOSED_BY_END.has(r.closedReason) && !isDropReason(r.closedReason)) out.push({ kind: "requested", text: `The call time with ${dev} on ${when} is no longer available`, createdAt: r.updatedAt, link });
+    else if (r.status === "closed" && testerSeesClosed(r.closedReason)) out.push({ kind: "requested", text: `The call time with ${dev} on ${when} is no longer available`, createdAt: r.updatedAt, link });
     // booked / declined by the tester themselves: their own action (reason E)
   }
   for (const r of mine) {
@@ -104,7 +110,7 @@ export async function testerChanges(testerId: string, contractId: string, testId
   for (const call of calls.filter((x) => !(x.cancelledBy === "system" && byTheEnd(c, x.cancelledAt)))) out.push({ kind: "cancelled", text: `Your call with ${dev} on ${fmtDateTime(call.startsAt)} was cancelled`, createdAt: call.cancelledAt!, link: callRow(call.id) });
   // (Owner, Oct 30, batch 15 section 45) The developer marked this tester's key as working: a change to their contract (it stops even with Alerts Off; no bell).
   const fixed = await db.accessKey.findFirst({ where: { contractId, fixedAt: { gt: seenAt }, status: "inuse" } });
-  if (fixed) out.push({ kind: "keyfixed", text: `${dev} marked your key as working (${fixed.value})`, createdAt: fixed.fixedAt!, link: KEY_BOX_ID });
+  if (fixed) out.push({ kind: "keyfixed", text: `${keyFixedLine(dev)} (${fixed.value})`, createdAt: fixed.fixedAt!, link: KEY_BOX_ID });
   // (Batch 30 §17) The developer's Save gave this tester a key (the test had none when they joined): "<dev> gave you an access key for “<test>”" (the key is in its box).
   for (const e of await db.testEvent.findMany({ where: { testId, kind: KEY_GIVEN, contractId, createdAt: { gt: seenAt } } })) out.push({ kind: "keygiven", text: keyGivenToYouLine(dev, c.test.title), createdAt: e.createdAt });
   // (Owner, Nov 5, §267) The NDA changed (its own notice): an ordinary line (Alerts on, not yet shown), apart from the block an added or removed one makes.
@@ -133,6 +139,10 @@ export async function questionChangeLines(testId: string, since: Date | null, de
 }
 /** (§269) A question-change line (questionChangeLines), apart from the listing's own "edited the listing" line. */
 const isQuestionLine = (e: TestEventLike) => e.kind === "info" && !!e.listing && e.key !== "listing" && !!e.keys?.includes("questions");
+
+/** (Design doc 8) "Nora Lane added her side to your dispute about your live call on …" (the top box's line; §286: the bell's, with the call's time as a token). */
+export const devSideLine = (dev: string, pronoun: string | null | undefined, callWhen: string | null, kind?: string | null) =>
+  `${dev} added ${pronouns(pronoun).poss} side to your dispute about ${callWhen ? `your live call on ${callWhen}` : `your ${kind === "recording" ? "recording" : "written answers"}`}`;
 
 /** (Batch 20 section 12) "Nora Lane paid you $5.00 more for your written answers". */
 export const payMoreLine = (dev: string, cents: number, part: string) => `${dev} paid you ${money(cents)} more for your ${part}`;
@@ -247,8 +257,8 @@ async function zeroUpdateLines(submissionId: string, since: Date): Promise<TestE
   return [{ kind: "paid", text: `${displayName(s.contract.test.developer)} paid $0 more for what you added to your ${s.kind === "recording" ? "recording" : "written answers"}`, createdAt: s.paidUpdateZeroAt, piece: s.id }];
 }
 
-/** "weekly calls from Thu, Nov 5, 3:00 PM" / "a call (pick one of 3 times)" / "a call for Thu, Nov 5, 3:00 PM". */
-function requestWords(r: { rows?: unknown; times: Date[]; startsAt: Date; weeks: number; repeat: string }, when: string) {
+/** "weekly calls from Thu, Nov 5, 3:00 PM" / "a call (pick one of 3 times)" / "a call for Thu, Nov 5, 3:00 PM". (§286) The bell passes `when` as a time token. */
+export function requestWords(r: { rows?: unknown; times: Date[]; startsAt: Date; weeks: number; repeat: string }, when: string) {
   const rows = rowsOf(r);
   if (rows.length > 1) return `a call (pick one of ${rows.length} times)`;
   const x = rows[0];

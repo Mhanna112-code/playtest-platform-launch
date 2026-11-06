@@ -1,10 +1,11 @@
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { displayName } from "@/lib/format";
-import { keyNeedLine, keyRefusal, keyReportedLine, keyToldNote, KEY_MAX_LENGTH, KEY_TOO_LONG, parseKeys, repeatedKeys, reusedKeyLine } from "@/lib/keys";
+import { keyFixedLine, keyNeedLine, keyRefusal, keyReportedLine, keyToldNote, KEY_MAX_LENGTH, KEY_TOO_LONG, parseKeys, repeatedKeys, reusedKeyLine } from "@/lib/keys";
 import { HttpError } from "./http";
 import { logEvent } from "./live";
 import { testerRow } from "@/lib/lineAnchors";
+import { bell } from "./notify";
 
 type Tx = Prisma.TransactionClient | typeof db;
 
@@ -52,10 +53,10 @@ export async function keyBoxes(testId: string) {
 /**
  * (Owner, Oct 30, batch 15 section 45) The developer's "Dismiss selected" on the broken-key warning: hides the selected rows (for this key report). With "Works now"
  * ticked it also clears the key's broken mark: it's no longer crossed out, it can be reused without a warning, and the tester's next press stops once with "The developer
- * marked your key as working" (even with Alerts Off: it's their contract). No bell.
+ * marked your key as working" (even with Alerts Off: it's their contract). (Owner, Nov 6, §286; replaces "No bell") Her top box shows it, so her bell rings too.
  */
 export async function dismissBrokenKeys(dev: { id: string }, testId: string, body: Record<string, unknown>) {
-  const t = await db.test.findUnique({ where: { id: testId }, select: { developerId: true } });
+  const t = await db.test.findUnique({ where: { id: testId }, select: { developerId: true, developer: true } });
   if (!t || t.developerId !== dev.id) throw new HttpError(404, "not_found", "That test doesn't exist.");
   const ids = Array.isArray(body.keyIds) ? body.keyIds.map(String).slice(0, 200) : [];
   const works = new Set(Array.isArray(body.worksNow) ? body.worksNow.map(String) : []);
@@ -65,6 +66,11 @@ export async function dismissBrokenKeys(dev: { id: string }, testId: string, bod
   for (const k of keys) {
     if (works.has(k.id)) await db.accessKey.update({ where: { id: k.id }, data: { status: "inuse", brokenAt: null, brokenDismissedAt: now, fixedAt: now } });
     else await db.accessKey.update({ where: { id: k.id }, data: { brokenDismissedAt: now } });
+  }
+  // (§286) "Nora Lane marked your key as working", linking to her key box (the key itself never in a bell, as batch 30 §17), for each working tester whose key it is.
+  for (const k of keys.filter((x) => works.has(x.id) && x.contractId)) {
+    const c = await db.contract.findUnique({ where: { id: k.contractId! }, select: { id: true, testerId: true, status: true } });
+    if (c?.status === "working") await bell(c.testerId, keyFixedLine(displayName(t.developer)), `/app/sessions/${c.id}#access-key`, undefined, { testId });
   }
   return { dismissed: keys.length, fixed: keys.filter((k) => works.has(k.id)).length };
 }
@@ -125,7 +131,8 @@ export async function heldBrokenKey(testId: string, testerId: string) {
   return db.accessKey.findFirst({ where: { testId, contractId: c.id, status: "broken" } });
 }
 
-/** "This key doesn't work": the key is marked (crossed out in the developer's row and Edit's "In use"), and the developer's live box gets one quiet line (no bell, never a stop). */
+/** "This key doesn't work": the key is marked (crossed out in the developer's row and Edit's "In use"), and the developer's live box gets one quiet line (never a
+ * stop). (Owner, Nov 6, §286; replaces batch 14 §6's "no bell") It rings their bell too, in the same words. */
 export async function reportKeyBroken(tester: { id: string; name: string; email: string; pronoun?: string }, contractId: string) {
   const c = await db.contract.findUnique({ where: { id: contractId }, include: { test: { include: { developer: true } } } });
   if (!c || c.testerId !== tester.id) throw new HttpError(404, "not_found", "That session doesn't exist or isn't yours.");
@@ -140,6 +147,8 @@ export async function reportKeyBroken(tester: { id: string; name: string; email:
   });
   if (result.already) return { reported: true, replaced: false, note: keyToldNote(true, c.test.developer.pronoun) };
   await logEvent(c.testId, "key", keyReportedLine(displayName(tester), tester.pronoun), c.id, testerRow(c.id)); // (Owner, Nov 6, §284) the place the line opens
+  // (§286) "Ana Silva reported her key doesn't work", linking to her row on the test page (the key is crossed out there).
+  await bell(c.test.developerId, keyReportedLine(displayName(tester), tester.pronoun), `/app/tests/${c.testId}#tester-${c.id}`, undefined, { testId: c.testId });
   return { reported: true, replaced: false, note: keyToldNote(false, c.test.developer.pronoun) };
 }
 

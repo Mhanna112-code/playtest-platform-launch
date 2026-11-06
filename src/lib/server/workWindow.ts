@@ -39,6 +39,8 @@ export async function finishWorkIfDue(testId: string, now = new Date()) {
     const at = workDeadlineOf(t, t.contracts);
     if (!at || at > now) return null;
     const ids = t.contracts.map((c) => c.id);
+    // (Owner, Nov 6, §286) The testers whose work this ends: their top box reads "This test ended", so their bell does too (below).
+    const ending = await tx.contract.findMany({ where: { testId, status: "working" }, select: { id: true, title: true, testerId: true, tester: { select: { email: true } } } });
     await tx.contract.updateMany({ where: { testId, status: "working" }, data: { status: "ended", endKind: "closed", endedAt: at, endReason: "The test ended." } });
     const cancelled = await cancelCallsAhead(tx, ids, "The test ended.", at);
     await closeOffersOfEnded(tx, ids, at); // (batch 35 §118) the part ended: its offer closes
@@ -47,9 +49,12 @@ export async function finishWorkIfDue(testId: string, now = new Date()) {
     await tx.invite.updateMany({ where: { testId, status: "sent" }, data: { status: "cancelled" } });
     await tx.application.updateMany({ where: { testId, status: "pending" }, data: { status: "closed", closedReason: "stopped", decidedAt: at } });
     await recordEvent(tx, testId, "stopped", "The test was closed", true, { status: "closed", workEndedAt: at });
-    return { at, cancelled };
+    return { at, cancelled, ending };
   });
   if (!result) return false;
+  // (§286) In the words of the same closure's other bells (a pause running out, pauseClosure): "“Harbor Run” ended", in the day's "Tests stopped or ended" stack.
+  const { notify } = await import("./notify");
+  for (const c of result.ending) await notify(c.tester.email, `“${c.title}” ended`, [`“${c.title}” ended. Work you already sent is still reviewed and paid. Calls ahead are cancelled.`], `/app/sessions/${c.id}`, { recipientId: c.testerId, group: "tstopped" });
   await (await import("./calls")).endCallsAtWorkDeadline(testId, result.at, now);
   await tellCancelled(result.cancelled, "closed");
   return true;

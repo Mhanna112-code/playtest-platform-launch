@@ -114,7 +114,7 @@ export async function requestExcerpt(tester: { id: string; name: string; email: 
     if ((await tx.excerpt.count({ where: { testerId: tester.id, status: { in: ["pending", "shown"] } } })) - replaced >= MAX_EXCERPTS) throw new HttpError(409, "too_many", TOO_MANY_EXCERPTS);
     return tx.excerpt.create({ data: { testerId: tester.id, testId: t.id, contractId: sub.contractId, submissionId: sub.id, question: pick.question, text, hideProduct } });
   });
-  await bell(t.developerId, `${displayName(tester)} asked to show an excerpt from “${t.title}” on ${pronouns(tester.pronoun).poss} profile`, `/app/tests/${t.id}#excerpt-${x.id}`, undefined, { testId: t.id });
+  await bell(t.developerId, `${displayName(tester)} asked to show an excerpt from “${t.title}” on ${pronouns(tester.pronoun).poss} profile`, `/app/tests/${t.id}#excerpt-${x.id}`, undefined, { side: "developer", testId: t.id, group: "excerpts" }); // (Owner, Nov 6, §286) one "Excerpts" entry a day across tests, as the tester's
   return { id: x.id };
 }
 
@@ -189,7 +189,7 @@ export async function excerptsOnDelete(userId: string) {
   for (const x of pending) {
     const line = devDeletedClosedLine(x.test.title, x.test.developer.pronoun);
     await db.excerpt.update({ where: { id: x.id }, data: { status: "closed", closedReason: line, decidedAt: new Date() } });
-    await bell(x.testerId, `${line}.`, `/app/sessions/${x.contractId}`, undefined, { side: "tester", testId: x.testId });
+    await bell(x.testerId, `${line}.`, `/app/sessions/${x.contractId}`, undefined, { side: "tester", testId: x.testId, group: "excerpts" }); // (§286) with her other excerpt lines
   }
 }
 

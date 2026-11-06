@@ -78,6 +78,8 @@ export const reusedKeyLine = (value: string, name: string, broken: boolean) => (
 export const FREE_KEYS_RULE = "Keys in use can't be added. Keys from testers who left or finished can be typed in again; you'll see if one was reported as broken.";
 
 /** (Owner, Oct 29, batch 14 section 6) The developer's quiet live-box line when a tester reports their key (not a stop-once kind, no bell). */
+/** (Batch 15 section 45) "Nora Lane marked your key as working" (the tester's top box adds the key; (Owner, Nov 6, §286) the bell never shows a key, as batch 30 §17). */
+export const keyFixedLine = (dev: string) => `${dev} marked your key as working`;
 export const keyReportedLine = (name: string, /** (batch 35 §162) the tester's */ pronoun?: string | null) => `${name} reported ${pronouns(pronoun).poss} key doesn't work`;
 /** (Batch 35 §162) The tester's note after "This key doesn't work", in the developer's pronoun ("She can send you another key in a message."). */
 export const keyToldNote = (already: boolean, devPronoun?: string | null) => `${already ? "The developer was already told." : "Thanks. The developer was told."} ${pronouns(devPronoun).Subj} can send you another key in a message.`;

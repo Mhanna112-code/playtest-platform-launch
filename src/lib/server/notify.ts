@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import type { Prisma } from "@prisma/client";
 import { summaryDue } from "@/lib/rules";
 import { renderTimes } from "@/lib/tz";
-import { DMS_GROUP, PAID_GROUP, bellKeyIn, groupTitle } from "@/lib/bell";
+import { BOOKED_GROUP, CALL_REQUESTS_GROUP, DMS_GROUP, PAID_GROUP, bellKeyIn, groupTitle } from "@/lib/bell";
 import { appUrl } from "./auth";
 import { sendEmail } from "./email";
 
@@ -112,7 +112,8 @@ export async function adminUsers() {
  * §201) So do the developer's receipts: "Paid · 3 payments" with each "You paid …" line under it (in the end-of-day payment email and the summary alike). A kind
  * with one line keeps its plain line, as in the bell.
  */
-export const EMAIL_STACKED = ["deadlines", PAID_GROUP, DMS_GROUP] as const;
+// (Owner, Nov 6, §286) Call requests and booked calls stack in the email as in the bell.
+export const EMAIL_STACKED = ["deadlines", PAID_GROUP, DMS_GROUP, CALL_REQUESTS_GROUP, BOOKED_GROUP] as const;
 export function emailLines<N extends { text: string; link: string; groupKey: string | null; testId: string | null; id: string }>(items: N[], line: (n: N) => string) {
   const stacks = new Map(EMAIL_STACKED.map((k) => [k as string, items.filter((n) => n.groupKey === k)]));
   const out: string[] = [];
