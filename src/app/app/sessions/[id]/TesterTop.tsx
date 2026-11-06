@@ -120,7 +120,8 @@ export function TesterTop({ sessionId, seenAt, offer, devName }: { sessionId: st
                 <li key={key} data-question-change={x.kind}>
                   <details className="rounded-lg border border-white/10 p-2">
                     <summary className="flex cursor-pointer flex-wrap items-baseline gap-x-2 font-medium" data-question-change-summary="">
-                      <span>{x.to != null ? `Question ${x.to + 1}` : `Question ${x.from! + 1} (before)`}</span>
+                      {/* (Owner, Nov 5, §258) A removed question is numbered as it was, with no "(before)": its Removed tag says it. */}
+                      <span>{`Question ${(x.to ?? x.from!) + 1}`}</span>
                       <span className="badge text-xs">{x.kind === "changed" ? "Changed" : x.kind === "new" ? "New" : "Removed"}</span>
                       <span className="min-w-0 flex-1 truncate font-normal text-slate-300">{head}</span>
                     </summary>

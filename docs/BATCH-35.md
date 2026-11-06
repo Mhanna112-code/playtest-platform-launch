@@ -4639,3 +4639,10 @@ In QA.tsx (every question and answer box): a question is a sky-tinted box (sky t
 sky label ("Question 1"); an answer keeps the normal dark box with the volt left accent, under a volt label ("Answer", "Notes"). "Added · <date>" keeps its green
 label. Sky, not indigo: this app's indigo is remapped to volt. The ResizeBox / OwnPanel behaviour is unchanged. The excerpt picker's "Your answer" was a box
 drawn by hand; it is QA's AnswerText now (at its own first height, keeping its line breaks).
+## §257 Invite testers: "Find testers" above the search box; list headings stay put (owner, Nov 5)
+"Find testers" now heads the Search by name box (always shown); its results stay right under the box, above "People you've worked with". In the lists' scroll box,
+"People you've worked with" and "Suggested" stick to the top of the box while their rows scroll under them (before, a scrolled box lost its heading, and a row's
+open "Worked with you on 1 test" could sit at the top with no name or heading over it).
+
+## §258 The questions changed: no "(before)" on a removed question (owner, Nov 5)
+A removed question reads "Question 1 · Removed · <its words>" (it was "Question 1 (before)"): the Removed tag already says it.

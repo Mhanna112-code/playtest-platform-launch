@@ -155,11 +155,16 @@ describe("no excerpts on hover cards (section 23); invite search results under t
   it("Find testers sits right under Search by name, in its own box, hidden while the box is empty", () => {
     const panel = src("app/app/tests/[id]/InvitePanel.tsx");
     const search = panel.indexOf('placeholder="Search by name"');
-    const find = panel.indexOf("<h3>Find testers</h3>");
+    // (Owner, Nov 5, §257) The "Find testers" heading moved above the search box (always shown); the results stay under it, above the lists, whose headings stick.
+    const title = panel.indexOf('<h3 data-invite-find-title="">Find testers</h3>');
+    const find = panel.indexOf('data-invite-find=""');
     expect(search).toBeGreaterThan(0);
+    expect(title).toBeGreaterThan(0);
+    expect(title).toBeLessThan(search);
     expect(find).toBeGreaterThan(search);
-    expect(find).toBeLessThan(panel.indexOf("<h3>People you&apos;ve worked with</h3>"));
-    expect(find).toBeLessThan(panel.indexOf("<h3>Suggested</h3>"));
+    expect(find).toBeLessThan(panel.indexOf('data-invite-list-head="worked">People you&apos;ve worked with</h3>'));
+    expect(find).toBeLessThan(panel.indexOf('data-invite-list-head="suggested">Suggested</h3>'));
+    expect(panel).toContain('const LIST_HEAD = "sticky top-0 z-10 bg-ink-900 py-1";');
     expect(panel).toContain('{term && (\n        <div className="space-y-1.5" data-invite-find="">');
     expect(panel).toContain('<ul className="max-h-64 space-y-1.5 overflow-y-auto" data-invite-found="">');
   });
