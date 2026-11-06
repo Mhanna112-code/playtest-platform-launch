@@ -25,6 +25,7 @@ import { bookableMinutes, lengthCapLine } from "@/lib/callMeasure";
 import { CALL_ACTS } from "./live";
 import { MAX_CALLS, MAX_SENT_PER_DAY, callLimitLine, callRoomLine, clashNotes, localFmt, sentRoomLine } from "@/lib/callClash";
 import { dayIn } from "@/lib/rules";
+import type { TestEventLike } from "@/lib/rules";
 import { renderTimes, safeZone } from "@/lib/tz";
 import { dateZone } from "./dateZone";
 import { DROP_BOTH, DROP_DEV_BUSY, DROP_TESTER_BUSY, dropLine, dropReasonFor, isDropReason } from "@/lib/requestDrop";
@@ -536,12 +537,18 @@ export async function devRequestTime(dev: U, testId: string, body: Record<string
   const kind = readKind(body, end);
   const reqMinutes = readMinutes(body);
   const all: Ctx[] = [];
+  // (Owner, Nov 5, §278) Ticked testers whose session already ended (left, ended, rated…), when others are still in: a refusal line each, and the press goes on
+  // for the others by the ordinary rules. Every ticked one out: the refusal as before.
+  const out: Ctx[] = [];
   for (const id of ids) {
     const x = await ctx(dev.id, id);
     if (x.side !== "developer" || x.c.testId !== testId) throw new HttpError(404, "not_found", "That tester isn't in this test.");
+    if (x.c.status !== "working") { out.push(x); continue; }
     await refusals(x.c, "developer");
     all.push(x);
   }
+  if (!all.length) await refusals(out[0].c, "developer");
+  const gone = out.map((x) => ({ contractId: x.c.id, text: requestTesterGoneLine(displayName(x.c.tester)) }));
   // (Batch 18 section 6) The Length is at most what's left of the $1,000 for each ticked tester's calls (red at the box).
   const overCap = await lengthOverCap(reqMinutes, all.map((x) => ({ contractId: x.c.id, rateCents: bookRate(x.c.test, x.c), name: displayName(x.c.tester) })));
   if (overCap) throw new HttpError(400, "bad_minutes", overCap);
@@ -593,7 +600,9 @@ export async function devRequestTime(dev: U, testId: string, body: Record<string
     if (first.refused.size === all.length) throw new HttpError(409, "limit", limitText([...first.refused.values()], ["day", "total"]));
   }
   // (Batch 16 section 21) Another tab's call action with any of these testers stops it once.
-  await db.$transaction((tx) => devGate(tx, testId, body, {}, [], undefined, { acts: CALL_ACTS, keys: ids.map((id) => `c:${id}`) }));
+  // (§278) The press is about the ticked testers still in; a gone one's own leaving line is what their refusal line says (it doesn't stop the others' press).
+  const outIds = new Set(out.map((x) => x.c.id));
+  await db.$transaction((tx) => devGate(tx, testId, body, gone.length ? { gone } : {}, [], outIds.size ? (e: TestEventLike & { contractId?: string | null }) => !(e.kind === "left" && !!e.contractId && outIds.has(e.contractId)) : undefined, { acts: CALL_ACTS, keys: all.map((x) => `c:${x.c.id}`) }));
   // (Batch 16 section 21) The same time again (e.g. requested in another tab meanwhile): already done, said plainly; the request shows in the panel.
   const again: string[] = [];
   for (const { c } of all) if (await sameAgain(c.id)) again.push(displayName(c.tester));
@@ -667,8 +676,11 @@ export async function devRequestTime(dev: U, testId: string, body: Record<string
     requested: sendRows.length ? ok.length : 0, batchId: batchIds[0] ?? "", batchIds, ids: made.map((r) => r.id),
     // (§177) the page shows it: the time written, never its token
     ...(callIds.length ? { booked: true, callId: callIds[0], callIds, message: renderTimes(bookedLine, dateZone()) } : {}),
+    ...(gone.length ? { gone } : {}),
   };
 }
+/** (Owner, Nov 5, §278) "Your Request a time didn't go through for mhann: mhann's session has ended." */
+export const requestTesterGoneLine = (name: string) => `Your Request a time didn't go through for ${name}: ${name}'s session has ended.`;
 
 /**
  * Tester: Request a time, always at the contract rate. (Owner, Nov 5, §208) Each row of the form is its OWN request (once, or a daily / weekly set): the developer

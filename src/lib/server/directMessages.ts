@@ -55,7 +55,7 @@ export async function sendDirect(userId: string, otherId: string, raw: unknown, 
     if (clientId) {
       const again = await tx.directMessage.findUnique({ where: { senderId_clientId: { senderId: userId, clientId } } });
       if (again) {
-        if (again.conversationId !== a.conversation?.id) throw new HttpError(409, "bad_request", "This page is out of date. Refresh to see the latest.");
+        if (again.conversationId !== a.conversation?.id) throw new HttpError(409, "bad_request", "This page is out of date.");
         return again;
       }
     }

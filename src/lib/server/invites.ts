@@ -296,6 +296,9 @@ export const sameTesterLimitLine = (name: string, pronoun?: string | null) => `$
  * developer stop-once reasons plus: a ticked tester's profile no longer fits, a ticked tester joined, or was already
  * invited in another tab. Then invites those who can be invited and names the others with reasons. (Batch 35 §128) Daily limits: see INVITES_PER_DAY.
  */
+/** (Owner, Nov 5, §278) "Your Invite didn't go through for Ana Silva: Ana Silva rated this test, so she can't join it again." */
+export const inviteRatedLine = (name: string, pronoun: string) => `Your Invite didn't go through for ${name}: ${name} rated this test, so ${pronouns(pronoun).subj} can't join it again.`;
+
 export async function inviteTesters(dev: U & { holdStartedAt?: Date | null }, testId: string, body: Record<string, unknown>) {
   await ownTest(dev.id, testId);
   // (Batch 8) Inviting testers is a subscriber perk (invites already sent stay valid when the subscription ends).
@@ -312,15 +315,19 @@ export async function inviteTesters(dev: U & { holdStartedAt?: Date | null }, te
     const refusal = inviteTestRefusal({ ...t, testersIn, paused: !!me.holdStartedAt, chargeback: me.holdReason === "chargeback" }, now, fmtDate);
     if (refusal) throw new HttpError(409, "refused", refusal, { clearTicks: true });
     // In the order the developer ticked them, so the "Invited A and B." line is stable.
-    const people = (await tx.user.findMany({ where: { id: { in: ids } }, include: { profile: true } })).sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id));
+    const ticked = (await tx.user.findMany({ where: { id: { in: ids } }, include: { profile: true } })).sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id));
     // (Owner, Oct 31, batch 35 §94) Someone who rated this test can't join it again, so they can't be invited to it (an old page's tick is refused).
     const rated = await tx.contract.findMany({ where: { testId, testerId: { in: ids }, endKind: "rated" }, select: { testerId: true } });
-    if (rated.length) {
-      const raters = people.filter((p) => rated.some((r) => r.testerId === p.id));
-      // (Batch 35 §162) One tester: in their own pronoun ("so she can't join it again. Untick her …"); several: "they".
+    const raters = ticked.filter((p) => rated.some((r) => r.testerId === p.id));
+    // (Owner, Nov 5, §278) Only some ticked testers rated it: each of them gets a refusal line of their own and the press goes on for the others. All of them: one
+    // refusal (no "Untick … to invite the others": there are none).
+    if (raters.length && raters.length === ticked.length) {
+      // (Batch 35 §162) One tester: in their own pronoun ("so she can't join it again"); several: "they".
       const pr = pronouns(raters.length === 1 ? raters[0].pronoun : "they");
-      throw new HttpError(409, "refused", `${raters.map((p) => displayName(p)).join(", ")} rated this test, so ${pr.subj} can't join it again. Untick ${pr.obj} to invite the others.`, { clearTicks: true });
+      throw new HttpError(409, "refused", `${raters.map((p) => displayName(p)).join(", ")} rated this test, so ${pr.subj} can't join it again.`, { clearTicks: true });
     }
+    const people = ticked.filter((p) => !raters.includes(p));
+    const ratedLines = raters.map((p) => inviteRatedLine(displayName(p), p.pronoun));
     const contracts = await tx.contract.findMany({ where: { testId, testerId: { in: ids } } });
     const invites = await tx.invite.findMany({ where: { testId, testerId: { in: ids } } });
     // Extra stop-once reasons for the ticked testers.
@@ -416,7 +423,7 @@ export async function inviteTesters(dev: U & { holdStartedAt?: Date | null }, te
     // (Correction 5) Invites never hold spots: any number can be open; the first to join gets a spot.
     for (const i of invited) await tx.invite.create({ data: { testId, testerId: i.id } });
     if (invited.length) await recordEvent(tx, testId, "invited", `You invited ${andList(invited.map((i) => i.name))}`, false);
-    return { t, invited, others };
+    return { t, invited, others: [...ratedLines, ...others] };
   });
   // (Design doc 6) An invite plus a pending application or rejoin ask joins the tester at once. (Batch 34 §16, owner, Oct 30) The Invite press is then exactly Accept
   // on that application (the tester's Accept lines, the Needs you row goes), and the result says so: "Ana Silva had applied: she joined." Refused for good (as Accept

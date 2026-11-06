@@ -20,6 +20,7 @@ import type { RowJson } from "@/lib/callRows";
 import { alignedClash, formClashInputs, madeBy, newRow, RequestRows, rowsPayload, sentLine, useWindowShutLine, type PressMade, type RowState } from "@/components/RequestRows";
 import { CallCheck } from "@/components/CallCheck";
 import { PressDone } from "@/components/PressDone";
+import { liveTicks, useDropGoneTicks } from "@/lib/liveTicks";
 import type { CallEnd } from "@/lib/callWindow";
 import { ResizeBox } from "@/components/Panel";
 import { LIST_PANEL, TESTERS_CALLS_TALLEST } from "@/components/ScrollList";
@@ -47,12 +48,23 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
   end?: CallEnd }) {
   const router = useRouter();
   // (Batch 16 section 21) A call request, booking or cancellation from another tab stops a press touching it once: the panel shows it at once.
-  const { press, changes, error, busy, at, errData, doneLine, finish } = usePress(seenAt, () => router.refresh(), { onFresh: () => { setFrozen(null); setMade(null); } });
+  // (Owner, Nov 5, §278) Request a time's refusal lines for ticked testers whose session ended meanwhile (the others' press went on): beside its stop box or done
+  // line; their ticks go.
+  const [goneLines, setGoneLines] = useState<{ contractId: string; text: string }[]>([]);
+  const takeGone = (data: Record<string, unknown> | null | undefined) => {
+    const g = Array.isArray(data?.gone) ? (data.gone as { contractId: string; text: string }[]) : [];
+    setGoneLines(g);
+    if (g.length) setTicked((now) => now.filter((id) => !g.some((x) => x.contractId === id)));
+  };
+  const { press, changes, error, busy, at, errData, doneLine, finish } = usePress(seenAt, (data) => { if (Array.isArray(data?.gone)) takeGone(data); router.refresh(); }, { onFresh: () => { setFrozen(null); setMade(null); setGoneLines([]); } });
   // Requesting the same time again is already done: said plainly, and the request shows in the panel.
   useEffect(() => {
     if (error.startsWith("You already requested this time")) router.refresh();
   }, [error, router]);
   const [ticked, setTicked] = useState<string[]>([]);
+  // (§278) A ticked tester whose row left the list (left, ended…) is unticked on the redraw, and never sent hidden.
+  useDropGoneTicks(testers.map((t) => t.contractId), setTicked);
+  const tickedIds = liveTicks(ticked, testers.map((t) => t.contractId));
   const [rows, setRows] = useState<RowState[]>([newRow()]);
   const [minutes, setMinutes] = useState("");
   // (Owner, Oct 28, batch 20 section 18) The typed times, length and ticks survive any reload (kept on the server, "Draft"; batch 35 §8: after signing in, with "Use saved"), and are forgotten once sent.
@@ -80,13 +92,15 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
   const requesting = useSending();
   const request = (body: Record<string, unknown>) => requesting.run(async () => {
     setFrozen({ testers, elsewhere });
-    const r = await press<{ message?: string }>(`/api/tests/${testId}/request-time`, body, "request");
+    setGoneLines([]);
+    const r = await press<{ message?: string; gone?: { contractId: string; text: string }[] }>(`/api/tests/${testId}/request-time`, body, "request");
+    if (r) takeGone(r);
     if (r) {
       setMade(madeBy(r));
       setRows([newRow()]);
       setMinutes("");
       await keep.clear();
-      finish(sentLine(r)); // (§208) "3 requests sent." for 3 times
+      finish(sentLine(r)); // (§208) "3 requests sent." for 3 times (§278: a gone tester's refusal line shows beside it)
     } else setFrozen(null);
   });
   const sendLocked = requesting.sending || (busy && at === "request");
@@ -171,14 +185,15 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
             <span className="pb-2 text-xs text-slate-500" data-length-hint="">{lenCap ? lenCap.hint : "10–180"}</span>
             <button
               className="btn"
-              disabled={busy || !filled.length || ticked.length === 0}
-              onClick={() => checkFields(form.current) && request({ contractIds: ticked.filter((id) => testers.some((t) => t.contractId === id)), minutes: minutes.trim() ? minutes.trim() : "", rows: filled })}
+              disabled={busy || !filled.length || tickedIds.length === 0}
+              onClick={() => checkFields(form.current) && request({ contractIds: tickedIds, minutes: minutes.trim() ? minutes.trim() : "", rows: filled })}
             >
               Request a time
             </button>
             {keep.restored && <DraftTag disabled={busy} kind="discard" onUseSaved={() => { setRows([newRow()]); setMinutes(""); setTicked([]); }} />}
           </div>
-          {ticked.length === 0 && <p className="note">Tick one or more testers to request a time.</p>}
+          {tickedIds.length === 0 && <p className="note">Tick one or more testers to request a time.</p>}
+          {goneLines.length > 0 && at === "request" && <div className="info" role="status" data-request-gone="">{goneLines.map((g) => <p key={g.contractId} data-refusal="">{g.text}</p>)}</div>}
           {box("request")}
           <PressDone line={doneLine} />
           <FormMistakes text={at === "request" && red ? error : ""} press="Request a time" />
