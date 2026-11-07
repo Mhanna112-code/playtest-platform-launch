@@ -325,7 +325,7 @@ describe("batch 17 §11: a charge made while away is confirmed on the test page"
     await (await import("@/lib/server/confirm")).awayAction(sub.id, { status: "requires_action", stripePaymentIntentId: "pi_" + randomUUID(), clientSecret: "" });
     // (Batch 29 §32) The same day: the day's one line now covers both (updated in place), still opening the dashboard's box.
     expect(await db.notification.count({ where: { userId: dev.user.id, text: { startsWith: "Your bank wants you to confirm" } } })).toBe(1);
-    expect(await db.notification.count({ where: { userId: dev.user.id, link: "/app#bank-to-confirm", text: { startsWith: "Your bank wants you to confirm 2 payments ($15.00 in all): the first by " } } })).toBe(1);
+    expect(await db.notification.count({ where: { userId: dev.user.id, link: "/app#bank-to-confirm", text: { startsWith: "Your bank wants you to confirm 2 payments ($15.00 in all): ", contains: "; the first by " } } })).toBe(1); // (§321) the payments are named before "the first by"
     const items = await confirmItems(dev.user.id);
     expect(items.find((i) => i.id === sub.id)).toMatchObject({ href: null });
     const list = renderToStaticMarkup(createElement(ConfirmList, { items: items.filter((i) => i.id === sub.id) }));
