@@ -21,3 +21,4 @@ next-env.d.ts
 scripts/codex-run.log
 scripts/payments-proof/logs/
 scripts/payments-proof/serve.log
+.social-render/
