@@ -1586,8 +1586,8 @@ export function closeSoonMarkDue(at: Date | null, from: Date, now: Date, recorde
  * (Batch 29 §22) "Closing soon: Ana's written answers on “Harbor Run” close on Nov 18" for one piece; "Closing soon: 2 pieces close by Nov 18 (Ana's written answers on
  * “Harbor Run”, Ben's recording on “Sky Lab”)" for several (the latest closing date; at most 5 named, then "and N more").
  */
-export function closingSoonLine(pieces: { who: string; part: string; title: string; at: Date }[]) {
-  const name = (p: { who: string; part: string; title: string }) => `${p.who}'s ${p.part} on “${p.title}”`;
+export function closingSoonLine(pieces: { who: string; part: string; title: string; at: Date; /** (§327) a call's date and time */ when?: string | null }[]) {
+  const name = (p: { who: string; part: string; title: string; when?: string | null }) => `${p.who}'s ${p.part} on “${p.title}”${p.when ? ` (${p.when})` : ""}`;
   if (pieces.length === 1) return `Closing soon: ${name(pieces[0])} ${pieces[0].part.endsWith("s") ? "close" : "closes"} on ${T(pieces[0].at, "date")}`;
   const last = new Date(Math.max(...pieces.map((p) => p.at.getTime())));
   const shown = pieces.slice(0, 5).map(name);
@@ -1610,14 +1610,14 @@ async function closeOutReminders(now: Date, co: CloseOuts) {
     include: { tester: true, test: { include: { developer: true } }, submissions: { where: { review: null } }, calls: { where: held } },
     take: 5000,
   });
-  type Piece = { who: string; part: string; title: string; at: Date };
+  type Piece = { who: string; part: string; title: string; at: Date; when?: string | null };
   const byDev = new Map<string, { email: string; today: Piece[]; fresh: boolean }>();
   for (const c of contracts) {
     // Anything of this tester's still unpaid (a deleted tester's only when their payout account was connected).
     if (!testerPayable(c.tester)) continue;
     const pieces = [
       ...c.submissions.map((s) => ({ k: { submissionId: s.id }, id: s.id, sub: true, part: s.kind === "recording" ? "recording" : "written answers", from: s.choiceOfferedAt ?? s.payBy ?? s.updatedAt, sent: s.devMarks })),
-      ...c.calls.filter((x) => callMinutesOf(x) != null).map((x) => ({ k: { callId: x.id }, id: x.id, sub: false, part: "call", from: x.choiceOfferedAt ?? x.payBy ?? x.startsAt, sent: x.devMarks })),
+      ...c.calls.filter((x) => callMinutesOf(x) != null).map((x) => ({ k: { callId: x.id }, id: x.id, sub: false, part: "call", when: T(x.startsAt) /* (§327) */, from: x.choiceOfferedAt ?? x.payBy ?? x.startsAt, sent: x.devMarks })),
     ];
     for (const p of pieces) {
       const at = await co.at(p.k, "developer");
@@ -1633,7 +1633,7 @@ async function closeOutReminders(now: Date, co: CloseOuts) {
       const today = !mark && CLOSE_SOON_MARKS.some((d) => d === dayNo(at) - dayNo(now) && p.sent.includes(`${closeSoonKey(at)}${d}`));
       if (!mark && !today) continue;
       const entry = byDev.get(c.test.developerId) ?? { email: c.test.developer.email, today: [], fresh: false };
-      entry.today.push({ who: firstName(c.tester), part: p.part, title: c.title, at });
+      entry.today.push({ who: firstName(c.tester), part: p.part, title: c.title, at, when: "when" in p ? p.when : null }); // (§327) a call's date and time
       if (mark) entry.fresh = true;
       byDev.set(c.test.developerId, entry);
     }
@@ -2098,7 +2098,9 @@ export async function finishChoicePay(paymentId: string, r: { status: string; fe
   const c = await db.contract.findUniqueOrThrow({ where: { id: p.contractId! }, include: { tester: true, test: { include: { developer: true } } } });
   const label = p.callId ? "call" : (await db.submission.findUnique({ where: { id: p.submissionId ?? "" } }))?.kind === "recording" ? "recording" : "written answers";
   // (§131) The receipt names the tester, the part and the test (pieceName).
-  await receipt(c.test.developer.email, `${pieceName({ tester: displayName(c.tester), part: p.callId ? "live call" : label, test: c.title, full: true })} (charged by ${pronouns(c.tester.pronoun).obj} after ${REVIEW_DAYS} days)`, p.amountCents, r.status, `/app/tests/${c.testId}`);
+  // (Owner, Nov 7, §327) A call with its date and time.
+  const callAt = p.callId ? (await db.call.findUnique({ where: { id: p.callId }, select: { startsAt: true } }))?.startsAt ?? null : null;
+  await receipt(c.test.developer.email, `${pieceName({ tester: displayName(c.tester), part: p.callId ? "live call" : label, test: c.title, when: callAt ? T(callAt) : null, full: true })} (charged by ${pronouns(c.tester.pronoun).obj} after ${REVIEW_DAYS} days)`, p.amountCents, r.status, `/app/tests/${c.testId}`);
   // (Owner, Nov 4, §177) A call with its date and time: "Ana Silva charged $15.00 for her call on Tue, Oct 27, 8:00 AM".
   const call = p.callId ? await db.call.findUnique({ where: { id: p.callId }, select: { startsAt: true } }) : null;
   await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${displayName(c.tester)} charged ${money(p.amountCents)} for ${pronouns(c.tester.pronoun).poss} ${label}${call ? ` on ${callAtFor(call.startsAt, c.test.developer)}` : ""}`, false, {}, c.id, "", p.callId ? `call-${p.callId}` : p.submissionId ? `part-${p.submissionId}` : ""));

@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import type Stripe from "stripe";
 import { afterEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
+import { callAtFor } from "@/lib/server/dateFormat";
 import * as R from "@/lib/rules";
 import { POST as owedPOST } from "@/app/api/payments/owed/route";
 import { chargeDeferred, chargebackOpened, payOwed, startHold } from "@/lib/server/holds";
@@ -98,10 +99,12 @@ describe("the description reads as the What you've paid line, names in full", ()
     const call = await bookCall(w.testId, w.dev.cookie, w.t[0].sessionId, w.t[0].tester.cookie);
     await db.review.create({ data: { callId: call.id, contractId: w.t[0].sessionId, amountCents: 1500, agreedCents: 1500, reason: R.AUTO_CHARGED_CALL, payKey: "autocall:" + call.id, auto: true } });
     const auto = await row(w, 0, { kind: "call", amountCents: 1500, submissionId: null, callId: call.id });
-    expect(await stripeDescription({ payment: auto })).toBe(`Playtest: Marc Hanna's live call on “${LONG}”, charged automatically after 7 days`);
+    // (Owner, Nov 7, §327) A call by its date and time, as on the page.
+    const at = callAtFor((await db.call.findUniqueOrThrow({ where: { id: call.id } })).startsAt, null);
+    expect(await stripeDescription({ payment: auto })).toBe(`Playtest: Marc Hanna's live call on “${LONG}” (${at}), charged automatically after 7 days`);
     expect(`Playtest: ${await pageLine(auto)}`).toBe(await stripeDescription({ payment: auto }));
     const decided = await row(w, 0, { kind: "dispute", amountCents: 700, submissionId: null, callId: call.id });
-    expect(await stripeDescription({ payment: decided })).toBe(`Playtest: The team's dispute decision on Marc Hanna's live call on “${LONG}”`);
+    expect(await stripeDescription({ payment: decided })).toBe(`Playtest: The team's dispute decision on Marc Hanna's live call on “${LONG}” (${at})`);
   });
 
   it("Pay what you owe's one payment lists each item as on the page; charges made while away; a reservation; a reversed payment owed again", async () => {

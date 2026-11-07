@@ -166,7 +166,9 @@ function devLine(ctx: Ctx, p: PayingRow, full: boolean, viaKnown?: Via) {
   // read "paid through Pay what you owe" whenever it was settled.
   const how = p.kind === "chargeback" ? "" : [byTester ? `charged by ${tester} after 7 days without a review` : own && r?.auto ? "charged automatically after 7 days" : "", VIA_LINE[via]].filter(Boolean).join(", ");
   // (Owner, Nov 2, §131) The developer's rows name the piece by pieceName (the tester's and the test's names cut at 10 characters on the page).
-  const piece = pieceName({ tester, part: ctx.partOf(o), test: c.title, full });
+  // (Owner, Nov 7, §327) A call by its date and time, as every other call line ("bb's live call on “…” (Fri, Oct 30, 12:17 AM)"): it was missing here, so a single
+  // (ungrouped) call row in What you've paid, the test page's Payments (N), the refund lines and the Stripe description named no call.
+  const piece = pieceName({ tester, part: ctx.partOf(o), test: c.title, when: callWhen(ctx, o), full });
   const what = p.kind === "extra" ? `Pay more for ${piece}`
     : p.kind === "dispute" ? disputeDecisionName(piece).replace(/^the/, "The")
     // (Owner, Nov 2) Which payment it repaid, and the fee: "Repaid the reversed $39.00 Pay more for … ($39.00 + $15.00 chargeback fee)". (§133) Part of it:
@@ -176,6 +178,11 @@ function devLine(ctx: Ctx, p: PayingRow, full: boolean, viaKnown?: Via) {
   return { what, how, testId: c.testId };
 }
 
+/** (Owner, Nov 7, §327) A payment's call, by its date and time (null: not a call). */
+const callWhen = (ctx: Pick<Ctx, "calls">, o: { callId?: string | null }) => {
+  const start = o.callId ? ctx.calls.get(o.callId) : undefined;
+  return start ? callAtFor(start, null) : null;
+};
 /** (§191) A part named for a group's item: its tester, part and test, a call by its date and time in the reader's zone (`whose`: "her" in place of the name). */
 function groupPiece(ctx: Ctx, o: PayingRow, full: boolean, whose?: string) {
   const c = o.contractId ? ctx.contracts.get(o.contractId) : undefined;
@@ -317,7 +324,9 @@ export async function paidRows(ps: Row[], side: "developer" | "tester"): Promise
     const byTester = own && r && (r.reason === CHARGED_BY_TESTER || r.reason === CHARGED_BY_TESTER_14);
     // (Owner, Nov 4) How the developer confirmed it is theirs: the tester's row reads as the charge itself (Pay what you owe kept as before).
     const how = p.kind === "chargeback" ? "" : via.get(p.id) === "owed" ? "paid through Pay what you owe" : byTester ? "charged by you after 7 days without a review" : own && r?.auto ? "charged automatically after 7 days" : "";
-    const what = `from ${displayName(c.test.developer)} for your ${ctx.partOf(o)} on “${c.title}”${p.kind === "extra" ? " (extra pay)" : p.kind === "dispute" ? " (dispute decision)" : ""}`;
+    // (Owner, Nov 7, §327) A call with its date and time: "from Nora Lane for your live call on “Harbor Run” (Fri, Oct 30, 12:17 AM)".
+    const when = callWhen(ctx, o);
+    const what = `from ${displayName(c.test.developer)} for your ${ctx.partOf(o)} on “${c.title}”${when ? ` (${when})` : ""}${p.kind === "extra" ? " (extra pay)" : p.kind === "dispute" ? " (dispute decision)" : ""}`;
     out.set(p.id, { what, full: what, how, testId: c.testId, reversed: false, links: linksIn(what, pool) });
   }
   return out;
@@ -387,7 +396,7 @@ function itemLine(ctx: Ctx, p: PayingRow) {
   if (p.chargeback === "open") {
     const o = { ...p, amountCents: p.paidCents ?? p.amountCents };
     const c = o.contractId ? ctx.contracts.get(o.contractId) : undefined;
-    const piece = c ? pieceName({ tester: displayName(c.tester), part: ctx.partOf(o), test: c.title, full: true }) : null;
+    const piece = c ? pieceName({ tester: displayName(c.tester), part: ctx.partOf(o), test: c.title, when: callWhen(ctx, o), full: true }) : null; // (§327)
     return `${repaidReversedLine(o, repaidWord(o.kind), piece, o.kind === "owed" ? oneName(ctx, o, true) : null) ?? plainLabel("chargeback")} ${money(reversedOf(o) + CHARGEBACK_FEE_CENTS)}`; // (§193b) a one payment names its items
   }
   return `${devLine(ctx, p, true)?.what ?? plainLabel(p.kind)} ${money(p.amountCents)}`;
