@@ -64,13 +64,14 @@ export function toForm(l: Listing, tz?: string | null): F {
 }
 
 /** Form values → API fields (prices in dollars; the server turns them into cents). */
-function toApi(f: F): Record<string, unknown> {
+export function toApi(f: F): Record<string, unknown> {
   return {
     productName: f.productName, title: f.title, description: f.description, buildUrl: f.buildUrl, categories: f.categories, devices: f.devices, languages: f.languages,
     mature: f.mature, matureWhy: f.mature ? f.matureWhy : "", ndaText: f.ndaText,
     spots: f.spots, deadlineDays: f.deadlineDays, writtenCents: f.written ? f.writtenPrice || "" : null,
     recordingCents: f.recording ? f.recordingPrice || "" : null, liveRateCents: f.live ? f.liveRate || "" : null,
-    liveMinutes: null, writtenRequired: f.written && f.writtenRequired, recordingRequired: f.recording && f.recordingRequired, liveRequired: f.live && f.liveRequired, questions: f.questions.split("\n").map((q) => q.trim()).filter(Boolean).map((q) => qStored(q, f.requiredQs.includes(q))), openUntil: f.openUntil, joinMode: f.joinMode,
+    // Retain hidden Required values in both the loaded baseline and the Save. Turning a part off does not edit that checkbox.
+    liveMinutes: null, writtenRequired: f.writtenRequired, recordingRequired: f.recordingRequired, liveRequired: f.liveRequired, questions: f.questions.split("\n").map((q) => q.trim()).filter(Boolean).map((q) => qStored(q, f.requiredQs.includes(q))), openUntil: f.openUntil, joinMode: f.joinMode,
   };
 }
 // Which API fields each form field feeds.

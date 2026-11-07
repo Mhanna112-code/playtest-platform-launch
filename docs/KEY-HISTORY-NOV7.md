@@ -21,3 +21,7 @@ Explain that saved edits update the current listing for existing testers where r
 ## 5. Paused header and tester earnings
 
 A developer's paused test header keeps its listing tags, including the ordinary status and free-key count, and adds Paused. The controls still obey the pause restrictions. A tester's earnings must not name the developer's Pay what you owe repayment method; the developer's own payment details may still explain it. Everything you sent and Your earnings retain their separate work-status and payment-history purposes.
+
+## 6. Hidden Required flags on Edit
+
+Turning a part on and off while editing its questions must not fabricate a save in another tab. Retain the stored Required checkbox value when its part is off, including in the comparison baseline. Genuine changes saved in another tab still use the normal conflict notice.
