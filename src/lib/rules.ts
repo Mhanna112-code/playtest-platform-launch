@@ -641,7 +641,7 @@ export const DEV_STOP_KINDS = [
 // (§185) "req_closed": a request with a tester closed because the tester got a call at that time ("Ana Silva's request for … closed: she is no longer free at that
 // time"): quiet too, with a bell (stacked per test and day).
 // (Owner, Nov 6, §304) No "key" (a tester's "This key doesn't work"): the report is gone; testers say so in chat.
-export const DEV_QUIET_KINDS = ["terms", "rated", "sentpaid", "req_dropped", "withdrew_req", "req_closed"] as const;
+export const DEV_QUIET_KINDS = ["terms", "rated", "sentpaid", "req_dropped", "withdrew_req", "req_closed", "withdrew_app"] as const;
 /** "Ana switched to the new terms"; several in a day stack: "3 testers switched to the new terms". */
 export const switchedLine = (n: number, name = "") => (n === 1 ? `${name} switched to the new terms` : `${n} testers switched to the new terms`);
 

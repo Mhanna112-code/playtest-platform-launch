@@ -25,3 +25,7 @@ A developer's paused test header keeps its listing tags, including the ordinary 
 ## 6. Hidden Required flags on Edit
 
 Turning a part on and off while editing its questions must not fabricate a save in another tab. Retain the stored Required checkbox value when its part is off, including in the comparison baseline. Genuine changes saved in another tab still use the normal conflict notice.
+
+## 7. Withdrawn applications
+
+An application withdrawn by a tester adds a quiet live line for the developer, alongside the existing bell notice and email setting. It never adds a stop-once reason. Accept or Decline on the withdrawn application remains a final refusal. This replaces the earlier bell-only rule in batch 35 section 185.

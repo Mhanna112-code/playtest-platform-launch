@@ -268,10 +268,11 @@ export async function withdrawApplication(tester: { id: string }, testId: string
   const n = await db.application.updateMany({ where: { testId, testerId: tester.id, status: "pending" }, data: { status: "withdrawn", decidedAt: new Date() } });
   if (!n.count) throw new HttpError(409, "gone", await withdrawGoneLine(tester.id, testId));
   const me = await db.user.findUniqueOrThrow({ where: { id: tester.id } });
-  // (Owner, Nov 4, §185) No live line and no stop for the developer any more (it was a Joins-type "applied" line): a bell instead (and its email, per their
-  // settings). Accept / Decline on it stays one refusal ("Ana Silva withdrew her application."). (Owner, Nov 6, §308) It stacks one entry a day ACROSS tests,
+  // (Owner, Nov 7) A quiet live line, never a stop. Accept / Decline on it stays one refusal. The bell's email follows their
+  // settings. (Owner, Nov 6, §308) It stacks one entry a day ACROSS tests,
   // "Applications withdrawn · 2" (group "appwithdrawn", no longer one stack per test).
   const t = await db.test.findUniqueOrThrow({ where: { id: testId }, select: { developerId: true, title: true } });
+  await logEvent(testId, "withdrew_app", `${displayName(me)} withdrew ${pronouns(me.pronoun).poss} application`);
   await bell(t.developerId, `${displayName(me)} withdrew ${pronouns(me.pronoun).poss} application to “${t.title}”`, `/app/tests/${testId}`, undefined, { side: "developer", testId, group: APP_WITHDRAWN_GROUP });
   return { withdrawn: true };
 }

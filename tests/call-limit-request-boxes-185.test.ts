@@ -390,8 +390,8 @@ describe("§185 the other side's withdrawal and a request a booking closed: a be
   });
 });
 
-describe("§185 a tester withdrawing her application: no live line, no stop; a bell to the developer", () => {
-  it("nothing in the developer's live box; a bell in the \"Applications withdrawn · N\" stack (§308: across tests); Accept from the old page is one refusal", async () => {
+describe("§185 a tester withdrawing their application: quiet live line, no stop; a bell to the developer", () => {
+  it("a quiet line in the developer's live box; a bell in the \"Applications withdrawn · N\" stack (§308: across tests); Accept from the old page is one refusal", async () => {
     const f = await setup({ joinMode: "apply" });
     const ana = await makeUser({ tester: true, name: "Ana Silva", pronoun: "she" });
     expect((await act(f.testId, "apply", ana.cookie, { note: "hi" })).body).toEqual({ applied: true });
@@ -401,8 +401,8 @@ describe("§185 a tester withdrawing her application: no live line, no stop; a b
     await later();
     expect((await act(f.testId, "withdraw-application", ana.cookie, {})).body).toEqual({ withdrawn: true });
     await settle();
-    expect(await db.testEvent.count({ where: { testId: f.testId, text: { contains: "withdrew" } } })).toBe(0);
-    expect((await live(`test:${f.testId}`, f.dev.cookie, loaded)).filter((l) => /withdrew/.test(l.text))).toEqual([]);
+    expect(await db.testEvent.count({ where: { testId: f.testId, text: { contains: "withdrew" } } })).toBe(1);
+    expect((await live(`test:${f.testId}`, f.dev.cookie, loaded)).filter((l) => /withdrew/.test(l.text))).toEqual([expect.objectContaining({ quiet: true })]);
     const bells = await db.notification.findMany({ where: { userId: f.dev.user.id, groupKey: "appwithdrawn", testId: f.testId } }); // (§308)
     expect(bells.map((n) => n.text)).toEqual([expect.stringMatching(/^Ana Silva withdrew her application to “.+”$/)]);
     const acc = await act(f.testId, "application", f.dev.cookie, { applicationId: app.id, action: "accept", seenAt: loaded });
