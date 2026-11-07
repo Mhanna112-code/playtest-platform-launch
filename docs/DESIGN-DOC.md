@@ -305,7 +305,7 @@ A page opened after the stop or pause doesn't stop for the state itself; every o
 | Who | Line | When | Stacks in |
 |---|---|---|---|
 | Developer | "<tester> joined <test>" (also after an accepted application, invite or rejoin) | each time | that test's day |
-| Developer | "<tester> applied to join" / "<name> asks to rejoin"; then "N applications wait for your answer" | each time; then daily while waiting | that test's day |
+| Developer | "<tester> applied to join" / "<name> asks to rejoin"; then "“<test>”: N applications and rejoin asks wait for your answer" | each time; then daily per test while waiting | Applications (§308); the daily lines: Applications waiting ("Applications waiting · 3", owner, Nov 6, §317b) |
 | Developer | "<tester> left <test>" (also after a suspension or deletion, with the name "Deleted account" where it applies) | each time | that test's day |
 | Developer | "<tester> sent / updated written answers / a recording"; after a Pay, "<tester> sent an updated version of their <part> for “<test>”" (opens its Needs you row) or, at the piece's cap, "<tester> updated their <part> for “<test>”" (opens the tester's row) | each send | that test's day |
 | Developer | "<tester> asked to show an excerpt from <test> on their profile" | each request | that test's day |
@@ -348,7 +348,7 @@ A page opened after the stop or pause doesn't stop for the state itself; every o
 | Tester | "<test> is running again" | each time | Tests paused or running again |
 | Tester | "<test> was stopped" / "Your work on <test> was ended early" / "<test> ended" | each time | Tests stopped or ended |
 | Tester | Call lines (as for developers) and "Your session on <test> ended." (after a block) | each time | that test's day |
-| Tester | "Your bank couldn't receive a payout. Update your payout details." | when a payout fails, then every 3 days until fixed | Payout |
+| Tester | "Your bank couldn't receive a payout. Update your payout details." | when a payout fails, then 3, 10 and 30 days after (owner, Nov 6, §317a), then no more; a new problem starts over | Payout |
 | Tester | "Your payout setup is done: $X on its way." (everything that waited for their payout setup, added up) | once, when their payout setup is done and something was waiting | own line |
 | Both | "Your call with <name> on “<test>” starts at <time>." (the same line for both); it opens the call's row, where "Check your call setup" is | 15 minutes before each booked call, to both; none for a call booked less than 15 minutes ahead; the email follows the setting | that test's day |
 | Both | "<name> sent you a message on “<test>”" (chat; the message itself is only in the chat and the email) | each message | that test's day |
@@ -1936,7 +1936,7 @@ One row per change. A test is paused while its developer has any hold or suspens
 | Bank-confirmation line | one line for every charge waiting for the bank; at most one a day |
 | Invite reminders | daily until answered |
 | Rating | tester: no end date until the close-out; developer: 14 days from when their Rate opens (the tester rated and everything is settled, or the close-out for a tester who never rated), paused while they can't rate; reminders every 3 days whatever the test's state, for 2 weeks from when their Rate opened (tester) or inside the 14 days (developer) |
-| Payout problem reminders | every 3 days until fixed |
+| Payout problem reminders | 3, 10 and 30 days after it started (§317a), then none |
 | Hold lifts | the 4th hold on needs an admin's Approve |
 | Retries during a payment hold | none: only Pay what you owe (saving a card charges nothing of what's owed, BATCH-35 §148); none during a chargeback hold |
 | Bank confirmation | 3 days to confirm a charge made while the developer wasn't there; a pending press locks the piece for up to 15 minutes |

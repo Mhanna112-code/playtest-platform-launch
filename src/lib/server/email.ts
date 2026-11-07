@@ -111,6 +111,30 @@ export function shortError(status: number, body: string) {
 }
 
 const key = () => process.env.RESEND_API_KEY?.trim() ?? "";
+/**
+ * (Owner, Nov 6, §318) EMAIL_LOCAL_ONLY_TO: a comma-separated list of addresses (or "*@domain", or "name+*@gmail.com") that may receive real email from a LOCAL
+ * site with RESEND_API_KEY set, so test accounts with made-up addresses never reach the email service. Ignored on Vercel; unset means every address.
+ */
+export function localSendAllowed(to: string, env: Record<string, string | undefined> = process.env) {
+  const list = (env.EMAIL_LOCAL_ONLY_TO ?? "").split(",").map((x) => x.trim().toLowerCase()).filter(Boolean);
+  if (env.VERCEL === "1" || !list.length) return true;
+  const addr = to.trim().toLowerCase();
+  // "*" matches anything; every other character must match itself.
+  const glob = (p: string, a: string): boolean => {
+    const [first, ...rest] = p.split("*");
+    if (!rest.length) return p === a;
+    if (!a.startsWith(first)) return false;
+    let at = first.length;
+    for (const [i, piece] of rest.entries()) {
+      if (i === rest.length - 1) return a.length - piece.length >= at && a.endsWith(piece);
+      const found = a.indexOf(piece, at);
+      if (found < 0) return false;
+      at = found + piece.length;
+    }
+    return true;
+  };
+  return list.some((p) => glob(p, addr));
+}
 
 async function capUntil(now: Date) {
   const row = await db.appState.findUnique({ where: { key: EMAIL_CAP_KEY } });
@@ -128,7 +152,8 @@ export async function sendEmail(e0: Email, now = new Date()) {
   const e = { ...e0, to: originalEmail(e0.to) };
   const k = key();
   const html = htmlOf(e);
-  if (!k && outboxEnabled()) {
+  // (Owner, Nov 6, §318) Local testing with the real email key: only addresses on EMAIL_LOCAL_ONLY_TO go out; every other one lands in the dev outbox.
+  if ((!k || !localSendAllowed(e.to)) && outboxEnabled()) {
     await db.outboxEmail.create({ data: { to: e.to, subject: e.subject, text: e.text, html } });
     return { via: "outbox" as const };
   }

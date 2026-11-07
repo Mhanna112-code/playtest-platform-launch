@@ -558,7 +558,7 @@ export async function previewSuspension(userId: string) {
 
 const REMIND_DAYS = 3;
 
-/** Stripe says a payout failed (or the payout account needs attention): the tester gets the banner and a bell now, then every 3 days until fixed. */
+/** Stripe says a payout failed (or the payout account needs attention): the tester gets the banner and a bell now, then (§317a) 3, 10 and 30 days after, until fixed. */
 export async function payoutProblem(accountId: string, now = new Date()) {
   const u = await db.user.findUnique({ where: { stripeAccountId: accountId } });
   if (!u) return false;
@@ -574,14 +574,29 @@ export async function payoutFixed(accountId: string) {
   await db.user.updateMany({ where: { stripeAccountId: accountId, payoutProblemAt: { not: null } }, data: { payoutProblemAt: null, payoutRemindedAt: null } });
 }
 
-/** The daily job: a bell reminder every 3 days until the payout is fixed. */
+/** (Owner, Nov 6, §317a) The payout problem's reminders: on the day it started (payoutProblem), then 3, 10 and 30 days after; then they stop. */
+export const PAYOUT_MARK_DAYS = [0, 3, 10, 30] as const;
+/**
+ * (§317a) The mark due now (days after the problem started), or null: the latest mark passed, once (the last line's time, `payoutRemindedAt`, is at or after
+ * it once sent); an earlier missed mark is never sent late. An hour of slack, as the daily job's time drifts. A new problem (cleared, then a new start) starts over.
+ */
+export function payoutMarkDue(problemAt: Date, remindedAt: Date | null, now: Date) {
+  const passed = PAYOUT_MARK_DAYS.filter((d) => problemAt.getTime() + d * DAY - 3_600_000 <= now.getTime());
+  const last = passed[passed.length - 1];
+  if (last === undefined) return null;
+  if (remindedAt && remindedAt.getTime() >= problemAt.getTime() + last * DAY - 3_600_000) return null;
+  return last;
+}
+/** The daily job: the payout problem's reminders on days 3, 10 and 30 (§317a; it was every 3 days until fixed). */
 export async function payoutReminders(now = new Date()) {
-  const due = await db.user.findMany({ where: { payoutProblemAt: { not: null }, OR: [{ payoutRemindedAt: null }, { payoutRemindedAt: { lt: new Date(now.getTime() - REMIND_DAYS * DAY + 3_600_000) } }] } });
-  for (const u of due) {
+  let n = 0;
+  for (const u of await db.user.findMany({ where: { payoutProblemAt: { not: null } }, select: { id: true, payoutProblemAt: true, payoutRemindedAt: true } })) {
+    if (payoutMarkDue(u.payoutProblemAt!, u.payoutRemindedAt, now) === null) continue;
     await bell(u.id, PAYOUT_LINE, "/app/payments#payout", undefined, { side: "tester", payment: true, group: "payout", reminder: "payout" });
     await db.user.update({ where: { id: u.id }, data: { payoutRemindedAt: now } });
+    n++;
   }
-  return due.length;
+  return n;
 }
 
 /**

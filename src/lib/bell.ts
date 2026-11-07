@@ -57,6 +57,9 @@ export const GROUP_TITLES: Record<string, string> = {
   dms: "Direct messages",
   // (Owner, Nov 6, §311f) "The site was down from … Deadlines and payment dates moved … later." lines, one entry a day: "Site down · 2".
   outages: "Site down",
+  // (Owner, Nov 6, §317b) The developer's daily "“<test>”: N applications and rejoin asks wait for your answer", one entry a day across tests (apart from §308's
+  // "Applications · N", the new applications and asks themselves).
+  appswaiting: "Applications waiting",
 };
 /** (§215) The group of every direct-message bell line. */
 export const DMS_GROUP = "dms";
@@ -75,6 +78,8 @@ export const APPLICATIONS_GROUP = "applications";
 export const APP_WITHDRAWN_GROUP = "appwithdrawn";
 /** (Owner, Nov 6, §295) The tester's pause lines ("“X” is paused", "“X” is running again"), one entry a day across tests, in the bell and the email alike. */
 export const PAUSES_GROUP = "paused";
+/** (Owner, Nov 6, §317b) The daily "… wait for your answer" lines, one entry a day across tests: "Applications waiting · N". */
+export const APPS_WAITING_GROUP = "appswaiting";
 /** (Owner, Nov 6, §311f) The outage lines ("The site was down from …"), one entry a day, in the bell and the email alike: "Site down · N". */
 export const OUTAGES_GROUP = "outages";
 
@@ -104,6 +109,8 @@ export const GROUP_COUNT_TITLES: Record<string, (n: number, lines: number) => st
   devpaid: (_n, lines) => `Paid · ${lines} payment${lines === 1 ? "" : "s"}`,
   // (Owner, Nov 6, §311f) "Site down · 2" (counting lines: each is one outage).
   outages: (_n, lines) => `Site down · ${lines}`,
+  // (Owner, Nov 6, §317b) "Applications waiting · 3" (counting lines: one per test).
+  appswaiting: (_n, lines) => `Applications waiting · ${lines}`,
 };
 /** (§185) A group key may name its test after a colon ("reqclosed:<testId>": one stack per test and day); its titles are the part before it. */
 export const groupBase = (key: string) => key.split(":")[0];
