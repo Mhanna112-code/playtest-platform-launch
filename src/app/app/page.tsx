@@ -269,7 +269,6 @@ async function DeveloperDashboard({ user, now, category, restricted }: { user: V
     .filter((r) => r.n > 0)
     .sort((a, b) => b.at.getTime() - a.at.getTime());
   const testersTotal = allTests.reduce((n, t) => n + t.contracts.filter((c) => c.status === "working").length, 0);
-  const initial = (name: string) => name.trim().charAt(0).toUpperCase();
   const invitesBy = new Map(invites.map((i) => [i.testId, i._count._all]));
   const appsBy = new Map<string, number>();
   for (const a of apps) appsBy.set(a.testId, (appsBy.get(a.testId) ?? 0) + 1);
@@ -310,7 +309,7 @@ async function DeveloperDashboard({ user, now, category, restricted }: { user: V
             {shown.map((r) => {
               const inner = (
                 <>
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-volt-300 to-sky-300 text-sm font-semibold text-ink-950">{initial(r.who)}</span>
+                  {/* (Owner, Nov 6, §326) No profile circle on these rows (it was the initial in a volt→sky circle): the words, the names' links and the action. */}
                   {/* (Owner, Nov 3, long text) The words keep at least 12rem: with a long name the action drops onto its own line (right-aligned) instead of
                       squeezing them into a narrow column. */}
                   <p className="min-w-[min(100%,12rem)] flex-1 text-slate-300"><span className="font-medium text-white"><NameLink text={r.who} href={r.whoHref} /></span> {r.text}</p>
