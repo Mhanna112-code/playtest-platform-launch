@@ -69,7 +69,7 @@ describe("batch 29 §37: an automatic call charge the tester can't be paid for y
     expect(await autoCharge()).toBe(1);
     expect(await db.payment.findFirstOrThrow({ where: { callId: x.call.id } })).toMatchObject({ status: "deferred" });
     expect(await delayedLines(x.tester.user.id)).toBe(1);
-    expect(await eventsOf(x.testId)).toContain(`${await callOf(x)} was charged automatically: $15.00, charged when your account is clear`);
+    expect(await eventsOf(x.testId)).toContain(`${await callOf(x)} is waiting to be charged: $15.00, charged when your account is clear`);
   });
 
   it("the developer's event says the true outcome: declined, or waiting for the bank", async () => {

@@ -508,9 +508,11 @@ describe("the final list of emails that ignore Off, and each notification emaile
     // restrictions.ts two more (running again after a reinstatement, after the team's pause lifted).
     // (Owner, Nov 6, §299) The team lifting its pause reaches the developer like the pause: restrictions.ts one more; the team moving a paused test's closing
     // date later: pauseClosure.ts one more.
+    // (Owner, Nov 6, §324) calls.ts two: the 15-minute call reminder, both sides (emailed at once, Off included).
+    // (Owner, Nov 6, §323) requests.ts three: every "Booked: a call with …" line (an auto-match on either side, an accepted request).
     // (Owner, Nov 6, §316) pauseClosure.ts one more: the daily hold reminder.
     // (Owner, Nov 6, §311d) holds.ts three more: the developer's review reminders (a part's, a listed or unlisted call's, "… wasn't reviewed by …"). (§311h) One
     // fewer: the line while a suspension continues is gone.
-    expect(names).toEqual(["chargeback.ts", "chargeback.ts", "chargeback.ts", "confirm.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "pauseClosure.ts", "pauseClosure.ts", "pauseClosure.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts"].sort());
+    expect(names).toEqual(["calls.ts", "calls.ts", "chargeback.ts", "chargeback.ts", "chargeback.ts", "confirm.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "pauseClosure.ts", "pauseClosure.ts", "pauseClosure.ts", "requests.ts", "requests.ts", "requests.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts"].sort());
   });
 });
