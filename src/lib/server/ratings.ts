@@ -27,7 +27,8 @@ import { testerRow } from "@/lib/lineAnchors";
 export type Side = "tester" | "developer";
 const DAY = 86_400_000;
 export const WINDOW_DAYS = 14;
-/** (Owner, Oct 27) Rating reminders: every 3 days, for 2 weeks only. (Batch 29 §21) On running tests too. */
+/** (Owner, Oct 27) Rating reminders: every 3 days, for 2 weeks only. (Batch 29 §21) On running tests too. (Owner, Nov 7, §331) The tester's no longer stop after
+ * 2 weeks (they run until they rate or the test's close-out); kept for older readers of the constant. */
 export const REMINDER_WEEKS = 2;
 /**
  * (Owner, Oct 29, batch 29 §21) Every rating line ("<tester> finished <test>. You can rate them…", the developer's reminders, the tester's "Rate <dev> on <test>" and its
@@ -301,27 +302,11 @@ export async function devRate(dev: { id: string; name: string; email: string }, 
   return { rated: true };
 }
 
-/** How long a tester's own side was suspended since `from` (their reminders pause then). */
-async function testerSuspendedMs(testerId: string, from: Date, now: Date) {
-  const u = await db.user.findUnique({ where: { id: testerId }, select: { testerSuspendedAt: true } });
-  const evs = await db.accountEvent.findMany({ where: { userId: testerId, kind: { in: ["suspended", "reinstated"] }, side: { in: ["tester", ""] } }, orderBy: { createdAt: "asc" } });
-  let ms = 0;
-  let on: number | null = null;
-  for (const e of evs) {
-    if (e.kind === "suspended" && on == null) on = e.createdAt.getTime();
-    else if (e.kind === "reinstated" && on != null) {
-      ms += Math.max(0, e.createdAt.getTime() - Math.max(on, from.getTime()));
-      on = null;
-    }
-  }
-  if (u?.testerSuspendedAt) ms += Math.max(0, now.getTime() - Math.max(on ?? u.testerSuspendedAt.getTime(), from.getTime()));
-  return ms;
-}
-
 /**
  * (Owner, Oct 26-27; batch 29 §21) Rating prompts and their reminders every 3 days, whatever the test's state (running, paused, stopped or closed), stacked in the day's
- * "Ratings to give" entry across tests. Tester: until they have rated or 2 weeks have passed (from the later of the stop / close and the first prompt), not counting the time their side
- * was suspended (batch 17 section 2: their Rate has no end date, so only the reminders pause). Developer (batch 17 section 16): from when their Rate opened, until they
+ * "Ratings to give" entry across tests. Tester (owner, Nov 7, §331; was 2 weeks only): every 3 days from when their Rate opened until they rate or the test's
+ * close-out (their Rate "closed"), skipped while their Rate is disabled (new work in its review window, a Charge to settle, an open dispute) or their tester side is
+ * suspended; when it opens again the next one comes once 3 days have passed since the last. The LAST one before the close-out ignores email Off and names the date. Developer (batch 17 section 16): from when their Rate opened, until they
  * rate or their 14 days end, paused while they can't rate.
  */
 export async function ratingReminders(now = new Date()) {
@@ -331,17 +316,17 @@ export async function ratingReminders(now = new Date()) {
     const last = await db.notification.findFirst({ where: { userId, testId, text: { startsWith: "Reminder: rate " } }, orderBy: { createdAt: "desc" }, select: { createdAt: true } });
     return last && last.createdAt > fallback ? last.createdAt : fallback;
   };
-  // Tester: prompted once (when their Rate opens), then every 3 days for 2 weeks until they rate, whatever the test's state (batch 29 §21: running tests too).
+  // Tester: prompted once (when their Rate opens), then every 3 days until they rate or the close-out, whatever the test's state (batch 29 §21: running tests too).
   const prompted = await db.contract.findMany({ where: { ratePromptedAt: { not: null, lt: new Date(now.getTime() - every), gt: new Date(now.getTime() - 365 * DAY) } }, orderBy: { ratePromptedAt: "desc" }, take: 500, include: { tester: { select: { testerSuspendedAt: true } }, test: { include: { developer: true } } } });
   const rated = new Set((await db.rating.findMany({ where: { contractId: { in: prompted.map((c) => c.id) }, side: "tester" }, select: { contractId: true } })).map((r) => r.contractId));
   for (const c of prompted) {
     if (rated.has(c.id) || c.tester.testerSuspendedAt) continue;
-    // (Batch 29 §21) 2 weeks from when their Rate opened (the prompt), not counting the time their tester side was suspended.
-    const from = c.ratePromptedAt!;
-    if (now.getTime() > from.getTime() + REMINDER_WEEKS * 7 * DAY + (await testerSuspendedMs(c.testerId, from, now))) continue; // 2 weeks only
     if (now.getTime() - (await sinceLast(c.testerId, c.testId, c.ratePromptedAt!)).getTime() < every) continue;
-    if ((await rateBlocker(c.id, "tester", now)) !== "") continue;
-    await bell(c.testerId, `Reminder: rate ${displayName(c.test.developer)} on “${c.title}”`, RATINGS_HREF, undefined, { side: "tester", ...RATINGS, testId: c.testId, reminder: `rate:${c.id}` });
+    if ((await rateBlocker(c.id, "tester", now)) !== "") continue; // disabled, or (§331) closed at the close-out: no reminder
+    // (Owner, Nov 7, §331) The last one before the close-out (the next 3-day slot would fall after it) ignores email Off and names the date.
+    const closes = await closeOutOf(c.testId, now);
+    const last = !!closes && now.getTime() + every >= closes.getTime();
+    await bell(c.testerId, `Reminder: rate ${displayName(c.test.developer)} on “${c.title}”${last ? `: rating closes on ${T(closes!, "date")}` : ""}`, RATINGS_HREF, undefined, { side: "tester", ...RATINGS, testId: c.testId, reminder: `rate:${c.id}`, ...(last ? { always: true } : {}) });
     n++;
   }
   // Developer: once their Rate opened (the tester rated and everything is settled, or (section 19) a never-rated tester at the close-out); every 3 days until they

@@ -369,7 +369,8 @@ describe("D) testers", () => {
     expect(src("app/app/DismissRemoved.tsx")).toContain('{all ? "Dismiss all" : "Dismiss"}');
   });
 
-  it("rating reminders: every 3 days after a stop or close, for 2 weeks only", async () => {
+  // (Owner, Nov 7, §331) No 2-week limit for the tester any more: every 3 days until they rate or the close-out; the last one names the date and is always emailed.
+  it("rating reminders: every 3 days after a stop or close, until the close-out (§331)", async () => {
     const { dev, testId, sessionId, tester, sub } = await sentWork();
     await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 });
     await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true });
@@ -378,7 +379,14 @@ describe("D) testers", () => {
     await ratingReminders(new Date());
     expect((await lines(tester.user.id)).some((l) => l.reminderKey === `rate:${sessionId}`)).toBe(true);
     await db.notification.deleteMany({ where: { userId: tester.user.id, text: { startsWith: "Reminder: rate" } } });
-    await ratingReminders(new Date(Date.now() + 12 * DAY)); // 16 days after the stop: past the 2 weeks
+    const closes = (await (await import("@/lib/server/closeOut")).closeOutOf(testId))!;
+    // The last one before the close-out: it names the date and ignores email Off.
+    await ratingReminders(new Date(closes.getTime() - DAY));
+    const last = await db.notification.findFirstOrThrow({ where: { userId: tester.user.id, reminderKey: `rate:${sessionId}` } });
+    expect(last.text).toMatch(/^Reminder: rate .+ on “.+”: rating closes on /);
+    expect(last.mustEmail).toBe(true);
+    await db.notification.deleteMany({ where: { userId: tester.user.id, text: { startsWith: "Reminder: rate" } } });
+    await ratingReminders(new Date(closes.getTime() + DAY)); // past the close-out: Rate closed
     expect(await db.notification.count({ where: { userId: tester.user.id, reminderKey: `rate:${sessionId}` } })).toBe(0);
   });
 
