@@ -1814,7 +1814,7 @@ export async function autoChargeCalls(now: Date) {
       // During a suspension: it waits and is charged when the account is clear (chargeDeferred on the reinstatement); the tester is paid then.
       await db.payment.create({ data: { kind: "call", callId: x.id, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amount, feeCents: 0, testerCents: 0, status: "deferred" } });
       await tellDelayed();
-      await logged(`${call} was charged automatically: ${money(amount)}, ${dev.devSuspendedAt ? "charged when your account is clear" : "charged when the team lifts the pause on this test"}`);
+      await logged(`${call} is waiting to be charged: ${money(amount)}, ${dev.devSuspendedAt ? "charged when your account is clear" : "charged when the team lifts the pause on this test"}`); // (§322) not "was charged": nothing is taken yet
       // (Owner, Nov 6, §319) The developer's bell (and the payment email), in "Payments and holds" like the hold's "is added to what you owe" line: which charge waits
       // and until when ("Nina Park's live call on “PAY TEST” (Sun, Nov 1, 6:05 PM) ($15.50) is waiting: it's charged when your account is clear").
       await bell(dev.id, waitingChargeLine(pieceName({ tester: name, part: "live call", test: c.title, when: T(x.startsAt), full: true }), amount, dev.devSuspendedAt ? null : c.title), `/app/tests/${c.testId}#call-${x.id}`, undefined, { side: "developer", payment: true, group: "payhold", testId: c.testId });
