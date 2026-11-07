@@ -1,3 +1,4 @@
+import { additionTerms } from "./submissionAdditions";
 import { dateZone } from "./dateZone";
 import { TEAM_LIFTED_EVENT, TEAM_PAUSED_EVENT, devLiftSince, devPauseMoments, devPauseSince, devStopSince, loadedOf } from "./stopMoment";
 import { replaceLine, takesTheirs } from "@/lib/editMerge";
@@ -24,7 +25,7 @@ import { T, safeZone, renderTimes } from "@/lib/tz";
 import { LISTING_INFO_FIELDS, LISTING_VALUES, valuesText } from "@/lib/listingInfo";
 import { LISTING_SAVED, savedText } from "@/lib/listingPanel";
 import {
-  andList, testClosedToNewLine, daysBetween, dueAfterDays, movedDue, endOfDayIn, openUntilDay, testerDaysOf, testPaused, testerPaused, PAUSED_SEND, checkWrittenLength, checkAdditionLength, PAUSED_RIGHT_NOW, openUntilShortened, changedTerms, sameListingValue, checkListing, checkOpenUntilChange, contractSnapshot, editCheck, isLate, joinCheck, payByFrom, PAY_WAITS, testerRefusal, LISTING_FIELDS, mergeEdit, termsLine, type Listing, type TestEventLike,
+  andList, testClosedToNewLine, daysBetween, dueAfterDays, movedDue, endOfDayIn, openUntilDay, testerDaysOf, testPaused, testerPaused, PAUSED_SEND, checkWrittenLength, checkAdditionLength, PAUSED_RIGHT_NOW, openUntilShortened, changedTerms, sameListingValue, checkListing, checkOpenUntilChange, contractSnapshot, editCheck, joinCheck, payByFrom, PAY_WAITS, testerRefusal, LISTING_FIELDS, mergeEdit, termsLine, type Listing, type TestEventLike,
 } from "@/lib/rules";
 import { gapsOf, gapsUnseen, missingNeedText, noGaps, readGaps } from "@/lib/gaps";
 import { HttpError, readText } from "./http";
@@ -1251,18 +1252,19 @@ export async function sendWritten(tester: U, contractId: string, body: Record<st
     if (refused) throw refused;
     const paid = !!existing?.review;
     const items = itemsFor(qs, answers);
-    // (Batch 30 §3) Added to a late piece, it stays late; added after the deadline, the piece is late (and Charge, if it had opened, no longer applies).
-    const late = !!existing?.late || isLate(c.dueAt, now);
+    // Additions preserve an existing piece's status; before the deadline they adopt the agreed price.
+    const addition = additionTerms(existing, c, c.writtenCents, now);
+    const late = addition.late;
     // (Owner, Nov 6, §283) Only unsent uploads (never one already sent), and not one that went with a draft into Terms history (snapshotOnlyFiles).
     const unsentFiles = await tx.recording.findMany({ where: { contractId, part: "written", uploadedAt: { not: null }, submissionId: null }, select: { id: true, filename: true } });
     const snapped = snapshotOnlyFiles(c.prevSets, unsentFiles, [...answers, notes]);
     const files = unsentFiles.filter((f) => !snapped.has(f.id));
     const sub = existing
       ? await tx.submission.update({ where: { id: existing.id }, data: {
-          // (Batch 13 §8) While unpaid, the piece is priced at the current contract's written price; it no longer reads "Sent for the questions until".
+          // The shared addition rule decides whether this unpaid piece can adopt current terms.
           additions: [...additionsOf(existing.additions), { at: now.toISOString(), items, notes: notes !== existing.notes ? notes : "", files: files.map((f) => f.id) }] as unknown as Prisma.InputJsonValue,
-          setUntil: null, late, updatedAt: now,
-          ...(paid ? { paidUpdateAt: now } : { agreedCents: c.writtenCents, payBy: payByFrom(now), stintDueAt: null /* (§313c) sent again now: this stint's deadline */, ...(late ? { choiceOfferedAt: null, choiceBy: null } : {}) }),
+          setUntil: null, updatedAt: now,
+          ...addition,
         } })
       : await tx.submission.create({ data: { contractId, kind: "written", agreedCents: c.writtenCents, answers: items as unknown as Prisma.InputJsonValue, notes, late, updatedAt: now, payBy: payByFrom(now), ...(late ? { choiceOfferedAt: null, choiceBy: null } : {}) } });
     // (Batch 11) Files and recordings attached to the written part go with it.
@@ -1430,12 +1432,12 @@ export async function addWritten(tester: U, contractId: string, body: Record<str
     // (Owner, Nov 3, races) A Pay in flight (reserved, its review not recorded yet) reads as unpaid here; recordReviewDraft marks this addition as one after the
     // payment once that Pay is recorded.
     const paid = !!existing.review;
-    const late = existing.late || isLate(c.dueAt, now);
+    const addition = additionTerms(existing, c, c.writtenCents, now);
     const fresh = placedIn(await tx.recording.findMany({ where: unsent, select: { id: true, filename: true } }));
     const sub = await tx.submission.update({ where: { id: existing.id }, data: {
       additions: [...made, { at: now.toISOString(), text, files: fresh.map((f) => f.id), questionKey: key, ...(first ? { first: true } : {}) }] as unknown as Prisma.InputJsonValue,
-      late, updatedAt: now,
-      ...(paid ? { paidUpdateAt: now } : { payBy: payByFrom(now), stintDueAt: null /* (§313c) sent again now: this stint's deadline */, ...(late ? { choiceOfferedAt: null, choiceBy: null } : {}) }),
+      updatedAt: now,
+      ...addition,
     } });
     await tx.recording.updateMany({ where: { id: { in: fresh.map((f) => f.id) } }, data: { submissionId: sub.id } });
     const question = key === ANYTHING_ELSE_KEY ? ANYTHING_ELSE_TITLE : qText(qs[at]);

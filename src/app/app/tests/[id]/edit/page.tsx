@@ -48,7 +48,7 @@ export default async function EditTest({ params, searchParams }: { params: Promi
         <p className="err-field" role="alert" data-closed="">{TEST_CLOSED_NO_EDIT}</p>
       ) : (
         <>
-          <p className="note">Edit changes the listing for new testers only. Testers already in keep the contract they joined on.</p>
+          <p className="note">Testers already in choose to accept new terms or keep their own for prices and parts.</p>
           {/* (Owner, Nov 5, §275 revised) A Save that went through stays on Edit (a fresh load of it: the saved values, counters and "Changes left") and says
               "Saved." at the top of the form, with what else the Save did only when it did something; it fades after 8 s, or stays until × when it lists that. */}
           {savedNote && <SavedNote stay={savedNote.extras}><p className="ok" data-saved-text="">{savedNote.text}</p></SavedNote>}

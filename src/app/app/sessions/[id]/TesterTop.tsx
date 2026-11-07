@@ -3,7 +3,7 @@ import { Err } from "@/components/Err";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { jumpTo } from "@/lib/markJump";
-import { ANSWER_TERMS_EVENT } from "@/lib/answerTerms";
+import { ANSWER_TERMS_EVENT, SENT_WORK_PRICE_EXPLANATION } from "@/lib/answerTerms";
 import { ChangesBox } from "@/components/ChangesBox";
 import { api, errOf } from "@/lib/client";
 import { pressLabelOf } from "@/lib/pressLabels";
@@ -84,7 +84,7 @@ export function TesterTop({ sessionId, seenAt, offer, devName }: { sessionId: st
       <p>
         {devName} updated the listing: {offer.diff}.
       </p>
-      <p className="text-xs">Switching applies to work you send from now on; work you&apos;ve already sent keeps its price. Your deadline never moves earlier.</p>
+      <p className="text-xs">{SENT_WORK_PRICE_EXPLANATION} Your deadline never moves earlier.</p>
       {/* (Owner, Nov 5, §267; replaces batch 13 §9's NDA Before / Offered here) An offer never carries the NDA: it follows the listing, with its own notice. */}
       {/* (Owner, Nov 5, §265; replaces §221 / §233 / §242's questions-changed block, before and after) An offer never carries questions: they follow the
           listing (each change is a "Questions changed" entry in Terms history). */}

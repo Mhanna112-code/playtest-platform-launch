@@ -7,6 +7,8 @@ export const ANSWER_TERMS_FIRST = "Answer the new terms first: Switch or Keep.";
 export const ANSWER_TERMS_CODE = "answer_terms";
 /** The page event that brings the Switch / Keep box into view, highlighted for a few seconds (the session page's TesterTop listens). */
 export const ANSWER_TERMS_EVENT = "answer-terms";
+/** Switching alone preserves a sent piece's price; sending fresh written answers is the existing exception. */
+export const SENT_WORK_PRICE_EXPLANATION = "Switching alone does not change submitted work. Before the tester's deadline and before Charge opens, sending more written answers, adding to an answer or sending additional recordings updates the unpaid part to their current agreed parts and price. After the tester's deadline or once Charge opens, additions preserve the piece's saved price, on-time status and Charge dates; they create no extra Charge entitlement. After payment or Charge, additions never reopen Charge.";
 /**
  * The session presses an open offer blocks: Send my answers / updated answers, Send my recording(s), Request a time, Accept / Decline / Withdraw, Cancel call, Cancel the
  * remaining calls, and (owner, Oct 29, batch 32 §7) Charge, Let it go and Dispute.

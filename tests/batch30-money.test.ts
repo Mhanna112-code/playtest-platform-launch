@@ -173,7 +173,7 @@ describe("batch 30 §3: late listed work never opens Charge", () => {
     expect(M.lateSentLine("Nov 3, 2026", "Nora Lane")).toBe("Sent after the Nov 3, 2026 deadline: Nora Lane decides what to pay. You can't charge for this part.");
     expect(R.PAY_RULES_TICK).toContain("for work they sent by their own deadline");
     const terms = src("lib/termsOfUse.ts");
-    expect(terms).toContain("Work sent after the tester's own deadline never opens Charge or Let it go");
+    expect(terms).toContain("A part first sent after the tester's own deadline never opens Charge or Let it go");
     const session = src("app/app/sessions/[id]/page.tsx");
     expect(session).toContain("lateBeforeSendLine(fmtDate(c.dueAt), dev)");
     expect(session).toContain("lateSentLine(fmtDate(c.dueAt), dev)");

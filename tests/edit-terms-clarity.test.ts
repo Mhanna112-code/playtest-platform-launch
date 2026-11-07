@@ -8,3 +8,8 @@ it("explains that Keep preserves agreed parts and prices while other listing edi
   expect(EDIT_TEST_TERMS).toContain("only if those deadlines have not already passed");
   expect(WHAT_CHANGED[0].points.some((p) => p.includes("keeping those terms does not keep old questions"))).toBe(true);
 });
+it("explains consistent addition pricing before the deadline and preservation afterward", () => {
+  expect(EDIT_TEST_TERMS).toContain("sending additional recordings updates the unpaid part");
+  expect(EDIT_TEST_TERMS).toContain("After the deadline or once Charge opens, additions preserve");
+  expect(EDIT_TEST_TERMS).toContain("After payment or Charge, additions never reopen Charge");
+});

@@ -1,7 +1,8 @@
+import { additionTerms } from "./submissionAdditions";
 import { randomBytes } from "node:crypto";
 import { db } from "@/lib/db";
 import { displayName, pronouns } from "@/lib/format";
-import { PAUSED_SEND, isLate, payByFrom, testerPaused } from "@/lib/rules";
+import { PAUSED_SEND, testerPaused } from "@/lib/rules";
 import { HttpError } from "./http";
 import { NO_RECORDING_TO_ADD, SENT_RECORDING_LOCKED } from "@/lib/rules";
 import { ATTACHMENT_TYPES, MAX_ATTACHMENTS, MAX_ATTACHMENT_BYTES, MAX_RECORDING_BYTES, MAX_RECORDINGS, deleteObject, deleteStored, headObject, isVideo, listStored, r2On, uploadTarget } from "./storage";
@@ -197,9 +198,8 @@ export async function sendRecording(tester: U, contractId: string, body: Record<
     if (!fresh.length) throw new HttpError(400, "none", existing ? NO_RECORDING_TO_ADD : "Upload a recording first.");
     const paid = !!existing?.review;
     const now = new Date();
-    // (Batch 30 §3) Added to a late piece, it stays late; sent or added after the deadline, it's late (Charge, if it had opened, no longer applies).
-    const lateNow = !!existing?.late || isLate(c.dueAt, now);
-    const data = { late: lateNow, updatedAt: now, ...(paid ? { paidUpdateAt: now } : { payBy: payByFrom(now), stintDueAt: null /* (§313c) sent again now: this stint's deadline */, ...(lateNow ? { choiceOfferedAt: null, choiceBy: null } : {}) }) };
+    // Additions follow the shared price-freeze rule and preserve the original piece's status.
+    const data = { updatedAt: now, ...additionTerms(existing, c, c.recordingCents, now) };
     const sub = existing
       ? await tx.submission.update({ where: { id: existing.id }, data: { ...data, additions: [...additionsOf(existing.additions), { at: now.toISOString(), files: fresh.map((r) => r.id) }] as unknown as Prisma.InputJsonValue } })
       // (Owner, Nov 5, §239) A recording takes no notes: a `notes` in the body is ignored and nothing is stored (the written part keeps its own).

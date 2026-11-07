@@ -351,7 +351,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
       const m = canSendAgain(sub) ? moreOf(sub.id) : null;
       return m ? [updateAboveSendLine(dev, m.paidCents, m.allCents, m.closedOn)] : [];
     }
-    return cents != null && cents > 0 && now > c.dueAt ? [lateBeforeSendLine(fmtDate(c.dueAt), dev)] : [];
+    return (!sub || sub.late) && cents != null && cents > 0 && now > c.dueAt ? [lateBeforeSendLine(fmtDate(c.dueAt), dev)] : [];
   };
   const pausedBanner = rulesPaused ? pausedForTesters({
     drafts: draftsShown && !refusal && !meOff && unpaidPart,

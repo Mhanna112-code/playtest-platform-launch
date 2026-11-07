@@ -2,7 +2,7 @@ import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, pronouns } from "@/lib/server/dateFormat";
 import { newDueAt, switchedLine, termsDiff, testerRefusal, type ContractTerms, type TestEventLike } from "@/lib/rules";
-import { ANSWER_TERMS_CODE, ANSWER_TERMS_FIRST } from "@/lib/answerTerms";
+import { ANSWER_TERMS_CODE, ANSWER_TERMS_FIRST, SENT_WORK_PRICE_EXPLANATION } from "@/lib/answerTerms";
 import { HttpError } from "./http";
 import { bell, notify } from "./notify";
 import { testerGate } from "./testerGate";
@@ -47,7 +47,7 @@ export async function offerNewTerms(testId: string, changeId: string | null = nu
       },
     });
     const line = `${displayName(t.developer)} updated the listing: ${diff}`;
-    await notify(c.tester.email, line, [line + ".", "Switch to the new terms or keep your current ones on your session page. Work you've already sent keeps its price."], `/app/sessions/${c.id}#terms-offer`, { about: t.developerId, testId }); // (Owner, Nov 6, §312b) in the test's own day stack, like "edited the listing" (was the "newterms" stack across tests) // (batch 29 §25) "New terms to answer", across tests
+    await notify(c.tester.email, line, [line + ".", `Switch to the new terms or keep your current ones on your session page. ${SENT_WORK_PRICE_EXPLANATION}`], `/app/sessions/${c.id}#terms-offer`, { about: t.developerId, testId }); // (Owner, Nov 6, §312b) in the test's own day stack, like "edited the listing" (was the "newterms" stack across tests) // (batch 29 §25) "New terms to answer", across tests
     offered++;
   }
   return offered;
