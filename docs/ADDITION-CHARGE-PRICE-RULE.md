@@ -12,4 +12,4 @@ Implementation: shared `additionTerms` used inside the test lock by all three su
 
 Validation: `consistent-addition-charge.test.ts` covers price increase/decrease/zero/unlisted, late originals, first late submission, an opened window with a subsequently extended deadline, settled work, and real request integration for all three addition paths. Full repository check status must be reported separately from focused checks.
 
-Focused validation: 73 tests passed across the new rule, edit wording and batch20; another 30 passed across the new rule, edit wording and batch30 money. Typecheck and lint passed (existing warnings remain). A full check was attempted in codex64 and stopped after reproducing unrelated existing source/markup assertion failures; the full check is not green.
+Focused validation: 73 tests passed across the new rule, edit wording and batch20; another 30 passed across the new rule, edit wording and batch30 money. Typecheck, lint and production build passed (existing warnings remain). A full check was attempted in codex64 and stopped after reproducing unrelated existing source/markup assertion failures; the full check is not green.
