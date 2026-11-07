@@ -2,7 +2,7 @@ import { CHECK_CANCELLED_UNDERNEATH } from "@/lib/pressLabels";
 import { db } from "@/lib/db";
 import { displayName, fmtDateTimeIn, fmtTimeIn, money, pronouns } from "@/lib/format";
 import { CONFIRM_DAYS, OVER_PAY_TICK_LINE, PAY_TICK_CENTS, PRESS_ACTION_MS, BANK_TO_CONFIRM_HREF, bankAnchor, bankHref, bankWaitingAllLine, bankWaitingLine, BANK_NOT_CONFIRMED, cardDeclinedConfirmLine, cut10 } from "@/lib/rules";
-import { awayFromTest, onTestLine } from "@/lib/rules"; // (§177)
+import { awayFromTest, dayIn, onTestLine } from "@/lib/rules"; // (§177)
 import { bankTopLead, confirmByText, pieceWords, type BankTopRow } from "@/lib/bankTop";
 import { HttpError } from "./http";
 import { lineLinks, linkPool } from "./lineLinks";
@@ -66,13 +66,21 @@ export async function tellBankWaiting(devId: string, now = new Date()) {
   if (!waiting.length) return;
   const titles = new Map((await db.contract.findMany({ where: { id: { in: waiting.map((w) => w.contractId).filter((x): x is string => !!x) } }, select: { id: true, title: true } })).map((c) => [c.id, c.title]));
   const line = bankWaitingAllLine(waiting.map((w) => ({ cents: w.amountCents, title: w.contractId ? titles.get(w.contractId) ?? null : null, by: w.actionBy! })));
-  const key = `bankwait:${now.toISOString().slice(0, 10)}`;
-  const today = await db.notification.findFirst({ where: { userId: devId, reminderKey: key }, select: { id: true, summarizedAt: true } });
+  // (Owner, Nov 6, §320) One key for every copy ("bankwait"), so a Weekly or Monthly email shows only the newest; "today" is the reader's own day of the last line.
+  const today = await bankLineToday(devId, dev.timeZone, now);
   if (today && !today.summarizedAt) {
     await db.notification.update({ where: { id: today.id }, data: { text: await renderFor(devId, line), readAt: null, createdAt: now } });
     return;
   }
-  await notify(dev.email, line, [line + "."], BANK_TO_CONFIRM_HREF, { side: "developer", always: true, payment: true, group: "payhold", reminder: key });
+  await notify(dev.email, line, [line + "."], BANK_TO_CONFIRM_HREF, { side: "developer", always: true, payment: true, group: "payhold", reminder: BANK_WAIT_KEY });
+}
+
+/** (§320) The bank-confirmation line's one reminder key (it was "bankwait:<date>", one per day: those rows still count as the day's line). */
+export const BANK_WAIT_KEY = "bankwait";
+/** (§320) The developer's bank-confirmation line already sent on the reader's own day of `now`, if any (either key). */
+async function bankLineToday(devId: string, tz: string | null | undefined, now: Date) {
+  const last = await db.notification.findFirst({ where: { userId: devId, OR: [{ reminderKey: BANK_WAIT_KEY }, { reminderKey: { startsWith: `${BANK_WAIT_KEY}:` } }] }, orderBy: { createdAt: "desc" }, select: { id: true, summarizedAt: true, createdAt: true } });
+  return last && dayIn(last.createdAt, tz) === dayIn(now, tz) ? last : null;
 }
 
 /**
@@ -83,11 +91,11 @@ export async function tellBankWaiting(devId: string, now = new Date()) {
  */
 export async function bankWaitingReminders(now = new Date()) {
   const devs = await db.payment.findMany({ where: { actionPi: { not: null }, actionBy: { gt: now }, status: { in: ["needs_confirmation", "failed", "owed"] } }, select: { developerId: true }, distinct: ["developerId"] });
-  const key = `bankwait:${now.toISOString().slice(0, 10)}`;
   let n = 0;
   for (const { developerId } of devs) {
-    if (await db.notification.findFirst({ where: { userId: developerId, reminderKey: key }, select: { id: true } })) continue; // told today already
-    if ((await db.user.findUnique({ where: { id: developerId }, select: { deletedAt: true } }))?.deletedAt) continue;
+    const u = await db.user.findUnique({ where: { id: developerId }, select: { deletedAt: true, timeZone: true } });
+    if (!u || u.deletedAt) continue;
+    if (await bankLineToday(developerId, u.timeZone, now)) continue; // told today already
     await tellBankWaiting(developerId, now);
     n++;
   }

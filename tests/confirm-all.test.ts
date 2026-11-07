@@ -195,7 +195,7 @@ describe("§147 Confirm all: one payment, one bank check", () => {
     expect((await confirmItems(w.devId)).map((i) => i.id)).toEqual(w.items.map((p) => p.id));
     // They're new confirms again: in the dashboard box, and the one bell line for charges waiting for the bank is sent again (unread).
     expect((await bankToConfirm(w.devId)).map((r) => r.id).sort()).toEqual(w.items.map((p) => p.id).sort());
-    const bell = await db.notification.findFirstOrThrow({ where: { userId: w.devId, reminderKey: { startsWith: "bankwait:" } }, orderBy: { createdAt: "desc" } });
+    const bell = await db.notification.findFirstOrThrow({ where: { userId: w.devId, reminderKey: "bankwait" }, orderBy: { createdAt: "desc" } });
     expect(bell).toMatchObject({ text: expect.stringMatching(/^Your bank wants you to confirm 3 payments \(\$42\.00 in all\)/), readAt: null });
     expect(await db.payment.count({ where: { id: { in: w.items.map((p) => p.id) }, status: { in: ["charged", "failed"] } } })).toBe(0);
   });
