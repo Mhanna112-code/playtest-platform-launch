@@ -40,26 +40,26 @@ async function heldCall(listed: boolean, liveRate = "30.00") {
 
 describe("batch 9 item 1 and 6: the caps", () => {
   it("the constants and the per-piece cap (batch 29 §38: the part's max in all, listed or not)", () => {
-    expect(R.NO_LISTING_WORK_CAP_CENTS).toBe(100_000);
+    expect(R.NO_LISTING_WORK_CAP_CENTS).toBe(50_000);
     expect(R.NO_LISTING_CALL_RATE_CAP_CENTS).toBe(20_000);
     expect("EXTRA_PAY_CAP_PERCENT" in R).toBe(false);
-    expect(R.pieceMaxCents("submission")).toBe(100_000);
+    expect(R.pieceMaxCents("submission")).toBe(50_000);
     expect(R.pieceMaxCents("call", 30)).toBe(10_000);
-    expect(R.pieceCapCents(2000, 100_000)).toBe(100_000); // a $20 listing: $1,000 in all
-    expect(R.pieceCapCents(100_000, 100_000)).toBe(100_000); // listed at the max: no Pay more room
+    expect(R.pieceCapCents(2000, 50_000)).toBe(50_000); // a $20 listing: $500 in all
+    expect(R.pieceCapCents(50_000, 50_000)).toBe(50_000); // listed at the max: no Pay more room
     expect(R.pieceCapCents(2500, 10_000)).toBe(10_000); // a $50/h call, 30 min: $100 in all ($200/h × 30 min)
-    expect(R.pieceCapCents(null, 100_000)).toBe(100_000); // unlisted: the max in all
-    expect(R.overMaxLine(100_000)).toBe("This is more than this piece can be paid (up to $1,000).");
-    expect(R.overMaxLine(2000, 100_000)).toBe("This is more than this piece can be paid (up to $20 more, $1,000 in all).");
+    expect(R.pieceCapCents(null, 50_000)).toBe(50_000); // unlisted: the max in all
+    expect(R.overMaxLine(50_000)).toBe("This is more than this piece can be paid (up to $500).");
+    expect(R.overMaxLine(2000, 50_000)).toBe("This is more than this piece can be paid (up to $20 more, $500 in all).");
   });
 
-  it("an unlisted written piece: $1000 in all, Pay and extra pay together (batch 29 §38)", async () => {
+  it("an unlisted written piece: $500 in all, Pay and extra pay together (batch 29 §38)", async () => {
     const { dev, testId, sessionId, sub } = await sentWork(null);
     // (Batch 11 section 6) One Pay box: (batch 29 §38) up to the max in all.
-    const over = await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "1000.01", tickedCents: 100_001, over200: true });
-    expect(over.body.error.message).toBe("This is more than this piece can be paid (up to $1,000).");
-    expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "600.00", tickedCents: 60_000, over200: true })).status).toBe(200);
-    expect((await extra(testId, dev.cookie, { contractId: sessionId, submissionId: sub.id, amount: "400.01", tickedCents: 40_001, over200: true })).body.error.message).toBe("This is more than this piece can be paid (up to $400 more, $1,000 in all).");
+    const over = await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "500.01", tickedCents: 50_001, over200: true });
+    expect(over.body.error.message).toBe("This is more than this piece can be paid (up to $500).");
+    expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "100.00", tickedCents: 10_000, over200: true })).status).toBe(200);
+    expect((await extra(testId, dev.cookie, { contractId: sessionId, submissionId: sub.id, amount: "400.01", tickedCents: 40_001, over200: true })).body.error.message).toBe("This is more than this piece can be paid (up to $400 more, $500 in all).");
     expect((await extra(testId, dev.cookie, { contractId: sessionId, submissionId: sub.id, amount: "400.00", tickedCents: 40_000, over200: true })).status).toBe(200);
   });
 
@@ -76,10 +76,10 @@ describe("batch 9 item 1 and 6: the caps", () => {
 
   it("a listed piece: Pay plus extra pays are at most the part's max in all (batch 29 §38)", async () => {
     const { dev, testId, sessionId, sub } = await sentWork("20.00");
-    expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "1000.01", tickedCents: 100_001, over200: true })).body.error.message).toBe("This is more than this piece can be paid (up to $1,000).");
+    expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "500.01", tickedCents: 50_001, over200: true })).body.error.message).toBe("This is more than this piece can be paid (up to $500).");
     expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "30.00", tickedCents: 3000 })).status).toBe(200);
-    expect((await extra(testId, dev.cookie, { contractId: sessionId, submissionId: sub.id, amount: "970.01", tickedCents: 97_001, over200: true })).body.error.message).toBe("This is more than this piece can be paid (up to $970 more, $1,000 in all).");
-    expect((await extra(testId, dev.cookie, { contractId: sessionId, submissionId: sub.id, amount: "970.00", tickedCents: 97_000, over200: true })).status).toBe(200);
+    expect((await extra(testId, dev.cookie, { contractId: sessionId, submissionId: sub.id, amount: "470.01", tickedCents: 47_001, over200: true })).body.error.message).toBe("This is more than this piece can be paid (up to $470 more, $500 in all).");
+    expect((await extra(testId, dev.cookie, { contractId: sessionId, submissionId: sub.id, amount: "470.00", tickedCents: 47_000, over200: true })).status).toBe(200);
     // A $50/h call, 30 minutes: $100 in all ($200/h × 30 min), so $75 more after a $25 Pay.
     const c = await heldCall(true, "50.00");
     await pay(c.dev.cookie, { kind: "call", id: c.call.id, amount: "25.00", tickedCents: 2500 });

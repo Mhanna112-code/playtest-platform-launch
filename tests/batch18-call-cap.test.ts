@@ -8,21 +8,21 @@ import { callStatus, joinCall } from "@/lib/server/blocks";
 import { callsLeftCents } from "@/lib/server/callMoney";
 import { bookCall, joined, setup } from "./fixtures";
 
-// Batch 18 section 3 (owner, Oct 28 evening): a call ends when its pay would pass the $1,000 for that tester's calls on the test.
+// Batch 18 section 3 (owner, Oct 28 evening): a call ends when its pay would pass the $500 for that tester's calls on the test.
 const MIN = 60_000;
 const at = (base: Date, min: number) => new Date(base.getTime() + min * MIN);
 const span = (base: Date, from: number, to: number) => ({ startAt: at(base, from), endAt: at(base, to) });
 
 /**
- * Another call on the same contract that uses `cents` of the $1,000 (at $200/h when `rateCents` is null). (Owner, Nov 6, §280) It took place before this one (measured,
- * not paid yet): a call booked AFTER the one in progress no longer counts toward its end, since booking isn't checked against the $1,000 any more.
+ * Another call on the same contract that uses `cents` of the $500 (at $200/h when `rateCents` is null). (Owner, Nov 6, §280) It took place before this one (measured,
+ * not paid yet): a call booked AFTER the one in progress no longer counts toward its end, since booking isn't checked against the $500 any more.
  */
 async function reserve(contractId: string, slotId: string, rateCents: number | null, cents: number) {
   const minutes = Math.round((cents * 60) / (rateCents ?? M.UNLISTED_CALL_RATE_CENTS));
   await db.call.create({ data: { slotId, contractId, startsAt: new Date(Date.now() - 9 * 86_400_000), minutes, rateCents, measuredMinutes: minutes, measuredAt: new Date() } });
 }
 
-describe("batch 18 section 3: the call's own cap at the $1,000 (pure)", () => {
+describe("batch 18 section 3: the call's own cap at the $500 (pure)", () => {
   it("the most minutes whose pay fits what's left: the contract rate, or $200/h unlisted; a free call never reaches it", () => {
     expect(M.capMinutesFor(3000, 1000)).toBe(20); // $30/h: $10 is 20 minutes
     expect(M.capMinutesFor(3000, 1049)).toBe(20);
@@ -43,17 +43,17 @@ describe("batch 18 section 3: the call's own cap at the $1,000 (pure)", () => {
     expect(M.capEnd([span(s, 0, 19.9)], [span(s, 0, 19.9)], 20, at(s, 20)).reached).toBe(true);
     // (Batch 21 section 2) The 2-minute warning, and the room's end line (the room hangs up, so nothing is said about minutes after).
     expect(M.endWarnLine("3:42 PM")).toBe("This call ends at 3:42 PM.");
-    expect(M.capEndedLine("Ana")).toBe("Call ended: the $1,000 for calls with Ana on this test is reached.");
+    expect(M.capEndedLine("Ana")).toBe("Call ended: the $500 for calls with Ana on this test is reached.");
     expect(M.CALL_OVER_LINE).toBe("This call is over.");
   });
 });
 
-describe("batch 18 section 3: a call reaching the $1,000 mid-way", () => {
+describe("batch 18 section 3: a call reaching the $500 mid-way", () => {
   it("the warning 2 minutes before, then it ends for both sides at that point; measuring stops; Join is refused", async () => {
     const { dev, testId } = await setup(); // $30/h, 30-minute calls
     const { tester, sessionId } = await joined(testId);
     const call = await bookCall(testId, dev.cookie, sessionId, tester.cookie);
-    await reserve(sessionId, call.slotId, 3000, 99_000); // other calls already use $990: $10 is left for this one (20 minutes at $30/h)
+    await reserve(sessionId, call.slotId, 3000, 49_000); // other calls already use $490: $10 is left for this one (20 minutes at $30/h)
     expect(await callsLeftCents(sessionId, db, call.id)).toBe(1_000);
     // The call started 19 minutes ago; both have been connected since.
     const start = new Date(Date.now() - 19 * MIN);
@@ -86,8 +86,8 @@ describe("batch 18 section 3: a call reaching the $1,000 mid-way", () => {
     expect((await db.call.findUniqueOrThrow({ where: { id: call.id } })).measuredMinutes).toBe(20);
     // The page says so (it replaces the room, for both sides) and Join is refused; the Join button goes.
     const after = await callStatus(dev.user, call.id);
-    expect(after).toMatchObject({ line: "Call ended: the $1,000 for calls with Ana Silva on this test is reached.", capLine: "", capped: true });
-    expect((await callStatus(tester.user, call.id)).line).toBe("Call ended: the $1,000 for calls with Nora Lane on this test is reached.");
+    expect(after).toMatchObject({ line: "Call ended: the $500 for calls with Ana Silva on this test is reached.", capLine: "", capped: true });
+    expect((await callStatus(tester.user, call.id)).line).toBe("Call ended: the $500 for calls with Nora Lane on this test is reached.");
     await expect(joinCall(tester.user, call.id)).rejects.toMatchObject({ message: "This call is over.", data: { cancelled: true } });
     await expect(joinCall(dev.user, call.id)).rejects.toMatchObject({ message: "This call is over." });
     expect(callJoinable({ ...ended, startsAt: new Date() })).toBe(false);
@@ -97,7 +97,7 @@ describe("batch 18 section 3: a call reaching the $1,000 mid-way", () => {
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
     const call = await bookCall(testId, dev.cookie, sessionId, tester.cookie);
-    await reserve(sessionId, call.slotId, 3000, 99_000); // 20 minutes left
+    await reserve(sessionId, call.slotId, 3000, 49_000); // 20 minutes left
     const start = new Date(Date.now() - 5 * MIN);
     await db.call.update({ where: { id: call.id }, data: { startsAt: start } });
     for (let m = 0; m <= 5; m++) {
@@ -107,7 +107,7 @@ describe("batch 18 section 3: a call reaching the $1,000 mid-way", () => {
     const s = await callStatus(dev.user, call.id);
     expect(s.capLine).toBe(""); // ends 15 minutes from now
     expect((await callCapState(call.id))?.ended).toBe(false);
-    // Plenty left ($30/h × 45 minutes fits): the $1,000 never binds before 150%.
+    // Plenty left ($30/h × 45 minutes fits): the $500 never binds before 150%.
     const other = await setup();
     const j = await joined(other.testId, "Ben Okafor");
     const c2 = await bookCall(other.testId, other.dev.cookie, j.sessionId, j.tester.cookie);
@@ -120,7 +120,7 @@ describe("batch 18 section 3: a call reaching the $1,000 mid-way", () => {
     const { tester, sessionId } = await joined(testId);
     const call = await bookCall(testId, dev.cookie, sessionId, tester.cookie);
     expect(call.rateCents).toBeNull();
-    await reserve(sessionId, call.slotId, null, 95_000); // $50 left: 15 minutes at $200/h
+    await reserve(sessionId, call.slotId, null, 45_000); // $50 left: 15 minutes at $200/h
     // Both had the call page open for the whole 30 minutes (no page polled meanwhile): the sweep ends it at 15 minutes together.
     const start = new Date(Date.now() - 3 * 3_600_000);
     await db.call.update({ where: { id: call.id }, data: { startsAt: start } });
@@ -134,7 +134,7 @@ describe("batch 18 section 3: a call reaching the $1,000 mid-way", () => {
     expect(c.measuredMinutes).toBe(15);
     expect(c.measuredTo!.getTime()).toBe(at(start, 15).getTime());
     expect(M.callPayCents(null, 15)).toBe(5_000);
-    expect((await callStatus(tester.user, call.id)).line).toBe("Call ended: the $1,000 for calls with Nora Lane on this test is reached.");
+    expect((await callStatus(tester.user, call.id)).line).toBe("Call ended: the $500 for calls with Nora Lane on this test is reached.");
     await expect(joinCall(dev.user, call.id)).rejects.toMatchObject({ message: "This call is over." });
   });
 });

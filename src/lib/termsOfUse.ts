@@ -45,8 +45,8 @@ export const WHAT_CHANGED: { version: number; date: string; points: string[] }[]
       // (Batch 19 section 6) Folded into version 2: nothing has launched.
       "Payments section rewritten: every money rule is now in one place, section 4, How payments work, in short headed paragraphs with an example each.",
       // (Batch 19 section 3) The developer no longer lowers a call's length.
-      "A call's length is measured by the app while both people are connected in the call room, up to 150% of the booked length and never past the $1,000 for that tester's calls. The developer pays by the hour at the call's rate; paying less needs a reason the tester reads, and the tester can dispute it once (section 4, Calls).",
-      "A live call ends for both people when it reaches 150% of the booked length or its pay would pass what's left of the $1,000 for that tester's calls on the test, and when a block, a pause, a suspension, a leave, End early or a stop happens; the minutes before that are paid as usual (section 4, Calls).",
+      "A call's length is measured by the app while both people are connected in the call room, up to 150% of the booked length and never past the $500 for that tester's calls. The developer pays by the hour at the call's rate; paying less needs a reason the tester reads, and the tester can dispute it once (section 4, Calls).",
+      "A live call ends for both people when it reaches 150% of the booked length or its pay would pass what's left of the $500 for that tester's calls on the test, and when a block, a pause, a suspension, a leave, End early or a stop happens; the minutes before that are paid as usual (section 4, Calls).",
       // (Batch 21) Folded into version 2: nothing has launched.
       "Calls happen in the app's own call room, on the call page, straight between the two browsers (section 7).",
       "When these terms change, you're asked to agree to the new version the next time you post a test, or join, apply, accept an invite or ask to rejoin (section 8).",
@@ -54,7 +54,7 @@ export const WHAT_CHANGED: { version: number; date: string; points: string[] }[]
       "You must be 18 or older to use Playtest. Signing up (with email or Google) asks you to confirm it (section 1).",
       // (Batch 29 §37, the batch 28 points) Folded into version 2: nothing has launched.
       "To decide a dispute, our team can read the chat between the tester and the developer (section 4, Paying for work).",
-      "A piece of work can be paid at most the part's maximum in all, listed or not: $1,000 for written answers or a recording, $200 an hour for a call's measured length. Pay, Pay more and a dispute decision all count toward it (section 4, Pay more).",
+      "A piece of work can be paid at most the part's maximum in all, listed or not: $500 for written answers or a recording, $200 an hour for a call's measured length. Pay, Pay more and a dispute decision all count toward it (section 4, Pay more).",
       "A listed call the developer hasn't paid 7 days after it took place is charged to their card automatically; there's no Charge or Let it go for it (section 4, Calls).",
       "Payment updates are included in the daily email whatever your email setting, Off included; new chargeback notices are sent immediately (section 4, Bank checks, declines, holds).",
       // (Batch 35 §132) Folded into version 2: nothing has launched.
@@ -70,7 +70,7 @@ export const WHAT_CHANGED: { version: number; date: string; points: string[] }[]
 export const PAYMENT_RULES: { heading: string; text: string; example: string }[] = [
   {
     heading: "Prices and the split",
-    text: "The developer sets the parts and the price of each on the listing: written answers and a recording $1 to $1,000 each, a live call $10 to $200 an hour, or free. The tester receives 80% of every payment; the platform keeps 20%.",
+    text: "The developer sets the parts and the price of each on the listing: written answers and a recording $1 to $500 each, a live call $10 to $200 an hour, or free. The tester receives 80% of every payment; the platform keeps 20%.",
     example: "A written part paid $10.00 gives the tester $8.00; the platform keeps $2.00.",
   },
   {
@@ -93,12 +93,12 @@ export const PAYMENT_RULES: { heading: string; text: string; example: string }[]
   },
   {
     heading: "Pay more",
-    text: "After paying a piece, the developer can pay extra on it with Pay more, within the piece's cap: the part's maximum in all, listed or not ($1,000 for written answers or a recording; $200 an hour for a call's measured length), counting the first payment, every Pay more and any dispute decision. A listed price at the maximum leaves no room for Pay more. All of one tester's calls on a test stay within $1,000 together. Pay more closes together with the test's last Pay or Charge.",
-    example: "A written part listed at $20 can be paid up to $1,000 in all.",
+    text: "After paying a piece, the developer can pay extra on it with Pay more, within the piece's cap: the part's maximum in all, listed or not ($500 for written answers or a recording; $200 an hour for a call's measured length), counting the first payment, every Pay more and any dispute decision. A listed price at the maximum leaves no room for Pay more. All of one tester's calls on a test stay within $500 together. Pay more closes together with the test's last Pay or Charge.",
+    example: "A written part listed at $20 can be paid up to $500 in all.",
   },
   {
     heading: "Unreviewed work: Charge or Let it go",
-    text: `If a listed piece of work isn't paid within ${REVIEW_DAYS} days of being sent, and not before the tester's own deadline, the tester decides: Charge the developer's card up to the agreed price saved on that submitted piece, or Let it go. Charge and Let it go are offered only while the developer hasn't paid anything on that part; once they have, Dispute is the way to ask for more. A Charge over $200 needs a tick. Each piece gets at least ${CLOSE_OUT_DAYS} days of Charge. A part first sent after the tester's own deadline never opens Charge or Let it go: the developer decides what to pay for it (any amount, $0 included; below the listing needs a reason the tester reads), and the tester can still dispute the payment once. A listed call works differently: if the developer hasn't paid it ${REVIEW_DAYS} days after it took place, their card is charged automatically for its measured length at the call's rate (within the $1,000 for that tester's calls), with no Charge or Let it go. Pauses and outages move these dates later.`,
+    text: `If a listed piece of work isn't paid within ${REVIEW_DAYS} days of being sent, and not before the tester's own deadline, the tester decides: Charge the developer's card up to the agreed price saved on that submitted piece, or Let it go. Charge and Let it go are offered only while the developer hasn't paid anything on that part; once they have, Dispute is the way to ask for more. A Charge over $200 needs a tick. Each piece gets at least ${CLOSE_OUT_DAYS} days of Charge. A part first sent after the tester's own deadline never opens Charge or Let it go: the developer decides what to pay for it (any amount, $0 included; below the listing needs a reason the tester reads), and the tester can still dispute the payment once. A listed call works differently: if the developer hasn't paid it ${REVIEW_DAYS} days after it took place, their card is charged automatically for its measured length at the call's rate (within the $500 for that tester's calls), with no Charge or Let it go. Pauses and outages move these dates later.`,
     example: "Sent Nov 10 with a deadline of Nov 20: Charge opens Nov 20, the later of Nov 17 (7 days after sending) and the deadline.",
   },
   {
@@ -108,14 +108,14 @@ export const PAYMENT_RULES: { heading: string; text: string; example: string }[]
   },
   {
     heading: "Calls",
-    // (Owner, Nov 6, §280) No booking check against the $1,000: only the call's own end at what's left (folded into version 2: nothing has launched).
-    text: `A call's length is measured by the app while both people are connected in the call room, up to 150% of the booked length and never past the $1,000 for that tester's calls. The developer pays by the hour at the call's rate; paying less needs a reason the tester reads, and the tester can dispute it once. All of one tester's calls on a test can come to at most $1,000 together, listed or not, extra pay included. Booking isn't limited by it: a call ends by itself, for both people, when its pay at the call's rate ($200 an hour for a call that isn't listed) reaches what's left. A call that isn't listed is paid what the developer chooses, at most $200 an hour. A listed call the developer hasn't paid ${REVIEW_DAYS} days after it took place is charged to their card automatically for its measured length at the call's rate (within the $1,000), with no Charge or Let it go.`,
+    // (Owner, Nov 6, §280) No booking check against the $500: only the call's own end at what's left (folded into version 2: nothing has launched).
+    text: `A call's length is measured by the app while both people are connected in the call room, up to 150% of the booked length and never past the $500 for that tester's calls. The developer pays by the hour at the call's rate; paying less needs a reason the tester reads, and the tester can dispute it once. All of one tester's calls on a test can come to at most $500 together, listed or not, extra pay included. Booking isn't limited by it: a call ends by itself, for both people, when its pay at the call's rate ($200 an hour for a call that isn't listed) reaches what's left. A call that isn't listed is paid what the developer chooses, at most $200 an hour. A listed call the developer hasn't paid ${REVIEW_DAYS} days after it took place is charged to their card automatically for its measured length at the call's rate (within the $500), with no Charge or Let it go.`,
     example: "A call at $30 an hour where both people were connected for 50 minutes: $25.00.",
   },
   {
     heading: "Unlisted work",
-    text: "A part or a call that isn't listed in the tester's contract is marked Not listed. The developer pays it any amount, $0 included (at most $1,000 for written answers or a recording, and $200 an hour for a call); Charge and Let it go never open for it.",
-    example: "An unlisted recording can be paid anything from $0 (with a reason) to $1,000.",
+    text: "A part or a call that isn't listed in the tester's contract is marked Not listed. The developer pays it any amount, $0 included (at most $500 for written answers or a recording, and $200 an hour for a call); Charge and Let it go never open for it.",
+    example: "An unlisted recording can be paid anything from $0 (with a reason) to $500.",
   },
   {
     heading: "Bank checks, declines, holds",

@@ -27,7 +27,7 @@ export const decideFromDraft = (d: Record<string, unknown>) => ({ total: typeof 
 
 /**
  * The admin's decision on a dispute: the total pay for THIS piece, between what it was paid (min) and the part's listing minus
- * what was already paid for that part on other pieces (max; batch 10: for an unlisted part, its max of $1000 or $200/h × the logged minutes, minus what was already paid). Blank keeps the pay as it is. Range hint next to the box,
+ * what was already paid for that part on other pieces (max; batch 10: for an unlisted part, its max of $500 or $200/h × the logged minutes, minus what was already paid). Blank keeps the pay as it is. Range hint next to the box,
  * red at the box when it is left with an amount outside it.
  * (Owner, Oct 30, batch 35 §11) The total and the note are a draft ("admin:decide:<id>", admins only): "Draft" after a reload; after a sign-in the total's "Use saved"
  * puts it back to blank (keep the pay as it is) and the note's "Discard" empties it. A restored raise needs the tick again (§1: the tick is never kept). Cleared when

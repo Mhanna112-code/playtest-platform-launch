@@ -7,7 +7,7 @@ import { callStatus, joinCall } from "@/lib/server/blocks";
 import { callsLeftCents } from "@/lib/server/callMoney";
 import { act, atHours, bookCall, joined, sact, seen, setup } from "./fixtures";
 
-// (Owner, Nov 6, §280) No booking check against the $1,000 for a tester's calls on a test: requests, offers, sets and Accept are never refused or cut for it. The
+// (Owner, Nov 6, §280) No booking check against the $500 for a tester's calls on a test: requests, offers, sets and Accept are never refused or cut for it. The
 // call itself still ends when its pay (the contract rate for a listed call, $200/h for an unlisted one) reaches what's left, and both people are told why.
 const MIN = 60_000;
 const at = (base: Date, min: number) => new Date(base.getTime() + min * MIN);
@@ -20,8 +20,8 @@ async function together(callId: string, devId: string, testerId: string, start: 
   ] });
 }
 
-describe("§280: booking is never checked against the $1,000", () => {
-  it("unlisted 180-minute calls past $1,000 ($200/h): a daily set and a weekly set are requested and accepted on both sides; the form shows no limit line", async () => {
+describe("§280: booking is never checked against the $500", () => {
+  it("unlisted 180-minute calls past $500 ($200/h): a daily set and a weekly set are requested and accepted on both sides; the form shows no limit line", async () => {
     const { dev, testId } = await setup({ liveRateCents: null });
     const { tester, sessionId } = await joined(testId);
     // 4 × 180 minutes at $200/h = $2,400 in one daily set, from the developer.
@@ -42,7 +42,7 @@ describe("§280: booking is never checked against the $1,000", () => {
     const calls = await db.call.findMany({ where: { contractId: sessionId, status: "booked" } });
     expect(calls).toHaveLength(6);
     expect(calls.every((c) => c.rateCents == null && c.minutes === 180)).toBe(true);
-    // The form's checks: only the limits of §185, never a line for the $1,000.
+    // The form's checks: only the limits of §185, never a line for the $500.
     const notes = clashNotes({ rows: [{ startsAt: atHours(300), repeat: "weekly", count: 3 }], minutes: 180, side: "developer", targets: [{ name: "Ana Silva", calls: [], requests: [], booked: 1 }], elsewhere: [], fmt: localFmt("UTC") });
     expect(notes.limits).toEqual([]);
     expect(notes.rows.flat()).toEqual([]);
@@ -51,11 +51,11 @@ describe("§280: booking is never checked against the $1,000", () => {
   it("a single request with only $5 left is booked (both sides); the call then ends itself at the $5, and both see why", async () => {
     const { dev, testId } = await setup(); // listed: $30/h
     const { tester, sessionId } = await joined(testId);
-    // An earlier call took place: 1,990 minutes at $30/h = $995 used, not paid yet. $5 is left.
+    // An earlier call took place: 990 minutes at $30/h = $495 used, not paid yet. $5 is left.
     const used = await bookCall(testId, dev.cookie, sessionId, tester.cookie);
-    await db.call.update({ where: { id: used.id }, data: { startsAt: new Date(Date.now() - 3 * 86_400_000), measuredMinutes: 1990, measuredAt: new Date() } });
+    await db.call.update({ where: { id: used.id }, data: { startsAt: new Date(Date.now() - 3 * 86_400_000), measuredMinutes: 990, measuredAt: new Date() } });
     expect(await callsLeftCents(sessionId)).toBe(500);
-    // A 60-minute call ($30) from the developer, accepted by the tester: never refused (was "Calls with Ana Silva on this test can come to at most $1,000; ...").
+    // A 60-minute call ($30) from the developer, accepted by the tester: never refused (was "Calls with Ana Silva on this test can come to at most $500; ...").
     const r = await act(testId, "request-time", dev.cookie, { seenAt: seen(), confirmed: true, contractIds: [sessionId], startsAt: atHours(72), minutes: 60 });
     expect(r.body.error?.message ?? "").toBe("");
     expect(r.status).toBe(200);
@@ -81,7 +81,7 @@ describe("§280: booking is never checked against the $1,000", () => {
     expect(M.callPayCents(ended.rateCents, ended.measuredMinutes!)).toBe(500);
     // Both see why (the existing wording), and Join is refused.
     expect((await callStatus(dev.user, first.id)).line).toBe(M.capEndedLine("Ana Silva"));
-    expect((await callStatus(tester.user, first.id)).line).toBe("Call ended: the $1,000 for calls with Nora Lane on this test is reached.");
+    expect((await callStatus(tester.user, first.id)).line).toBe("Call ended: the $500 for calls with Nora Lane on this test is reached.");
     await expect(joinCall(tester.user, first.id)).rejects.toMatchObject({ message: M.CALL_OVER_LINE });
     // The later call: nothing is left, so it would end as soon as it starts.
     expect(await callCapMinutes(later)).toBe(0);
@@ -90,22 +90,22 @@ describe("§280: booking is never checked against the $1,000", () => {
   it("an unlisted call ends at what's left at $200/h; calls booked after it don't count, calls before it do", async () => {
     const { dev, testId } = await setup({ liveRateCents: null });
     const { tester, sessionId } = await joined(testId);
-    expect((await act(testId, "request-time", dev.cookie, { seenAt: seen(), confirmed: true, contractIds: [sessionId], rows: [{ startsAt: atHours(48), repeat: "daily", count: 3 }], minutes: 180 })).status).toBe(200);
+    expect((await act(testId, "request-time", dev.cookie, { seenAt: seen(), confirmed: true, contractIds: [sessionId], rows: [{ startsAt: atHours(48), repeat: "daily", count: 3 }], minutes: 90 })).status).toBe(200);
     expect((await sact(sessionId, "answer-request", tester.cookie, { requestId: (await pending(sessionId, "developer")).id, action: "accept", seenAt: seen(), confirmed: true })).body.calls).toBe(3);
     const [c1, c2, c3] = await db.call.findMany({ where: { contractId: sessionId }, orderBy: { startsAt: "asc" } });
-    // $1,800 booked in all, but nothing has been used before the first call: the 150% cap (270 minutes) comes first, not the $1,000 (300 minutes at $200/h).
+    // $900 booked in all, but nothing has been used before the first call: the 150% cap (135 minutes) comes first, not the $500 (150 minutes at $200/h).
     expect(await callCapMinutes(c1)).toBeNull();
-    // The first took place: 180 minutes, $600 used. The second starts now: $400 left, 120 minutes at $200/h.
-    await db.call.update({ where: { id: c1.id }, data: { startsAt: new Date(Date.now() - 2 * 86_400_000), measuredMinutes: 180, measuredAt: new Date() } });
+    // The first took place: 30 minutes, $100 used. The second starts now: $400 left, 120 minutes at $200/h.
+    await db.call.update({ where: { id: c1.id }, data: { startsAt: new Date(Date.now() - 2 * 86_400_000), measuredMinutes: 30, measuredAt: new Date() } });
     const start = new Date(Date.now() - 130 * MIN);
     await db.call.update({ where: { id: c2.id }, data: { startsAt: start } });
     expect(await callCapMinutes({ ...c2, startsAt: start })).toBe(120);
     await together(c2.id, dev.user.id, tester.user.id, start, 130);
     expect(await callEndState(c2.id)).toMatchObject({ ended: true, reason: "calls_cap", endsAt: at(start, 120) });
     expect(await db.call.findUniqueOrThrow({ where: { id: c2.id } })).toMatchObject({ measuredMinutes: 120, endReason: "calls_cap" });
-    expect((await callStatus(dev.user, c2.id)).line).toBe("Call ended: the $1,000 for calls with Ana Silva on this test is reached.");
-    expect((await callStatus(tester.user, c2.id)).line).toBe("Call ended: the $1,000 for calls with Nora Lane on this test is reached.");
-    // The third: $600 + $400 used before it, nothing left.
+    expect((await callStatus(dev.user, c2.id)).line).toBe("Call ended: the $500 for calls with Ana Silva on this test is reached.");
+    expect((await callStatus(tester.user, c2.id)).line).toBe("Call ended: the $500 for calls with Nora Lane on this test is reached.");
+    // The third: $100 + $400 used before it, nothing left.
     expect(await callCapMinutes(c3)).toBe(0);
   });
 });

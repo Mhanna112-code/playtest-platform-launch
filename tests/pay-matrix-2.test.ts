@@ -213,13 +213,13 @@ describe("§159: the part's Pay waits while the tester's Charge waits for the ba
     const w = await world();
     const st = bank();
     const one = await waitingCharge(w, w.ana, w.anaSub.id, st);
-    const r = await pay(w.dev.cookie, { kind: "submission", id: w.anaSub.id, amount: "1000.00", tickedCents: 100000, over200: true, seenAt: new Date(Date.now() - 60_000).toISOString() });
+    const r = await pay(w.dev.cookie, { kind: "submission", id: w.anaSub.id, amount: "500.00", tickedCents: 50000, over200: true, seenAt: new Date(Date.now() - 60_000).toISOString() });
     expect([r.status, r.body.error?.code, r.body.error?.message]).toEqual([409, "bank_waits", "Confirm Ana Silva's $10.00 charge with your bank first."]);
     expect(st.made).toHaveLength(0);
     st.pis.set(one.actionPi!, "succeeded");
     expect((await confirm(w.dev.cookie, { paymentId: one.id })).status).toBe(200);
-    const over = await act(w.testId, "pay-extra", w.dev.cookie, { contractId: w.ana.sessionId, submissionId: w.anaSub.id, amount: "995.00", tickedCents: 99500, over200: true, seenAt: seen(), confirmed: true });
-    expect(over.body.error?.message, JSON.stringify(over.body)).toContain("up to $990 more");
+    const over = await act(w.testId, "pay-extra", w.dev.cookie, { contractId: w.ana.sessionId, submissionId: w.anaSub.id, amount: "495.00", tickedCents: 49500, over200: true, seenAt: seen(), confirmed: true });
+    expect(over.body.error?.message, JSON.stringify(over.body)).toContain("up to $490 more");
   });
 
   it("Pay and the tester's Charge at the same moment: at most one charges, never above the part's max", async () => {
@@ -320,11 +320,11 @@ describe("§159: Dispute when a payment since the page loaded left nothing to di
     expect((await pay(w.dev.cookie, { kind: "submission", id: w.anaSub.id, amount: "4.00", tickedCents: 400, reason: "Only half of it was useful", seenAt: seen(), confirmed: true })).status).toBe(200);
     await settle();
     const loaded = seen(); await settle();
-    const more = await act(w.testId, "pay-extra", w.dev.cookie, { contractId: w.ana.sessionId, submissionId: w.anaSub.id, amount: "996.00", tickedCents: 99600, over200: true, seenAt: seen(), confirmed: true });
+    const more = await act(w.testId, "pay-extra", w.dev.cookie, { contractId: w.ana.sessionId, submissionId: w.anaSub.id, amount: "496.00", tickedCents: 49600, over200: true, seenAt: seen(), confirmed: true });
     expect(more.status, JSON.stringify(more.body)).toBe(200);
     const r = await sact(w.ana.sessionId, "dispute", w.ana.tester.cookie, { kind: "submission", id: w.anaSub.id, reason: "I answered every question fully", seenAt: loaded, loadedAt: loaded });
     expect([r.status, r.body.error?.code]).toEqual([409, "no_dispute"]);
-    expect(r.body.error.message).toMatch(/^Nora Lane paid \$996\.00 more meanwhile \(.+\): this part is now paid the most it can be \(\$1,000\.00\), so there's nothing to dispute\.$/);
+    expect(r.body.error.message).toMatch(/^Nora Lane paid \$496\.00 more meanwhile \(.+\): this part is now paid the most it can be \(\$500\.00\), so there's nothing to dispute\.$/);
   });
 
   it("Dispute and Pay more to the max at the same moment: decided in one place (either the dispute is made, or one refusal; never a stop-once)", async () => {
@@ -335,7 +335,7 @@ describe("§159: Dispute when a payment since the page loaded left nothing to di
       await settle();
       const loaded = seen(); await settle();
       const [m, d] = await Promise.all([
-        act(w.testId, "pay-extra", w.dev.cookie, { contractId: w.ana.sessionId, submissionId: w.anaSub.id, amount: "996.00", tickedCents: 99600, over200: true, seenAt: seen(), confirmed: true }),
+        act(w.testId, "pay-extra", w.dev.cookie, { contractId: w.ana.sessionId, submissionId: w.anaSub.id, amount: "496.00", tickedCents: 49600, over200: true, seenAt: seen(), confirmed: true }),
         sact(w.ana.sessionId, "dispute", w.ana.tester.cookie, { kind: "submission", id: w.anaSub.id, reason: "I answered every question fully", seenAt: loaded, loadedAt: loaded }),
       ]);
       expect(d.body.error?.code, JSON.stringify([m.body, d.body])).not.toBe("stop_once");

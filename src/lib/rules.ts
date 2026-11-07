@@ -17,7 +17,7 @@ export const MIN_CHARGE_CENTS = 50;
 
 export const PRICE_LIMITS = {
   partMin: 100, // $1.00 for written answers or a recording (or free)
-  partMax: 100_000, // (Owner, Oct 27) $1,000 for written answers or a recording
+  partMax: 50_000, // (Owner, Oct 27) $500 for written answers or a recording
   rateMin: 1000, // $10.00 an hour for a live call (or free)
   rateMax: 20_000, // (Owner, Oct 27) $200 an hour for a live call
 };
@@ -190,14 +190,14 @@ export const decideDoneLine = (what: string) => `Done: ${what}.`;
 
 /**
  * An admin's decision can only raise pay. (Owner, Oct 29, batch 28 §15) The total for the piece runs from what it was already paid (`paidCents`, its Pay and every Pay
- * more) up to its cap (`maxCents`: the same cap Pay + Pay more have; a call also within what's left of the $1,000 for that tester's calls, `poolBinds`). Returns the
+ * more) up to its cap (`maxCents`: the same cap Pay + Pay more have; a call also within what's left of the $500 for that tester's calls, `poolBinds`). Returns the
  * extra to charge.
  */
 export function checkDisputeDecision(decidedCents: number | null, paidCents: number, maxCents: number, poolBinds = false): Check & { extraCents?: number } {
   if (decidedCents == null || !Number.isInteger(decidedCents)) return no("Enter the total pay, like 7.50.");
   if (decidedCents < paidCents) return no(`A decision can only raise pay: at least the ${money(paidCents)} paid for this piece.`);
   const max = Math.max(paidCents, maxCents);
-  if (decidedCents > max) return no(`At most ${money(max)}: ${poolBinds ? "what's left of the $1,000 for this tester's calls" : "the most this piece can be paid"}.`);
+  if (decidedCents > max) return no(`At most ${money(max)}: ${poolBinds ? "what's left of the $500 for this tester's calls" : "the most this piece can be paid"}.`);
   const extra = decidedCents - paidCents;
   if (extra > 0 && extra < MIN_CHARGE_CENTS) return no(`The extra would be under the smallest card charge (${money(MIN_CHARGE_CENTS)}). Keep the pay as it is or raise it by at least ${money(MIN_CHARGE_CENTS)}.`);
   return { ok: true, extraCents: extra };
@@ -1506,7 +1506,7 @@ export const chargeIsOpen = (...a: Parameters<typeof chargeOpensAt>) => {
 export const CHARGED_BY_TESTER = `Charged by the tester after ${REVIEW_DAYS} days without a review.`;
 /**
  * (Owner, Oct 29, batch 28 §21) A listed call not paid 7 days after it is charged automatically (rate × measured minutes): the reason stored on its review, and the closing
- * reason when there was nothing to charge (no measured time, or the $1,000 for calls used).
+ * reason when there was nothing to charge (no measured time, or the $500 for calls used).
  */
 export const AUTO_CHARGED_CALL = `Charged automatically ${REVIEW_DAYS} days after the call.`;
 export const AUTO_NOTHING_CALL = "Closed with nothing to pay.";
@@ -1676,7 +1676,7 @@ export const INVITE_REMIND_DAYS = 1; // (Owner, Oct 26) invite reminders are dai
  * what's already been paid") The listing, and nothing once the developer paid anything on the part (a payment that went through): the tester's way to more is
  * Dispute. A payment cancelled or declined that left nothing paid doesn't count.
  */
-export const chargeAmount = (listingCents: number | null, paidCents: number) => (listingCents == null || paidCents > 0 ? 0 : listingCents);
+export const chargeAmount = (listingCents: number | null, paidCents: number) => (listingCents == null || paidCents > 0 ? 0 : Math.min(listingCents, PRICE_LIMITS.partMax));
 /**
  * (Owner, Nov 3, batch 35 §163) Charge or Let it go pressed on an older page (or at the same moment) after the developer paid: ONE final refusal, never a stop-once.
  * "Nora Lane paid $6.00 for this meanwhile: you can dispute it if you think it should be more." (with a Pay more after it: "paid $6.00 and $2.00 more").
@@ -1943,17 +1943,17 @@ export const EXTRA_PAY_TICK_CENTS = PAY_TICK_CENTS;
 export const EXTRA_PAY_MAX_CENTS = STRIPE_MAX_CENTS;
 export const EXTRA_PAY_TICK_LINE = PAY_TICK_LINE;
 
-/** (Batch 9 section 1) A part with no listed price: written answers or a recording at most $1000 per piece; a call at most $200 an hour for the minutes logged. */
-export const NO_LISTING_WORK_CAP_CENTS = 100_000;
+/** (Batch 9 section 1) A part with no listed price: written answers or a recording at most $500 per piece; a call at most $200 an hour for the minutes logged. */
+export const NO_LISTING_WORK_CAP_CENTS = PRICE_LIMITS.partMax;
 export const NO_LISTING_CALL_RATE_CAP_CENTS = 20_000;
-// (Owner, Oct 30, batch 15 section 34) NO_LISTING_CALLS_TOTAL_CENTS became CALLS_TOTAL_CENTS (callMeasure.ts): one $1,000 for ALL of a tester's calls on a test.
+// (Owner, Oct 30, batch 15 section 34) NO_LISTING_CALLS_TOTAL_CENTS became CALLS_TOTAL_CENTS (callMeasure.ts): one $500 for ALL of a tester's calls on a test.
 /** The blocked line for an unlisted call over its own room ($200 an hour for its measured minutes; nothing above it). */
 export const overCallsLine = (roomCents: number) => `This is more than you can pay for this call (up to ${money(roomCents)} at ${money(NO_LISTING_CALL_RATE_CAP_CENTS).replace(/\.00$/, "")} an hour).`;
-/** A piece's max: $1000 for written answers or a recording; $200/h × the logged minutes for a call. */
+/** A piece's max: $500 for written answers or a recording; $200/h × the logged minutes for a call. */
 export const pieceMaxCents = (kind: "submission" | "call", minutes = 0) => (kind === "call" ? Math.round((NO_LISTING_CALL_RATE_CAP_CENTS * minutes) / 60) : NO_LISTING_WORK_CAP_CENTS);
 /**
- * (Owner, Oct 29, batch 29 §38; corrects batch 28 §20) A piece's cap is the part's MAX IN TOTAL (Pay + every Pay more + any dispute raise), listed or not: $1,000 in all
- * for written answers or a recording; $200/h × the measured minutes for a call (and still within the $1,000 for all of that tester's calls on the test, pieceRoom).
+ * (Owner, Oct 29, batch 29 §38; corrects batch 28 §20) A piece's cap is the part's MAX IN TOTAL (Pay + every Pay more + any dispute raise), listed or not: $500 in all
+ * for written answers or a recording; $200/h × the measured minutes for a call (and still within the $500 for all of that tester's calls on the test, pieceRoom).
  * A listed price at the max leaves no Pay more room (a listing above the max, which the forms don't allow, is still payable in full).
  */
 export const pieceCapCents = (listingCents: number | null, maxCents: number) => Math.max(maxCents, listingCents ?? 0);
@@ -1961,11 +1961,11 @@ export const pieceCapCents = (listingCents: number | null, maxCents: number) => 
 export const paidMostLine = (cents: number) => `Paid the most this piece can be paid (${money(cents)}).`;
 /**
  * (Batch 28 §14) The tester's line on a paid part. (A paid part can't be changed in this app, so the lines say what Pay more can still add rather than "an update".)
- * "Nora Lane has paid $10.00 for this. It can be paid more, up to $1,000.00 in all." / "This part is already paid the most it can be ($20.00)." / "Pay more closed on Nov 2."
+ * "Nora Lane has paid $10.00 for this. It can be paid more, up to $500.00 in all." / "This part is already paid the most it can be ($20.00)." / "Pay more closed on Nov 2."
  */
 export const testerPayMoreLine = (dev: string, paidCents: number, allCents: number) => `${dev} has paid ${money(paidCents)} for this. It can be paid more, up to ${money(allCents)} in all.`;
 export const testerPaidMostLine = (cents: number) => `This part is already paid the most it can be (${money(cents)}).`;
-/** (Batch 29 §38) The same for a part that isn't listed: what's left of its max in all ("up to $990 more, $1,000 in all" once something is paid). */
+/** (Batch 29 §38) The same for a part that isn't listed: what's left of its max in all ("up to $990 more, $500 in all" once something is paid). */
 export const overMaxLine = (roomCents: number, totalCents: number = roomCents) =>
   `This is more than this piece can be paid (up to ${money(roomCents).replace(/\.00$/, "")}${roomCents < totalCents ? ` more, ${money(totalCents).replace(/\.00$/, "")} in all` : ""}).`;
 export function checkExtraPay(amountCents: number | null, tickedCents: number | null, over200 = false): Check {

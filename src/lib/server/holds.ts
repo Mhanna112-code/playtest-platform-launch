@@ -1290,7 +1290,7 @@ export const VERIFY_FIRST = "Verify your card first.";
 
 /**
  * (Owner, Oct 28, batch 19 section 4) The time-sensitive sweep: what page loads and polls trigger for calls and timers, run every 5 minutes by the uptime check's keyed
- * GET /api/health (UptimeRobot) and by the daily job: the 15-minute call reminders, calls ending at the $1,000, nobody-joined cancels and final call lengths, Charge
+ * GET /api/health (UptimeRobot) and by the daily job: the 15-minute call reminders, calls ending at the $500, nobody-joined cancels and final call lengths, Charge
  * opening (sent parts and listed calls, with their daily "pay it" and Charge reminders), the close-out reminders, the developer's review reminders and the rating
  * reminders. Each step records what it did, so a second run sends nothing twice; the caller holds the timers lock (withTimersLock), so two never run at once.
  */
@@ -1344,7 +1344,7 @@ async function runDailyLocked(now: Date) {
   await settleDisputeAmounts(now).catch((e) => console.error("[stripe] dispute amounts:", (e as Error).message)); // (§192)
   // 1. Sent work past its review window: Charge / Let it go opens (batch 19 section 4: also every 5 minutes, runSweep).
   out.choices += await openCharges(now, co);
-  // 1b. (Owner, Oct 29, batch 28 §21) A LISTED call not paid 7 days after it is charged automatically (rate × measured minutes, within the $1,000 for calls).
+  // 1b. (Owner, Oct 29, batch 28 §21) A LISTED call not paid 7 days after it is charged automatically (rate × measured minutes, within the $500 for calls).
   out.choices += await autoChargeCalls(now);
   // 1c. (Batch 29 §22, §31) The tester's one daily "Charge or let go" line, the developer's one daily "Pay now" line, and the developer's closing-soon countdown.
   await testerChargeLines(now, co);
@@ -1752,7 +1752,7 @@ async function testerChargeLines(now: Date, co: CloseOuts) {
 export const unreviewedLine = (title: string, name: string, part: string, reviewDate: Date, closesAt: Date | null | undefined, /** (§162) the tester's */ pronoun?: string | null) =>
   `“${title}”: ${name}'s ${part} ${part.endsWith("s") ? "weren't" : "wasn't"} reviewed by ${T(reviewDate, "date")}: ${closesAt === null ? "pay it." : `${name} can now charge or let it go. You can still pay until ${pronouns(pronoun).subj} ${pronouns(pronoun).v("does", "do")}${closesAt ? ` (at the latest ${T(closesAt, "date")})` : ""}.`}`;
 
-/** (Batch 15 section 34) What a tester can Charge for a listed call: its measured (or lowered) length × the contract rate, less what's paid, within what's left of the $1,000. */
+/** (Batch 15 section 34) What a tester can Charge for a listed call: its measured (or lowered) length × the contract rate, less what's paid, within what's left of the $500. */
 export async function callChargeCap(x: { id: string; contractId: string; rateCents: number | null; actualMinutes: number | null; measuredMinutes: number | null; measuredAt: Date | null }) {
   const minutes = callMinutesOf(x);
   if (x.rateCents == null || minutes == null) return { cents: 0, capped: false };
@@ -1765,10 +1765,10 @@ export async function callChargeCap(x: { id: string; contractId: string; rateCen
 export const autoPaidTesterLine = (dev: string, cents: number, at: Date) => `${dev} paid you ${money(cents)} for your call on ${T(at)}`; // (Owner, Nov 4, §178) the call's date and time
 /**
  * (Owner, Oct 29, batch 28 §21; replaces Charge / Let it go for listed calls) A LISTED call not paid 7 days after it (its payBy, moved by pauses and outages) is charged
- * automatically: rate × measured minutes, less what's paid, within the $1,000 for that tester's calls; off-session, as a payment made while the developer is away. Each
+ * automatically: rate × measured minutes, less what's paid, within the $500 for that tester's calls; off-session, as a payment made while the developer is away. Each
  * call once: its review row is claimed first (unique per call), and the charge's key is the call's. Bank asks: "Your bank wants you to confirm" (3 days, then declined).
  * Declined: a payment hold. During a hold: added to what's owed. During a suspension or (owner, Nov 4, §172) the team's pause of its test: charged, waiting for the lift.
- * Nothing to charge (no measured time, or the $1,000 used): closed with $0.
+ * Nothing to charge (no measured time, or the $500 used): closed with $0.
  * Listed calls whose Charge had already opened switch to this. Returns how many were charged.
  * (Owner, Nov 6, §311e) An UNLISTED call not paid by the same date closes with $0 the same way ("<name>'s call on <date> closed with nothing paid (it wasn't
  * listed)"): final, no Pay or Pay more after it (UNLISTED_CALL_CLOSED).
@@ -2045,7 +2045,7 @@ async function chooseCallOutcome(tester: { id: string; email: string; name: stri
   const choice = body.choice === "letgo" ? "letgo" : body.choice === "charge" ? "charge" : null;
   if (!choice) throw new HttpError(400, "bad_choice", "Choose Charge or Let it go.");
   const cap = (await callChargeCap(x)).cents;
-  if (cap === 0 && choice === "charge") throw new HttpError(409, "paid_in_full", "There's nothing left to charge for this call (the $1,000 for calls on this test is used).");
+  if (cap === 0 && choice === "charge") throw new HttpError(409, "paid_in_full", "There's nothing left to charge for this call (the $500 for calls on this test is used).");
   const typed = body.amount === undefined || body.amount === "" ? cap : toCents(body.amount);
   if (choice === "charge" && (typed == null || typed <= 0)) throw new HttpError(400, "bad_amount", "Enter an amount like 5.00.");
   if (choice === "charge" && typed! > cap) throw new HttpError(400, "too_much", `At most ${money(cap)}.`);

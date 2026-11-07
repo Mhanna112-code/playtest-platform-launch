@@ -192,9 +192,9 @@ describe("admin decides disputes", () => {
     const owner = await makeUser({ email: `admin-${randomUUID()}@playtest.test` });
     await db.user.update({ where: { id: owner.user.id }, data: { isAdmin: true } });
     const { disputeBounds } = await import("@/lib/server/payments");
-    expect(await disputeBounds(d)).toMatchObject({ min: 0, max: 100_000 });
-    const over = await admin("decide", owner.cookie, { id: d.id, total: "1000.01" });
-    expect(over.body.error.message).toBe("At most $1,000.00: the most this piece can be paid.");
+    expect(await disputeBounds(d)).toMatchObject({ min: 0, max: 50_000 });
+    const over = await admin("decide", owner.cookie, { id: d.id, total: "500.01" });
+    expect(over.body.error.message).toBe("At most $500.00: the most this piece can be paid.");
     expect(over.status).toBe(400);
     // Blank keeps the pay as it is (nothing charged).
     const kept = await admin("decide", owner.cookie, { id: d.id, total: "" });

@@ -306,11 +306,11 @@ describe("S) price caps and the $200 ticks", () => {
   const price = (errs: string[]) => errs.filter((e) => /price|rate|Tick/.test(e));
   const l = (over: Partial<Listing> = {}): Listing => ({ ...(listingBody() as never as Listing), writtenCents: 1000, recordingCents: null, liveRateCents: 3000, questions: ["Q?"], productName: "P", title: "T", description: "x", categories: ["Game"], spots: 3, deadlineDays: 7, ...over }) as Listing;
 
-  it("written / recording max $1,000; live max $200 an hour; over $200 needs the tick unless an unchanged saved price", () => {
-    expect(price(checkListing(l({ writtenCents: 100_000 })))[0]).toMatch(/^Tick “I confirm this part pays more than \$200\.”/);
-    expect(price(checkListing(l({ writtenCents: 100_000 }), 0, new Date(), { confirmedHigh: ["written"] }))).toEqual([]);
-    expect(checkListing(l({ writtenCents: 100_001 }), 0, new Date(), { confirmedHigh: ["written"] })).toContain("The written answers price can be at most $1,000.00.");
-    expect(checkListing(l({ recordingCents: 100_001 }))).toContain("The recording price can be at most $1,000.00.");
+  it("written / recording max $500; live max $200 an hour; over $200 needs the tick unless an unchanged saved price", () => {
+    expect(price(checkListing(l({ writtenCents: 50_000 })))[0]).toMatch(/^Tick “I confirm this part pays more than \$200\.”/);
+    expect(price(checkListing(l({ writtenCents: 50_000 }), 0, new Date(), { confirmedHigh: ["written"] }))).toEqual([]);
+    expect(checkListing(l({ writtenCents: 50_001 }), 0, new Date(), { confirmedHigh: ["written"] })).toContain("The written answers price can be at most $500.00.");
+    expect(checkListing(l({ recordingCents: 50_001 }))).toContain("The recording price can be at most $500.00.");
     expect(checkListing(l({ liveRateCents: 20_001 }))).toContain("The live call rate can be at most $200.00 an hour.");
     expect(price(checkListing(l({ liveRateCents: 20_000 })))).toEqual([]);
     expect(price(checkListing(l({ writtenCents: 20_000 })))).toEqual([]); // exactly $200: no tick
@@ -328,9 +328,9 @@ describe("S) price caps and the $200 ticks", () => {
     expect(refused.status).toBe(400);
     expect(refused.body.error.message).toMatch(/^Tick “I confirm this part pays more than \$200\.”/);
     expect((await json(await testsPOST(req("/api/tests", { cookie: dev.cookie, body: { ...listingBody({ writtenCents: "500.00" }), confirmHigh: ["written"] } })))).status).toBe(200);
-    expect((await json(await testsPOST(req("/api/tests", { cookie: dev.cookie, body: { ...listingBody({ writtenCents: "1000.01" }), confirmHigh: ["written"] } })))).status).toBe(400);
+    expect((await json(await testsPOST(req("/api/tests", { cookie: dev.cookie, body: { ...listingBody({ writtenCents: "500.01" }), confirmHigh: ["written"] } })))).status).toBe(400);
     const form = src("app/app/tests/TestForm.tsx");
-    expect(form).toContain('max: "1000"');
+    expect(form).toContain('max: "500"');
     expect(form).toContain('max: "200"');
     expect(form).toContain("data-high-tick");
   });
@@ -350,7 +350,7 @@ describe("T) extra pay beside each sent part, capped per piece (batch 29 §38: t
 
   it("pays above the listing for a sent part (80/20, a bell that does not stack); 'up to $Y' is the room left; the server refuses more", async () => {
     const { dev, tester, testId, sessionId, sub } = await sentAt(20_000);
-    expect((await roomOf(sub.id)).aboveBaseCents).toBe(80_000); // (batch 29 §38) the $1,000 in all, above the $200 listing
+    expect((await roomOf(sub.id)).aboveBaseCents).toBe(30_000); // (batch 29 §38) the $500 in all, above the $200 listing
     // (Batch 11 section 6) Pay more goes on a paid piece: pay the listing first.
     expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "200.00", tickedCents: 20_000 })).status).toBe(200);
     const r = await extra(dev.cookie, testId, { contractId: sessionId, submissionId: sub.id, amount: "150.00" });
@@ -359,20 +359,20 @@ describe("T) extra pay beside each sent part, capped per piece (batch 29 §38: t
     expect(p).toMatchObject({ amountCents: 15_000, feeCents: 3000, testerCents: 12_000, submissionId: sub.id });
     const bell = (await lines(tester.user.id)).find((l) => /paid you \$150\.00 more for your written answers on “Harbor Run”$/.test(l.text))!;
     expect(bell).toMatchObject({ own: false, groupKey: "tpaid", payment: true }); // (Owner, Oct 27) "<dev> paid you $X extra" lines stack across tests, one entry a day
-    expect((await roomOf(sub.id)).aboveBaseCents).toBe(65_000);
-    const over = await extra(dev.cookie, testId, { contractId: sessionId, submissionId: sub.id, amount: "650.01", over200: true });
+    expect((await roomOf(sub.id)).aboveBaseCents).toBe(15_000);
+    const over = await extra(dev.cookie, testId, { contractId: sessionId, submissionId: sub.id, amount: "150.01", over200: true });
     expect(over.status).toBe(400);
-    expect(over.body.error.message).toBe("This is more than this piece can be paid (up to $650 more, $1,000 in all).");
-    expect((await extra(dev.cookie, testId, { contractId: sessionId, submissionId: sub.id, amount: "650.00", over200: true })).status).toBe(200);
-    expect((await extra(dev.cookie, testId, { contractId: sessionId, submissionId: sub.id, amount: "1.00" })).body.error.message).toBe("Paid the most this piece can be paid ($1,000.00).");
+    expect(over.body.error.message).toBe("This is more than this piece can be paid (up to $150 more, $500 in all).");
+    expect((await extra(dev.cookie, testId, { contractId: sessionId, submissionId: sub.id, amount: "150.00", over200: true })).status).toBe(200);
+    expect((await extra(dev.cookie, testId, { contractId: sessionId, submissionId: sub.id, amount: "1.00" })).body.error.message).toBe("Paid the most this piece can be paid ($500.00).");
   });
 
   it("a normal Pay above the listing counts toward the same piece's cap; an unsent part has no extra box", async () => {
     const { dev, sub } = await sentAt(10_000);
-    expect((await roomOf(sub.id)).capCents).toBe(90_000);
+    expect((await roomOf(sub.id)).capCents).toBe(40_000);
     // Pay $110 for a $100 part: $10 above the listing.
     expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "110.00", tickedCents: 11_000 })).status).toBe(200);
-    expect((await roomOf(sub.id)).aboveBaseCents).toBe(89_000);
+    expect((await roomOf(sub.id)).aboveBaseCents).toBe(39_000);
     // (Batch 11 section 6) The same Pay box, as "Pay more" on a paid piece.
     expect(src("app/app/tests/[id]/page.tsx")).toContain("r.sub && r.sub.review && !r.sub.review.rejected && !restricted");
     // (Batch 15 section 31) The room beside the amount; no "Paid so far for this part" any more.
@@ -380,9 +380,9 @@ describe("T) extra pay beside each sent part, capped per piece (batch 29 §38: t
     expect(src("app/app/tests/[id]/PayBox.tsx")).not.toContain("Paid so far for this part:");
     // Pay above the cap is refused.
     const two = await sentAt(10_000, "Ben Carter");
-    const tooMuch = await pay(two.dev.cookie, { kind: "submission", id: two.sub.id, amount: "1000.01", tickedCents: 100_001, over200: true });
+    const tooMuch = await pay(two.dev.cookie, { kind: "submission", id: two.sub.id, amount: "500.01", tickedCents: 50_001, over200: true });
     expect(tooMuch.status).toBe(400);
-    expect(tooMuch.body.error.message).toBe("This is more than this piece can be paid (up to $1,000).");
+    expect(tooMuch.body.error.message).toBe("This is more than this piece can be paid (up to $500).");
   });
 });
 

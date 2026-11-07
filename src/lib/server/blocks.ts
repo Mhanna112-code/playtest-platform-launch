@@ -119,7 +119,7 @@ export async function unblockUser(me: { id: string }, otherId: string) {
 /** Join call: the call page (the built-in room) only when the call can be joined now; otherwise the refusal line (shown under Join). */
 export async function joinCall(user: { id: string }, callId: string, body: Record<string, unknown> = {}) {
   await (await import("./calls")).sweepNobodyJoined();
-  // (Batch 18 section 3; batch 21 section 2) A call the server ended (150%, the $1,000, or what closed it): Join is refused (and the button goes).
+  // (Batch 18 section 3; batch 21 section 2) A call the server ended (150%, the $500, or what closed it): Join is refused (and the button goes).
   const own = await db.call.findUnique({ where: { id: callId }, include: { contract: { include: { test: true } } } });
   if (own && (own.contract.testerId === user.id || own.contract.test.developerId === user.id)) await (await import("./workWindow")).finishWorkIfDue(own.contract.testId);
   if (own && (own.contract.testerId === user.id || own.contract.test.developerId === user.id) && ((await callEndState(callId))?.ended || own.endedAt))

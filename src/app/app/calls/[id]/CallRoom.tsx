@@ -2,7 +2,7 @@
 // (Owner, Oct 28, batch 21) The built-in call room, adapted from the full app's call room (src/app/call/[slotId]/call-room.tsx there): camera, microphone and screen
 // sharing straight between the two browsers (WebRTC, "perfect negotiation": on a clash the tester's browser gives way), with the connection messages relayed through
 // /api/calls/<id>/room by polling. Each poll says whether this browser is connected to the other: the time both were connected is the call's measured length. The
-// server ends the call for real (150% of the booked length, the $1,000, a block, a pause, a suspension, a leave, End early or a Stop): both pages hang up at once and
+// server ends the call for real (150% of the booked length, the $500, a block, a pause, a suspension, a leave, End early or a Stop): both pages hang up at once and
 // show "Call ended: <reason>"; the room can't be rejoined.
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";

@@ -171,7 +171,7 @@ describe("batch 29 §37: the admin's dispute row", () => {
     const { disputeRow } = await import("@/lib/server/adminLists");
     const row = await disputeRow(d);
     expect(row.money).toBe("Listing $10.00 · Paid for this piece $15.00");
-    expect(row.range).toBe("$15.00 paid · can raise up to $985.00 more");
+    expect(row.range).toBe("$15.00 paid · can raise up to $485.00 more");
   });
 });
 
@@ -180,7 +180,7 @@ describe("batch 29 §37: Terms and leftovers", () => {
     const T = await import("@/lib/termsOfUse");
     expect(T.TERMS_VERSION).toBe(2);
     const more = T.PAYMENT_RULES.find((r) => r.heading === "Pay more")!;
-    expect(more.example).toBe("A written part listed at $20 can be paid up to $1,000 in all.");
+    expect(more.example).toBe("A written part listed at $20 can be paid up to $500 in all.");
     expect(more.text).toContain("the part's maximum in all, listed or not");
     expect(T.PAYMENT_RULES.find((r) => r.heading === "Calls")!.text).toContain("is charged to their card automatically for its measured length at the call's rate");
     const points = T.WHAT_CHANGED.find((w) => w.version === 2)!.points.join("\n");
@@ -207,30 +207,30 @@ describe("batch 29 §38: a piece's cap is the part's max in all", () => {
     return { ...s, ...j, sub: await db.submission.findFirstOrThrow({ where: { contractId: j.sessionId } }) };
   }
 
-  it("a $10 written part can be paid up to $1,000 in all: up to $990.00 more after the $10", async () => {
+  it("a $10 written part can be paid up to $500 in all: up to $490.00 more after the $10", async () => {
     const R = await import("@/lib/rules");
     const { pieceOf, pieceRoom } = await import("@/lib/server/payments");
     const w = await sent();
-    expect((await pay(w.dev.cookie, { kind: "submission", id: w.sub.id, amount: "1000.01", tickedCents: 100_001, over200: true })).body.error.message).toBe("This is more than this piece can be paid (up to $1,000).");
+    expect((await pay(w.dev.cookie, { kind: "submission", id: w.sub.id, amount: "500.01", tickedCents: 50_001, over200: true })).body.error.message).toBe("This is more than this piece can be paid (up to $500).");
     expect((await pay(w.dev.cookie, { kind: "submission", id: w.sub.id, amount: "10.00", tickedCents: 1000 })).status).toBe(200);
-    expect(await pieceRoom((await pieceOf({ submissionId: w.sub.id }))!)).toMatchObject({ paidCents: 1000, roomCents: 99_000, totalCapCents: 100_000 });
-    expect((await more(w.testId, w.dev.cookie, { contractId: w.sessionId, submissionId: w.sub.id, amount: "990.01", tickedCents: 99_001, over200: true })).body.error.message).toBe("This is more than this piece can be paid (up to $990 more, $1,000 in all).");
-    expect((await more(w.testId, w.dev.cookie, { contractId: w.sessionId, submissionId: w.sub.id, amount: "990.00", tickedCents: 99_000, over200: true })).status).toBe(200);
-    expect((await more(w.testId, w.dev.cookie, { contractId: w.sessionId, submissionId: w.sub.id, amount: "1.00", tickedCents: 100 })).body.error.message).toBe(R.paidMostLine(100_000));
-    // The Pay box's hint says the same ("up to $990.00 more ($1,000.00 in all)").
+    expect(await pieceRoom((await pieceOf({ submissionId: w.sub.id }))!)).toMatchObject({ paidCents: 1000, roomCents: 49_000, totalCapCents: 50_000 });
+    expect((await more(w.testId, w.dev.cookie, { contractId: w.sessionId, submissionId: w.sub.id, amount: "490.01", tickedCents: 49_001, over200: true })).body.error.message).toBe("This is more than this piece can be paid (up to $490 more, $500 in all).");
+    expect((await more(w.testId, w.dev.cookie, { contractId: w.sessionId, submissionId: w.sub.id, amount: "490.00", tickedCents: 49_000, over200: true })).status).toBe(200);
+    expect((await more(w.testId, w.dev.cookie, { contractId: w.sessionId, submissionId: w.sub.id, amount: "1.00", tickedCents: 100 })).body.error.message).toBe(R.paidMostLine(50_000));
+    // The Pay box's hint says the same ("up to $490.00 more ($500.00 in all)").
     expect(src("app/app/tests/[id]/PayBox.tsx")).toContain("more ? `up to ${money(room.roomCents)} more (${money(total)} in all)` : `up to ${money(room.roomCents)} in all`");
   });
 
-  it("a part listed at the max leaves no Pay more room; an unlisted part is $1,000 in all too", async () => {
+  it("a part listed at the max leaves no Pay more room; an unlisted part is $500 in all too", async () => {
     const { pieceOf, pieceRoom } = await import("@/lib/server/payments");
-    const top = await sent({ writtenCents: "1000.00", confirmHigh: ["written"] });
-    expect((await pay(top.dev.cookie, { kind: "submission", id: top.sub.id, amount: "1000.00", tickedCents: 100_000, over200: true })).status).toBe(200);
-    expect(await pieceRoom((await pieceOf({ submissionId: top.sub.id }))!)).toMatchObject({ roomCents: 0, totalCapCents: 100_000 });
+    const top = await sent({ writtenCents: "500.00", confirmHigh: ["written"] });
+    expect((await pay(top.dev.cookie, { kind: "submission", id: top.sub.id, amount: "500.00", tickedCents: 50_000, over200: true })).status).toBe(200);
+    expect(await pieceRoom((await pieceOf({ submissionId: top.sub.id }))!)).toMatchObject({ roomCents: 0, totalCapCents: 50_000 });
     const open = await sent({ writtenCents: null });
-    expect(await pieceRoom((await pieceOf({ submissionId: open.sub.id }))!)).toMatchObject({ roomCents: 100_000, totalCapCents: 100_000 });
+    expect(await pieceRoom((await pieceOf({ submissionId: open.sub.id }))!)).toMatchObject({ roomCents: 50_000, totalCapCents: 50_000 });
   });
 
-  it("a listed call: $200 an hour × its measured minutes in all (within the $1,000 for that tester's calls); a dispute's range ends there too", async () => {
+  it("a listed call: $200 an hour × its measured minutes in all (within the $500 for that tester's calls); a dispute's range ends there too", async () => {
     const { pieceOf, pieceRoom, disputeBounds } = await import("@/lib/server/payments");
     const x = await heldCall({ card: false });
     expect((await pay(x.dev.cookie, { kind: "call", id: x.call.id, amount: "15.00", tickedCents: 1500 })).status).toBe(200);

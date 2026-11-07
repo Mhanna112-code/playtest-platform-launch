@@ -14,8 +14,8 @@ export const MEASURE_CAP = 1.5;
 export const MEASURE_FINAL_AFTER_MS = 30 * 60_000;
 /** (Batch 15 sections 34 and 40) Calls not listed: at most $200 an hour for the measured length. */
 export const UNLISTED_CALL_RATE_CENTS = 20_000;
-/** (Batch 15 section 34) All of one tester's calls on a test, listed and unlisted together, extra pay counted: at most $1,000. */
-export const CALLS_TOTAL_CENTS = 100_000;
+/** (Batch 15 section 34) All of one tester's calls on a test, listed and unlisted together, extra pay counted: at most $500. */
+export const CALLS_TOTAL_CENTS = 50_000;
 
 export type Span = { startAt: Date; endAt: Date };
 
@@ -95,10 +95,10 @@ export const amountFromRate = (rateCents: number, minutes: number) => Math.round
 /** Typing an amount fills Rate = amount ÷ length × 60, to the cent per hour. */
 export const rateFromAmount = (amountCents: number, minutes: number) => (minutes > 0 ? Math.round((amountCents * 60) / minutes) : 0);
 
-// ---------- (Batch 15 section 34) The $1,000 for all of a tester's calls ----------
+// ---------- (Batch 15 section 34) The $500 for all of a tester's calls ----------
 const dollars = (c: number) => money(c).replace(/\.00$/, "");
 // (Owner, Nov 6, §280) No booking check against it any more: requests, offers, sets and Accept are never refused or cut for it (callsCeilingLine, "Calls with Ana on
-// this test can come to at most $1,000; $X is left, so this call can't be booked.", is gone). Only the call itself ends at it (capEndedLine, below).
+// this test can come to at most $500; $X is left, so this call can't be booked.", is gone). Only the call itself ends at it (capEndedLine, below).
 /** The small warning when what's left is under one hour at the tester's listed rate (or under $200 when their calls aren't listed). */
 export function callsLeftWarning(leftCents: number, rateCents: number | null, side: "developer" | "tester", testerName: string) {
   const hour = rateCents ?? UNLISTED_CALL_RATE_CENTS;
@@ -140,12 +140,12 @@ export function callOverBadge(x: OverCall, who: { developer: string; tester: str
 /** Whether a call is over (it moves from the calls ahead to Had / Cancelled, §209): cancelled, or its length is final. */
 export const callIsOver = (x: { status: string; measuredAt: Date | null; actualMinutes: number | null }) => x.status === "cancelled" || x.measuredAt != null || x.actualMinutes != null;
 
-// ---------- (Owner, Oct 28 evening, batch 18 section 3) A call ends when its pay would pass the $1,000 for that tester's calls ----------
+// ---------- (Owner, Oct 28 evening, batch 18 section 3) A call ends when its pay would pass the $500 for that tester's calls ----------
 // The 150% cap on the measured length stays. While a call is on, the app works out when its pay at the call's rate (the contract rate for a listed call, $200/h for an
-// unlisted one) would reach what's left of the $1,000 for that tester's calls on the test, and the call ends then for both sides: the call page says so, measuring stops
+// unlisted one) would reach what's left of the $500 for that tester's calls on the test, and the call ends then for both sides: the call page says so, measuring stops
 // (the length is final, capped at that point) and Join is refused. (Batch 21) The room is the app's own, so it really hangs up then for both.
 
-/** A call's pay for `minutes` at its rate (null: not listed, $200 an hour): what the $1,000 counts for it. */
+/** A call's pay for `minutes` at its rate (null: not listed, $200 an hour): what the $500 counts for it. */
 export const callPayCents = (rateCents: number | null, minutes: number) => (rateCents == null ? Math.round((UNLISTED_CALL_RATE_CENTS * minutes) / 60) : callCharge(rateCents, minutes));
 /** The most whole minutes whose pay fits in `leftCents`; null for a free call (its pay never reaches it). */
 export function capMinutesFor(rateCents: number | null, leftCents: number) {
@@ -171,10 +171,10 @@ export function capEnd(dev: Span[], tester: Span[], capMinutes: number, now: Dat
   const endsAt = new Date((here && m.to ? m.to.getTime() : now.getTime()) + capMs - m.ms);
   return { reached: here && endsAt.getTime() <= now.getTime(), endsAt, together: here };
 }
-/** (Batch 21 section 2) The room's short warning, 2 minutes before a planned end (150% of the booked length or the $1,000): "This call ends at 3:42 PM." */
+/** (Batch 21 section 2) The room's short warning, 2 minutes before a planned end (150% of the booked length or the $500): "This call ends at 3:42 PM." */
 export const END_WARN_MS = 2 * 60_000;
 export const endWarnLine = (time: string) => `This call ends at ${time}.`;
-/** (Batch 21 section 2) The call room once the server ended it at the $1,000 (both pages hang up; it can't be rejoined). `who`: the other person in the call. */
+/** (Batch 21 section 2) The call room once the server ended it at the $500 (both pages hang up; it can't be rejoined). `who`: the other person in the call. */
 export const capEndedLine = (who: string) => `Call ended: the ${dollars(CALLS_TOTAL_CENTS)} for calls with ${who} on this test is reached.`;
 /** (Batch 21 section 2) Ended at 150% of the booked length. */
 export const LENGTH_ENDED_LINE = "Call ended: it reached 150% of the booked time.";
@@ -208,8 +208,8 @@ export function roomStatusLine(r: { setup: "camera" | "allow" | "ready"; connect
   if (!r.otherHere) return `Waiting for ${r.otherName}…`;
   return "Connecting…";
 }
-/** Join on a call that ended at the $1,000. */
+/** Join on a call that ended at the $500. */
 export const CALL_OVER_LINE = "This call is over.";
 
-// (Owner, Nov 6, §280) Batch 18 section 6's booking cap is gone: the Length box is 10–180 minutes whatever is left of the $1,000 (no "At most 95 minutes: …", no
-// "10–95 min (the $1,000 for calls with Ana)" hint), and the server refuses no length for it. A call that reaches what's left ends itself in the call room.
+// (Owner, Nov 6, §280) Batch 18 section 6's booking cap is gone: the Length box is 10–180 minutes whatever is left of the $500 (no "At most 95 minutes: …", no
+// "10–95 min (the $500 for calls with Ana)" hint), and the server refuses no length for it. A call that reaches what's left ends itself in the call room.

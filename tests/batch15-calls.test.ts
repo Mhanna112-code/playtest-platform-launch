@@ -11,7 +11,7 @@ import { rateBlocker } from "@/lib/server/ratings";
 import { act, bookCall, joined, sact, seen, settle, setup } from "./fixtures";
 import { DAY, pay, payMore, withCard } from "./b15";
 
-// Batch 15 sections 15, 30, 31, 34 and 40: the app measures each call; the developer can only lower it; one $1,000 ceiling for a tester's calls; no Reject.
+// Batch 15 sections 15, 30, 31, 34 and 40: the app measures each call; the developer can only lower it; one $500 ceiling for a tester's calls; no Reject.
 const MIN = 60_000;
 const at = (base: Date, min: number) => new Date(base.getTime() + min * MIN);
 const span = (base: Date, from: number, to: number) => ({ startAt: at(base, from), endAt: at(base, to) });
@@ -135,25 +135,25 @@ describe("paying a measured call (sections 30, 31, 40)", () => {
   });
 });
 
-describe("the $1,000 ceiling for all of a tester's calls (section 34)", () => {
+describe("the $500 ceiling for all of a tester's calls (section 34)", () => {
   it("booked calls count at their reference; (§280) a request over it still goes through; the warning shows under an hour; pay is capped by it", async () => {
     const { dev, testId } = await setup({ liveRateCents: "150.00" });
     const { tester, sessionId } = await joined(testId);
     await withCard(dev.user.id);
-    // Two 180-minute calls at $150/h = $900 booked.
+    // Two 80-minute calls at $150/h = $400 booked.
     for (const h of [48, 72]) {
       const startsAt = new Date(Date.now() + h * 3_600_000); startsAt.setSeconds(0, 0);
-      expect((await act(testId, "request-time", dev.cookie, { seenAt: seen(), confirmed: true, contractIds: [sessionId], startsAt: startsAt.toISOString(), minutes: 180 })).status).toBe(200);
+      expect((await act(testId, "request-time", dev.cookie, { seenAt: seen(), confirmed: true, contractIds: [sessionId], startsAt: startsAt.toISOString(), minutes: 80 })).status).toBe(200);
       const q = await db.callRequest.findFirstOrThrow({ where: { contractId: sessionId, status: "pending" }, orderBy: { createdAt: "desc" } });
       expect((await sact(sessionId, "answer-request", tester.cookie, { requestId: q.id, action: "accept", seenAt: seen(), confirmed: true })).status).toBe(200);
     }
-    expect(await callsLeftCents(sessionId)).toBe(100_000 - 90_000);
-    expect(M.callsLeftWarning(10_000, 15_000, "developer", "Ana Silva")).toBe("$100.00 left of the $1,000 for calls with Ana Silva on this test.");
-    expect(M.callsLeftWarning(10_000, 15_000, "tester", "Ana Silva")).toBe("$100.00 left of the $1,000 for your calls on this test.");
+    expect(await callsLeftCents(sessionId)).toBe(50_000 - 40_000);
+    expect(M.callsLeftWarning(10_000, 15_000, "developer", "Ana Silva")).toBe("$100.00 left of the $500 for calls with Ana Silva on this test.");
+    expect(M.callsLeftWarning(10_000, 15_000, "tester", "Ana Silva")).toBe("$100.00 left of the $500 for your calls on this test.");
     expect(M.callsLeftWarning(15_000, 15_000, "developer", "Ana Silva")).toBe("");
     expect(M.callsLeftWarning(19_000, null, "developer", "Ana Silva")).toMatch(/^\$190\.00 left/); // unlisted: under $200
-    // A third call (60 min at $150/h = $150) would go over. (Owner, Nov 6, §280) No longer refused on either side (was "At most 40 minutes: the $1,000 for calls
-    // with Ana Silva on this test."): booking is never checked against the $1,000; the call room ends a call at what's left.
+    // A third call (60 min at $150/h = $150) would go over. (Owner, Nov 6, §280) No longer refused on either side (was "At most 40 minutes: the $500 for calls
+    // with Ana Silva on this test."): booking is never checked against the $500; the call room ends a call at what's left.
     const startsAt = new Date(Date.now() + 96 * 3_600_000); startsAt.setSeconds(0, 0);
     const r = await act(testId, "request-time", dev.cookie, { seenAt: seen(), confirmed: true, contractIds: [sessionId], startsAt: startsAt.toISOString(), minutes: 60 });
     expect(r.body.error?.message ?? "").toBe("");
@@ -164,28 +164,28 @@ describe("the $1,000 ceiling for all of a tester's calls (section 34)", () => {
     const t = await sact(sessionId, "request-time", tester.cookie, { seenAt: seen(), confirmed: true, startsAt: startsAt.toISOString(), minutes: 60 });
     expect(t.body.error?.message ?? "").toBe("");
     expect(t.status).toBe(200);
-    // The first call took place (60 minutes measured at $150/h = $150). Another 180-minute call is booked meanwhile ($450 more reserved): only $100 is left for this one.
+    // The first call took place (60 minutes measured at $150/h = $150). Another 80-minute call is booked meanwhile ($200 more reserved): only $100 is left for this one.
     const [first, second] = await db.call.findMany({ where: { contractId: sessionId }, orderBy: { startsAt: "asc" } });
     await tookPlace(first.id, 60);
-    await db.call.create({ data: { slotId: second.slotId, contractId: sessionId, startsAt: new Date(Date.now() + 9 * DAY), minutes: 180, rateCents: 15_000 } });
+    await db.call.create({ data: { slotId: second.slotId, contractId: sessionId, startsAt: new Date(Date.now() + 9 * DAY), minutes: 80, rateCents: 15_000 } });
     expect(await callsLeftCents(sessionId, db, first.id)).toBe(10_000);
     const over = await pay(dev.cookie, { kind: "call", id: first.id, amount: "150.00", tickedCents: 15_000 });
     expect(over.body.error.message).toBe(M.overCeilingLine(10_000));
-    expect((await pay(dev.cookie, { kind: "call", id: first.id, amount: "100.00", reason: "The $1,000 for calls is nearly used.", tickedCents: 10_000 })).status).toBe(200);
+    expect((await pay(dev.cookie, { kind: "call", id: first.id, amount: "100.00", reason: "The $500 for calls is nearly used.", tickedCents: 10_000 })).status).toBe(200);
     // Pay more: nothing is left.
     const more = await payMore(testId, dev.cookie, { contractId: sessionId, callId: first.id, amount: "1.00", tickedCents: 100 });
     expect(more.body.error.message).toBe(M.overCeilingLine(0));
   });
 
-  it("a mix: an unlisted call ($200/h) and a listed one share the same $1,000", async () => {
+  it("a mix: an unlisted call ($200/h) and a listed one share the same $500", async () => {
     const { dev, testId } = await setup({ liveRateCents: "100.00" });
     const { tester, sessionId } = await joined(testId);
     const listed = await bookCall(testId, dev.cookie, sessionId, tester.cookie); // 30 min at $100/h = $50
     // A call booked while the contract had no live rate: not listed ($200/h × 30 = $100).
     const unl = await db.call.create({ data: { slotId: listed.slotId, contractId: sessionId, startsAt: new Date(Date.now() + 5 * DAY), minutes: 30, rateCents: null } });
-    expect(await callsLeftCents(sessionId)).toBe(100_000 - 5_000 - 10_000);
+    expect(await callsLeftCents(sessionId)).toBe(50_000 - 5_000 - 10_000);
     await db.call.update({ where: { id: unl.id }, data: { minutes: 180 } }); // $600 reserved
-    expect(await callsLeftCents(sessionId)).toBe(100_000 - 5_000 - 60_000);
+    expect(await callsLeftCents(sessionId)).toBe(0);
   });
 });
 

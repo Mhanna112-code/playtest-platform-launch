@@ -41,8 +41,8 @@ const subOf = (id: string) => db.submission.findUniqueOrThrow({ where: { id }, i
 
 describe("batch 30 §2 (batch 35 §136): adding to a part after it's paid", () => {
   it("the lines", () => {
-    expect(M.updateAboveSendLine("Nora Lane", 1000, 100000, null)).toBe("Nora Lane has paid $10.00 for this. What you add can be paid more, up to $1,000.00 in all.");
-    expect(M.updateAboveSendLine("Nora Lane", 100000, 100000, null)).toBe("This part is already paid the most it can be ($1,000.00): Nora Lane can't pay more for what you add.");
+    expect(M.updateAboveSendLine("Nora Lane", 1000, 50000, null)).toBe("Nora Lane has paid $10.00 for this. What you add can be paid more, up to $500.00 in all.");
+    expect(M.updateAboveSendLine("Nora Lane", 50000, 50000, null)).toBe("This part is already paid the most it can be ($500.00): Nora Lane can't pay more for what you add.");
     expect(M.updateRowLine("Ana Silva", 1000, 99000)).toBe("Ana Silva added to this after you paid ($10.00 paid · up to $990.00 more)");
     expect(M.UPDATED_AT_CAP).toBe("Added to after you paid · already paid the most");
     expect(M.updatedAtCapLive("Ana Silva", "her", "written answers")).toBe("Ana Silva added to her written answers (already paid the most)");
@@ -101,7 +101,7 @@ describe("batch 30 §2 (batch 35 §136): adding to a part after it's paid", () =
 
   it("at the cap: no Needs you row, a quiet line, the usual Work sent alert only", async () => {
     const w = await sent();
-    expect((await pay(w.dev.cookie, { kind: "submission", id: w.sub.id, amount: "1000.00", tickedCents: 100000, over200: true })).status).toBe(200);
+    expect((await pay(w.dev.cookie, { kind: "submission", id: w.sub.id, amount: "500.00", tickedCents: 50000, over200: true })).status).toBe(200);
     expect((await addTo(w.sessionId, w.tester.cookie, { text: LONG2[0], seenAt: seen(), confirmed: true })).status).toBe(200);
     const { paidUpdateRoom, updateRoomLeft } = await import("@/lib/server/paidUpdates");
     expect((await paidUpdateRoom(db, w.sub.id, w.testId)).atCap).toBe(true);

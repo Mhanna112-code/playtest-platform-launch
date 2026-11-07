@@ -61,15 +61,15 @@ describe("batch 18 section 5 (confirmed as built): excerpt requests in the bell"
 
 // ---------- Sections 6-8 (owner, Oct 28) ----------
 
-/** Another booked call on this contract reserving `cents` of the $1,000 at `rateCents`. */
+/** Another booked call on this contract reserving `cents` of the $500 at `rateCents`. */
 async function reserve(contractId: string, slotId: string, rateCents: number, cents: number) {
   return db.call.create({ data: { slotId, contractId, startsAt: new Date(Date.now() + 9 * 86_400_000), minutes: Math.round((cents * 60) / rateCents), rateCents } });
 }
 const startAt = (h: number) => { const d = new Date(Date.now() + h * 3_600_000); d.setSeconds(0, 0); return d.toISOString(); };
 const once = (h: number) => [{ startsAt: startAt(h), repeat: "once", count: 1 }];
 
-// (Owner, Nov 6, §280) Batch 18 section 6's Length cap is gone: booking is never checked against the $1,000. The two tests below now assert the opposite.
-describe("batch 18 section 6, reversed by §280: the Length is never capped by what's left of the $1,000", () => {
+// (Owner, Nov 6, §280) Batch 18 section 6's Length cap is gone: booking is never checked against the $500. The two tests below now assert the opposite.
+describe("batch 18 section 6, reversed by §280: the Length is never capped by what's left of the $500", () => {
   it("no cap, hint or line any more: the forms' Length box is 10–180 minutes", () => {
     // (§280) bookableMinutes, lengthCap, lengthCapHint, lengthCapLine and callsCeilingLine are gone.
     for (const k of ["bookableMinutes", "lengthCap", "lengthCapHint", "lengthCapLine", "callsCeilingLine"]) expect(k in M).toBe(false);
@@ -87,10 +87,10 @@ describe("batch 18 section 6, reversed by §280: the Length is never capped by w
     const ana = await joined(s.testId, "Ana Silva");
     const ben = await joined(s.testId, "Ben Okafor", "he");
     const c1 = await bookCall(s.testId, s.dev.cookie, ana.sessionId, ana.tester.cookie, 30); // 30 min at $150/h: $75
-    await reserve(ana.sessionId, c1.slotId, 15_000, 100_000 - 7_500 - 23_750); // $237.50 left for Ana: 95 minutes at the rate
+    await reserve(ana.sessionId, c1.slotId, 15_000, 50_000 - 7_500 - 23_750); // $237.50 left for Ana: 95 minutes at the rate
     const c2 = await bookCall(s.testId, s.dev.cookie, ben.sessionId, ben.tester.cookie, 32);
-    const benOther = await reserve(ben.sessionId, c2.slotId, 15_000, 100_000 - 7_500 - 50_000); // $500 left for Ben
-    // 120 minutes ($300) is more than Ana has left: it still goes to both (was "At most 95 minutes: the $1,000 for calls with Ana Silva on this test.").
+    const benOther = await reserve(ben.sessionId, c2.slotId, 15_000, 50_000 - 7_500 - 25_000); // $250 left for Ben
+    // 120 minutes ($300) is more than Ana has left: it still goes to both (was "At most 95 minutes: the $500 for calls with Ana Silva on this test.").
     const dev = await act(s.testId, "request-time", s.dev.cookie, { seenAt: seen(), confirmed: true, contractIds: [ana.sessionId, ben.sessionId], rows: once(96), minutes: 120 });
     expect(dev.body.error?.message ?? "").toBe("");
     expect(dev.status).toBe(200);

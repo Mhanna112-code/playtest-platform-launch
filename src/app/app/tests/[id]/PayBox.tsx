@@ -28,8 +28,8 @@ export type PayRoom = { roomCents: number; aboveRoomCents: number; ceilingBinds:
  * The one Pay box for a piece of sent work or a call that took place. (Owner, Oct 30, batch 15 sections 30, 31 and 40)
  *   - No Reject button anywhere: one green Pay, any amount from $0 up. "Note to <name> (optional)" is required at $0 ("Say why you're paying $0") and, while
  *     REASON_WHEN_UNDER_LISTING is on, below the listing.
- *   - Beside the amount, the room left (batch 29 §38: the part's max in all): "up to $1,000.00 in all" / Pay more "up to $990.00 more ($1,000.00 in all)" / an unlisted
- *     call "up to $100.00 ($200/h × 30 min)" / "up to $X (what's left of the $1,000 for calls)". An amount above it
+ *   - Beside the amount, the room left (batch 29 §38: the part's max in all): "up to $500.00 in all" / Pay more "up to $990.00 more ($500.00 in all)" / an unlisted
+ *     call "up to $100.00 ($200/h × 30 min)" / "up to $X (what's left of the $500 for calls)". An amount above it
  *     is refused in red at the box as it's typed (and again on the server).
  *   - A call's box: Rate and Amount fill each other (rate × length; amount ÷ length × 60); the one typed last wins and the server recomputes the other. (Batch 16 section 26) No
  *     "Lower the length": the box starts at the measured length × the rate; paying less needs the usual reason.
@@ -148,7 +148,7 @@ export function PayBox(p: {
   const room = p.room;
   const total = room ? room.totalCapCents ?? room.roomCents : 0;
   const unlistedCall = !listed && p.kind === "call";
-  const roomText = !room ? "" : room.ceilingBinds ? `up to ${money(room.roomCents)} (what's left of the $1,000 for calls)` : unlistedCall && !more ? `up to ${money(room.roomCents)} ($200/h × ${minutes} min)` : more ? `up to ${money(room.roomCents)} more (${money(total)} in all)` : `up to ${money(room.roomCents)} in all`;
+  const roomText = !room ? "" : room.ceilingBinds ? `up to ${money(room.roomCents)} (what's left of the $500 for calls)` : unlistedCall && !more ? `up to ${money(room.roomCents)} ($200/h × ${minutes} min)` : more ? `up to ${money(room.roomCents)} more (${money(total)} in all)` : `up to ${money(room.roomCents)} in all`;
   const overCap = !!room && cents != null && cents > room.roomCents;
   const overText = !room || !overCap ? "" : room.ceilingBinds ? overCeilingLine(room.roomCents) : unlistedCall ? overCallsLine(room.roomCents) : overMaxLine(room.roomCents, total);
 

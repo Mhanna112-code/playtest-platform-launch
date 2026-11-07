@@ -178,7 +178,7 @@ describe("batch 35 §27: the build link checks itself", () => {
 describe("batch 35 §28: the cents wording", () => {
   it("the parts help line starts “Prices can include cents, like 9.99.”", () => {
     const t = src("app/app/tests/TestForm.tsx");
-    expect(t).toContain("Prices can include cents, like 9.99. Free makes a part unpaid. Otherwise $1 to $1,000 for the written answers or a recording");
+    expect(t).toContain("Prices can include cents, like 9.99. Free makes a part unpaid. Otherwise $1 to $500 for the written answers or a recording");
     expect(t).not.toContain("Any cents.");
   });
 });

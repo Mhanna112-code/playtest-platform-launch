@@ -548,7 +548,7 @@ async function recipientBusyClash(requester: { timeZone?: string | null }, side:
 /** "You already requested this time with Ben Okafor." */
 export const alreadyRequestedLine = (names: string[]) => `You already requested this time with ${andList(names)}.`;
 
-// (Owner, Nov 6, §280) No Length cap from the $1,000 any more (lengthOverCap, "At most 95 minutes: the $1,000 for calls with Ana on this test.", is gone): any
+// (Owner, Nov 6, §280) No Length cap from the $500 any more (lengthOverCap, "At most 95 minutes: the $500 for calls with Ana on this test.", is gone): any
 // length from 10 to 180 minutes can be requested, offered or accepted; the call room ends a call when its pay reaches what's left.
 
 
@@ -644,7 +644,7 @@ export async function devRequestTime(dev: U, testId: string, body: Record<string
   for (const { c } of all) if (await sameAgain(c.id)) again.push(displayName(c.tester));
   if (again.length) throw new HttpError(409, "already", alreadyRequestedLine(again));
   const p = await plan(new Set());
-  // Auto-matches: a row exactly a tester's waiting request books it (checked as the Accept would be: clashes with anyone's calls; §280: never the $1,000).
+  // Auto-matches: a row exactly a tester's waiting request books it (checked as the Accept would be: clashes with anyone's calls; §280: never the $500).
   for (const m of p.match.values()) {
     const clash = await acceptClash(m.x.c, "developer", [m.hit], m.match.minutes);
     if (clash.length) throw new HttpError(409, "clash", clash[0]);
@@ -656,7 +656,7 @@ export async function devRequestTime(dev: U, testId: string, body: Record<string
   }
   const sendRows = kind.each.filter((_, i) => !p.match.has(i));
   const matchIds = [...p.match.values()].map((m) => m.match.id);
-  // Clashes per tester (Owner, Nov 6, §280: no longer the $1,000); (§185) the limits from the plan.
+  // Clashes per tester (Owner, Nov 6, §280: no longer the $500); (§185) the limits from the plan.
   const blocked: string[] = [], limited: Limited[] = [], ok: Ctx[] = [];
   for (const x of all) {
     const lim = p.refused.get(x.c.id);
@@ -892,7 +892,7 @@ export async function answerRequest(user: U, contractId: string, body: Record<st
       }
       // (Owner, Nov 4, §185) Claimed, this request no longer counts as waiting: booking it makes one more booked time, so the others must leave room for it.
       if ((await callsTaken(contractId)) >= MAX_CALLS) throw new HttpError(409, "limit", callLimitLine(displayName(other)));
-      // (Owner, Nov 6, §280) Never refused for the $1,000 for this tester's calls (a set past it too): the call room ends a call when its pay reaches what's left.
+      // (Owner, Nov 6, §280) Never refused for the $500 for this tester's calls (a set past it too): the call room ends a call when its pay reaches what's left.
       // A repeating pick is one CallSet (it counts as 1 of the 3 booked times); Forever keeps the next 4 ahead.
       const set = row.repeat === "once" ? null : await db.callSet.create({ data: { testId: c.testId, contractId, repeat: row.repeat, count: row.count, minutes: r.minutes, rateCents: rate, nextAt: new Date(row.startsAt.getTime() + times.length * stepMs(row.repeat)) } });
       for (const t of times) {
@@ -1020,7 +1020,7 @@ export async function topUpForeverSets(now = new Date()) {
       if (end && at.getTime() > end.getTime()) break; // (batch 35 §132) the next call would be after the end: it waits there
       nextAt = new Date(at.getTime() + stepMs(set.repeat));
       if (at.getTime() <= now.getTime()) continue; // (an old occurrence: never booked back in time)
-      // (Owner, Nov 6, §280) A Forever set's next call is never skipped for the $1,000 for this tester's calls (only a clash skips it).
+      // (Owner, Nov 6, §280) A Forever set's next call is never skipped for the $500 for this tester's calls (only a clash skips it).
       const clash = await acceptClash(c, "developer", [at], set.minutes);
       if (clash.length) {
         skipped++;

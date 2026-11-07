@@ -124,7 +124,7 @@ export const MEASURING_REFUSAL = "This call is still being measured: you can pay
 // Video and sound go straight between the two browsers (WebRTC); the app only relays their short connection messages (CallSignal) by polling, and keeps the stretches
 // both browsers were actually connected (CallPresence), which is the measured length. Only the booked tester and the test's developer can be in the room, from 10
 // minutes before the start until the call ends; every poll and message is checked on the server. The server ends the call for real (both pages hang up, no rejoin) at
-// 150% of the booked length, at the $1,000 for that tester's calls, and when a block, a pause, a suspension, a leave, End early or a Stop closes it.
+// 150% of the booked length, at the $500 for that tester's calls, and when a block, a pause, a suspension, a leave, End early or a Stop closes it.
 
 const roomInclude = { presences: true, contract: { include: { test: { include: { developer: true } } } } } as const;
 type RoomCall = Prisma.CallGetPayload<{ include: typeof roomInclude }>;
@@ -175,12 +175,12 @@ async function endCall(call: CapCall & { presences: Presence[] }, reason: string
 }
 
 /**
- * The most minutes this call can be paid before its pay at the call's rate reaches what's left of the $1,000 for that tester's calls on this test (this call's own
+ * The most minutes this call can be paid before its pay at the call's rate reaches what's left of the $500 for that tester's calls on this test (this call's own
  * booked reservation not counted); null when that never binds before the 150% cap (or the call is free). The rate: the contract rate stored on a listed call
  * (`rateCents`), $200/h (UNLISTED_CALL_RATE_CENTS) for an unlisted one (`rateCents` null).
  * (Owner, Nov 6, §280) What's left: everything paid for that tester's calls, plus the unpaid reference of calls that started before this one; calls booked after it
- * no longer count (booking isn't checked against the $1,000 any more, so a set booked past it must not end the first call at once). This end is now the only place
- * the $1,000 stops a call.
+ * no longer count (booking isn't checked against the $500 any more, so a set booked past it must not end the first call at once). This end is now the only place
+ * the $500 stops a call.
  */
 export async function callCapMinutes(call: Pick<CapCall, "id" | "contractId" | "rateCents" | "minutes" | "startsAt">) {
   const cap = capMinutesFor(call.rateCents, await callsLeftCents(call.contractId, db, call.id, call.startsAt));
@@ -189,7 +189,7 @@ export async function callCapMinutes(call: Pick<CapCall, "id" | "contractId" | "
 
 /**
  * (Batch 18 section 3; batch 21 section 2) Where a call stands against its planned end: the smaller of 150% of the booked length ("length") and the minutes left of the
- * $1,000 for that tester's calls ("calls_cap"), counted in time both browsers were connected. `ended` once it was reached (the call is then ended on the server, at
+ * $500 for that tester's calls ("calls_cap"), counted in time both browsers were connected. `ended` once it was reached (the call is then ended on the server, at
  * that moment); otherwise `endsAt`, the projected moment (`together`: both connected now, so it holds). Checked by every room poll, by Join and by the measuring sweep.
  */
 export async function callEndState(callId: string, now = new Date(), loaded?: CapCall & { presences: Presence[] }) {
@@ -205,7 +205,7 @@ export async function callEndState(callId: string, now = new Date(), loaded?: Ca
   await endCall(call, reason, e.endsAt, now, limit);
   return { ended: true, endsAt: e.endsAt, reason, together: false };
 }
-/** (Batch 18 section 3) The same, only when the $1,000 is what ends it: null otherwise. */
+/** (Batch 18 section 3) The same, only when the $500 is what ends it: null otherwise. */
 export async function callCapState(callId: string, now = new Date(), loaded?: CapCall & { presences: Presence[] }) {
   const s = await callEndState(callId, now, loaded);
   return s && s.reason === "calls_cap" ? { ended: s.ended, endsAt: s.endsAt } : null;
@@ -472,7 +472,7 @@ export async function finishMeasuring(now = new Date()) {
       await cancelNobodyJoined(call.id, now, call.devSeenAt && call.testerSeenAt ? COULD_NOT_CONNECT : NOBODY_JOINED);
       continue;
     }
-    const capMinutes = await callCapMinutes(call); // (batch 18 section 3) capped at the $1,000 as well as at 150%
+    const capMinutes = await callCapMinutes(call); // (batch 18 section 3) capped at the $500 as well as at 150%
     const minutes = m.ms > 0 ? Math.min(Math.max(1, m.minutes), capMinutes ?? Number.POSITIVE_INFINITY) : 0;
     const end = m.to ?? new Date(call.startsAt.getTime() + call.minutes * 60_000);
     await db.call.updateMany({ where: { id: call.id, measuredAt: null }, data: { measuredMinutes: minutes, measuredFrom: m.from, measuredTo: m.to, measuredAt: now, payBy: payByFrom(end) } });

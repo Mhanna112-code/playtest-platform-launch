@@ -38,12 +38,12 @@ describe("clash checks (section 33)", () => {
     const lim = clashNotes({ rows: [once(at("2026-11-02T13:38:00.000Z"))], minutes: 60, side: "developer", targets: [
       { name: "A", calls: [], requests: [], pending: 3 },
       { name: "B", calls: [], requests: [], booked: 3 },
-      { name: "C", calls: [], requests: [] }, // (Owner, Nov 6, §280) no longer what's left of the $1,000: "$4.00 is left, so this call can't be booked" is gone
+      { name: "C", calls: [], requests: [] }, // (Owner, Nov 6, §280) no longer what's left of the $500: "$4.00 is left, so this call can't be booked" is gone
     ], elsewhere: [], fmt });
     // (Owner, Nov 4, §185) One limit: booked + waiting together, at most 3.
     expect(lim.limits[0]).toBe("You already have 3 calls booked or requested with A. Wait until one is answered, over or cancelled, or withdraw a request.");
     expect(lim.limits[1]).toBe("You already have 3 calls booked or requested with B. Wait until one is answered, over or cancelled, or withdraw a request.");
-    // (§280) No line for the $1,000 any more: only the two limits above.
+    // (§280) No line for the $500 any more: only the two limits above.
     expect(lim.limits).toHaveLength(2);
   });
 });

@@ -139,8 +139,8 @@ export function draftMarks(f: F, base: F, drafted?: ReadonlySet<string>): Record
 
 // The parts, as the full app's Parts and prices cards (prices-widget.tsx there), with lean's names and price limits.
 const PARTS = [
-  { on: "written", req: "writtenRequired", price: "writtenPrice", title: "Written report", help: "Answers to your questions", ph: "10.00", unit: "", min: "1", max: "1000", key: "written", lowMsg: partLowLine("written answers"), highMsg: partHighLine("written answers") },
-  { on: "recording", req: "recordingRequired", price: "recordingPrice", title: "Recorded session", help: "Screen recording, thinking out loud", ph: "15.00", unit: "", min: "1", max: "1000", key: "recording", lowMsg: partLowLine("recording"), highMsg: partHighLine("recording") },
+  { on: "written", req: "writtenRequired", price: "writtenPrice", title: "Written report", help: "Answers to your questions", ph: "10.00", unit: "", min: "1", max: "500", key: "written", lowMsg: partLowLine("written answers"), highMsg: partHighLine("written answers") },
+  { on: "recording", req: "recordingRequired", price: "recordingPrice", title: "Recorded session", help: "Screen recording, thinking out loud", ph: "15.00", unit: "", min: "1", max: "500", key: "recording", lowMsg: partLowLine("recording"), highMsg: partHighLine("recording") },
   { on: "live", req: "liveRequired", price: "liveRate", title: "Live session", help: "A call while you watch, billed by the minute", ph: "30.00", unit: "/h", min: "10", max: "200", key: "", lowMsg: rateLowLine(), highMsg: rateHighLine() },
 ] as const;
 
@@ -817,7 +817,7 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
               </div>
             );
           })}
-          <p className="text-xs text-slate-500" data-parts-help="">{/* (Owner, Oct 31, batch 35 §28) */}Prices can include cents, like 9.99. Free makes a part unpaid. Otherwise $1 to $1,000 for the written answers or a recording, and $10 to $200 an hour for a live call (each call request sets its own length). A written or recording price over $200 needs a tick.</p>
+          <p className="text-xs text-slate-500" data-parts-help="">{/* (Owner, Oct 31, batch 35 §28) */}Prices can include cents, like 9.99. Free makes a part unpaid. Otherwise $1 to $500 for the written answers or a recording, and $10 to $200 an hour for a live call (each call request sets its own length). A written or recording price over $200 needs a tick.</p>
           {note("parts")}
         </fieldset>
         {f.written && (

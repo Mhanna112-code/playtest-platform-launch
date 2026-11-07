@@ -13,7 +13,7 @@ export type ClashTarget = {
   /** Waiting requests between the two of you, both directions. */
   requests: ClashReq[];
   /**
-   * Waiting requests with them now (both sides) and booked times ahead. (Owner, Nov 6, §280) No longer what's left of the $1,000: booking is never checked against
+   * Waiting requests with them now (both sides) and booked times ahead. (Owner, Nov 6, §280) No longer what's left of the $500: booking is never checked against
    * it (the call room ends a call at it instead).
    */
   pending?: number; booked?: number;
@@ -138,7 +138,7 @@ export function clashNotes(p: { rows: RowJson[]; minutes: number | null; side: "
     const taken = (t.pending ?? 0) + (t.booked ?? 0);
     const adds = p.rows.length ? p.rows.length - (exactWith.get(t.name)?.size ?? 0) : 1;
     if (adds > 0 && taken + adds > MAX_CALLS) limits.push(callRoomLine(t.name, taken));
-    // (Owner, Nov 6, §280) No red line for the $1,000 for this tester's calls any more: a request, a set or an Accept is never refused for it.
+    // (Owner, Nov 6, §280) No red line for the $500 for this tester's calls any more: a request, a set or an Accept is never refused for it.
   }
   return { rows, limits };
 }

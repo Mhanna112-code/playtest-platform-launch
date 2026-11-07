@@ -1,8 +1,8 @@
-// (Owner, Oct 30, batch 15 section 34) One $1,000 ceiling for ALL of a tester's calls on a test, listed and unlisted together, extra pay counted. It replaces batch 12
+// (Owner, Oct 30, batch 15 section 34) One $500 ceiling for ALL of a tester's calls on a test, listed and unlisted together, extra pay counted. It replaces batch 12
 // section 2's pool for unlisted calls only. Used = everything paid for that tester's calls on the test (Pay, Pay more, dispute decisions, Charge) plus each booked call
 // not paid yet at its reference (rate × length; unlisted: $200/h × length; the booked length until it has been measured).
 // (Owner, Nov 6, §280) Booking is no longer checked against it (ceilingRefusal / checkCeiling are gone): requests, offers, sets and Accept never refuse or cut a call
-// for the $1,000. What's left still ends a call in the call room (calls.ts, callCapMinutes), caps Pay and Pay more, and shows the small warning line.
+// for the $500. What's left still ends a call in the call room (calls.ts, callCapMinutes), caps Pay and Pay more, and shows the small warning line.
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { callCharge } from "@/lib/rules";
@@ -19,9 +19,9 @@ export function callRefCents(x: { rateCents: number | null; minutes: number; act
 }
 
 /**
- * What one tester's calls on this contract use of the $1,000 (`except`: a call whose own unpaid reference isn't counted, the one being paid). `before` (Owner, Nov 6,
+ * What one tester's calls on this contract use of the $500 (`except`: a call whose own unpaid reference isn't counted, the one being paid). `before` (Owner, Nov 6,
  * §280): only booked calls that start before it reserve their reference (the call room's end: calls booked later haven't used anything yet, and booking no longer
- * keeps them within the $1,000, so they must not cut short the call in progress).
+ * keeps them within the $500, so they must not cut short the call in progress).
  */
 export async function callsUsedCents(contractId: string, tx: Tx = db, except?: string, before?: Date) {
   const calls = await tx.call.findMany({ where: { contractId }, select: { id: true, status: true, startsAt: true, rateCents: true, minutes: true, actualMinutes: true, measuredMinutes: true, measuredAt: true, review: { select: { id: true } } } });

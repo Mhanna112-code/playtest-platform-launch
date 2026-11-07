@@ -30,7 +30,7 @@ export function CallRequests(p: {
   end?: CallEnd;
   /**
    * (Batch 16 section 33) For the clash checks: the booked calls between you, your other calls, and the limits (waiting, booked). (Owner, Nov 6, §280) No longer
-   * what's left of the $1,000 or the rate: booking isn't checked against it.
+   * what's left of the $500 or the rate: booking isn't checked against it.
    */
   clash?: { calls: Slot[]; elsewhere: (Slot & { name: string })[]; pending: number; booked: number;
     /** (Owner, Nov 6, §292) The developer's calls booked with other testers (any test): time ranges only, never who with (their private bookings). */
@@ -83,7 +83,7 @@ export function CallRequests(p: {
   const clash = liveTargets.length
     ? alignedClash(rows, minutes, "tester", formClashInputs(liveTargets, frozen?.targets ?? null, made), frozen?.elsewhere ?? liveElsewhere, p.end)
     : { notes: undefined, limits: [] as string[] };
-  // (Owner, Nov 6, §280) The Length is 10–180 minutes whatever is left of the $1,000 for your calls (no "At most N minutes", no cap in the hint).
+  // (Owner, Nov 6, §280) The Length is 10–180 minutes whatever is left of the $500 for your calls (no "At most N minutes", no cap in the hint).
   const form = useRef<HTMLDivElement>(null);
   const minNow = useLocalMin(p.leadMinutes); // (batch 27 section 6; batch 29 section 20) the server's lead, passed from the server
   // (Batch 35 §132) Less than the lead left before testers' work ends: no time fits, so the form goes and a line says why.

@@ -395,7 +395,7 @@ export async function openDispute(tester: U, contractId: string, body: Record<st
   return d;
 }
 
-/** (Owner, Nov 3, §159) "Nora Lane paid $996.00 more meanwhile (3:20 PM): this part is now paid the most it can be ($1,000.00), so there's nothing to dispute." */
+/** (Owner, Nov 3, §159) "Nora Lane paid $996.00 more meanwhile (3:20 PM): this part is now paid the most it can be ($500.00), so there's nothing to dispute." */
 export const paidMostMeanwhileLine = (dev: string, cents: number, more: boolean, time: string, maxCents: number) =>
   `${dev} paid ${money(cents)}${more ? " more" : ""} meanwhile (${time}): this part is now paid the most it can be (${money(maxCents)}), so there's nothing to dispute.`;
 
@@ -413,7 +413,7 @@ export async function disputeRoom(pieces: { submissionId?: string | null; callId
 
 /**
  * What an admin may decide for a dispute. (Owner, Oct 29, batch 28 §15) The total for THIS piece: MIN = what the piece was already paid (its Pay and every Pay more);
- * MAX = its cap, the same one Pay + Pay more have (pieceRoom, batch 29 §38: the part's max in all, listed or not; a call also within what's left of the $1,000 for
+ * MAX = its cap, the same one Pay + Pay more have (pieceRoom, batch 29 §38: the part's max in all, listed or not; a call also within what's left of the $500 for
  * that tester's calls). A decision still only raises pay.
  */
 export async function disputeBounds(d: { submissionId: string | null; callId: string | null }) {
@@ -642,11 +642,11 @@ const ABOVE_PAY = ["extra", "dispute"];
 export const NO_REJECT = "There's no Reject: pay any amount, $0 included (say why at $0).";
 /**
  * What can still be paid on ONE piece, with ONE Pay box (owner, Oct 29: batch 11 section 6 merged Extra pay into Pay; batch 12 section 2 the call caps).
- *   - (Batch 29 §38, correcting batch 28 §20) Every piece, listed or not: the part's max IN ALL (Pay + every Pay more + any dispute raise): $1,000 for written answers
+ *   - (Batch 29 §38, correcting batch 28 §20) Every piece, listed or not: the part's max IN ALL (Pay + every Pay more + any dispute raise): $500 for written answers
  *     or a recording; $200/h × the measured minutes for a call. A listed price at the max leaves no Pay more room.
- *   - (Batch 15 section 34) Any call, listed or not: all of the tester's calls on the test together at most $1,000 (extra pay counted).
+ *   - (Batch 15 section 34) Any call, listed or not: all of the tester's calls on the test together at most $500 (extra pay counted).
  * `roomCents`: the most the next payment (the first Pay or a "Pay more") can be. `aboveRoomCents`: for a listed piece, what is still left above the listing (for the
- * blocked line). `callPoolRoomCents`: for a call, what is left of the $1,000 for the tester's calls (else null); `ceilingBinds`: that's what limits this payment.
+ * blocked line). `callPoolRoomCents`: for a call, what is left of the $500 for the tester's calls (else null); `ceilingBinds`: that's what limits this payment.
  */
 export async function pieceRoom(piece: { where: PieceKey; listing: number | null; kind: "submission" | "call"; minutes: number; contractId?: string }, tx: Prisma.TransactionClient = db) {
   const key = piece.where.submissionId ? { submissionId: piece.where.submissionId } : { callId: piece.where.callId! };
@@ -669,7 +669,7 @@ export async function pieceRoom(piece: { where: PieceKey; listing: number | null
   }
   return { listed: piece.listing != null, maxCents, capCents: cap, paidCents, totalCapCents, roomCents, aboveRoomCents, callPoolRoomCents, ceilingBinds, aboveBaseCents: aboveRoomCents };
 }
-/** The blocked line for a payment over a piece's room (batch 9's wording; batch 15 section 34: a call over what's left of the $1,000 says so). */
+/** The blocked line for a payment over a piece's room (batch 9's wording; batch 15 section 34: a call over what's left of the $500 says so). */
 export function overRoomLine(piece: { listing: number | null; kind: "submission" | "call" }, room: Awaited<ReturnType<typeof pieceRoom>>) {
   if (room.ceilingBinds) return overCeilingLine(room.roomCents);
   if (piece.listing == null && piece.kind === "call") return overCallsLine(room.roomCents);

@@ -310,42 +310,43 @@ describe("batch 11 item 5: the paused banner mentions the deadline", () => {
 describe("batch 11 item 6 (with batch 12 section 2): one Pay box, Pay more", () => {
   it("a listed piece: the first Pay can go above the listing within the cap; then Pay more until the cap; the tester's lines", async () => {
     const { dev, tester, testId, sessionId, sub } = await sentWork("20.00");
-    // (Batch 29 §38) The part's max in all: $1,000.
-    expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "1000.01", tickedCents: 100_001, over200: true })).body.error.message).toBe("This is more than this piece can be paid (up to $1,000).");
+    // (Batch 29 §38) The part's max in all: $500.
+    expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "500.01", tickedCents: 50_001, over200: true })).body.error.message).toBe("This is more than this piece can be paid (up to $500).");
     expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "30.00", tickedCents: 3000 })).status).toBe(200);
     expect(await db.notification.count({ where: { userId: tester.user.id, text: "Nora Lane paid you $30.00 for your written answers on “Harbor Run”" } })).toBe(1);
-    expect((await more(testId, dev.cookie, { contractId: sessionId, submissionId: sub.id, amount: "970.01", tickedCents: 97_001, over200: true })).body.error.message).toBe("This is more than this piece can be paid (up to $970 more, $1,000 in all).");
+    expect((await more(testId, dev.cookie, { contractId: sessionId, submissionId: sub.id, amount: "470.01", tickedCents: 47_001, over200: true })).body.error.message).toBe("This is more than this piece can be paid (up to $470 more, $500 in all).");
     expect((await more(testId, dev.cookie, { contractId: sessionId, submissionId: sub.id, amount: "10.00", tickedCents: 1000, note: "Great" })).status).toBe(200);
     expect(await db.notification.count({ where: { userId: tester.user.id, text: "Nora Lane paid you $10.00 more for your written answers on “Harbor Run”" } })).toBe(1); // (batch 15 section 20: the note is in the email, not the bell)
   });
 
-  it("an unlisted written piece: up to $1000 in all (batch 29 §38); Pay more needs a first payment", async () => {
+  it("an unlisted written piece: up to $500 in all (batch 29 §38); Pay more needs a first payment", async () => {
     const { dev, testId, sessionId, sub } = await sentWork(null);
     expect((await more(testId, dev.cookie, { contractId: sessionId, submissionId: sub.id, amount: "5.00", tickedCents: 500 })).body.error.message).toBe("Pay this part first: Pay more is for a part you've already paid.");
-    expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "1000.01", tickedCents: 100_001, over200: true })).body.error.message).toBe("This is more than this piece can be paid (up to $1,000).");
-    expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "750.00", tickedCents: 75_000, over200: true })).status).toBe(200);
+    expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "500.01", tickedCents: 50_001, over200: true })).body.error.message).toBe("This is more than this piece can be paid (up to $500).");
+    expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "250.00", tickedCents: 25_000, over200: true })).status).toBe(200);
     expect((await more(testId, dev.cookie, { contractId: sessionId, submissionId: sub.id, amount: "250.01", tickedCents: 25_001, over200: true })).status).toBe(400);
     expect((await more(testId, dev.cookie, { contractId: sessionId, submissionId: sub.id, amount: "250.00", tickedCents: 25_000, over200: true })).status).toBe(200);
   });
 
-  it("unlisted calls: $200/h for the measured minutes with nothing above, and (batch 15 section 34) $1,000 for all of a tester's calls", async () => {
-    expect(CALLS_TOTAL_CENTS).toBe(100_000);
+  it("unlisted calls: $200/h for the measured minutes with nothing above, and (batch 15 section 34) $500 for all of a tester's calls", async () => {
+    expect(CALLS_TOTAL_CENTS).toBe(50_000);
     const s = await setup({ liveRateCents: null });
     const j = await joined(s.testId);
     const took = async (h: number) => {
       const call = await bookCall(s.testId, s.dev.cookie, j.sessionId, j.tester.cookie, h);
-      await db.call.update({ where: { id: call.id }, data: { startsAt: new Date(Date.now() - h * 3_600_000), measuredMinutes: 180, measuredAt: new Date() } });
+      await db.call.update({ where: { id: call.id }, data: { startsAt: new Date(Date.now() - h * 3_600_000), measuredMinutes: 30, measuredAt: new Date() } });
       return call;
     };
-    // 3 hours at $200/h = $600; nothing above it.
+    // 30 minutes at $200/h = $100; nothing above it.
     const first = await took(48);
-    expect((await pay(s.dev.cookie, { kind: "call", id: first.id, amount: "600.01", tickedCents: 60_001, over200: true })).body.error.message).toBe(R.overCallsLine(60_000));
-    expect((await pay(s.dev.cookie, { kind: "call", id: first.id, amount: "600.00", tickedCents: 60_000, over200: true })).status).toBe(200);
-    // $400 left of the $1,000 for this tester's calls.
+    expect((await pay(s.dev.cookie, { kind: "call", id: first.id, amount: "100.01", tickedCents: 10_001, over200: true })).body.error.message).toBe(R.overCallsLine(10_000));
+    expect((await pay(s.dev.cookie, { kind: "call", id: first.id, amount: "100.00", tickedCents: 10_000, over200: true })).status).toBe(200);
+    // $400 left of the $500 for this tester's calls.
     const second = await took(72);
+    await db.call.update({ where: { id: second.id }, data: { measuredMinutes: 180 } });
     expect((await pay(s.dev.cookie, { kind: "call", id: second.id, amount: "400.01", tickedCents: 40_001, over200: true })).body.error.message).toBe(overCeilingLine(40_000));
     expect((await pay(s.dev.cookie, { kind: "call", id: second.id, amount: "400.00", tickedCents: 40_000, over200: true })).status).toBe(200);
-    // (Owner, Nov 6, §280) Nothing left, yet another call can still be requested: booking is never checked against the $1,000 (the call room ends it at what's left).
+    // (Owner, Nov 6, §280) Nothing left, yet another call can still be requested: booking is never checked against the $500 (the call room ends it at what's left).
     const startsAt = new Date(Date.now() + 96 * 3_600_000); startsAt.setSeconds(0, 0);
     expect((await act(s.testId, "request-time", s.dev.cookie, { seenAt: seen(), confirmed: true, contractIds: [j.sessionId], startsAt: startsAt.toISOString() })).status).toBe(200);
   });

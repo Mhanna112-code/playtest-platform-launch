@@ -32,7 +32,7 @@ export type DevCall = { id: string; when: string; minutes: number; rate: string;
 export type DevSet = { id: string; label: string; minutes: number; rate: string; needsReason: boolean; calls: DevCall[] };
 export type DevReq = { id: string; rows: RowJson[]; mine: boolean; rate: string; minutes?: number };
 export type DevTester = { contractId: string; name: string; /** (Owner, Nov 3, §166) their profile: the name is the green link */ testerHref?: string | null; terms: string; booked: number; calls: DevCall[]; sets: DevSet[]; requests: DevReq[]; warning?: string;
-  /** (Batch 16 section 33) For the clash checks: waiting requests with them (both sides). (Owner, Nov 6, §280) No longer what's left of the $1,000. */
+  /** (Batch 16 section 33) For the clash checks: waiting requests with them (both sides). (Owner, Nov 6, §280) No longer what's left of the $500. */
   pending?: number;
   /** (Owner, Nov 6, §292) Their calls booked with someone else (any test): time ranges only, never who with; a request overlapping one is red at its row. */
   busy?: Slot[] };
@@ -122,7 +122,7 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
   const filled = rowsPayload(rows, end);
   // (Owner, Oct 28, batch 16 section 33) Clash checks as the form is filled, for every ticked tester (and every call of a Daily / Weekly set): red lines under the
   // row (listed under the button; the press waits until fixed), a blue line for an exact match with their waiting request, and the limits in today's wording.
-  // (Owner, Nov 6, §280) The Length is 10–180 minutes whatever is left of the $1,000 for the ticked testers' calls (no "At most N minutes", no cap in the hint).
+  // (Owner, Nov 6, §280) The Length is 10–180 minutes whatever is left of the $500 for the ticked testers' calls (no "At most N minutes", no cap in the hint).
   const clash = alignedClash(rows, minutes, "developer", checked.filter((t) => ticked.includes(t.contractId)).map((t) => ({
     name: t.name, pending: t.pending, booked: t.booked, busy: t.busy,
     calls: t.calls.map((c) => ({ id: c.id, start: c.when, minutes: c.minutes })),

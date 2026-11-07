@@ -694,24 +694,24 @@ describe("batch 20 section 15: Dispute disabled when nothing more can be awarded
     const full = await paidAt("10.00", 1000);
     expect((await dispute(full.sessionId, full.tester.cookie, full.sub.id)).status).toBe(200);
   });
-  it("(server; batch 29 §38) an unlisted piece paid below its max can be disputed; paid its max ($1,000 in all), there's nothing to dispute", async () => {
-    const x = await paidAt("900.00", 90000, { writtenCents: null });
+  it("(server; batch 29 §38) an unlisted piece paid below its max can be disputed; paid its max ($500 in all), there's nothing to dispute", async () => {
+    const x = await paidAt("400.00", 40000, { writtenCents: null });
     expect((await dispute(x.sessionId, x.tester.cookie, x.sub.id)).status).toBe(200);
-    const y = await paidAt("1000.00", 100000, { writtenCents: null });
+    const y = await paidAt("500.00", 50000, { writtenCents: null });
     expect((await dispute(y.sessionId, y.tester.cookie, y.sub.id)).body.error.message).toBe("Already paid the most this piece can be paid, so there's nothing to dispute.");
   });
   it("(server) a Pay more reaching the cap disables it (the page's poll brings it); the page uses the admin form's bounds", async () => {
     const x = await paidAt("8.00", 800);
     const { disputeRoom } = await import("@/lib/server/payments");
-    expect((await disputeRoom([{ submissionId: x.sub.id }])).get(x.sub.id)).toBe(99_200); // (batch 29 §38) $1,000 in all, less the $8 paid
-    expect((await payMore(x.testId, x.dev.cookie, { contractId: x.sessionId, submissionId: x.sub.id, amount: "990.00", tickedCents: 99_000, over200: true })).status).toBe(200);
+    expect((await disputeRoom([{ submissionId: x.sub.id }])).get(x.sub.id)).toBe(49_200); // (batch 29 §38) $500 in all, less the $8 paid
+    expect((await payMore(x.testId, x.dev.cookie, { contractId: x.sessionId, submissionId: x.sub.id, amount: "490.00", tickedCents: 49_000, over200: true })).status).toBe(200);
     expect((await payMore(x.testId, x.dev.cookie, { contractId: x.sessionId, submissionId: x.sub.id, amount: "2.00", tickedCents: 200 })).status).toBe(200);
     expect((await disputeRoom([{ submissionId: x.sub.id }])).get(x.sub.id)).toBe(0);
     expect((await dispute(x.sessionId, x.tester.cookie, x.sub.id)).body.error.message).toBe("Already paid the most this piece can be paid, so there's nothing to dispute.");
     const page = src("app/app/sessions/[id]/page.tsx");
     expect(page).toContain('<button type="button" className="btn-ghost text-sm" disabled>Dispute the pay</button>');
     expect(page).toContain("const room = await disputeRoom(");
-    // The same bounds as the admin's decision (disputeBounds), so the two never disagree; a call's include what's left of the $1,000.
+    // The same bounds as the admin's decision (disputeBounds), so the two never disagree; a call's include what's left of the $500.
     expect(src("lib/server/payments.ts")).toContain("const bounds = existing || closed || byTesterChoice(review.reason) ? null : await disputeBounds("); // (§288) not for a closed part
     expect(src("lib/server/payments.ts")).toContain("const room = await pieceRoom(piece);");
   });
@@ -1000,8 +1000,8 @@ describe("batch 20 section 26 (replaced by batch 35 §136): sent work is locked,
     }
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: j.sessionId, kind: "written" } });
     const f = await db.recording.create({ data: { contractId: j.sessionId, storageKey: `k-${randomUUID()}`, filename: "shot.png", sizeBytes: 10, contentType: "image/png", uploadedAt: new Date(), part: "written" } });
-    // (§167) A file alone, placed in the box (its marker only), is something to add.
-    expect((await addTo(j.sessionId, j.tester.cookie, { text: `[[attachment:${f.id}|shot.png]]`, seenAt: seen(), confirmed: true })).status).toBe(200);
+    // An attachment goes with a text addition; its marker does not satisfy the text minimum.
+    expect((await addTo(j.sessionId, j.tester.cookie, { text: `${"Sample written feedback. ".repeat(3)}[[attachment:${f.id}|shot.png]]`, seenAt: seen(), confirmed: true })).status).toBe(200);
     expect((await db.recording.findUniqueOrThrow({ where: { id: f.id } })).submissionId).toBe(sub.id);
     const r = await db.recording.create({ data: { contractId: j.sessionId, storageKey: `k-${randomUUID()}`, filename: "run.mp4", sizeBytes: 10, contentType: "video/mp4", uploadedAt: new Date(), part: "recording" } });
     expect((await sact(j.sessionId, "recording-send", j.tester.cookie, { seenAt: seen(), confirmed: true })).status).toBe(200);

@@ -60,7 +60,7 @@ describe("batch 10 item 1: every reviewed part can be disputed", () => {
     expect(src("app/app/sessions/[id]/page.tsx")).toContain("limit={disputeLimitText(room ?? 0)}");
   });
 
-  it("an unlisted written piece paid $0: the tester disputes it; the admin can raise it up to $1000 minus what was already paid (extra pay counts)", async () => {
+  it("an unlisted written piece paid $0: the tester disputes it; the admin can raise it up to $500 minus what was already paid (extra pay counts)", async () => {
     const { dev, tester, testId, sessionId, sub } = await sentWork(null);
     expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "0", reason: "Not needed after all" })).status).toBe(200);
     expect((await extra(testId, dev.cookie, { contractId: sessionId, submissionId: sub.id, amount: "200.00", tickedCents: 20_000 })).status).toBe(200);
@@ -68,15 +68,15 @@ describe("batch 10 item 1: every reviewed part can be disputed", () => {
     expect(d.status).toBe(200);
     expect(await db.notification.count({ where: { userId: dev.user.id, text: "Ana Silva disputed the pay for her written answers on “Harbor Run”" } })).toBe(1); // (§177) which part
     const row = await db.dispute.findFirstOrThrow({ where: { submissionId: sub.id } });
-    // (Batch 28 §15; batch 29 §38) The total for the piece: from what it was paid ($0 + $200 Pay more) up to its cap ($1,000 in all).
-    expect(await disputeBounds(row)).toMatchObject({ min: 20_000, max: 100_000 });
+    // (Batch 28 §15; batch 29 §38) The total for the piece: from what it was paid ($0 + $200 Pay more) up to its cap ($500 in all).
+    expect(await disputeBounds(row)).toMatchObject({ min: 20_000, max: 50_000 });
     // Once only.
     expect((await dispute(sessionId, tester.cookie, { kind: "submission", id: sub.id })).body.error.message).toBe("You already disputed this payment. A part can be disputed once.");
     const a = await admin();
-    await expect(decideDispute(a, row.id, { total: "1000.01" })).rejects.toThrow("At most $1,000.00: the most this piece can be paid.");
-    expect(await decideDispute(a, row.id, { total: "800.00", tickCents: 60_000 })).toEqual({ extraCents: 60_000, line: "Done: raised the pay to $800.00 ($600.00 more charged)." }); // (batch 35 §163) the result line
+    await expect(decideDispute(a, row.id, { total: "500.01" })).rejects.toThrow("At most $500.00: the most this piece can be paid.");
+    expect(await decideDispute(a, row.id, { total: "400.00", tickCents: 20_000 })).toEqual({ extraCents: 20_000, line: "Done: raised the pay to $400.00 ($200.00 more charged)." }); // (batch 35 §163) the result line
     // No Stripe in tests: the raise is recorded ("payments not set up") at once, as any decision outside a hold.
-    expect(await db.payment.findFirstOrThrow({ where: { disputeId: row.id } })).toMatchObject({ kind: "dispute", amountCents: 60_000, status: "not_set_up" });
+    expect(await db.payment.findFirstOrThrow({ where: { disputeId: row.id } })).toMatchObject({ kind: "dispute", amountCents: 20_000, status: "not_set_up" });
     expect(await db.notification.count({ where: { userId: tester.user.id, text: "Your dispute about your written answers on “Harbor Run” was decided" } })).toBe(1);
     expect(await db.notification.count({ where: { userId: dev.user.id, text: "Ana Silva's dispute about her written answers on “Harbor Run” was decided" } })).toBe(1); // (§177)
   });
@@ -101,8 +101,8 @@ describe("batch 10 item 1: every reviewed part can be disputed", () => {
   it("a listed part paid the listing can still be disputed up to its cap (batch 28 §15); an old rejection can; the tester's own Charge can't", async () => {
     const full = await sentWork("10.00");
     expect((await pay(full.dev.cookie, { kind: "submission", id: full.sub.id, amount: "10.00", tickedCents: 1000 })).status).toBe(200);
-    // (Batch 28 §15; batch 29 §38) Up to the part's max in all ($1,000), less what it was paid.
-    expect(await disputeBounds({ submissionId: full.sub.id, callId: null })).toMatchObject({ min: 1000, max: 100_000 });
+    // (Batch 28 §15; batch 29 §38) Up to the part's max in all ($500), less what it was paid.
+    expect(await disputeBounds({ submissionId: full.sub.id, callId: null })).toMatchObject({ min: 1000, max: 50_000 });
     expect((await dispute(full.sessionId, full.tester.cookie, { kind: "submission", id: full.sub.id })).status).toBe(200);
 
     const rej = await sentWork("10.00");

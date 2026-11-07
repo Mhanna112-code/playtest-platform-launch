@@ -382,15 +382,15 @@ describe("batch 28 §20, §15, §14: a listed piece's cap is its listing plus th
     return { ...s, ...j, sub };
   }
 
-  it("§20 (batch 29 §38: the max in all): a $10 listing paid $20 can be paid up to $1,000 in all (Pay + Pay more); above it is refused", async () => {
+  it("§20 (batch 29 §38: the max in all): a $10 listing paid $20 can be paid up to $500 in all (Pay + Pay more); above it is refused", async () => {
     const R = await import("@/lib/rules");
     const { pieceOf, pieceRoom } = await import("@/lib/server/payments");
     const w = await sent();
     expect((await pay(w.dev.cookie, { kind: "submission", id: w.sub.id, amount: "20.00", tickedCents: 2000 })).status).toBe(200);
     const room = await pieceRoom((await pieceOf({ submissionId: w.sub.id }))!);
-    expect(room).toMatchObject({ paidCents: 2000, totalCapCents: 100_000, roomCents: 98_000, aboveRoomCents: 98_000 });
-    expect((await more(w.testId, w.dev.cookie, { contractId: w.sessionId, submissionId: w.sub.id, amount: "980.01", tickedCents: 98_001, over200: true })).body.error.message).toBe(R.overMaxLine(98_000, 100_000));
-    expect(R.overMaxLine(98_000, 100_000)).toBe("This is more than this piece can be paid (up to $980 more, $1,000 in all).");
+    expect(room).toMatchObject({ paidCents: 2000, totalCapCents: 50_000, roomCents: 48_000, aboveRoomCents: 48_000 });
+    expect((await more(w.testId, w.dev.cookie, { contractId: w.sessionId, submissionId: w.sub.id, amount: "480.01", tickedCents: 48_001, over200: true })).body.error.message).toBe(R.overMaxLine(48_000, 50_000));
+    expect(R.overMaxLine(48_000, 50_000)).toBe("This is more than this piece can be paid (up to $480 more, $500 in all).");
     expect(fs.readFileSync(path.resolve(__dirname, "../src/lib/termsOfUse.ts"), "utf8")).toContain("the part's maximum in all, listed or not");
   });
 
@@ -404,18 +404,18 @@ describe("batch 28 §20, §15, §14: a listed piece's cap is its listing plus th
     expect((await dispute(w.sessionId, w.tester.cookie, w.sub.id)).status).toBe(200);
     expect(await db.notification.count({ where: { userId: w.dev.user.id, text: "Ana Silva disputed the pay for her written answers on “Harbor Run”" } })).toBe(1); // (§177) which part
     const row = await db.dispute.findFirstOrThrow({ where: { submissionId: w.sub.id } });
-    expect(await disputeBounds(row)).toMatchObject({ min: 2000, max: 100_000 });
+    expect(await disputeBounds(row)).toMatchObject({ min: 2000, max: 50_000 });
     const rows = (await adminPage("disputes", w.dev.user.id, null)).rows as import("@/lib/server/adminLists").DisputeVM[];
     const mine = rows.find((r) => r.id === row.id)!;
-    expect(mine.range).toBe("$20.00 paid · can raise up to $980.00 more");
+    expect(mine.range).toBe("$20.00 paid · can raise up to $480.00 more");
     expect(mine.money).toBe("Listing $10.00 · Paid for this piece $20.00");
     expect(mine.chat?.map((m) => `${m.who}: ${m.text}`)).toEqual(["Ana Silva: Can you pay $30 for the extra levels?", "Nora Lane: Yes, $30 in all."]);
     expect(src("app/admin/PagedList.tsx")).toContain("Their chat on this test");
     const a = await db.user.update({ where: { id: (await makeUser({ name: "Admin" })).user.id }, data: { isAdmin: true } });
-    await expect(decideDispute(a, row.id, { total: "1000.01" })).rejects.toThrow("At most $1,000.00: the most this piece can be paid.");
-    expect(await decideDispute(a, row.id, { total: "1000.00", tickCents: 98_000 })).toEqual({ extraCents: 98_000, line: "Done: raised the pay to $1,000.00 ($980.00 more charged)." }); // (batch 35 §163) the result line
+    await expect(decideDispute(a, row.id, { total: "500.01" })).rejects.toThrow("At most $500.00: the most this piece can be paid.");
+    expect(await decideDispute(a, row.id, { total: "500.00", tickCents: 48_000 })).toEqual({ extraCents: 48_000, line: "Done: raised the pay to $500.00 ($480.00 more charged)." }); // (batch 35 §163) the result line
     // At the cap: nothing is left for Pay more or a dispute.
-    expect(await disputeBounds(row)).toMatchObject({ min: 100_000, max: 100_000 });
+    expect(await disputeBounds(row)).toMatchObject({ min: 50_000, max: 50_000 });
     expect(R.canDispute(0, 1000, false, false, 0)).toEqual({ ok: false, message: "Already paid the most this piece can be paid, so there's nothing to dispute." });
     expect(fs.readFileSync(path.resolve(__dirname, "../src/lib/termsOfUse.ts"), "utf8")).toContain("To decide a dispute, our team can read the chat between the tester and the developer.");
   });
@@ -425,12 +425,12 @@ describe("batch 28 §20, §15, §14: a listed piece's cap is its listing plus th
     const { paidAndCap } = await import("@/lib/server/payments");
     const w = await sent();
     expect((await pay(w.dev.cookie, { kind: "submission", id: w.sub.id, amount: "10.00", tickedCents: 1000 })).status).toBe(200);
-    expect((await paidAndCap([{ submissionId: w.sub.id }])).get(w.sub.id)).toEqual({ paidCents: 1000, allCents: 100_000 });
-    expect(R.testerPayMoreLine("Nora Lane", 1000, 100_000)).toBe("Nora Lane has paid $10.00 for this. It can be paid more, up to $1,000.00 in all.");
-    expect((await more(w.testId, w.dev.cookie, { contractId: w.sessionId, submissionId: w.sub.id, amount: "990.00", tickedCents: 99_000, over200: true })).status).toBe(200);
-    expect((await paidAndCap([{ submissionId: w.sub.id }])).get(w.sub.id)).toEqual({ paidCents: 100_000, allCents: 100_000 });
-    expect(R.paidMostLine(100_000)).toBe("Paid the most this piece can be paid ($1,000.00).");
-    expect(R.testerPaidMostLine(100_000)).toBe("This part is already paid the most it can be ($1,000.00).");
+    expect((await paidAndCap([{ submissionId: w.sub.id }])).get(w.sub.id)).toEqual({ paidCents: 1000, allCents: 50_000 });
+    expect(R.testerPayMoreLine("Nora Lane", 1000, 50_000)).toBe("Nora Lane has paid $10.00 for this. It can be paid more, up to $500.00 in all.");
+    expect((await more(w.testId, w.dev.cookie, { contractId: w.sessionId, submissionId: w.sub.id, amount: "490.00", tickedCents: 49_000, over200: true })).status).toBe(200);
+    expect((await paidAndCap([{ submissionId: w.sub.id }])).get(w.sub.id)).toEqual({ paidCents: 50_000, allCents: 50_000 });
+    expect(R.paidMostLine(50_000)).toBe("Paid the most this piece can be paid ($500.00).");
+    expect(R.testerPaidMostLine(50_000)).toBe("This part is already paid the most it can be ($500.00).");
     expect(R.payClosedLine("Nov 2", true)).toBe("Pay more closed on Nov 2.");
     expect(src("app/app/tests/[id]/page.tsx")).toContain("paidMostLine(rooms.get(r.sub.id)!.paid)");
     expect(src("app/app/sessions/[id]/page.tsx")).toContain("more.allCents <= more.paidCents ? testerPaidMostLine(more.paidCents) : more.closedOn ? payClosedLine(more.closedOn, true) : testerPayMoreLine(dev, more.paidCents, more.allCents)");

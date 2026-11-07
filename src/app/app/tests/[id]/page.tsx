@@ -232,7 +232,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
     const r = await pieceRoom(piece);
     return [k.submissionId ?? k.callId!, { room: r.roomCents, paid: r.paidCents, listed: r.listed, pool: r.callPoolRoomCents, box: { roomCents: r.roomCents, aboveRoomCents: r.aboveRoomCents, ceilingBinds: r.ceilingBinds, totalCapCents: r.totalCapCents } }] as const;
   })));
-  // (Batch 15 section 34) What's left of the $1,000 for each tester's calls, and the small warning when under an hour (or under $200 unlisted).
+  // (Batch 15 section 34) What's left of the $500 for each tester's calls, and the small warning when under an hour (or under $200 unlisted).
   const callsLeft = new Map(await Promise.all(t.contracts.map(async (c) => [c.id, await callsLeftCents(c.id)] as const)));
   // (Batch 17 §19) Each unpaid piece's Pay closes on its own date (the test's close-out, or 14 days after its Charge opened if later): then it leaves Needs you and its
   // place reads "Closed on <date>: not paid."; in its last 7 days its Needs you row says "Pay closes on <date>.".
@@ -297,7 +297,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       sets,
       busy: testerBusy.filter((x) => x.contract.testerId === c.testerId && x.contractId !== c.id).map((x) => ({ start: x.startsAt.toISOString(), minutes: x.minutes })),
       // (Batch 16 section 33) Their waiting requests and yours, as they arrive (answered in the Call requests panel).
-      pending: reqs.filter((r) => r.contractId === c.id).length, // (Owner, Nov 6, §280) what's left of the $1,000 no longer goes to the form: booking isn't checked against it
+      pending: reqs.filter((r) => r.contractId === c.id).length, // (Owner, Nov 6, §280) what's left of the $500 no longer goes to the form: booking isn't checked against it
       requests: reqs.filter((r) => r.contractId === c.id).map((r) => ({
         id: r.id, minutes: r.minutes, rows: pageRows(r, callEnd), mine: r.fromSide === "developer",
         rate: devRateLabel(callListed(t, c) ? c.liveRateCents : null, c.liveRateCents, t.liveRateCents, c.tester.pronoun),
