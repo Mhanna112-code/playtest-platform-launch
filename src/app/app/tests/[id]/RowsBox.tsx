@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { rowShown, useTesterFilter } from "./TesterFilter";
+import { resetInactiveTesterFilter, rowShown, useTesterFilter } from "./TesterFilter";
 import { hideUnmatched, noTestersMatch, useTesterSearch } from "./TesterSearch";
 import { OwnPanel, ResizeBox } from "@/components/Panel";
 import { BIG_PANEL_TALLEST, LIST_PANEL } from "@/components/ScrollList";
@@ -18,7 +18,9 @@ export function RowsBox({ children, id = "tester-rows" }: { children: React.Reac
   // After every render (a live redraw brings new rows): the same count again changes nothing, so this never loops.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
-    setLeft(hideUnmatched(box.current, "[data-tester-name]", "testerName", q, (el) => rowShown(el.dataset.testerId ?? "", chosen)));
+    const activeIds = Array.from(box.current?.querySelectorAll<HTMLElement>("[data-tester-working]") ?? []).map((el) => el.dataset.testerId ?? "");
+    const current = resetInactiveTesterFilter(activeIds, chosen);
+    setLeft(hideUnmatched(box.current, "[data-tester-name]", "testerName", q, (el) => rowShown(el.dataset.testerId ?? "", current)));
   });
   return (
     <div className="space-y-2">

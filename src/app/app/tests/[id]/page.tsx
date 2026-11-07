@@ -130,6 +130,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const perks = await hasPerks(u);
   // (Batch 14 section 6) The read-only Access keys notice (only when the test uses keys).
   const keysView = await keyBoxes(id);
+  const participationHistory = await (await import("@/lib/server/contractHistory")).contractHistory(id, t.contracts, true);
   // (Owner, Oct 30, batch 15 sections 23, 29 and 37) ANY pause (the team's, a payment or chargeback hold, a developer-side suspension) shows the restricted view: the
   // overview with Stop and End early, Booked calls with Cancel, the excerpt requests and the disputes. Only the banner's title and reason differ by cause.
   const accountPaused = devRestricted(u, "developer");
@@ -737,7 +738,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
               { name: "Recording", on: c.recordingCents != null, required: c.recordingRequired, sub: c.submissions.find((s) => s.kind === "recording"), cents: c.recordingCents },
             ];
             return (
-              <div key={c.id} className="panel space-y-2" id={`tester-${c.id}`} data-tester-name={name} data-tester-id={c.testerId} data-previous-names={JSON.stringify(previousTesterNames.get(c.testerId) ?? [])}>
+              <div key={c.id} className="panel space-y-2" id={`tester-${c.id}`} data-tester-name={name} data-tester-id={c.testerId} data-tester-working={c.status === "working" && !c.tester.deletedAt ? "" : undefined} data-previous-names={JSON.stringify(previousTesterNames.get(c.testerId) ?? [])}>
                 {/* (Owner, Nov 3, batch 35 §140) Each tester folds by their name: closed, only the summary under it (paid in all, ratings, Rate); open, all their
                     parts, each in its own panel. Kept open or closed through the live redraws; a link into it (#part-, #call-…) opens it. */}
                 <Fold id={`tester-${c.id}`} defaultOpen={t.contracts.length === 1} className="space-y-2" summaryClassName="flex flex-wrap items-baseline gap-2 !text-base" summary={<>
@@ -747,7 +748,6 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                       spare): `NameLink fit`, the heading `min-w-0` so it can shrink, never wider than the row less the arrow (so the arrow stays beside it); the badges and the paid figure (§195) never cut (they wrap below on a phone). */}
                   <h3 className="mr-auto min-w-0 max-w-[calc(100%-1.25rem)] font-semibold text-white" data-tester-fold-name=""><NameLink fit text={name} href={personHref} /><span hidden className="text-xs font-normal text-slate-400" data-previous-name-match="" /></h3>
                   <span className="badge shrink-0 whitespace-nowrap">{c.status === "working" ? `Working · due ${fmtDate(c.dueAt)}` : c.status === "left" ? "Left the test" : "Work ended"}</span>
-                  {c.ndaAcceptedAt && <span className="badge shrink-0 whitespace-nowrap">NDA accepted {fmtDate(c.ndaAcceptedAt)}</span>}
                   {/* (Owner, Nov 4, §195) Paid so far for their work on this test, once, on the right of the name row (it was the first line of the summary under the row). */}
                   <PaidSoFar cents={paidSoFar(c.id)} className="!ml-0" />
                 </>}>
@@ -928,14 +928,14 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                     drop-down, below all their part panels (written answers, recording, calls and their Pay panels). */}
                 {/* (Owner, Nov 5, §263) The tester's Terms history for the questions, as on their session page: each change, Then (with what they SENT for
                     each question, never a draft) → Now, the files drawn from this part's uploads. */}
-                {writtenSub && ((hist) => hist.length > 0 && (
+                {((hist) => (hist.length > 0 || (participationHistory.get(c.id)?.length ?? 0) > 0) && (
                   <details className="mt-2 space-y-2 text-sm" data-terms-history="" data-dev-terms-history={c.id}>
                     <summary className="fold-chevron cursor-pointer font-medium text-white">Terms history</summary>
                     <OwnPanel><ResizeBox id={`dev-terms-history-${c.id}`} label="Terms history">
-                      <ul className="space-y-1.5 text-slate-300">{hist.map((q) => <QuestionsChangedEntry key={q.at} id={`dev-history-q-${c.id}-${new Date(q.at).getTime()}`} change={q} files={writtenSub.recordings} timeZone={u.timeZone} />)}</ul>
+                      <ul className="space-y-1.5 text-slate-300">{[...hist.map((q) => ({ at: new Date(q.at), id: `q-${q.at}`, node: <QuestionsChangedEntry key={q.at} id={`dev-history-q-${c.id}-${new Date(q.at).getTime()}`} change={q} files={writtenSub?.recordings ?? []} timeZone={u.timeZone} /> })), ...(participationHistory.get(c.id) ?? []).map((e) => ({ at: e.at, id: e.id, node: <li key={e.id} data-participation-history="">{fmtDateTime(e.at)}: {e.label}{e.value && <>: <span className="break-all">{e.value}</span></>}</li> }))].sort((a, b) => a.at.getTime() - b.at.getTime() || a.id.localeCompare(b.id)).map((e) => e.node)}</ul>
                     </ResizeBox></OwnPanel>
                   </details>
-                ))(questionChanges(c.prevSets, writtenQuestions(c), writtenSub, { drafts: false }))}
+                ))(writtenSub ? questionChanges(c.prevSets, writtenQuestions(c), writtenSub, { drafts: false }) : [])}
                 </Fold>
                 <div className="space-y-1" data-tester-summary="">
                   <div className="flex flex-wrap items-center gap-2">

@@ -76,7 +76,9 @@ async function removeTester(u: { id: string; name: string; email: string; pronou
   const who = kind === "deleted" ? "Deleted account" : displayName(u);
   for (const c of contracts) {
     const cancelled = await db.$transaction(async (tx) => {
+      await (await import("./tests")).lockTest(tx, c.testId);
       await tx.contract.update({ where: { id: c.id }, data: { status: "left", endKind: kind, endedAt: new Date() } });
+      await (await import("./accessKeys")).releaseTesterKeys(tx, c.id);
       const list = await cancelCallsAhead(tx, [c.id], `${who} left the test.`);
       await closeOffersOfEnded(tx, [c.id]); // (batch 35 §118)
       await tx.callRequest.updateMany({ where: { contractId: c.id, status: "pending" }, data: { status: "closed", closedReason: "the tester left", decidedAt: new Date() } });

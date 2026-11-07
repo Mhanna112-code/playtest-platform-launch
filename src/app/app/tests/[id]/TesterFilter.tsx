@@ -28,6 +28,12 @@ function choose(id: string) {
 }
 /** (Owner, Nov 6, §283) Typing in "Search testers" clears the circles' choice (the two never narrow the list together). */
 export const clearTesterFilter = () => { if (read()) choose(""); };
+/** A departed/deleted tester must not leave the list stuck on a stale circle selection. */
+export function resetInactiveTesterFilter(activeIds: string[], chosen = "") {
+  const current = chosen || read();
+  if (current && !activeIds.includes(current)) { choose(""); return ""; }
+  return current;
+}
 /** The tester shown alone (""; everyone). */
 export function useTesterFilter() {
   const [id, setId] = useState("");

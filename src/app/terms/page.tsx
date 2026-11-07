@@ -1,7 +1,7 @@
 import { HashJump } from "@/components/HashJump";
 import { PublicShell } from "@/components/PublicShell";
 import { MAX_ACTIVE_TESTS, MAX_SPOTS, PAYMENTS_TERMS_ID } from "@/lib/rules";
-import { CALL_WINDOW_TERMS, EMAIL_TIMING_TERMS, PAUSE_DEADLINE_TERMS, PAYMENT_RULES, TERMS_VERSION, WHAT_CHANGED, WHAT_CHANGED_ID } from "@/lib/termsOfUse";
+import { CALL_WINDOW_TERMS, EDIT_TEST_TERMS, EMAIL_TIMING_TERMS, PAUSE_DEADLINE_TERMS, PAYMENT_RULES, TERMS_VERSION, WHAT_CHANGED, WHAT_CHANGED_ID } from "@/lib/termsOfUse";
 
 export const metadata = { title: "Terms of Use · Playtest" };
 const LATEST = WHAT_CHANGED.reduce((a, b) => (b.version > a.version ? b : a));
@@ -25,7 +25,7 @@ const SECTIONS: { title: string; points: (string | { id: string; text: string })
       "A test states its terms up front: the parts you ask for (written answers, a screen recording, a live call), the price of each, your questions, the devices and languages it needs, Open until (the last day to join; every tester gets the same number of days from when they join), how many testers (spots), and who can join (anyone who matches, people you approve, or invite only).",
       "A live call's hourly rate is at least $10 an hour (or free); each call request picks its own length (10 to 180 minutes). Each part can be marked Required or Not required: it is a label, it blocks nothing.",
       `Posting a test is free; what developers pay is in section 4. Every test takes at most ${MAX_SPOTS} testers. A tester can be in up to ${MAX_ACTIVE_TESTS} tests at once.`,
-      "When a tester joins, their agreed parts and prices are saved. Changes to those terms are offered to working testers, who choose Switch or Keep; work already sent keeps the price it was sent under. Questions and listing information follow the current listing, with changes recorded on the test. An NDA change requires its own acknowledgement. Moving Open until later moves working testers' deadlines later; a deadline never moves earlier.",
+      EDIT_TEST_TERMS,
       "Tests can be stopped for good by the developer; the work already sent still waits to be paid, and calls ahead are cancelled.",
     ],
   },

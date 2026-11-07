@@ -35,11 +35,11 @@ describe("the Free box (section 19)", () => {
     expect(keyRefusal("HR-9", "held", { working: false, name: "Ben" })).toBe("");
     expect(keyRefusal("HR-9", "broken", { working: true, name: "Ben Okafor" })).toBe("HR-9 is in use by Ben Okafor, so it can't be added.");
     expect(reusedKeyLine("HR-3333", "Ben Okafor")).toBe("HR-3333: reused, previously given to Ben Okafor.");
-    expect(FREE_KEYS_RULE).toBe("Keys in use can't be added. Keys from testers who left or finished can be typed in again.");
+    expect(FREE_KEYS_RULE).toBe("Keys in use can't be added. When a tester leaves or their work ends, their key returns to Free. Assigned keys stay in Terms history.");
     expect(src("app/app/tests/TestForm.tsx")).toContain("keysAdd: fb.added, keysRemove: fb.removed");
   });
 
-  it("every key a refusal calls 'in use' is listed under In use; a key of a tester who left shows greyed '(left)' and can be typed back (one stored as \"broken\" too)", async () => {
+  it("every key a refusal calls 'in use' is listed under In use; a key of a tester who left returns to Free (one stored as \"broken\" too)", async () => {
     const { dev, testId } = await setup({ spots: 3, accessKeys: "K1\nK2\nK3\nK4" });
     const a = await joined(testId, "Ana Silva"); // K1
     const b = await joined(testId, "Ben Okafor"); // K2
@@ -51,7 +51,8 @@ describe("the Free box (section 19)", () => {
     await sact(a.sessionId, "leave", a.tester.cookie, { seenAt: seen() });
     await sact(b.sessionId, "leave", b.tester.cookie, { seenAt: seen() });
     k = await keyBoxes(testId);
-    expect(k.inUse.map((x) => [x.value, x.gone])).toEqual([["K1", "left"], ["K2", "left"]]);
+    expect(k.inUse).toEqual([]);
+    expect(k.free.map((x) => x.value)).toEqual(["K1", "K2", "K3", "K4"]);
     expect((await edit(testId, dev.cookie, { keysAdd: ["K1", "K2"] })).status).toBe(200);
     k = await keyBoxes(testId);
     expect(k.free.filter((x) => x.reused).map((x) => [x.value, x.reused])).toEqual([["K1", { from: "Ana Silva" }], ["K2", { from: "Ben Okafor" }]]);

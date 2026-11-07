@@ -7,8 +7,8 @@ import { HttpError } from "./http";
 type Tx = Prisma.TransactionClient | typeof db;
 
 // (Design doc 5) Access keys. Free keys go to NEW testers (the oldest free key at join). (Owner, Oct 29, batch 14 section 6) Nothing ever replaces a key on its own
-// and there is no "Assign a free key": a tester whose key doesn't work is sent one by the developer in a message (a free key deleted in Edit). A key given to a tester
-// who left is held for them: it isn't free and can never be added again.
+// and there is no "Assign a free key": a tester whose key doesn't work is sent one by the developer in a message (a free key deleted in Edit).
+// (Owner, Nov 7) Leaving or End early returns assigned keys to Free; their previous recipient remains on the reuse warning.
 // (Owner, Nov 6, §304) There is no "This key doesn't work" any more: a tester whose key fails says so in chat. A key still stored as "broken" (reported before
 // §304) is simply a key in use: shown normally everywhere, given back to its tester on rejoining like any held key. The status and its columns stay, unused.
 
@@ -22,12 +22,31 @@ export async function openSpotsOf(tx: Tx, testId: string, spots?: number) {
 /** Does this test use access keys at all? (Any key ever added.) */
 export const usesKeys = async (tx: Tx, testId: string) => (await tx.accessKey.count({ where: { testId } })) > 0;
 
+/** Called under the test lock, in the same transaction that ends the tester's work. */
+export async function releaseTesterKeys(tx: Tx, contractId: string) {
+  const keys = await tx.accessKey.findMany({ where: { contractId, status: { in: ["inuse", "held", "broken"] } }, select: { id: true, value: true, assignedAt: true, createdAt: true, contract: { select: { tester: { select: { name: true, email: true, deletedAt: true } } } } } });
+  for (const key of keys) {
+    if (!(await tx.contractNote.findFirst({ where: { contractId, kind: "key_assigned", text: key.value } }))) await tx.contractNote.create({ data: { contractId, kind: "key_assigned", text: key.value, createdAt: key.assignedAt ?? key.createdAt } });
+    await tx.accessKey.updateMany({ where: { id: key.id, contractId }, data: { status: "free", contractId: null, assignedAt: null, brokenAt: null, fixedAt: null, brokenDismissedAt: null, reusedFrom: key.contract ? displayName(key.contract.tester) : "", reusedBroken: false } });
+  }
+}
+
+/** Also releases assignments made before automatic unassignment was introduced. Caller holds the test lock. */
+async function releaseInactiveKeys(tx: Tx, testId: string) {
+  const rows = await tx.accessKey.findMany({ where: { testId, status: { in: ["inuse", "held", "broken"] }, contract: { OR: [{ status: { not: "working" } }, { tester: { deletedAt: { not: null } } }] } }, select: { contractId: true }, distinct: ["contractId"] });
+  for (const row of rows) if (row.contractId) await releaseTesterKeys(tx, row.contractId);
+}
+
 /**
- * The keys of a test grouped for the Edit page's boxes. (Owner, Oct 30, batch 15 sections 19 and 44) "In use" also lists, greyed, the keys of testers who left or finished
- * ("(left)" / "(finished)"): those can be typed back into Free (with a warning, never a mistake). Every key a refusal calls "in use" is a working tester's, listed here.
+ * The keys of a test grouped for the Edit page. Departed testers' assignments return to Free; their key history stays in ContractNote.
+ * Every key a refusal calls "in use" belongs to a working tester.
  * (Owner, Nov 6, §304) No "broken" flag or rows: a key once reported shows as a normal key.
  */
 export async function keyBoxes(testId: string) {
+  await db.$transaction(async (tx) => {
+    await (await import("./tests")).lockTest(tx, testId);
+    await releaseInactiveKeys(tx, testId);
+  });
   const keys = await db.accessKey.findMany({ where: { testId }, orderBy: [{ createdAt: "asc" }, { id: "asc" }], include: { contract: { include: { tester: true } } } });
   const free = keys.filter((k) => k.status === "free").map((k) => ({ id: k.id, value: k.value, ...(k.reusedFrom ? { reused: { from: k.reusedFrom } } : {}) }));
   const inUse = keys
@@ -47,20 +66,23 @@ export async function keyBoxes(testId: string) {
 }
 
 /**
- * A tester joins: they get the key held for them (a key stays attached to the tester who left or was ended), else the oldest free key.
+ * A tester joins: they get the oldest free key. Rejoining releases any legacy held assignment first.
  * (Owner, Nov 6, §304) A held key once reported as not working comes back like any other (no "does it work again?" question).
  * Throws when the test has keys but none is free.
  */
 export async function assignKeyAtJoin(tx: Tx, testId: string, contractId: string) {
+  await releaseInactiveKeys(tx, testId);
   if (!(await usesKeys(tx, testId))) return null;
   const held = await tx.accessKey.findFirst({ where: { testId, contractId, status: { in: ["inuse", "broken", "held"] } } });
   if (held) {
     await tx.accessKey.update({ where: { id: held.id }, data: { status: "inuse", brokenAt: null, assignedAt: new Date() } });
+    await tx.contractNote.create({ data: { contractId, kind: "key_assigned", text: held.value } });
     return held.value;
   }
   const free = await tx.accessKey.findFirst({ where: { testId, status: "free" }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] });
   if (!free) throw new HttpError(409, "no_key", "No access key is free right now, so this test can't take another tester until the developer adds one.");
   await tx.accessKey.update({ where: { id: free.id }, data: { status: "inuse", contractId, assignedAt: new Date() } });
+  await tx.contractNote.create({ data: { contractId, kind: "key_assigned", text: free.value } });
   return free.value;
 }
 
@@ -84,6 +106,7 @@ export async function giveKeysToWorking(tx: Tx, testId: string) {
   const given: { contractId: string; testerId: string; email: string; name: string }[] = [];
   for (let i = 0; i < Math.min(free.length, waiting.length); i++) {
     await tx.accessKey.update({ where: { id: free[i].id }, data: { status: "inuse", contractId: waiting[i].id, assignedAt: now } });
+    await tx.contractNote.create({ data: { contractId: waiting[i].id, kind: "key_assigned", text: free[i].value, createdAt: now } });
     given.push({ contractId: waiting[i].id, testerId: waiting[i].testerId, email: waiting[i].tester.email, name: displayName(waiting[i].tester) });
   }
   return given;

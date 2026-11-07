@@ -914,6 +914,7 @@ export async function endEarly(dev: U, testId: string, body: Record<string, unkn
     if (!list.length && endedElsewhere.length) throw new HttpError(409, "gone", `${andList(endedElsewhere.map((x) => x.name))}'s work already ended.`);
     for (const c of list) {
       await tx.contract.update({ where: { id: c.id }, data: { status: "ended", endKind: "early", endedAt: new Date(), endReason: reason } });
+      await (await import("./accessKeys")).releaseTesterKeys(tx, c.id);
       cancelled = cancelled.concat(await cancelCallsAhead(tx, [c.id], "The developer ended the work early."));
       await closeOffersOfEnded(tx, [c.id]); // (batch 35 §118)
       await tx.callRequest.updateMany({ where: { contractId: c.id, status: "pending" }, data: { status: "closed", closedReason: "the session ended", decidedAt: new Date() } });
@@ -1095,6 +1096,7 @@ export async function joinTest(tester: U, testId: string, body: Record<string, u
     }
     // (Owner, Nov 6, §312e) Rejoining accepts the listing as it is now, NDA included: the earlier stint's NDA change (and its unacknowledged notice, which blocked
     // every press and showed "… changed the NDA … Acknowledge" on the fresh page) does not carry over.
+    if (old) await (await import("./accessKeys")).releaseTesterKeys(tx, old.id);
     const contract = old
       ? await tx.contract.update({ where: { id: old.id }, data: { ...snap, dueAt: rejoinDue(old.dueAt, old.endedAt, new Date(), dev.timeZone), status: "working", endKind: "", endedAt: null, endReason: "", termsSwitchedAt: null, ndaChangedAt: null, ndaChangeKind: "", ndaNoticeSeenAt: null } })
       : await tx.contract.create({ data: { testId, testerId: tester.id, ...snap } });
@@ -1159,6 +1161,7 @@ export async function leaveTest(tester: U, contractId: string, body: Record<stri
     const c = await tx.contract.findUniqueOrThrow({ where: { id: contractId } });
     refused(c);
     await tx.contract.update({ where: { id: c.id }, data: { status: "left", endedAt: new Date() } });
+    await (await import("./accessKeys")).releaseTesterKeys(tx, c.id);
     await cancelCallsAhead(tx, [c.id], `${displayName(tester)} left the test.`);
     await closeOffersOfEnded(tx, [c.id]); // (batch 35 §118) leaving ends the part: its open new-terms offer closes
     await tx.callRequest.updateMany({ where: { contractId: c.id, status: "pending" }, data: { status: "closed", closedReason: "the tester left", decidedAt: new Date() } });

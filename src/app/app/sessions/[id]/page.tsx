@@ -186,6 +186,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
   // (Design doc 9) Terms history: what they joined on, every offer and what they chose (previous questions, answers and NDAs stay here).
   const offers = await db.termsOffer.findMany({ where: { contractId: c.id }, orderBy: { createdAt: "asc" } });
   // (Owner, Oct 30, batch 15 sections 24 and 43) Their own deal history, in order: renames, previous question sets and payments too (never other testers' choices).
+  const participationHistory = (await (await import("@/lib/server/contractHistory")).contractHistory(c.testId, [c])).get(c.id) ?? [];
   const contractNotes = await db.contractNote.findMany({ where: { contractId: c.id }, orderBy: { createdAt: "asc" } });
   const historyPays = await db.payment.findMany({ where: { contractId: c.id, status: { in: ["charged", "not_set_up"] }, kind: { notIn: ["chargeback", "subscription"] } }, orderBy: { createdAt: "asc" }, select: { id: true, amountCents: true, createdAt: true, kind: true, callId: true, submissionId: true } });
   const subKinds = new Map(c.submissions.map((x) => [x.id, x.kind === "recording" ? "recording" : "written answers"]));
@@ -540,7 +541,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
           <OwnPanel>
           <ResizeBox id={`terms-history-${c.id}`} label="Terms history">
           <ul className="space-y-1.5 text-slate-300" data-terms-history-list="">
-            <li>{fmtDate(c.joinedAt)}: you joined on {termsLine(c, true)}{c.ndaAcceptedAt ? ` and accepted the NDA` : ""}.</li>
+            <li>{fmtDate(c.joinedAt)}: you joined on {termsLine(c, true)}.</li>
             {[
               // (Owner, Nov 5, §266) Terms history keeps only changes to the fields limited to 3 changes: an offer lists only those in its diff (parts and prices;
               // questions for an offer made before §265), and one that changed none of them (only the NDA or the deadline) gets no entry.
@@ -559,6 +560,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
                 {/* (§266) No "NDA then and now": the NDA isn't a limited field. */}
               </li>) }] : []; }),
               // (Owner, Nov 5, §266) "Test stopped" with its reason stays; the "Renamed" lines (title, product name) are left out.
+              ...participationHistory.filter((e) => e.label !== "Joined").map((e) => ({ at: e.at, key: e.id, node: <li key={e.id} data-participation-history="">{fmtDateTime(e.at)}: {e.label}{e.value && <>: <span className="break-all">{e.value}</span></>}</li> })),
               ...contractNotes.filter((n) => n.kind === STOP_NOTE_KIND).map((n) => ({ at: n.createdAt, key: n.id, node: <li key={n.id} data-history-line="">{`${fmtDateTime(n.createdAt)}: Test stopped`}<ReasonQuote text={stopReasonOf(n.text)} /></li> })), // (Batch 17 §15) the reason in its scroll box
               // (Batch 30 §15) Older versions of the listing information: each save's changes, before → after (renames have their own "Renamed" line).
               // (Owner, Nov 5, §266) Only the limited fields: what to do, the build link, devices and languages (no title, product, categories, Mature).
