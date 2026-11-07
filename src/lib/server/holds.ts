@@ -262,6 +262,13 @@ export async function deferIfHeld(data: Omit<Prisma.PaymentUncheckedCreateInput,
   });
 }
 
+/**
+ * (Owner, Nov 6, §319) A charge that waits for a developer suspension or the team's pause of its test (no hold): "<piece> ($15.50) is waiting: it's charged when your
+ * account is clear" / "… it's charged when the team lifts the pause on “<test>”" (`pausedTest`: the team's pause; null: a suspension).
+ */
+export const waitingChargeLine = (piece: string, cents: number, pausedTest: string | null) =>
+  `${piece} (${money(cents)}) is waiting: it's charged when ${pausedTest ? `the team lifts the pause on “${pausedTest}”` : "your account is clear"}`;
+
 /** One drain per developer; the durable AppState lock follows the timers lock's stale-run protection. */
 export async function chargeDeferred(devId: string) {
   const key = `deferred-charges:${devId}`, value = `${Date.now()}:${randomUUID()}`;
@@ -1806,6 +1813,9 @@ export async function autoChargeCalls(now: Date) {
       await db.payment.create({ data: { kind: "call", callId: x.id, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amount, feeCents: 0, testerCents: 0, status: "deferred" } });
       await tellDelayed();
       await logged(`${call} was charged automatically: ${money(amount)}, ${dev.devSuspendedAt ? "charged when your account is clear" : "charged when the team lifts the pause on this test"}`);
+      // (Owner, Nov 6, §319) The developer's bell (and the payment email), in "Payments and holds" like the hold's "is added to what you owe" line: which charge waits
+      // and until when ("Nina Park's live call on “PAY TEST” (Sun, Nov 1, 6:05 PM) ($15.50) is waiting: it's charged when your account is clear").
+      await bell(dev.id, waitingChargeLine(pieceName({ tester: name, part: "live call", test: c.title, when: T(x.startsAt), full: true }), amount, dev.devSuspendedAt ? null : c.title), `/app/tests/${c.testId}#call-${x.id}`, undefined, { side: "developer", payment: true, group: "payhold", testId: c.testId });
       n++;
       continue;
     }
