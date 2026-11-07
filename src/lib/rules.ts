@@ -972,12 +972,16 @@ export const cardDeclinedConfirmLine = (by: string) => `Your card was declined, 
 export const CONFIRM_WITH_BANK = "Confirm with your bank";
 /**
  * (Owner, Oct 29, batch 29 §32) ONE bell line for every charge waiting for the bank, across tests and renewals: "Your bank wants you to confirm a $10.00 payment on
- * “Harbor Run” by Nov 2" (a renewal: "… a $10.00 payment by Nov 2"), or "Your bank wants you to confirm 3 payments ($24.50 in all): the first by Nov 2".
+ * “Harbor Run” by Nov 2" (a renewal: "… a $10.00 payment by Nov 2"), or (§321) "Your bank wants you to confirm 5 payments ($52.00 in all): $10.00 on “Harbor Run”, $9.00 on “Sky Lab”, $15.00 on “Harbor Run” and 2 more; the first by Nov 2".
  */
 export const bankWaitingAllLine = (list: { cents: number; title: string | null; by: Date }[]) => {
   const first = [...list].sort((a, b) => a.by.getTime() - b.by.getTime())[0];
   if (list.length === 1) return `Your bank wants you to confirm a ${money(first.cents)} payment${first.title ? ` on “${first.title}”` : ""} by ${T(first.by, "date")}`;
-  return `Your bank wants you to confirm ${list.length} payments (${money(list.reduce((s, x) => s + x.cents, 0))} in all): the first by ${T(first.by, "date")}`;
+  // (Owner, Nov 6, §321) The first 3 by their dates, then "and N more".
+  const named = [...list].sort((a, b) => a.by.getTime() - b.by.getTime()).slice(0, 3).map((x) => `${money(x.cents)}${x.title ? ` on “${x.title}”` : ""}`);
+  const more = list.length - named.length;
+  const which = more ? `${named.join(", ")} and ${more} more` : `${named.slice(0, -1).join(", ")} and ${named[named.length - 1]}`;
+  return `Your bank wants you to confirm ${list.length} payments (${money(list.reduce((s, x) => s + x.cents, 0))} in all): ${which}; the first by ${T(first.by, "date")}`;
 };
 /** (Batch 29 §32) Where that line opens: the dashboard's "Your bank wants you to confirm" box (batch 24). */
 export const BANK_TO_CONFIRM_HREF = "/app#bank-to-confirm";

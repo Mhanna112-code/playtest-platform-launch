@@ -272,12 +272,12 @@ describe("§32 bank confirmations: one line across all tests", () => {
     await tellBankWaiting(dev.user.id);
     const bank = () => db.notification.findMany({ where: { userId: dev.user.id, text: { startsWith: "Your bank wants you to confirm" } }, orderBy: { createdAt: "asc" } });
     expect(await bank()).toHaveLength(1);
-    expect((await bank())[0].text).toMatch(/^Your bank wants you to confirm 2 payments \(\$17\.00 in all\): the first by [A-Z][a-z]{2} \d{1,2}$/);
+    expect((await bank())[0].text).toMatch(/^Your bank wants you to confirm 2 payments \(\$17\.00 in all\): .+; the first by [A-Z][a-z]{2} \d{1,2}$/);
     expect((await bank())[0]).toMatchObject({ link: "/app#bank-to-confirm", groupKey: "payhold", mustEmail: true, payment: true });
     await mk(750, a.sessionId, 3);
     await tellBankWaiting(dev.user.id, new Date(Date.now() + DAY));
     expect(await bank()).toHaveLength(2);
-    expect((await bank())[1].text).toMatch(/^Your bank wants you to confirm 3 payments \(\$24\.50 in all\): the first by /);
+    expect((await bank())[1].text).toMatch(/^Your bank wants you to confirm 3 payments \(\$24\.50 in all\): .+; the first by /);
     expect(renderTimes(R.bankWaitingAllLine([{ cents: 1000, title: "Harbor Run", by: new Date("2026-11-02T15:00:00Z") }]), "UTC")).toBe("Your bank wants you to confirm a $10.00 payment on “Harbor Run” by Nov 2");
   });
 });
