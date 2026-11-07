@@ -17,3 +17,7 @@ If the selected tester is no longer working on the test, or their account was de
 ## 4. Terms of Use
 
 Explain that saved edits update the current listing for existing testers where relevant. Keep/Switch protects their agreed parts and prices; it does not preserve older questions or other listing information. NDA changes are acknowledged separately. This is a clarification of the existing behavior before launch, folded into Terms version 2.
+
+## 5. Paused header and tester earnings
+
+A developer's paused test header keeps its listing tags, including the ordinary status and free-key count, and adds Paused. The controls still obey the pause restrictions. A tester's earnings must not name the developer's Pay what you owe repayment method; the developer's own payment details may still explain it. Everything you sent and Your earnings retain their separate work-status and payment-history purposes.

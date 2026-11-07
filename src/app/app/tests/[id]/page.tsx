@@ -459,7 +459,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
         <AutoRefresh query={`test=${t.id}`} v={pageV} />
         {banner}
         <TopPanel timeZone={u.timeZone}
-          id={t.id} title={t.title} productName={t.productName} ignoredAlerts={t.ignoredAlerts} alertsV={t.alertsV} restricted mature={t.mature} nda={!!t.ndaText} keysLeft={null}
+          id={t.id} title={t.title} productName={t.productName} ignoredAlerts={t.ignoredAlerts} alertsV={t.alertsV} restricted mature={t.mature} nda={!!t.ndaText} keysLeft={keysLeft}
           parts={{ written: t.writtenCents != null, recording: t.recordingCents != null, live: t.liveRateCents != null }} paused status={t.status} workEnded={!!t.workEndedAt}
           terms={termsLine({ ...asListing(t), testerDays: t.testerDays })} openUntil={t.openUntil ? t.openUntil.toISOString() : null} version={t.version} seenAt={seenAt}
           teamStopped={!!t.adminStoppedAt} perks={perks} spotsLine={`${working.length} of ${t.spots} spots used`} full={working.length >= t.spots}

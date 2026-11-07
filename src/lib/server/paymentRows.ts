@@ -322,8 +322,8 @@ export async function paidRows(ps: Row[], side: "developer" | "tester"): Promise
     const r = ctx.reviewOf(o);
     const own = p.kind === "review" || p.kind === "call";
     const byTester = own && r && (r.reason === CHARGED_BY_TESTER || r.reason === CHARGED_BY_TESTER_14);
-    // (Owner, Nov 4) How the developer confirmed it is theirs: the tester's row reads as the charge itself (Pay what you owe kept as before).
-    const how = p.kind === "chargeback" ? "" : via.get(p.id) === "owed" ? "paid through Pay what you owe" : byTester ? "charged by you after 7 days without a review" : own && r?.auto ? "charged automatically after 7 days" : "";
+    // How the developer repaid or confirmed it is private: the tester's row describes only their work and charge.
+    const how = p.kind === "chargeback" ? "" : byTester ? "charged by you after 7 days without a review" : own && r?.auto ? "charged automatically after 7 days" : "";
     // (Owner, Nov 7, §327) A call with its date and time: "from Nora Lane for your live call on “Harbor Run” (Fri, Oct 30, 12:17 AM)".
     const when = callWhen(ctx, o);
     const what = `from ${displayName(c.test.developer)} for your ${ctx.partOf(o)} on “${c.title}”${when ? ` (${when})` : ""}${p.kind === "extra" ? " (extra pay)" : p.kind === "dispute" ? " (dispute decision)" : ""}`;

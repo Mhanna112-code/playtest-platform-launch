@@ -11,6 +11,8 @@ describe("Confirm all's paid label", () => {
     expect(src).toContain('by ? (alls.has(by) ? "all" : "owed") : p.owedUntil ? "owed" : "bank"');
   });
   it("the tester's row never names the developer's Confirm all", () => {
-    expect(src).toContain('via.get(p.id) === "owed" ? "paid through Pay what you owe"');
+    const tester = src.slice(src.indexOf("// The tester's rows"), src.indexOf("export type RefundLine"));
+    expect(tester).not.toContain("paid through Pay what you owe");
+    expect(tester).not.toContain("confirmed with Confirm all");
   });
 });

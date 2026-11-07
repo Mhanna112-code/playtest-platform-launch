@@ -123,7 +123,8 @@ export function TopPanel(p: { timeZone?: string | null; joinClosedLine?: string;
             {p.productName && <p className="kicker">{p.productName}</p>}
             <h1 className="text-3xl font-bold tracking-tight text-white">{p.title}</h1>
             <div className="flex flex-wrap gap-2">
-              {p.paused && p.status !== "stopped" ? <span className="badge border-amber-300/40 text-amber-200">Paused</span> : <StatusPill status={p.workEnded ? "closed" : p.status} full={p.full} />}
+              <StatusPill status={p.workEnded ? "closed" : p.status} full={p.full} />
+              {p.paused && p.status !== "stopped" && <span className="badge border-amber-300/40 text-amber-200">Paused</span>}
               {p.parts && <PartBadges written={p.parts.written} recording={p.parts.recording} live={p.parts.live} />}
               {p.mature && <span className="badge border-rose-300/40 text-rose-200">Mature (18+)</span>}
               {p.nda && <span className="badge">NDA</span>}
