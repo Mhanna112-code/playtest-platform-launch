@@ -652,7 +652,13 @@ export async function payOwed(dev: { id: string }, body: Record<string, unknown>
   // (§117 rule 6) ONE payment for the total: one charge, one bank check if the card asks (inline under the button), one receipt naming every item.
   // (Owner, Nov 3) Allowed to pay after the team's review: checked again inside the claim (a new chargeback meanwhile un-approves it).
   const r = await once.chargeOwedTotal(u, list, "press", reviewFirst ? { reviewFirst: reviewFirstLine(cbCount + 1) } : {});
-  if (r.result === "skipped") throw new HttpError(409, "stop_once", "Press again to go ahead.", { changes: [{ text: "What you owe changed meanwhile. Press again to pay what's left.", at: new Date(), key: "owed-total" }] });
+  if (r.result === "skipped") {
+    // Another tab can claim or finish the same payment after the initial refusal check, while this press is reading its total.
+    await refuseOwedInFlight(dev.id);
+    const paid = await paidBefore(dev.id, body);
+    if (paid && !withDebt(await payable(dev.id)).length) throw new HttpError(409, "nothing_owed", paid);
+    throw new HttpError(409, "stop_once", "Press again to go ahead.", { changes: [{ text: "What you owe changed meanwhile. Press again to pay what's left.", at: new Date(), key: "owed-total" }] });
+  }
   if (r.result === "action") return { paid: 0, stillFailing: [] as string[], lifted: false, confirm: [r.action] };
   if (r.result === "failed") {
     const what = list.length === 1 ? lines.find((l) => l.id === list[0].id)?.text ?? money(total) : money(total);

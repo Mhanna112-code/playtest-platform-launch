@@ -75,6 +75,8 @@ export async function testV(viewerId: string, testId: string, sessionId = "") {
   // event: the sessions' states, the calls' states and the block itself are in the fingerprint, so the session page drops Join call, Request a time and the call
   // requests on its normal poll (and the test page its rows' call buttons).
   const consV = cons.filter((c) => c.status !== "working").map((c) => `${c.id}:${c.status}:${c.endedAt?.getTime() ?? 0}`).sort().join(",");
+  // Each tester's displayed deadline can move without changing the overall work window or recording an edit event.
+  const deadlinesV = cons.map((c) => `${c.id}:${c.dueAt.getTime()}`).join(",");
   const callsV = await db.call.aggregate({ where: { contractId: { in: ids } }, _count: { _all: true }, _max: { cancelledAt: true, endedAt: true } });
   const callsKey = `${callsV._count._all}:${callsV._max.cancelledAt?.getTime() ?? 0}:${callsV._max.endedAt?.getTime() ?? 0}`;
   const sessionTester = sessionId ? cons.find((c) => c.id === sessionId)?.testerId ?? "" : "";
@@ -119,7 +121,7 @@ export async function testV(viewerId: string, testId: string, sessionId = "") {
   // redraws it on the next poll, the step ticked and the button gone.
   const cbV = sessionId ? "" : await (await import("./pageFreshness")).chargebackStateV(viewerId);
   // (Batch 10) The developer's suspension and the team's pause are in it too, so a tester's session page shows (or drops) the paused banner live.
-  return [ev?.createdAt.getTime() ?? 0, pay.n, pay.last, bankActionsV, elsewhereV, t.developer.holdStartedAt?.getTime() ?? 0, t.status, disp.map((d) => d.status + (d.devSideAt?.getTime() ?? 0)).join(","), inv?.updatedAt.getTime() ?? 0, sus, msg?.createdAt.getTime() ?? 0, t.developer.devSuspendedAt?.getTime() ?? 0, t.adminPausedAt?.getTime() ?? 0, keysV, own?.createdAt.getTime() ?? 0, reqV?.updatedAt.getTime() ?? 0, profV?.getTime() ?? 0, ratingsN, ratingRowsV, rateV, consV, callsKey, blocksV, excerptsV, cbV, workEnd, pronounsV, myKeyV].join("|");
+  return [ev?.createdAt.getTime() ?? 0, pay.n, pay.last, bankActionsV, elsewhereV, t.developer.holdStartedAt?.getTime() ?? 0, t.status, disp.map((d) => d.status + (d.devSideAt?.getTime() ?? 0)).join(","), inv?.updatedAt.getTime() ?? 0, sus, msg?.createdAt.getTime() ?? 0, t.developer.devSuspendedAt?.getTime() ?? 0, t.adminPausedAt?.getTime() ?? 0, keysV, own?.createdAt.getTime() ?? 0, reqV?.updatedAt.getTime() ?? 0, profV?.getTime() ?? 0, ratingsN, ratingRowsV, rateV, consV, deadlinesV, callsKey, blocksV, excerptsV, cbV, workEnd, pronounsV, myKeyV].join("|");
 }
 
 /** (Owner, Oct 29, batch 10) Payments'"Pay what you owe": a declined payment, a chargeback, a tester's Charge during the hold, a payment from another tab, a reservation. */
