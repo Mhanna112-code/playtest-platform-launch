@@ -75,8 +75,8 @@ export async function notify(to: string, subject0: string, lines0: string[], pat
   }
   // (Owner, Nov 6, §294) `now` (with `always`): the email is sent immediately through sendEmail, the path the admins' chargeback emails take, never queued for
   // the summary or the end-of-day email; the bell line is written as already emailed (summarizedAt), so no later email repeats it. Used for the developer's
-  // chargeback emails. (Owner, Nov 6, §299) Also the 15-minute call reminder, WITHOUT `always`: it follows the person's email setting (Off: the bell line only, and
-  // no later email repeats it either), but when it is emailed it goes at once, before the call, never in a later summary.
+  // chargeback emails. (Owner, Nov 6, §299) Also the 15-minute call reminder: it goes at once, before the call, never in a later summary; (§324) with `always`
+  // now, so an account with email Off gets it too.
   if (opts.now) {
     await client.notification.create({ data: { side: lineSide(user.id, path, opts.side), userId: user.id, text: subject, link: path, testId: opts.testId ?? (await testIdOfLink(path)), mustEmail: !!opts.always, summarizedAt: new Date(), reminderKey: opts.reminder ?? null, ...flags(opts) } });
     if (!opts.always && !opts.payment && !EMAIL_ON.includes(user.emailPref)) return;

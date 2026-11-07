@@ -82,7 +82,8 @@ describe("§299 point 1: Pay more on a finished test reaches the tester", () => 
 });
 
 describe("§299 point 2: the 15-minute call reminder goes out at once", () => {
-  it("both are emailed immediately; the bell lines stay, already emailed, and the next summary doesn't repeat them; email Off: the bell line only", async () => {
+  // (Owner, Nov 6, §324) Off included: the reminder is `always` now (emailed at once, still once).
+  it("both are emailed immediately; the bell lines stay, already emailed, and the next summary doesn't repeat them; email Off: emailed at once too (§324)", async () => {
     const s = await setup();
     const j = await joined(s.testId);
     const call = await bookCall(s.testId, s.dev.cookie, j.sessionId, j.tester.cookie);
@@ -94,14 +95,14 @@ describe("§299 point 2: the 15-minute call reminder goes out at once", () => {
       expect(ns).toHaveLength(1);
       expect(ns[0].text).toMatch(new RegExp(`^Your call with ${who} on “Harbor Run” starts at `));
       expect(ns[0].summarizedAt).not.toBeNull();
-      expect(ns[0].mustEmail).toBe(false);
+      expect(ns[0].mustEmail).toBe(true); // (§324)
       const sent = (await mails(u.email)).filter((m) => m.subject === ns[0].text);
       expect(sent).toHaveLength(1);
     }
     // The next summaries don't list it again.
     await sendSummaries(new Date(), [j.tester.user.id, s.dev.user.id]);
     for (const u of [j.tester.user, s.dev.user]) expect((await mails(u.email)).filter((m) => m.text.includes("starts at"))).toHaveLength(1);
-    // Email Off: the bell line, no email.
+    // Email Off: (§324) emailed at once all the same, once; never again in a later email.
     const w2 = await world();
     await db.user.update({ where: { id: w2.devId }, data: { emailPref: "off" } });
     const c2 = await bookCall(w2.testId, w2.dev.cookie, w2.sessionId, w2.tester.cookie);
@@ -109,9 +110,9 @@ describe("§299 point 2: the 15-minute call reminder goes out at once", () => {
     await remindCallsSoon();
     const off = await db.notification.findMany({ where: { userId: w2.devId, reminderKey: `call15:${c2.id}` } });
     expect(off).toHaveLength(1);
-    expect((await mails(w2.dev.user.email)).filter((m) => m.subject === off[0].text)).toHaveLength(0);
+    expect((await mails(w2.dev.user.email)).filter((m) => m.subject === off[0].text)).toHaveLength(1);
     await sendSummaries(new Date(), [w2.devId]);
-    expect((await mails(w2.dev.user.email)).filter((m) => m.text.includes("starts at"))).toHaveLength(0);
+    expect((await mails(w2.dev.user.email)).filter((m) => m.text.includes("starts at"))).toHaveLength(1);
   });
 });
 

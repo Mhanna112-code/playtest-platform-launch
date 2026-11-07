@@ -5,7 +5,7 @@ import { db } from "@/lib/db";
 import { act, atHours, joined, sact, seen, setup } from "./fixtures";
 
 // (Owner, Nov 6, §323) Every "Booked: a call with …" line (both sides: an accepted request, an auto-match "you both picked") is `always`: it reaches the end-of-day
-// email even with email Off. Its stack ("Booked calls"), words and link are unchanged. The 15-minute call reminder stays as it is.
+// email even with email Off. Its stack ("Booked calls"), words and link are unchanged. (§324) The 15-minute call reminder is always too (emailed at once).
 
 const booked = (userId: string) => db.notification.findMany({ where: { userId, groupKey: "booked" }, orderBy: { createdAt: "asc" } });
 
@@ -33,9 +33,10 @@ describe("§323 every booked-call line is always emailed", () => {
     expect(l).toMatchObject({ mustEmail: true, groupKey: "booked" });
   });
 
-  it("the source: all three booked lines always; the 15-minute reminder unchanged", () => {
+  it("the source: all three booked lines always; (§324) the 15-minute reminder too", () => {
     const src = (f: string) => fs.readFileSync(path.resolve(__dirname, "../src", f), "utf8");
     expect(src("lib/server/requests.ts").match(/group: BOOKED_GROUP, always: true/g)).toHaveLength(3);
-    expect(src("lib/server/calls.ts")).toMatch(/reminder: reminderKey\(call\.id\), now: true \}/);
+    // (Owner, Nov 6, §324) The 15-minute reminder is now always too (emailed at once, Off included).
+    expect(src("lib/server/calls.ts").match(/reminder: reminderKey\(call\.id\), now: true, always: true/g)).toHaveLength(2);
   });
 });
