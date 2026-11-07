@@ -182,3 +182,27 @@ export async function pausedClosingWords(devId: string): Promise<string | null> 
   const tail = !hidden.length ? "" : hidden.length === 1 ? `${n} more on ${day(hidden[0].at)}` : `${n} more by ${day(hidden[hidden.length - 1].at)}`;
   return tail ? `${parts.join(", ")}, and ${tail}` : parts.join(", ");
 }
+
+/** (Owner, Nov 6, §316) The hold reminder's one key: a Weekly or Monthly email shows only its newest copy; once a day per developer (holdReminders). */
+export const HOLD_REMINDER_KEY = "holdreminder";
+/**
+ * (Owner, Nov 6, §316) The developer on a HOLD (a payment hold or a chargeback hold; not a suspension, not the team's pause) gets ONE reminder a day, from the
+ * first daily job on a later day than the hold started (never the same day as the hold's own line), until the hold lifts or every paused test has closed:
+ * "Reminder: your tests are paused until you pay what you owe: “Harbor Run” and “Sky Lab” close on Nov 13" / "Reminder: your tests are paused after a chargeback:
+ * … unless you finish the steps" (the dates in §313a's words). In "Payments and holds", emailed whatever the setting. Returns how many were sent.
+ */
+export async function holdReminders(now = new Date()) {
+  let n = 0;
+  for (const dev of await db.user.findMany({ where: { holdStartedAt: { not: null }, deletedAt: null }, take: 5000 })) {
+    if (dayIn(dev.holdStartedAt!, dev.timeZone) === dayIn(now, dev.timeZone)) continue; // the hold's own line said it today
+    const last = await db.notification.findFirst({ where: { userId: dev.id, reminderKey: HOLD_REMINDER_KEY }, orderBy: { createdAt: "desc" }, select: { createdAt: true } });
+    if (last && dayIn(last.createdAt, dev.timeZone) === dayIn(now, dev.timeZone)) continue; // once a day
+    const closing = await pausedClosingWords(dev.id);
+    if (!closing) continue; // every paused test has closed
+    const cb = dev.holdReason === "chargeback";
+    const line = cb ? `Reminder: your tests are paused after a chargeback: ${closing} unless you finish the steps` : `Reminder: your tests are paused until you pay what you owe: ${closing}`;
+    await notify(dev.email, line, [`${line}.`], cb ? "/app/payments#chargeback-steps" : "/app/payments#owed", { side: "developer", always: true, payment: true, group: "payhold", reminder: HOLD_REMINDER_KEY });
+    n++;
+  }
+  return n;
+}

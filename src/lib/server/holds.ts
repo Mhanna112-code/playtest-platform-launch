@@ -1340,6 +1340,8 @@ async function runDailyLocked(now: Date) {
   // (Owner, Nov 6, §311a) No daily "<test> is paused and closes on …" reminder any more. (§313a) The pause's own line names the closing dates.
   const pc = await import("./pauseClosure");
   out.closed = await pc.closePausedTests(now);
+  // (Owner, Nov 6, §316) A developer on a hold: one reminder a day naming the closing dates, until it lifts or every paused test has closed (after the closures above).
+  await pc.holdReminders(now);
   // 4. Open until heads-ups for the developer: 1 month (when it was more than a month away), 1 week, 3 days and 1 day before.
   const closing = await db.test.findMany({ where: { status: { in: ["open", "closed"] }, openUntil: { gt: now }, ...PAUSE_FREE } });
   for (const t of closing) {
