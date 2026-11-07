@@ -945,7 +945,7 @@ export async function chargebackOpened(paymentIntentId: string, disputedCents: u
   // (Owner, Nov 4, §193b) Which payment, by its part or (a one payment) its kind, time and items, full names: "… reversed $20.00 of a $35.00 Pay what you owe payment
   // on Wed, Nov 4, 12:30 PM (Ana Silva's written answers on “Harbor Run”, …) (pi_…)".
   const named = await reversedNaming(p, true, (d) => fmtDateTime(d));
-  for (const a of to) await sendEmail({ to: a, subject: `Playtest: new chargeback of ${money(rev)}`, text: [`A developer's bank reversed ${reversedWords(cb, "a", named.one)}${named.piece ? ` for ${named.piece}` : ""} (${p.stripePaymentIntentId ?? "no payment id"}). The developer's account is on a chargeback hold.`, `${appUrl()}/admin#chargebacks`, "", "Playtest"].join("\n"), button: { label: "Open the admin console", url: `${appUrl()}/admin#chargebacks` } }).catch((e) => console.error("[email] chargeback:", e.message));
+  for (const a of to) await sendEmail({ to: a, subject: `Playtest: new chargeback of ${money(rev)}`, text: [`A developer's bank reversed ${reversedWords(cb, "a", named.one)}${named.piece ? ` for ${named.piece}` : ""} (${p.stripePaymentIntentId ?? "no payment id"}). The developer's account is on a chargeback hold.`, `${appUrl()}/admin#chargebacks`].join("\n") /* (§325) no closing signature */, button: { label: "Open the admin console", url: `${appUrl()}/admin#chargebacks` } }).catch((e) => console.error("[email] chargeback:", e.message));
   if (!started) {
     const piece = c ? await paymentPiece(p) : null;
     // (Owner, Nov 4, §193b) A one payment names itself and every item it paid (full names: the email has no hover).
@@ -1221,7 +1221,7 @@ async function followAmount(reversalId: string, cents: number, status: string, e
 /** (§192) An email to every admin, whatever their email setting (as the chargeback's own). */
 export async function tellAdmins(subject: string, line: string) {
   const to = await teamEmails(subject); // (Owner, Nov 6, §299) every admin account's confirmed email and ADMIN_EMAILS, each once
-  for (const a of to) await sendEmail({ to: a, subject, text: [line, `${appUrl()}/admin#chargebacks`, "", "Playtest"].join("\n"), button: { label: "Open the admin console", url: `${appUrl()}/admin#chargebacks` } }).catch((e) => console.error("[email] chargeback amount:", e.message));
+  for (const a of to) await sendEmail({ to: a, subject, text: [line, `${appUrl()}/admin#chargebacks`].join("\n") /* (§325) no closing signature */, button: { label: "Open the admin console", url: `${appUrl()}/admin#chargebacks` } }).catch((e) => console.error("[email] chargeback amount:", e.message));
 }
 
 /**

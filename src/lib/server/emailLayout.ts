@@ -70,13 +70,8 @@ function body(text: string, b?: EmailButton, heading?: string) {
     head = headingLine(lines.shift()!.trim());
     while (lines.length && !lines[0].trim()) lines.shift();
   }
-  // The closing "Playtest" signature stays last, under the button.
-  let sig = "";
+  // (Owner, Nov 6, §325) No closing "Playtest" signature any more: the body ends with its last line or the button (trailing blank lines dropped).
   while (lines.length && !lines[lines.length - 1].trim()) lines.pop();
-  if (lines.length && lines[lines.length - 1].trim() === "Playtest") {
-    sig = lines.pop()!;
-    while (lines.length && !lines[lines.length - 1].trim()) lines.pop();
-  }
   let placed = false;
   const out = lines.map((l) => {
     if (!l.trim()) return `<div style="height:10px;line-height:10px;font-size:10px;">&nbsp;</div>`;
@@ -87,7 +82,6 @@ function body(text: string, b?: EmailButton, heading?: string) {
     return line(l);
   });
   if (b && !placed) out.push(button(b));
-  if (sig) out.push(`<div style="height:10px;line-height:10px;font-size:10px;">&nbsp;</div>`, line(sig));
   if (head) out.unshift(head);
   return out.join("\n");
 }

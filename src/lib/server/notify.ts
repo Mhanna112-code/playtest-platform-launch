@@ -67,7 +67,7 @@ export async function notify(to: string, subject0: string, lines0: string[], pat
     // Not an account (nowhere for a bell or a summary to go): the one email goes at once.
     try {
       // (Batch 30 §19) Not an account: no notification settings to link to.
-      await sendEmail({ to, subject, text: [...lines.filter(Boolean), "", `${appUrl()}${path}`, "", "Playtest"].join("\n"), button: { label: "Open Playtest", url: `${appUrl()}${path}` }, settings: false });
+      await sendEmail({ to, subject, text: [...lines.filter(Boolean), "", `${appUrl()}${path}`].join("\n") /* (Owner, Nov 6, §325) no closing "Playtest" signature */, button: { label: "Open Playtest", url: `${appUrl()}${path}` }, settings: false });
     } catch (e) {
       console.error("[email] failed:", subject, (e as Error).message);
     }
@@ -81,7 +81,7 @@ export async function notify(to: string, subject0: string, lines0: string[], pat
     await client.notification.create({ data: { side: lineSide(user.id, path, opts.side), userId: user.id, text: subject, link: path, testId: opts.testId ?? (await testIdOfLink(path)), mustEmail: !!opts.always, summarizedAt: new Date(), reminderKey: opts.reminder ?? null, ...flags(opts) } });
     if (!opts.always && !opts.payment && !EMAIL_ON.includes(user.emailPref)) return;
     try {
-      await sendEmail({ to, subject, text: [...lines.filter(Boolean), "", `${appUrl()}${path}`, "", "Playtest"].join("\n"), button: { label: "Open Playtest", url: `${appUrl()}${path}` } });
+      await sendEmail({ to, subject, text: [...lines.filter(Boolean), "", `${appUrl()}${path}`].join("\n") /* (Owner, Nov 6, §325) no closing "Playtest" signature */, button: { label: "Open Playtest", url: `${appUrl()}${path}` } });
     } catch (e) {
       console.error("[email] failed:", subject, (e as Error).message);
     }
@@ -293,7 +293,7 @@ export async function sendSummaries(now = new Date(), only?: string[]) {
       const own = sidedEmailLines(items, line, hasBoth(u), u.timeZone, await testTitlesOf(items));
       const forTeam = t && teamN ? [...(own.length ? [""] : []), ad.TEAM_HEADING, ...ad.teamLines(t, u.timeZone)] : [];
       // (§306) With the team's section, the admin email's button: Open the admin console.
-      await sendEmail({ to: u.email, subject, text: [heading, "", ...own, ...forTeam, "", "Playtest"].join("\n"), button: { label: forTeam.length ? "Open the admin console" : "Open Playtest", url: `${appUrl()}${forTeam.length ? "/admin" : "/app/notifications"}` }, heading });
+      await sendEmail({ to: u.email, subject, text: [heading, "", ...own, ...forTeam].join("\n") /* (§325) no closing signature */, button: { label: forTeam.length ? "Open the admin console" : "Open Playtest", url: `${appUrl()}${forTeam.length ? "/admin" : "/app/notifications"}` }, heading });
       await db.notification.updateMany({ where: { id: { in: [...items.map((n) => n.id), ...dropped, ...repeats] } }, data: { summarizedAt: now } });
       if (due) await db.user.update({ where: { id: u.id }, data: { lastSummaryAt: now } });
       if (t) await ad.teamSent([u.id], t.noShowIds, now);

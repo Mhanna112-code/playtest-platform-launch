@@ -62,12 +62,13 @@ function branded(m: { text: string; html: string }, button: { label: string; url
 }
 
 describe("batch 30 §19: branded HTML emails", () => {
-  it("the layout: user text is escaped; a line ending in a link links its words; the button takes the link's own line; the signature stays last", () => {
-    const h = emailHtml("Hi", `Ana wrote <b>"hi"</b> & left\n• Ana sent her answers ${BASE}/app/tests/1\n\n${BASE}/x\n\nPlaytest`, { base: BASE, button: { label: "Open Playtest", url: `${BASE}/x` }, settings: true });
+  // (Owner, Nov 6, §325) No closing "Playtest" signature: the body ends with the button.
+  it("the layout: user text is escaped; a line ending in a link links its words; the button takes the link's own line; no signature (§325)", () => {
+    const h = emailHtml("Hi", `Ana wrote <b>"hi"</b> & left\n• Ana sent her answers ${BASE}/app/tests/1\n\n${BASE}/x`, { base: BASE, button: { label: "Open Playtest", url: `${BASE}/x` }, settings: true });
     expect(h).toContain("Ana wrote &lt;b&gt;&quot;hi&quot;&lt;/b&gt; &amp; left");
     expect(h).not.toContain("<b>");
     expect(h).toMatch(new RegExp(`<a href="${BASE}/app/tests/1"[^>]*>• Ana sent her answers</a>`));
-    expect(h.indexOf(">Open Playtest</a>")).toBeLessThan(h.lastIndexOf(">Playtest</p>"));
+    expect(h).not.toContain(">Playtest</p>");
     expect(h.match(/>Open Playtest<\/a>/g)).toHaveLength(1);
     // No header logo: the only image is the footer's.
     expect(h.match(/<img /g)).toHaveLength(1);
@@ -110,7 +111,7 @@ describe("batch 30 §19: branded HTML emails", () => {
     const [s] = await mails(d.user.email);
     expect(s.subject).toBe("Your Playtest summary: 1 update");
     // (Owner, Nov 6, §295) The body opens with its heading ("Your Playtest updates for Fri, Nov 6").
-    expect(s.text).toBe(`${summaryHeading("daily", new Date(), new Date(), null)}\n\n• Ana sent her written answers for “Harbor <Run>” ${BASE}/app/tests/abc\n\nPlaytest`);
+    expect(s.text).toBe(`${summaryHeading("daily", new Date(), new Date(), null)}\n\n• Ana sent her written answers for “Harbor <Run>” ${BASE}/app/tests/abc`); // (§325) no signature
     expect(s.html).toContain("Harbor &lt;Run&gt;");
     branded(s, { label: "Open Playtest", url: SETTINGS }, true);
 
@@ -135,7 +136,7 @@ describe("batch 30 §19: branded HTML emails", () => {
     const to = mkEmail("nobody");
     await notify(to, "You're invited to “Harbor Run”", ["Nora invited you."], "/app/find/xyz");
     const [m] = await mails(to);
-    expect(m.text).toBe(`Nora invited you.\n\n${BASE}/app/find/xyz\n\nPlaytest`);
+    expect(m.text).toBe(`Nora invited you.\n\n${BASE}/app/find/xyz`); // (§325) no signature
     branded(m, { label: "Open Playtest", url: `${BASE}/app/find/xyz` }, false);
   });
 

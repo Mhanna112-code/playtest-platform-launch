@@ -17,8 +17,8 @@ type Line = { text: string; groupKey?: string | null; testId?: string | null; ow
 async function lines(userId: string, ls: Line[]) {
   for (const l of ls) await db.notification.create({ data: { userId, text: l.text, link: "", groupKey: l.groupKey ?? null, testId: l.testId ?? null, own: !!l.own, side: l.side === undefined ? "tester" : l.side, ...(l.at ? { createdAt: l.at } : {}) } });
 }
-/** The email body's lines between its heading and the "Playtest" sign-off. */
-const bodyOf = (text: string) => text.split("\n").slice(2, -2);
+/** The email body's lines under its heading (§325: no "Playtest" sign-off any more). */
+const bodyOf = (text: string) => text.split("\n").slice(2);
 /** The email body as stacks: each heading with its lines ("" heading for a single line). */
 function emailStacks(body: string[]) {
   const out: { heading: string; lines: string[] }[] = [];
