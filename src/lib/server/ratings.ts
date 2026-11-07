@@ -358,7 +358,10 @@ export async function ratingReminders(now = new Date()) {
     const c = await db.contract.findUnique({ where: { id: r.contractId }, include: { tester: true, test: true } });
     if (!c) continue; // (batch 29 §21) on a running test too
     if (now.getTime() - (await sinceLast(c.test.developerId, c.testId, s.opensAt!)).getTime() < every) continue;
-    await bell(c.test.developerId, `Reminder: rate ${displayName(c.tester)} for “${c.title}” (until ${T(s.endsAt!, "date")})`, RATINGS_HREF, undefined, { side: "developer", ...RATINGS, testId: c.testId, reminder: `rate-dev:${c.id}` });
+    // (Owner, Nov 7, §329) The LAST reminder before their 14 days end (the next 3-day slot would fall after the end) ignores email Off (`always`): it reaches the
+    // end-of-day email. The others follow the email setting. (The line already names the end date.)
+    const last = now.getTime() + every >= s.endsAt!.getTime();
+    await bell(c.test.developerId, `Reminder: rate ${displayName(c.tester)} for “${c.title}” (until ${T(s.endsAt!, "date")})`, RATINGS_HREF, undefined, { side: "developer", ...RATINGS, testId: c.testId, reminder: `rate-dev:${c.id}`, ...(last ? { always: true } : {}) });
     n++;
   }
   return n;
