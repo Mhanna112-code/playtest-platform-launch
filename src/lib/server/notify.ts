@@ -267,7 +267,12 @@ export async function sendSummaries(now = new Date(), only?: string[]) {
     const only = due ? {} : { OR: [{ payment: true }, { mustEmail: true }] };
     if (!off && !due && u.emailPref === "daily") continue; // (a daily person is not due again yet)
     const t = due ? team.get(u.id) : undefined;
-    const fetched = await db.notification.findMany({ where: { userId: u.id, summarizedAt: null, ...only }, orderBy: { createdAt: "asc" }, take: 200 });
+    // (Owner, Nov 7, §328) The NEWEST 200 unsent lines (it was the oldest 200, so a backlog came as a flood over the next days); the older ones are marked emailed
+    // too and the email ends with "And N older updates — see your bell".
+    const fetched = (await db.notification.findMany({ where: { userId: u.id, summarizedAt: null, ...only }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: SUMMARY_MAX })).reverse();
+    const olderIds = fetched.length === SUMMARY_MAX
+      ? (await db.notification.findMany({ where: { userId: u.id, summarizedAt: null, ...only, id: { notIn: fetched.map((n) => n.id) }, createdAt: { lte: fetched[0].createdAt } }, select: { id: true } })).map((n) => n.id)
+      : [];
     // (§306) The admin's own lines, without those the team section lists.
     const repeats = fetched.filter((n) => inTeam(n, t)).map((n) => n.id);
     const all = fetched.filter((n) => !repeats.includes(n.id));
@@ -291,10 +296,11 @@ export async function sendSummaries(now = new Date(), only?: string[]) {
       const period = due && (u.emailPref === "weekly" || u.emailPref === "monthly") ? u.emailPref : "daily";
       const heading = summaryHeading(period, u.lastSummaryAt ?? all[0]?.createdAt ?? now, now, u.timeZone, !!u.lastSummaryAt);
       const own = sidedEmailLines(items, line, hasBoth(u), u.timeZone, await testTitlesOf(items));
+      if (olderIds.length) own.push("", line({ text: olderLine(olderIds.length), link: "/app/notifications" })); // (§328)
       const forTeam = t && teamN ? [...(own.length ? [""] : []), ad.TEAM_HEADING, ...ad.teamLines(t, u.timeZone)] : [];
       // (§306) With the team's section, the admin email's button: Open the admin console.
       await sendEmail({ to: u.email, subject, text: [heading, "", ...own, ...forTeam].join("\n") /* (§325) no closing signature */, button: { label: forTeam.length ? "Open the admin console" : "Open Playtest", url: `${appUrl()}${forTeam.length ? "/admin" : "/app/notifications"}` }, heading });
-      await db.notification.updateMany({ where: { id: { in: [...items.map((n) => n.id), ...dropped, ...repeats] } }, data: { summarizedAt: now } });
+      await db.notification.updateMany({ where: { id: { in: [...items.map((n) => n.id), ...dropped, ...repeats, ...olderIds] } }, data: { summarizedAt: now } });
       if (due) await db.user.update({ where: { id: u.id }, data: { lastSummaryAt: now } });
       if (t) await ad.teamSent([u.id], t.noShowIds, now);
     } catch (e) {
@@ -303,6 +309,11 @@ export async function sendSummaries(now = new Date(), only?: string[]) {
   }
   return users.length;
 }
+
+/** (Owner, Nov 7, §328) At most this many lines in one summary or end-of-day email (the newest). */
+export const SUMMARY_MAX = 200;
+/** (§328) The email's last line when older lines were left out: "And 37 older updates — see your bell". */
+export const olderLine = (n: number) => `And ${n} older update${n === 1 ? "" : "s"} — see your bell`;
 
 /**
  * (Owner, Oct 29, batch 29 §28) The bell's red number: how many ENTRIES of the bell list have anything unread (a stack with 3 unread lines counts 1), the same
