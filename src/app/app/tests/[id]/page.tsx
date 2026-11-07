@@ -91,6 +91,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const { id } = await params;
   // First: a restricted developer may open a test page only in its restricted view (batch 15 section 29); every other page sends them to the dashboard top.
   const u = await requireOpenPage(`/app/tests/${id}`);
+  const previousTesterNames = await (await import("@/lib/server/previousNames")).previousNamesFor(u.id);
   return withDateZone(u.timeZone, async () => {
 
   const fmtDateTime = (d: Date | string) => fmtDateTimeIn(d, u.timeZone);
@@ -736,7 +737,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
               { name: "Recording", on: c.recordingCents != null, required: c.recordingRequired, sub: c.submissions.find((s) => s.kind === "recording"), cents: c.recordingCents },
             ];
             return (
-              <div key={c.id} className="panel space-y-2" id={`tester-${c.id}`} data-tester-name={name} data-tester-id={c.testerId}>
+              <div key={c.id} className="panel space-y-2" id={`tester-${c.id}`} data-tester-name={name} data-tester-id={c.testerId} data-previous-names={JSON.stringify(previousTesterNames.get(c.testerId) ?? [])}>
                 {/* (Owner, Nov 3, batch 35 §140) Each tester folds by their name: closed, only the summary under it (paid in all, ratings, Rate); open, all their
                     parts, each in its own panel. Kept open or closed through the live redraws; a link into it (#part-, #call-…) opens it. */}
                 <Fold id={`tester-${c.id}`} defaultOpen={t.contracts.length === 1} className="space-y-2" summaryClassName="flex flex-wrap items-baseline gap-2 !text-base" summary={<>
@@ -744,7 +745,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                       anywhere else on the heading (the arrow, the badges, the space after the name) still opens or closes the fold. */}
                   {/* (Owner, Nov 4, §199; the §187 rule) The whole name, cut with "…" only when the row is actually full (it was cut at 12 characters with room to
                       spare): `NameLink fit`, the heading `min-w-0` so it can shrink, never wider than the row less the arrow (so the arrow stays beside it); the badges and the paid figure (§195) never cut (they wrap below on a phone). */}
-                  <h3 className="mr-auto min-w-0 max-w-[calc(100%-1.25rem)] font-semibold text-white" data-tester-fold-name=""><NameLink fit text={name} href={personHref} /></h3>
+                  <h3 className="mr-auto min-w-0 max-w-[calc(100%-1.25rem)] font-semibold text-white" data-tester-fold-name=""><NameLink fit text={name} href={personHref} /><span hidden className="text-xs font-normal text-slate-400" data-previous-name-match="" /></h3>
                   <span className="badge shrink-0 whitespace-nowrap">{c.status === "working" ? `Working · due ${fmtDate(c.dueAt)}` : c.status === "left" ? "Left the test" : "Work ended"}</span>
                   {c.ndaAcceptedAt && <span className="badge shrink-0 whitespace-nowrap">NDA accepted {fmtDate(c.ndaAcceptedAt)}</span>}
                   {/* (Owner, Nov 4, §195) Paid so far for their work on this test, once, on the right of the name row (it was the first line of the summary under the row). */}

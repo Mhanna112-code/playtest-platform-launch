@@ -27,7 +27,13 @@ export function SearchTestersBox({ value, onChange, where }: { value: string; on
 export function hideUnmatched(root: HTMLElement | null, selector: string, nameKey: string, typed: string, alsoShown: (el: HTMLElement) => boolean = () => true) {
   let left = 0;
   root?.querySelectorAll<HTMLElement>(selector).forEach((el) => {
-    el.hidden = !nameShown(el.dataset[nameKey] ?? "", typed) || !alsoShown(el);
+    const current = el.dataset[nameKey] ?? "";
+    let aliases: string[] = [];
+    try { const stored = JSON.parse(el.dataset.previousNames ?? "[]"); if (Array.isArray(stored)) aliases = stored.filter((name): name is string => typeof name === "string"); } catch { /* A stale row has no aliases. */ }
+    const matched = typed.trim() && !nameMatches(current, typed) ? aliases.find((name) => nameMatches(name, typed)) : undefined;
+    const note = el.querySelector<HTMLElement>("[data-previous-name-match]");
+    if (note) { note.textContent = matched ? ` · previously ${matched}` : ""; note.hidden = !matched; }
+    el.hidden = (!nameShown(current, typed) && !matched) || !alsoShown(el);
     if (!el.hidden) left++;
   });
   return left;

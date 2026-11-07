@@ -83,7 +83,7 @@ export default async function FindPage({ searchParams }: { searchParams: Promise
   // first (more time left to join); tests without Open until last.
   else if (sort === "deadline") shown.sort(byMostTimeToFinish);
   // (Batch 20 section 9) An exact match (the test's name, its product or the developer's name) comes first.
-  if (typed) shown.splice(0, shown.length, ...exactFirst(shown, typed, (t) => [t.title, t.productName ?? "", displayName(t.developer)]));
+  if (typed) shown.splice(0, shown.length, ...exactFirst(shown, typed, (t) => [t.title, t.productName ?? "", displayName(t.developer), ...("previousName" in t && typeof t.previousName === "string" ? [t.previousName] : [])]));
   // What the search box, the tick boxes and the chips keep from each other.
   const params: FindLink = { ...ticks, sort, mine: matchMine, q: typed || undefined, states };
   // (Owner, Nov 3) Why the list is empty: nothing open, the ticks, or Matching my profile alone (its N tests are one "Show them" away).
@@ -152,7 +152,7 @@ export default async function FindPage({ searchParams }: { searchParams: Promise
                       <div className="min-w-[min(100%,10rem)] flex-1">
                         {t.productName && <p className="kicker"><Cut text={t.productName} kind="product" /></p>}
                         <p className="font-semibold"><TestName text={t.title} /></p>
-                        <p className="text-sm text-slate-400 [overflow-wrap:anywhere]">by <Cut text={displayName(t.developer)} />{devRatings.get(t.developerId) && ` · ${devRatings.get(t.developerId)}`}</p>
+                          <p className="text-sm text-slate-400 [overflow-wrap:anywhere]">by <Cut text={displayName(t.developer)} />{"previousName" in t && typeof t.previousName === "string" && <span> · previously {t.previousName}</span>}{devRatings.get(t.developerId) && ` · ${devRatings.get(t.developerId)}`}</p>
                       </div>
                       <div className="ml-auto max-w-full shrink-0 text-right sm:max-w-[50%]">
                         <p className="whitespace-nowrap text-lg font-bold text-emerald-300">{fromText(t)}</p>

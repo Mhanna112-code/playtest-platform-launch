@@ -149,12 +149,15 @@ export async function saveProfile(userId: string, body: Record<string, unknown>)
   // The other side's own fields aren't on this page, so their changes don't stop it.
   await accountGate(userId, body, "profile", sent, first ? null : side);
   const before = await db.user.findUniqueOrThrow({ where: { id: userId }, include: { profile: true } });
+  const tab = typeof body.tab === "string" ? body.tab : "";
   const saved = await db.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${userId} FOR UPDATE`;
+    const previous = await tx.user.findUniqueOrThrow({ where: { id: userId }, select: { name: true } });
     const user = await tx.user.update({ where: { id: userId }, data: { name, pronoun, isDeveloper, isTester, ...(emailPref ? { emailPref } : {}), ...(devPart ? { devBio: bio } : {}) } });
+    if (previous.name !== name) await logAccountChange(userId, tab, { scopes: ["profile", "settings"], field: "name", label: "Name", before: previous.name, after: name }, tx);
     if (testerPart) await tx.testerProfile.upsert({ where: { userId }, update: { devices, categories, languages, bio }, create: { userId, devices, categories, languages, bio } });
     return user;
   });
-  const tab = typeof body.tab === "string" ? body.tab : "";
   const was: Record<string, string> = {
     name: before.name, pronoun: before.pronoun || "not set", sides: sidesLabel(before.isDeveloper, before.isTester),
     devices: inOrder(before.profile?.devices ?? [], DEVICES), languages: inOrder(before.profile?.languages ?? [], LANGUAGES), bio: before.profile?.bio ?? "", devBio: before.devBio,
@@ -162,6 +165,7 @@ export async function saveProfile(userId: string, body: Record<string, unknown>)
   // Each side's page reads its own bio's change as "Bio".
   const LABELS: Record<string, string> = { name: "Name", pronoun: "Pronoun", sides: "Sides", devices: "Devices", languages: "Languages", bio: "Bio", devBio: "Bio" };
   for (const [field, after] of Object.entries(sent)) {
+    if (field === "name") continue; // Recorded atomically with the rename above.
     if (was[field] === after) continue;
     // A long value (the bio) reads "Bio changed"; the values are kept for the same-value rule.
     const long = was[field].length > 60 || after.length > 60;

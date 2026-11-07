@@ -7,13 +7,13 @@ import { textFilters } from "@/lib/nameSearch";
  * (Owner, Oct 28, batch 17 section 8) The search box's filter, on the server: the test's name, its product name or the developer's name contains the text (any part,
  * any case). `email`: the team also finds a developer by their email.
  */
-export function testSearchWhere(q: unknown, email = false): Prisma.TestWhereInput {
+export function testSearchWhere(q: unknown, email = false, previousDeveloperIds: string[] = []): Prisma.TestWhereInput {
   const typed = findQuery(q);
   if (!typed) return {};
   // (Batch 20 section 9) From 1 character: 1-2 characters match the start of a word (or the whole text), 3+ any part.
   const any = textFilters(typed), start = textFilters(typed, true);
   // Under AND, so it can be spread into a where that has its own OR.
-  return { AND: [{ OR: [...any.map((f) => ({ title: f })), ...any.map((f) => ({ productName: f })), ...any.map((f) => ({ developer: { name: f } })), ...(email ? start.map((f) => ({ developer: { email: f } })) : [])] }] };
+  return { AND: [{ OR: [...any.map((f) => ({ title: f })), ...any.map((f) => ({ productName: f })), ...any.map((f) => ({ developer: { name: f } })), ...(previousDeveloperIds.length ? [{ developerId: { in: previousDeveloperIds } }] : []), ...(email ? start.map((f) => ({ developer: { email: f } })) : [])] }] };
 }
 
 /** The most tests an admin's Find tests lists at once (newest first); a search narrows it. */

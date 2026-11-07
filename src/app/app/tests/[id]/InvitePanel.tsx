@@ -25,7 +25,7 @@ import { inviteTicksKey, notTickedLine, readInviteTicks, restoredTicks, writeInv
 import { tabStore } from "@/lib/keepTyped";
 import { nameMatches } from "@/lib/nameSearch";
 
-type Tester = { details?: string; availability?: string; changedAt?: string; id: string; name: string; rating?: string; ratingAvg?: number | null; devices: string[]; languages: string[]; categories: string[]; invited: boolean; inviteId: string | null; grey: string | null; section: string; gap: string; was?: string; tag?: string; tagItems?: string[]; detail?: string; together?: { id: string; title: string; state?: string }[]; /** (Batch 30 §7) A search match who can't be invited: why, in the row's words */ why?: string; whyKind?: "invited" | "in" | "applied" | "cant"; appId?: string };
+type Tester = { previousName?: string; details?: string; availability?: string; changedAt?: string; id: string; name: string; rating?: string; ratingAvg?: number | null; devices: string[]; languages: string[]; categories: string[]; invited: boolean; inviteId: string | null; grey: string | null; section: string; gap: string; was?: string; tag?: string; tagItems?: string[]; detail?: string; together?: { id: string; title: string; state?: string }[]; /** (Batch 30 §7) A search match who can't be invited: why, in the row's words */ why?: string; whyKind?: "invited" | "in" | "applied" | "cant"; appId?: string };
 type RowUpdate = { id: string; name: string; seen: SeenTester; tag: string; detail: string; changedAt: string };
 type SeenTester = { devices: string[]; languages: string[]; rating: number | null };
 type Sent = { id: string; testerId: string; name: string; status: string; seen: SeenTester; tag: string; detail: string; changedAt: string };
@@ -350,7 +350,7 @@ export function InvitePanel(p: { testId: string; /** (§173) the signed-in accou
   const row = (t: Tester, key: string) => (
     <li key={key + t.id} data-invite-row={t.id} className={`flex flex-wrap items-center gap-2 ${t.grey ? "text-slate-500" : "text-slate-300"}`}>
       <input type="checkbox" id={`${key}-${t.id}`} aria-label={t.name} disabled={!!t.grey} checked={!t.grey && ticked.includes(t.id)} onChange={(e) => { setNone(false); setDropped([]); setTicked(e.target.checked ? [...ticked, t.id] : ticked.filter((x) => x !== t.id)); }} />
-      <span className="min-w-[8rem] flex-1 [overflow-wrap:anywhere]"><NameLink text={t.name} href={`/app/testers/${t.id}`} newTab /></span>
+      <span className="min-w-[8rem] flex-1 [overflow-wrap:anywhere]"><NameLink text={t.name} href={`/app/testers/${t.id}`} newTab />{t.previousName && <span className="text-xs text-slate-400"> · previously {t.previousName}</span>}</span>
       {t.was && !t.grey && <span className="badge max-w-[14rem] shrink truncate whitespace-nowrap" title={t.was}>{t.was}</span>}
       {/* (Batch 15 section 35) 3 items, then "+N more" which opens the rest in place. */}
       {t.tag && <span className="badge border-amber-300/40 text-amber-200">{t.tag}</span>}
@@ -374,7 +374,7 @@ export function InvitePanel(p: { testId: string; /** (§173) the signed-in accou
     setTimeout(() => (inviteId ? jumpTo(`invited-${inviteId}`) : document.getElementById("invited-list")?.scrollIntoView({ block: "center", behavior: "smooth" })), 50);
   };
   const whyRow = (t: Tester) => {
-    const name = <NameLink text={t.name} href={`/app/testers/${t.id}`} newTab />;
+    const name = <><NameLink text={t.name} href={`/app/testers/${t.id}`} newTab />{t.previousName && <span> · previously {t.previousName}</span>}</>;
     const [lead, link] = t.whyKind === "applied" ? (t.why ?? "").split(": ") : [t.why ?? "", ""];
     return (
       <li key={"f" + t.id} data-invite-row={t.id} data-invite-why={t.whyKind} className="text-slate-500">

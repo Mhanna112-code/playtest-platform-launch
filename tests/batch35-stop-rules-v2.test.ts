@@ -596,7 +596,7 @@ describe("§171 C: the Terms of Use", () => {
     expect(c.text).toMatch(/^Pay, Pay more, Confirm with your bank and Confirm all check what changed since your page last showed it\./);
     expect(c.text).toContain("anything on the part you're paying (work sent or added to it, a dispute on it, another payment on it), a dispute by that tester or the team's decision on one");
     expect(c.text).toContain("changes show in a blue notice in the bank's box (everything about that tester, whatever your Alerts)");
-    expect(c.example).toBe("You open Pay $20 for Nina's recording; Nina adds to that recording before you press: the press stops and lists her addition; press again to pay.");
+    expect(c.example).toBe("You open Pay $20 for Nina's recording; Nina adds to that recording before you press: the press stops and lists their addition; press again to pay.");
     expect(PAYMENT_RULES.find((r) => r.heading === "Unreviewed work: Charge or Let it go")!.text).toContain("Charge and Let it go are offered only while the developer hasn't paid anything on that part; once they have, Dispute is the way to ask for more.");
     expect(PAYMENT_RULES.find((r) => r.heading === "Bank checks, declines, holds")!.text).toContain("From an account's 2nd chargeback");
     expect(TERMS_VERSION).toBe(2);

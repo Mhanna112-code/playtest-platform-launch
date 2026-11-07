@@ -1,7 +1,7 @@
 import { HashJump } from "@/components/HashJump";
 import { PublicShell } from "@/components/PublicShell";
 import { MAX_ACTIVE_TESTS, MAX_SPOTS, PAYMENTS_TERMS_ID } from "@/lib/rules";
-import { CALL_WINDOW_TERMS, PAYMENT_RULES, TERMS_VERSION, WHAT_CHANGED, WHAT_CHANGED_ID } from "@/lib/termsOfUse";
+import { CALL_WINDOW_TERMS, EMAIL_TIMING_TERMS, PAUSE_DEADLINE_TERMS, PAYMENT_RULES, TERMS_VERSION, WHAT_CHANGED, WHAT_CHANGED_ID } from "@/lib/termsOfUse";
 
 export const metadata = { title: "Terms of Use · Playtest" };
 const LATEST = WHAT_CHANGED.reduce((a, b) => (b.version > a.version ? b : a));
@@ -16,6 +16,7 @@ const SECTIONS: { title: string; points: (string | { id: string; text: string })
       "Playtest connects people who make apps, websites and games (\"developers\") with people who try them and give feedback (\"testers\").",
       // (Batch 20 section 5) The age rule in the sign-up's own words.
       "You must be 18 or older to use Playtest. Everyone must give accurate account details. One account per person; an account can be a developer, a tester, or both.",
+      "If you change your profile name, people you have already worked with can find you by a recorded previous name. Results show your current name and the previous name they searched for. Previous names are not added to your public profile.",
     ],
   },
   {
@@ -24,7 +25,7 @@ const SECTIONS: { title: string; points: (string | { id: string; text: string })
       "A test states its terms up front: the parts you ask for (written answers, a screen recording, a live call), the price of each, your questions, the devices and languages it needs, Open until (the last day to join; every tester gets the same number of days from when they join), how many testers (spots), and who can join (anyone who matches, people you approve, or invite only).",
       "A live call's hourly rate is at least $10 an hour (or free); each call request picks its own length (10 to 180 minutes). Each part can be marked Required or Not required: it is a label, it blocks nothing.",
       `Posting a test is free; what developers pay is in section 4. Every test takes at most ${MAX_SPOTS} testers. A tester can be in up to ${MAX_ACTIVE_TESTS} tests at once.`,
-      "Once a tester joins, the terms they agreed to are saved and are what their work is judged against, even if the test is edited later. If you change prices, parts, questions, devices or languages, or the description, each working tester is offered the new terms and chooses Switch or Keep; work already sent keeps the price it was sent under. Moving Open until later moves every working tester's deadline with it.",
+      "When a tester joins, their agreed parts and prices are saved. Changes to those terms are offered to working testers, who choose Switch or Keep; work already sent keeps the price it was sent under. Questions and listing information follow the current listing, with changes recorded on the test. An NDA change requires its own acknowledgement. Moving Open until later moves working testers' deadlines later; a deadline never moves earlier.",
       "Tests can be stopped for good by the developer; the work already sent still waits to be paid, and calls ahead are cancelled.",
     ],
   },
@@ -33,6 +34,7 @@ const SECTIONS: { title: string; points: (string | { id: string; text: string })
     points: [
       "Joining means you agree to the test's terms as listed. If your profile doesn't list a device or language the test needs, you're warned first and can join anyway.",
       "Send the parts you choose. Honest, critical feedback counts, and so does saying where and why you stopped early.",
+      "Each answer to a question, and each new addition to an answer, needs at least 50 characters of text. Earlier answers, formatting marks and attached files do not count toward an addition's minimum.",
       "Don't share builds, keys or confidential details.",
       "You can leave a test at any time: what you sent is still reviewed and paid. You can ask to rejoin, or be invited back; a tester a developer ended early needs a new invitation.",
       "Requests, applications and offers can be withdrawn until the other side answers.",
@@ -60,6 +62,7 @@ const SECTIONS: { title: string; points: (string | { id: string; text: string })
       "Ratings (1 to 5 stars, and an optional note) go both ways. The tester rates first; the developer rates once the tester has rated and everything they sent is settled. The tester's rating shows once the developer rates or their 14 days to rate end.",
       "Developers may use the feedback they receive to improve their products. Testers keep no rights over how it's used, but their name isn't published without consent.",
       "Any confidentiality agreement a developer sets applies between the developer and the tester.",
+      "If the developer adds, removes or changes the NDA after you join, you must acknowledge the change before continuing work on that test. You can still leave or rate the test without acknowledging it. Acknowledging an NDA change is separate from choosing Switch or Keep for changes to your agreed work.",
     ],
   },
   {
@@ -67,7 +70,7 @@ const SECTIONS: { title: string; points: (string | { id: string; text: string })
     points: [
       // (Owner, Nov 2, batch 35 §132) When a call can be booked.
       CALL_WINDOW_TERMS,
-      "Calls run in the app's own call room, on the call page: video and sound go directly between the two browsers, and the app only passes along the messages that connect them. Only the developer and tester of that call can be in it, from 10 minutes before the start until the call ends. When the two browsers were connected is recorded (it measures the length); the team can read it when handling a report. Nothing in the call is recorded.",
+      "Calls run in the app's own call room, on the call page: video and sound travel between the two browsers, directly or through a relay when needed to connect them. Only the developer and tester of that call can be in it, from 10 minutes before the start until the call ends. When the two browsers were connected is recorded (it measures the length); the team can read it when handling a report. Nothing in the call is recorded.",
       "Screen recordings are only seen by the developer and tester of that session, and by the team when handling a dispute or report.",
     ],
   },
@@ -76,6 +79,8 @@ const SECTIONS: { title: string; points: (string | { id: string; text: string })
     points: [
       "The platform is provided as is. We aren't responsible for the products being tested, for builds, or for agreements between users beyond what these terms describe.",
       "If we have an outage, every deadline and payment date that was running moves later by the length of it.",
+      PAUSE_DEADLINE_TERMS,
+      EMAIL_TIMING_TERMS,
       // (Owner, Oct 31, batch 35 §90)
       "Pages update on their own about every 20 seconds. When a blue \"new update\" pill appears, check the update (tap the pill) before you press anything: once the page has shown an update, a press counts as made with it in view.",
       "When these terms change, we'll tell you on the site before the change applies. You're asked to agree to the new version the next time you post a test, or join, apply, accept an invite or ask to rejoin. Tests you're already in carry on under the terms you agreed to.",

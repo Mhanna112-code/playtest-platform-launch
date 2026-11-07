@@ -187,7 +187,8 @@ describe("batch 29 §37: Terms and leftovers", () => {
     expect(points).toContain("To decide a dispute, our team can read the chat between the tester and the developer");
     expect(points).toContain("can be paid at most the part's maximum in all");
     expect(points).toContain("charged to their card automatically");
-    expect(points).toContain("Emails about payments are always sent the same evening");
+    expect(points).toContain("Payment updates are included in the daily email whatever your email setting");
+    expect(points).toContain("new chargeback notices are sent immediately");
   });
 
   it("callChoiceLine and the stale EXTRA_PAY_CAP_PERCENT mention are gone", async () => {

@@ -4,7 +4,7 @@ import { replaceLine, takesTheirs } from "@/lib/editMerge";
 import { FIELD_NAMES, INFO_FIELDS, editedLine, saveText } from "@/lib/listingSave";
 import { CALL_ACTS, PAY_ACTS, unanswered, answersIt, devChanges, devForced, logEvent, seenOf, tabOf, withRenamed, type Press } from "./live";
 import { notListed, sidOf } from "./shownLines";
-import { ANSWER_ONE, NOT_REQUIRED, answerMin, answersMissing, qText, sameQuestionSet, sameQuestionWords } from "@/lib/questions";
+import { ANSWER_ONE, NOT_REQUIRED, answerChars, answerMin, answerShortLine, answersMissing, qText, sameQuestionSet, sameQuestionWords } from "@/lib/questions";
 import { answerUnit, NOTES_UNIT } from "@/lib/draftUnits";
 import { patchKept, setKept } from "./kept";
 import { questionChangeTexts } from "@/lib/questionHistory";
@@ -967,7 +967,12 @@ export async function nextRound(dev: U, testId: string) {
 
 /** Open tests the tester can join (not their own, not full, not already joined). (Batch 17 section 8) `q`: the search box (test, product or developer name). */
 export async function findTests(tester: U, q?: unknown) {
-  const search = (await import("./findSearch")).testSearchWhere(q);
+  const query = typeof q === "string" ? q.trim() : "";
+  const { previousNamesFor, previousNameMatch } = await import("./previousNames");
+  const names = query ? await previousNamesFor(tester.id) : new Map<string, string[]>();
+  const { nameMatches } = await import("@/lib/nameSearch");
+  const matches = [...names].filter(([, aliases]) => aliases.some((name) => nameMatches(name, query))).map(([id]) => id);
+  const search = (await import("./findSearch")).testSearchWhere(q, false, matches);
   const include = { _count: { select: { contracts: { where: { status: "working" } } } }, developer: { select: { name: true, email: true, timeZone: true } }, contracts: { where: { testerId: tester.id }, select: { id: true, status: true } } } as const;
   const [tests, joined] = await Promise.all([
     db.test.findMany({
@@ -995,7 +1000,7 @@ export async function findTests(tester: U, q?: unknown) {
   const rank = (t: { devices: string[]; languages: string[] }) =>
     t.devices.length ? (t.devices.some((d) => p?.devices.includes(d)) ? 0 : 2) : 1;
   const all = [...tests.filter((t) => t._count.contracts < t.spots), ...joined.filter((j) => !tests.some((t) => t.id === j.id))].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-  return all.map((t, i) => ({ t, i })).sort((a, b) => rank(a.t) - rank(b.t) || a.i - b.i).map((x) => x.t);
+  return all.map((t, i) => ({ t, i })).sort((a, b) => rank(a.t) - rank(b.t) || a.i - b.i).map(({ t }) => ({ ...t, previousName: previousNameMatch(t.developer.name, names.get(t.developerId), query) }));
 }
 
 /** (Owner, Nov 6, §279) The tester's working contract on a Find card's test (its card reads "Joined" and opens /app/sessions/<id>), if any. */
@@ -1347,6 +1352,8 @@ function addRefusal(existing: SentPart | null, c: { questions: unknown }, key: s
   // first: at most 20,000 characters of its own, whatever the others hold. Checked before the stop-once, so a too-long addition is refused on the first press.
   const long = checkAdditionLength(text);
   if (!long.ok) return new HttpError(400, "too_long", long.message);
+  const chars = answerChars(text);
+  if (chars < answerMin()) return new HttpError(400, "too_short", answerShortLine(chars));
   return null;
 }
 

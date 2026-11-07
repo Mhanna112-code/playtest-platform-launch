@@ -1507,8 +1507,10 @@ async function openCharges(now: Date, co: CloseOuts) {
  * (Owner, Nov 6, §311d) Every one goes in the end-of-day email whatever the email setting (`always`; Off was the bell only), as the testers' deadline reminders do;
  * in a Weekly or Monthly summary only the newest copy of each (its `reminder`).
  */
-async function reviewReminders(now: Date, co: CloseOuts) {
-  const upcoming = await db.submission.findMany({ where: { review: null, choiceOfferedAt: null, payBy: { not: null }, contract: { test: PAUSE_FREE, tester: PAYABLE_TESTER } }, include: { contract: { include: { tester: true, test: true } } }, orderBy: { payBy: "asc" }, take: 2000 });
+export async function reviewReminders(now: Date, co: CloseOuts = closeOutMemo(now), contractIds?: string[]) {
+  // A local rehearsal can generate reminders for selected sessions without running payment timers.
+  const scope = contractIds ? { contractId: { in: contractIds } } : {};
+  const upcoming = await db.submission.findMany({ where: { ...scope, review: null, choiceOfferedAt: null, payBy: { not: null }, contract: { test: PAUSE_FREE, tester: PAYABLE_TESTER } }, include: { contract: { include: { tester: true, test: true } } }, orderBy: { payBy: "asc" }, take: 2000 });
   for (const s of upcoming) {
     const reviewDate = chargeOpensAt(s, s.contract.test, s.contract, now);
     // (Owner, Nov 6, §311g) The marks are keyed by the review date: an extended deadline, a pause or an outage re-arms the ones still ahead (never a repeat).
@@ -1528,7 +1530,7 @@ async function reviewReminders(now: Date, co: CloseOuts) {
   // 5b. (Owner, Oct 29, batch 28 §21) Listed calls: "pay it within 3 days / by tomorrow" before the automatic charge (7 days after the call, moved by pauses and outages).
   // (Owner, Nov 6, §311e) Unlisted calls the same, counted to their pay date (7 days after the call), ending "(it isn't listed: pay any amount, or it closes with
   // nothing paid)" (was a weekly "Pay your calls" line after the date): at that date an unpaid one closes with $0 (autoChargeCalls).
-  const upcomingCalls = await db.call.findMany({ where: { review: null, status: "booked", payBy: { not: null }, contract: { test: PAUSE_FREE, tester: PAYABLE_TESTER } }, include: { contract: { include: { tester: true, test: true } } }, take: 2000 });
+  const upcomingCalls = await db.call.findMany({ where: { ...scope, review: null, status: "booked", payBy: { not: null }, contract: { test: PAUSE_FREE, tester: PAYABLE_TESTER } }, include: { contract: { include: { tester: true, test: true } } }, take: 2000 });
   for (const x of upcomingCalls) {
     if (x.rateCents == null && (await co.payClosed({ callId: x.id }))) continue; // an unlisted call whose Pay closed: no reminders
     const chargeAt = x.payBy!;

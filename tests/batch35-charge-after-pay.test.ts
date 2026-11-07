@@ -116,7 +116,7 @@ describe("§163: Charge and Let it go are gone once the developer paid anything 
         choose(c, "charge", { seenAt: loaded, amount: "10.00" }),
       ]);
       expect([x.status, y.status].filter((s) => s === 200)).toHaveLength(1);
-      for (const r of [x, y]) if (r.status !== 200) expect(r.body.error.code).not.toBe("stop_once");
+      for (const [press, r] of [["Pay", x], ["Charge", y]] as const) if (r.status !== 200) expect(r.body.error.code, `${press}: ${JSON.stringify(r.body.error)}`).not.toBe("stop_once");
       expect(await db.review.count({ where: { submissionId: c.sub.id } })).toBe(1);
       expect(await db.payment.count({ where: { submissionId: c.sub.id, status: { in: ["charged", "not_set_up"] } } })).toBe(1);
     }

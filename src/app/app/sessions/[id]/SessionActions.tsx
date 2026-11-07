@@ -398,6 +398,7 @@ export function WrittenAddForm({ sessionId, seenAt, canSend = true, known = [], 
     if (!canSend || empty || full) return;
     if (text.includes("[Uploading ")) return setErr(FIELD + "Wait for the upload to finish before sending.");
     if (!offerShown() && length > WRITTEN_MAX_CHARS) return setErr(FIELD + additionTooLongLine(length));
+    if (!offerShown() && answerChars(text) < ANSWER_MIN_CHARS) return setErr(FIELD + answerShortLine(answerChars(text)));
     setBusy(true);
     setErr("");
     try {
@@ -451,7 +452,7 @@ export function WrittenAddForm({ sessionId, seenAt, canSend = true, known = [], 
             ) : (
               <>
                 <p className="note">{questionKey === ANYTHING_ELSE_KEY ? `What you sent stays as it is. This is added under ${ANYTHING_ELSE_TITLE}.` /* (Owner, Nov 4, §188) */ : first ? "What you sent stays as it is. This is your answer to this question." /* (§222) */ : "What you sent stays as it is. This is added under this answer."}</p>
-                <AnswerBox id={`add-${sessionId}-${questionKey}`} rows={3} sessionId={sessionId} attachments={attachments} onAttach={(a) => setAttachments((old) => [...old.filter((x) => x.id !== a.id), a])} onRemove={remove} total={length} alone value={text} onChange={setText} />
+                <AnswerBox id={`add-${sessionId}-${questionKey}`} rows={3} sessionId={sessionId} attachments={attachments} onAttach={(a) => setAttachments((old) => [...old.filter((x) => x.id !== a.id), a])} onRemove={remove} total={length} alone min short={isShortLine(err) && answerChars(text) < ANSWER_MIN_CHARS} value={text} onChange={(v) => { setText(v); if (isShortLine(err)) setErr(answerChars(v) < ANSWER_MIN_CHARS ? FIELD + answerShortLine(answerChars(v)) : ""); }} />
               </>
             )}
             {keep.restored && text !== "" && !full && <DraftTag disabled={busy} kind="discard" onUseSaved={() => setText("")} />}
@@ -469,7 +470,7 @@ export function WrittenAddForm({ sessionId, seenAt, canSend = true, known = [], 
       <ChangesBox side="tester" changes={box && !box.top ? box.changes : null} tail={box?.tail} press={first ? ANSWER_PRESS : "Add"} />
       {/* (Owner, Nov 4, batch 35 §170) A refusal names the press Add (§146), not "Your Add to my answer didn't go through". */}
       {/* (§222) A question's first answer is the press Answer this question. */}
-      <FormMistakes text={err} press={sender} named={first ? ANSWER_PRESS : PRESS_VERBS["written-add"]} />
+      <FormMistakes text={err} press={sender} named={first ? ANSWER_PRESS : PRESS_VERBS["written-add"]} find={(msg) => isShortLine(msg) ? root.current?.querySelector("textarea") : null} />
     </div>
     </SendingScope.Provider>
   );

@@ -12,6 +12,7 @@ import { ratingSummary, revealedRatingsWhere } from "./ratings";
 import { doesntListItems, doesntListTag, withYouText } from "@/lib/inviteRows";
 import { INVITE_ACTS } from "./live";
 import { exactFirst, nameMatches } from "@/lib/nameSearch";
+import { previousNamesFor, previousNameMatch } from "./previousNames";
 import { gapsOf, missingNeedLine, missingNeedText, type GapItem } from "@/lib/gaps";
 
 type U = { id: string; email: string; name: string; pronoun: string };
@@ -165,6 +166,7 @@ export async function invitePanel(devId: string, testId: string, filters: Invite
   const { lean, full } = await rankedTesters(devId, testId);
   const devices = strings(filters.devices), languages = strings(filters.languages);
   const q = typeof filters.q === "string" ? filters.q.trim().toLowerCase() : "";
+  const previous = q ? await previousNamesFor(devId) : new Map<string, string[]>();
   const notInvited = lean.filter((x) => !x.inv);
   const passes = (x: (typeof lean)[number]) =>
     (!devices.length || (x.t.profile?.devices ?? []).some((d) => devices.includes(d))) && (!languages.length || (x.t.profile?.languages ?? []).some((l) => languages.includes(l)));
@@ -173,18 +175,19 @@ export async function invitePanel(devId: string, testId: string, filters: Invite
   // the Invited list with Cancel invite); someone who left the test shows again. The name search below still finds them, greyed with the reason.
   // (Owner, Nov 5, §274) The Find testers search applies to every section: a typed name keeps only the people whose name matches (nameMatches, as Find testers),
   // and the device / language ticks narrow People you've worked with too (they narrowed only Suggested and Find testers). Suggested's top 5 is taken after both.
-  const named = (x: (typeof lean)[number]) => !q || nameMatches(x.name, q);
+  const named = (x: (typeof lean)[number]) => !q || nameMatches(x.name, q) || !!previousNameMatch(x.name, previous.get(x.t.id), q);
   const worked = notInvited.filter((x) => x.section === "worked" && !x.inTest && passes(x) && named(x));
   const suggested = notInvited.filter((x) => x.section === "other" && !x.inTest && !x.grey && passes(x) && named(x)).slice(0, 5);
   // (Batch 30 §7) The name search finds everyone who matches, invitable or not (blocked and deleted accounts are never in `lean`): a match who can't be invited shows
   // greyed with why (already invited, already in this test, applied, or "Can't join this test"), after the invitable ones, so "No testers match" means nobody matches.
-  const hits = q.length >= 1 ? lean.filter((x) => passes(x) && nameMatches(x.name, q)) : [];
-  const matches = exactFirst([...hits.filter((x) => !x.inv && !x.grey), ...hits.filter((x) => x.inv || x.grey)], q, (x) => [x.name]);
-  const [w, s, f] = await Promise.all([full(worked), full(suggested), full(matches.slice(0, SEARCH_LIMIT))]);
+  const hits = q.length >= 1 ? lean.filter((x) => passes(x) && named(x)) : [];
+  const matches = exactFirst([...hits.filter((x) => !x.inv && !x.grey), ...hits.filter((x) => x.inv || x.grey)], q, (x) => [x.name, ...(previous.get(x.t.id) ?? [])]);
+  const decorate = async (rows: Parameters<typeof full>[0]) => (await full(rows)).map((r) => ({ ...r, previousName: previousNameMatch(r.name, previous.get(r.id), q) }));
+  const [w, s, f] = await Promise.all([decorate(worked), decorate(suggested), decorate(matches.slice(0, SEARCH_LIMIT))]);
   const found = f.map((r) => ({ ...r, ...whyNotInvitable(r, appOf.get(r.id)) }));
   // (Owner, Nov 5, §273) Nobody matches with the ticked devices / languages, but someone of that name exists: how many (blocked and deleted accounts are never in
   // `lean`, so never counted or revealed).
-  const filteredOut = q.length >= 1 && !matches.length && (devices.length || languages.length) ? lean.filter((x) => nameMatches(x.name, q)).length : 0;
+  const filteredOut = q.length >= 1 && !matches.length && (devices.length || languages.length) ? lean.filter(named).length : 0;
   return { worked: w, suggested: s, found, foundTotal: matches.length, capLine: matches.length > SEARCH_LIMIT ? searchCapLine(matches.length) : "", searched: q.length >= 1, filteredOut };
 }
 
