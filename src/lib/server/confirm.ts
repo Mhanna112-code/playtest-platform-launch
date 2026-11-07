@@ -75,6 +75,25 @@ export async function tellBankWaiting(devId: string, now = new Date()) {
   await notify(dev.email, line, [line + "."], BANK_TO_CONFIRM_HREF, { side: "developer", always: true, payment: true, group: "payhold", reminder: key });
 }
 
+/**
+ * (Owner, Nov 6, §320) The daily reminder: while any charge made while the developer was away waits for their bank (an automatic call charge, the tester's Charge,
+ * the team's decision, a renewal: "needs_confirmation" with its 3 days running), tellBankWaiting's one line goes out again once a day ("Your bank wants you to confirm
+ * 2 payments ($19.00 in all): the first by Nov 9"), never twice the same day (the day's key). The developer's own bank check from a press on a page (Pay, Pay more,
+ * Pay what you owe, Confirm all: "needs_action") is never in it. It stops once each is confirmed, cancelled or ran out (declined).
+ */
+export async function bankWaitingReminders(now = new Date()) {
+  const devs = await db.payment.findMany({ where: { actionPi: { not: null }, actionBy: { gt: now }, status: { in: ["needs_confirmation", "failed", "owed"] } }, select: { developerId: true }, distinct: ["developerId"] });
+  const key = `bankwait:${now.toISOString().slice(0, 10)}`;
+  let n = 0;
+  for (const { developerId } of devs) {
+    if (await db.notification.findFirst({ where: { userId: developerId, reminderKey: key }, select: { id: true } })) continue; // told today already
+    if ((await db.user.findUnique({ where: { id: developerId }, select: { deletedAt: true } }))?.deletedAt) continue;
+    await tellBankWaiting(developerId, now);
+    n++;
+  }
+  return n;
+}
+
 /** (Batch 25 section 1) The developer's saved time zone, for the times these lists show them. */
 const zoneOf = async (devId: string) => (await db.user.findUnique({ where: { id: devId }, select: { timeZone: true } }))?.timeZone ?? null;
 

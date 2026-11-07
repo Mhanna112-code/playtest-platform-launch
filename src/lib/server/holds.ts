@@ -1332,6 +1332,8 @@ async function runDailyLocked(now: Date) {
   // (Batch 11) Bank confirmations that timed out. (Owner, Nov 3, batch 35 §145, §148) No retries of what is owed during a hold: it's charged only when the
   // developer presses Pay what you owe (never daily, never on a new card).
   await (await import("./confirm")).expireActions(now);
+  // (Owner, Nov 6, §320) Charges made while away still waiting for the developer's bank (after the ones that ran out above): the one line again, once a day.
+  await (await import("./confirm")).bankWaitingReminders(now);
   await chargeReadyDeferred();
   await settleDisputeAmounts(now).catch((e) => console.error("[stripe] dispute amounts:", (e as Error).message)); // (§192)
   // 1. Sent work past its review window: Charge / Let it go opens (batch 19 section 4: also every 5 minutes, runSweep).
