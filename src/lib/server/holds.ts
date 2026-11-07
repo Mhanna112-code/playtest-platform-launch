@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Prisma, type Payment } from "@prisma/client";
 import { T } from "@/lib/tz";
+import { APPS_WAITING_GROUP } from "@/lib/bell";
 import { db } from "@/lib/db";
 import { callAtFor, displayName, fmtDate, fmtDateTime, money, pronouns, toCents } from "@/lib/server/dateFormat";
 import {
@@ -2108,7 +2109,8 @@ async function dailyReminders(now: Date) {
   await db.notification.createMany({
     data: tests.filter((t) => !told.has(t.id)).map((t) => {
       const n = count.get(t.id)!;
-      return { userId: t.developerId, side: "developer", testId: t.id, reminderKey: `applications:${t.id}`, text: `“${t.title}”: ${n} ${n === 1 ? "application or rejoin ask waits" : "applications and rejoin asks wait"} for your answer`, link: `/app/tests/${t.id}#needs-you` };
+      // (Owner, Nov 6, §317b) One stack a day across tests ("Applications waiting · N"), still daily per test, following the email setting.
+      return { userId: t.developerId, side: "developer", testId: t.id, groupKey: APPS_WAITING_GROUP, reminderKey: `applications:${t.id}`, text: `“${t.title}”: ${n} ${n === 1 ? "application or rejoin ask waits" : "applications and rejoin asks wait"} for your answer`, link: `/app/tests/${t.id}#needs-you` };
     }),
   });
 }
