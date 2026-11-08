@@ -146,7 +146,7 @@ describe("§159 rule 2: the tester adding to that part stops Pay once if unseen"
   });
 });
 
-describe("§159 rule 2: work on the SAME part always stops; work on other parts follows \"Work sent\"", () => {
+describe("§159 rule 2: work on every part follows \"Work sent\"", () => {
   /** Ana's written answers and recording sent; "Work sent" ticked off (or not). */
   async function workWorld(off: boolean) {
     const { dev, testId } = await setup({ recordingCents: "10.00" });
@@ -160,15 +160,13 @@ describe("§159 rule 2: work on the SAME part always stops; work on other parts 
     return { dev, testId, tester, sessionId, sub, rec };
   }
 
-  it("\"Work sent\" ticked off: an addition to the part being paid still stops Pay once naming it; the second press pays", async () => {
+  it("\"Work sent\" ticked off: an addition to the part being paid allows Pay", async () => {
     const w = await workWorld(true);
     const loaded = seen(); await settle();
     expect((await addTo(w.sessionId, w.tester.cookie, { text: "one more thing", confirmed: true })).status).toBe(200);
     const body = { kind: "submission", id: w.sub.id, amount: "10.00", tickedCents: 1000, seenAt: loaded };
     const first = await pay(w.dev.cookie, body);
-    expect(first.body.error?.code, JSON.stringify(first.body)).toBe("stop_once");
-    expect(texts(first)).toEqual([expect.stringMatching(/^Ana Silva added to her answer to “/)]);
-    expect((await pay(w.dev.cookie, { ...body, confirmed: true, boxAt: first.body.error.now })).status).toBe(200);
+    expect(first.status, JSON.stringify(first.body)).toBe(200);
   });
 
   it("an addition to her OTHER part follows the tick: off → Pay goes through; on → stops once", async () => {
@@ -183,7 +181,7 @@ describe("§159 rule 2: work on the SAME part always stops; work on other parts 
     }
   });
 
-  it("Pay more and Confirm with your bank on the part: an update sent after the Pay stops once even with \"Work sent\" ticked off", async () => {
+  it("Pay more and Confirm with your bank on the part: an update sent after the Pay follows \"Work sent\" ticked off", async () => {
     const w = await workWorld(true);
     expect((await pay(w.dev.cookie, { kind: "submission", id: w.sub.id, amount: "10.00", tickedCents: 1000, confirmed: true })).status).toBe(200);
     const waitRow = await db.payment.create({ data: { kind: "review", contractId: w.sessionId, submissionId: w.rec.id, developerId: w.dev.user.id, testerId: w.tester.user.id, amountCents: 1000, feeCents: 0, testerCents: 0, status: "needs_action", actionPi: "pi_" + randomUUID(), actionBy: new Date(Date.now() + 60_000) } });
@@ -192,7 +190,7 @@ describe("§159 rule 2: work on the SAME part always stops; work on other parts 
     const loaded = seen(); await settle();
     expect((await addTo(w.sessionId, w.tester.cookie, { text: "more", confirmed: true })).status).toBe(200);
     const more = await act(w.testId, "pay-extra", w.dev.cookie, { contractId: w.sessionId, submissionId: w.sub.id, amount: "1.00", tickedCents: 100, seenAt: loaded });
-    expect(more.body.error?.code, JSON.stringify(more.body)).toBe("stop_once");
+    expect(more.status, JSON.stringify(more.body)).toBe(200);
     // Confirm on the recording's waiting charge: the written answers' update is another part → follows the tick (off): no stop.
     setStripeForTests(null);
     const c = await confirmStart(w.dev.cookie, waitRow.id, { seenAt: loaded });
@@ -259,14 +257,14 @@ describe("§159 rule 4: Charge / Let it go — a payment on that part and the te
     expect([r.status, r.body.error?.code, r.body.error?.message]).toEqual([409, "done", "Nora Lane paid $10.00 for this meanwhile: you can dispute it if you think it should be more."]); // (batch 35 §163) one final refusal, with the way to more
   });
 
-  it("the same-part rule itself: a paid line on the part being charged stops even with Alerts Off; one on another part doesn't (owedChange)", async () => {
-    const { owedChange } = await import("@/lib/server/testerGate");
+  it("only dispute changes force tester presses with Alerts Off; developer payments follow Alerts", async () => {
+    const { disputeChange } = await import("@/lib/server/testerGate");
     const at = new Date();
-    expect(owedChange({ kind: "paid", text: "Nora Lane paid you $1.00 more for your written answers", createdAt: at, piece: "sub1" }, "sub1")).toBe(true);
-    expect(owedChange({ kind: "paid", text: "Nora Lane paid $15.00 for your live call", createdAt: at, piece: "call1" }, "call1")).toBe(true);
-    expect(owedChange({ kind: "paid", text: "Nora Lane paid $10.00 for your recording", createdAt: at, piece: "sub2" }, "sub1")).toBe(false);
-    expect(owedChange({ kind: "admin", text: "The team decided your dispute about your recording: the pay stays at $4.00", createdAt: at, piece: "sub2" }, "sub1")).toBe(true);
-    expect(owedChange({ kind: "paid", text: "Nora Lane paid $5.00 for your written answers on Sky Lab", createdAt: at }, "sub1")).toBe(false);
+    expect(disputeChange({ kind: "paid", text: "Nora Lane paid you $1.00 more for your written answers", createdAt: at, piece: "sub1" })).toBe(false);
+    expect(disputeChange({ kind: "paid", text: "Nora Lane paid $15.00 for your live call", createdAt: at, piece: "call1" })).toBe(false);
+    expect(disputeChange({ kind: "paid", text: "Nora Lane paid $10.00 for your recording", createdAt: at, piece: "sub2" })).toBe(false);
+    expect(disputeChange({ kind: "admin", text: "The team decided your dispute about your recording: the pay stays at $4.00", createdAt: at, piece: "sub2" })).toBe(true);
+    expect(disputeChange({ kind: "paid", text: "Nora Lane paid $5.00 for your written answers on Sky Lab", createdAt: at })).toBe(false);
   });
 
   it("an automatic call charge on her call part (another part) follows her Alerts: On → stops Charge once naming it; Off → doesn't", async () => {

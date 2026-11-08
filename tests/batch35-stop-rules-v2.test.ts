@@ -145,10 +145,10 @@ describe("§171 A1: same part always stops, whatever the Alerts ticks", () => {
     expect(src.match(/false, \{\}, c\.id, "", `call-\$\{x\.id\}`\)/g)?.length).toBe(6); // closed with nothing, (§311e) an unlisted call closed with nothing paid, the automatic charge, let go, charge (twice)
   });
 
-  it("a call: the tester's problem report and its length becoming final each stop Pay on that call once (Calls ticked off), forced", async () => {
+  it.each([true, false])("Alerts Off=%s, a call: the tester's problem report and its length becoming final follow Call changes alerts", async (off) => {
     const s = await setup();
     devs.push(s.dev.user.id);
-    await db.test.update({ where: { id: s.testId }, data: { ignoredAlerts: ["calls", "payments", "work", "disputes", "admin"] } });
+    await db.test.update({ where: { id: s.testId }, data: { ignoredAlerts: [...(off ? ["calls"] : []), "payments", "work", "disputes", "admin"] } });
     const ana = await joined(s.testId, "Ana Silva");
     const call = await bookCall(s.testId, s.dev.cookie, ana.sessionId, ana.tester.cookie);
     const started = new Date(Date.now() - 120 * 60_000);
@@ -161,9 +161,12 @@ describe("§171 A1: same part always stops, whatever the Alerts ticks", () => {
     await db.call.update({ where: { id: call.id }, data: { noShowBy: "tester", noShowNote: "Was late.", noShowAt: new Date() } });
     const body = { kind: "call", id: call.id, amount: "15.00", tickedCents: 1500, seenAt: loaded };
     const first = await pay(s.dev.cookie, body);
-    expect(first.body.error?.code, JSON.stringify(first.body)).toBe("stop_once");
-    expect(lines(first)).toEqual([expect.objectContaining({ text: callProblemLine("Ana Silva", fmtDateTime(started), "Was late."), forced: true })]);
-    expect(texts(first)[0]).toMatch(/^Ana Silva reported a problem with the call on .*: Was late$/);
+    if (off) expect(first.status, JSON.stringify(first.body)).toBe(200);
+    else {
+      expect(first.body.error?.code, JSON.stringify(first.body)).toBe("stop_once");
+      expect(lines(first)).toEqual([expect.objectContaining({ text: callProblemLine("Ana Silva", fmtDateTime(started), "Was late.") })]);
+      expect(lines(first).every((line) => !line.forced)).toBe(true);
+    }
     // Its length became final after the page drew (a second call).
     const call2 = await bookCall(s.testId, s.dev.cookie, ana.sessionId, ana.tester.cookie, 72);
     await db.call.update({ where: { id: call2.id }, data: { startsAt: started, endedAt: new Date() } });
@@ -172,10 +175,14 @@ describe("§171 A1: same part always stops, whatever the Alerts ticks", () => {
     await settle();
     await db.call.update({ where: { id: call2.id }, data: { measuredMinutes: 20, measuredAt: new Date() } });
     const r2 = await pay(s.dev.cookie, { kind: "call", id: call2.id, amount: "10.00", tickedCents: 1000, seenAt: loaded2 });
-    expect(r2.body.error?.code, JSON.stringify(r2.body)).toBe("stop_once");
-    expect(lines(r2)).toEqual([expect.objectContaining({ text: callLengthLine("Ana Silva", fmtDateTime(started), 20), forced: true })]);
-    expect(callLengthLine("Ana Silva", "Thu, Nov 5, 3:00 PM", 20)).toBe("The length of the call with Ana Silva on Thu, Nov 5, 3:00 PM is final: 20 minutes");
-    expect((await pay(s.dev.cookie, { kind: "call", id: call2.id, amount: "10.00", tickedCents: 1000, seenAt: loaded2, confirmed: true, boxAt: r2.body.error!.now })).status).toBe(200);
+    if (off) expect(r2.status, JSON.stringify(r2.body)).toBe(200);
+    else {
+      expect(r2.body.error?.code, JSON.stringify(r2.body)).toBe("stop_once");
+      expect(lines(r2)).toEqual([expect.objectContaining({ text: callLengthLine("Ana Silva", fmtDateTime(started), 20) })]);
+      expect(lines(r2).every((line) => !line.forced)).toBe(true);
+      expect((await pay(s.dev.cookie, { kind: "call", id: call2.id, amount: "10.00", tickedCents: 1000, seenAt: loaded2, confirmed: true, boxAt: r2.body.error!.now })).status).toBe(200);
+    }
+
   });
 });
 
@@ -593,11 +600,9 @@ describe("§171 C: the Terms of Use", () => {
     const heads = PAYMENT_RULES.map((r) => r.heading);
     expect(heads.indexOf("Changes while you pay")).toBe(heads.indexOf("Paying for work") + 1);
     const c = PAYMENT_RULES.find((r) => r.heading === "Changes while you pay")!;
-    expect(c.text).toMatch(/^Pay, Pay more, Confirm with your bank and Confirm all check what changed since your page last showed it\./);
-    expect(c.text).toContain("anything on the part you're paying (work sent or added to it, a dispute on it, another payment on it), a dispute by that tester or the team's decision on one");
-    expect(c.text).toContain("changes show in a blue notice in the bank's box (everything about that tester, whatever your Alerts)");
-    expect(c.example).toBe("You open Pay $20 for Nina's recording; Nina adds to that recording before you press: the press stops and lists their addition; press again to pay.");
-    expect(PAYMENT_RULES.find((r) => r.heading === "Unreviewed work: Charge or Let it go")!.text).toContain("Charge and Let it go are offered only while the developer hasn't paid anything on that part; once they have, Dispute is the way to ask for more.");
+    expect(c.text).toContain("Work sent or added and ordinary payment updates follow the developer's Alerts, including on the specific part being paid.");
+    expect(c.text).toContain("Call problem reports and final call lengths follow Call changes alerts.");
+    expect(c.text).toContain("While a bank check is open, its blue notice shows changes about that tester regardless of Alerts.");
     expect(PAYMENT_RULES.find((r) => r.heading === "Bank checks, declines, holds")!.text).toContain("From an account's 2nd chargeback");
     expect(TERMS_VERSION).toBe(2);
     expect(WHAT_CHANGED).toHaveLength(1);

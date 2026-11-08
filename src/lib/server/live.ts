@@ -246,12 +246,9 @@ export async function devChanges(devId: string, testId: string, since: Date, tab
   // (Owner, Nov 3, batch 35 §159 rule 1; narrows the same day's "any part") The team's dispute decision about the SAME tester (any of their parts in this test: the
   // decision's contract is the press's) always stops a payment press once (Pay, Pay more, Confirm with your bank), even with "Decisions by the team" ticked: what
   // was decided changes what that tester is owed. A decision about ANOTHER tester follows the Alerts ticks like every other line.
-  // (§159 rule 2) Likewise the tester's sent, updated or added work on the SAME part being paid ("sent" lines carry the part as their item) always stops once,
-  // even with "Work sent" ticked; work on their other parts, and other testers' work, follows the tick.
-  // (§159) And that tester leaving the test (or being removed: a suspension or deletion reads "left") always stops a payment press on THEIR parts; another tester
-  // leaving follows "Testers leaving".
-  // (Owner, Nov 4, §171) Widened: anything on the part being paid, and a dispute by the press's tester or the team's decision on it, for every press about that
-  // tester (alwaysStops). (§171 A3) The blue notice in an open bank window lists everything about the payment's tester whatever the ticks (`wholeTester`).
+  // Same-part work, ordinary payments and call details follow Alerts. Departures,
+  // disputes and charges retain the separate forced checks in alwaysStops.
+  // An open bank window still shows all updates about its tester (wholeTester).
   const press = opts.press;
   const keep = (c: TestEventLike & { contractId?: string | null }) => {
     const a = alertOf(c.kind);
@@ -273,16 +270,8 @@ const onPart = (c: TestEventLike, press?: Press) => {
   return !!id && !!press && (press.keys.includes(`sub:${id}`) || press.keys.includes(`call:${id}`));
 };
 
-/**
- * (§159) The lines that stop a payment press (Pay, Pay more, Confirm with your bank: `payPressOf`) whatever the Alerts ticks: the team's decision about that same
- * tester, that tester leaving (or removed), and work sent, updated or added on the very part being paid.
- * (Owner, Nov 4, §171 A1) Same part always stops: ANYTHING on the part being paid (work sent, updated or added; a dispute on it; another payment on it: a Charge,
- * an automatic call charge, a team decision's charge; for a call, a problem the tester reported and its length becoming final: `payCallLines`).
- * (§171 A2) A dispute by the tester a press is about, or the team's decision on one, stops EVERY press about that tester once (Pay, Pay more, Confirm with your
- * bank on any of her parts; End early including her; call requests with her and answering or cancelling them). Presses about the whole test and about other
- * testers follow the Disputes / Decisions ticks.
- * (Owner, Nov 4, §193) A charge about that tester (`charge`: their Charge on any part, an automatic call charge, the team's dispute-decision charge) stops the
- * same presses once; the developer's own payments are never charges. Presses about the whole test and about other testers follow the Payments tick.
+/** Forced checks for departures, disputes, team decisions and tester charges.
+ * Ordinary same-part work and payments follow Alerts.
  */
 export function alwaysStops(c: TestEventLike & { contractId?: string | null }, press?: Press) {
   if (press?.awayCharge) {
@@ -292,19 +281,19 @@ export function alwaysStops(c: TestEventLike & { contractId?: string | null }, p
     // which the box already shows as its row; Confirm all: every part it covers): stopping for it could only show the press what it is paying.
     const ownCharge = !!c.piece && (onPart(c, press) || !!press.confirms?.includes(c.piece));
     // (Owner, Nov 5) A dispute by that tester forces it too, like the team's decision and a charge (it followed the Disputes tick before).
-    return !!pc && (((c.kind === "dispute" || isTeamDecision(c) || c.kind === "left" || (!!c.charge && !ownCharge)) && c.contractId === pc) || (c.kind === "sent" && !!c.item && press.keys.includes(`sub:${c.item}`)));
+    return !!pc && ((c.kind === "dispute" || isTeamDecision(c) || c.kind === "left" || (!!c.charge && !ownCharge)) && c.contractId === pc);
   }
   // (Owner, Nov 4, §193) A charge about the tester (their Charge on any part, an automatic call charge, the team's dispute-decision charge) stops every press about
   // that tester once, exactly like a dispute (§171 A2). Presses about the whole test and about other testers follow the Payments tick.
   if ((c.kind === "dispute" || isTeamDecision(c) || !!c.charge) && !!c.contractId && pressContracts(press).includes(c.contractId)) return true;
   const payContract = payContractOf(press);
   if (!payContract) return false;
-  return (c.kind === "left" && c.contractId === payContract) || onPart(c, press);
+  return c.kind === "left" && c.contractId === payContract;
 }
 
 /**
  * (Owner, Nov 4, §171 A1) A payment press on a call: what changed on that call itself that no test event says: the tester reported a problem with it, or its
- * measured length became final. Never in the live box; forced (no Alerts type).
+ * measured length became final. These follow Call changes alerts.
  */
 async function payCallLines(since: Date, press: Press | undefined, tx: Tx | typeof db): Promise<TestEventLike[]> {
   const id = payContractOf(press) && !press!.awayCharge ? press!.keys.find((k) => k.startsWith("call:"))?.slice(5) : undefined;
@@ -320,7 +309,7 @@ async function payCallLines(since: Date, press: Press | undefined, tx: Tx | type
     out.push({ kind: CALL_LENGTH, text: callLengthLine(name, when, minutes), createdAt: call.measuredAt, contractId: call.contractId, piece: id } as TestEventLike);
   return out;
 }
-/** (§171 A1) The kinds of `payCallLines`' lines (no Alerts type: always forced). */
+/** Call details use the Call changes Alerts setting. */
 export const CALL_PROBLEM = "call_problem", CALL_LENGTH = "call_length";
 /** "Ana Silva reported a problem with the call on Thu, Nov 5, 3:00 PM: Was late" */
 export const callProblemLine = (name: string, when: string, note: string) => `${name} reported a problem with the call on ${when}${note.trim() ? `: ${note.trim().replace(/\.$/, "")}` : ""}`;

@@ -5,10 +5,9 @@ import { PAYMENT_RULES } from "@/lib/termsOfUse";
 import { pay, payMore } from "./b15";
 import { addTo, joined, sact, seen, settle, setup } from "./fixtures";
 import { makeUser } from "./helpers";
+import { testerGate } from "@/lib/server/testerGate";
 
-// (Owner, Nov 4, §183) A tester's press that sends more to a part already sent (Add to this answer, a Send of the answers to changed questions, adding
-// recordings) always stops once, whatever her Alerts, when the developer made a payment on THAT part since her page loaded (Pay, Pay more, the $0 answer to her
-// update, a delayed payment going through). A payment on her other part keeps following her Alerts. A press that could only be refused is refused at once.
+// Developer payments on the same part follow tester Alerts; final refusals still apply.
 
 const ANS = "The harbour level was clear and the boats handled well on the first try.";
 type Res = { status: number; body: { error?: { code?: string; message?: string; changes?: { text: string; forced?: boolean }[] } } & Record<string, unknown> };
@@ -37,23 +36,52 @@ async function world(alertsOff = true) {
 type W = Awaited<ReturnType<typeof world>>;
 const more = (w: W, submissionId: string, amount = "2.00") => payMore(w.testId, w.dev.cookie, { contractId: w.sessionId, submissionId, amount, tickedCents: Math.round(Number(amount) * 100) });
 
-describe("§183 Add to this answer after a payment on the written answers", () => {
-  it("Pay more on them after her page loaded: the first Add stops once, the payment line forced (Alerts Off); the second press goes", async () => {
+describe("tester payment stops follow Alerts", () => {
+  it.each([true, false])("Dispute and Charge gate payment notices follow Alerts Off=%s", async (off) => {
+    const w = await world(off);
+    const loaded = seen();
+    await settle();
+    expect((await more(w, w.written.id)).status).toBe(200);
+    await settle();
+    for (const opts of [{ piece: w.written.id }, { owedPiece: w.written.id }]) {
+      const press = testerGate(w.tester.user.id, w.sessionId, w.testId, { seenAt: loaded, loadedAt: loaded }, undefined, opts);
+      if (off) await expect(press).resolves.toBeUndefined();
+      else await expect(press).rejects.toMatchObject({ code: "stop_once" });
+    }
+  });
+  it.each(["written", "recording", "zero"])("Alerts Off allows an addition after a same-part %s payment", async (kind) => {
     const w = await world();
+    if (kind === "recording") await addRecording(w.sessionId, w.tester.cookie);
+    if (kind === "zero") expect((await addTo(w.sessionId, w.tester.cookie, { text: "An initial addition.", seenAt: seen(), confirmed: true })).status).toBe(200);
+    const loaded = seen();
+    await settle();
+    expect((await more(w, kind === "recording" ? w.rec.id : w.written.id, kind === "zero" ? "0" : "2.00")).status).toBe(200);
+    await settle();
+    const r = kind === "recording"
+      ? await sact(w.sessionId, "recording-send", w.tester.cookie, { seenAt: loaded, loadedAt: loaded })
+      : await addTo(w.sessionId, w.tester.cookie, { text: "An addition after payment.", seenAt: loaded, loadedAt: loaded });
+    expect(r.status, JSON.stringify(r.body)).toBe(200);
+  });
+});
+
+describe("§183 Add to this answer after a payment on the written answers", () => {
+  it("Pay more on them after her page loaded: the first Add stops once, the payment line following Alerts On; the second press goes", async () => {
+    const w = await world(false);
     const loaded = seen();
     await settle();
     expect((await more(w, w.written.id)).status).toBe(200);
     await settle();
     const first = await addTo(w.sessionId, w.tester.cookie, { text: "One more thing about the boats.", seenAt: loaded, loadedAt: loaded });
     expect(first.body.error?.code, JSON.stringify(first.body)).toBe("stop_once");
-    expect(lines(first)).toEqual([expect.objectContaining({ text: "Nora Lane paid you $2.00 more for your written answers", forced: true })]);
+    expect(lines(first).every((line) => !line.forced)).toBe(true);
+    expect(lines(first)).toEqual([expect.objectContaining({ text: "Nora Lane paid you $2.00 more for your written answers" })]);
     await settle();
     const second = await addTo(w.sessionId, w.tester.cookie, { text: "One more thing about the boats.", seenAt: loaded, boxAt: seen(), confirmed: true });
     expect(second.status, JSON.stringify(second.body)).toBe(200);
   });
 
-  it("the developer's $0 answer to her update stops the next Add once, forced", async () => {
-    const w = await world();
+  it("the developer's $0 answer to her update stops the next Add once with Alerts On", async () => {
+    const w = await world(false);
     expect((await addTo(w.sessionId, w.tester.cookie, { text: "First addition after the Pay.", seenAt: seen(), confirmed: true })).status).toBe(200);
     await settle();
     const loaded = seen();
@@ -64,7 +92,8 @@ describe("§183 Add to this answer after a payment on the written answers", () =
     await settle();
     const first = await addTo(w.sessionId, w.tester.cookie, { text: "Second addition.", seenAt: loaded, loadedAt: loaded });
     expect(first.body.error?.code, JSON.stringify(first.body)).toBe("stop_once");
-    expect(lines(first)).toEqual([expect.objectContaining({ text: "Nora Lane paid $0 more for what you added to your written answers", forced: true })]);
+    expect(lines(first).every((line) => !line.forced)).toBe(true);
+    expect(lines(first)).toEqual([expect.objectContaining({ text: "Nora Lane paid $0 more for what you added to your written answers" })]);
   });
 
   it("a payment on her recording does NOT stop an Add on the written answers with Alerts Off; with Alerts on it stops, not forced", async () => {
@@ -108,8 +137,8 @@ describe("§183 Add to this answer after a payment on the written answers", () =
 });
 
 describe("§183 adding recordings after a payment on the recording", () => {
-  it("Pay more on the recording after her page loaded: the add stops once, forced (Alerts Off); the second press goes", async () => {
-    const w = await world();
+  it("Pay more on the recording after her page loaded: the add stops once, following Alerts On; the second press goes", async () => {
+    const w = await world(false);
     await addRecording(w.sessionId, w.tester.cookie);
     const loaded = seen();
     await settle();
@@ -117,7 +146,8 @@ describe("§183 adding recordings after a payment on the recording", () => {
     await settle();
     const first = await sact(w.sessionId, "recording-send", w.tester.cookie, { seenAt: loaded, loadedAt: loaded });
     expect(first.body.error?.code, JSON.stringify(first.body)).toBe("stop_once");
-    expect(lines(first)).toEqual([expect.objectContaining({ text: "Nora Lane paid you $2.00 more for your recording", forced: true })]);
+    expect(lines(first).every((line) => !line.forced)).toBe(true);
+    expect(lines(first)).toEqual([expect.objectContaining({ text: "Nora Lane paid you $2.00 more for your recording" })]);
     await settle();
     const second = await sact(w.sessionId, "recording-send", w.tester.cookie, { seenAt: loaded, boxAt: seen(), confirmed: true });
     expect(second.status, JSON.stringify(second.body)).toBe(200);
@@ -149,6 +179,6 @@ describe("§183 adding recordings after a payment on the recording", () => {
 describe("§183 the Terms", () => {
   it("“Changes while you pay” says a payment on the part a tester is adding to stops her press once", () => {
     const c = PAYMENT_RULES.find((r) => r.heading === "Changes while you pay")!;
-    expect(c.text).toContain("A developer payment on a part the tester is adding to also stops their Send or Add press once, whatever their Alerts.");
+    expect(c.text).toContain("Developer payment updates, including payments on the same part, stop the tester's presses once only with their Alerts on.");
   });
 });

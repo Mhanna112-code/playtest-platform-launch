@@ -26,6 +26,7 @@ export function alertOf(kind: string): AlertKey | null {
     case "joined": case "applied": case "invite": case "invited": case "full": case "spot_open": return "joins";
     case "left": return "leaving";
     case "sent": return "work";
+    case "call_problem": case "call_length":
     case "booked": case "confirmed": case "cancelled": case "offered": case "removed": case "requested": case "withdrew_req": case "declined_req": case "req_closed": return "calls"; // (Owner, Nov 4, §184) req_closed: a request dropped by a booking
     case "paid": case "rejected": case "choice": case "payment": return "payments";
     case "dispute": return "disputes";
