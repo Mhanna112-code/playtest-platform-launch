@@ -14,7 +14,7 @@ import { ADDITIONS_MAX, ADD_UNDER_QUESTION, ANYTHING_ELSE_KEY, ANYTHING_ELSE_TIT
 import { countersOf, countingSince, countsAfter, countsOf, criticalLine, lockedFields, storedCounts, type CriticalCounts } from "@/lib/limits";
 import { alertOf } from "@/lib/alerts";
 import { KEY_GIVEN, applyKeyChange, assignKeyAtJoin, checkTypedKeys, giveKeysToWorking, planKeyChange } from "./accessKeys";
-import { givenDeletedLine, keyGivenEventLine, keyNeedLine, keysAddedLine, keysRemovedLine, parseKeys } from "@/lib/keys";
+import { keyAdditionsByEdit, givenDeletedLine, keyGivenEventLine, keyNeedLine, keysAddedLine, keysRemovedLine, parseKeys } from "@/lib/keys";
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { LIMITS } from "@/lib/limits";
@@ -714,7 +714,7 @@ export async function editNews(tx: Tx, testId: string, body: Record<string, unkn
     const keys = await tx.accessKey.findMany({ where: { testId }, select: { value: true, status: true } });
     const free = keys.filter((k) => k.status === "free").map((k) => k.value);
     const used = keys.filter((k) => k.status === "inuse" || k.status === "broken").map((k) => k.value);
-    added = free.filter((v) => !loaded.includes(v));
+    added = keyAdditionsByEdit(free.filter((v) => !loaded.includes(v)), parseKeys(body.keysInUseLoaded));
     removed = loaded.filter((v) => !free.includes(v) && !used.includes(v));
   }
   return { fields, added, removed };

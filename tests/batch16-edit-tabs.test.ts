@@ -1,9 +1,10 @@
+import { editNews, asListing } from "@/lib/server/tests";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { givenDeletedLine, keyGivenLine, keysAddedLine, keysRemovedLine } from "@/lib/keys";
-import { act, joined, settle, setup } from "./fixtures";
+import { act, joined, settle, setup, sact, seen } from "./fixtures";
 import * as React from "react";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -145,7 +146,7 @@ describe("the notes under Edit's fields and in Save's stop box (sections 17-19)"
     expect(form).not.toMatch(/added in another tab|is no longer free/);
     // Always listed (the owner's exception to section 17): no filtering by what this tab also did.
     expect(form).toContain("const addedElse = nowFree.filter((v) => !freeLoaded.includes(v));");
-    expect(form).toContain("...(addedElse.length ? [keysAddedLine(addedElse)] : [])");
+    expect(form).toContain("...(addedByEdit.length ? [keysAddedLine(addedByEdit)] : [])");
     expect(form).toContain("...(removed.length ? [keysRemovedLine(removed)] : [])");
     expect(form).toContain("joinedOnly.map((v) => keyGivenLine(givenTo(v)!, v))");
   });
@@ -196,4 +197,15 @@ describe("the notes under Edit's fields and in Save's stop box (sections 17-19)"
     expect(qs.match(/data-qa="question"/g)?.length).toBe(5);
     expect(qs).toContain(">Question 5<");
   });
+});
+
+it("a released assignment is not an added-key Save conflict, while a real addition still is",async()=>{
+ const s=await setup({accessKeys:"RETURNED\nFREE",spots:2});const j=await joined(s.testId);
+ const used=await db.accessKey.findFirstOrThrow({where:{contractId:j.sessionId}});
+ const loaded=await freeKeys(s.testId),base=await formOf(s.testId);
+ expect((await sact(j.sessionId,"leave",j.tester.cookie,{seenAt:seen(),confirmed:true})).status).toBe(200);
+ const news=()=>db.$transaction(async tx=>editNews(tx,s.testId,{base,has:base,fields:{},keysLoaded:loaded,keysInUseLoaded:[used.value]},asListing(await tx.test.findUniqueOrThrow({where:{id:s.testId}}))));
+ expect((await news())?.added).toEqual([]);
+ await db.accessKey.create({data:{testId:s.testId,value:"ACTUAL-NEW",status:"free"}});
+ expect((await news())?.added).toEqual(["ACTUAL-NEW"]);
 });
