@@ -1,5 +1,4 @@
 "use client";
-import { SENT_WORK_PRICE_EXPLANATION } from "@/lib/answerTerms";
 import { KeyCounts } from "@/components/KeyCounts";
 import { CharacterCount } from "@/components/CharacterCount";
 import { SubscribersTag } from "@/components/SubscribeLink";
@@ -901,7 +900,7 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
       </div>
 
       <div className="space-y-2">
-        {edit && edit.testersIn > 0 && <p className="note">Testers already working keep their contract; each is offered these new terms and can switch. {SENT_WORK_PRICE_EXPLANATION}</p>}
+        {edit && edit.testersIn > 0 && <p className="note">Testers already in choose to accept new terms or keep their own for prices and parts. <a className="link" href="/terms#how-payments-work">How payments work</a></p>}
         {/* (Owner, Oct 28) Above the button: "Fix the N mistakes above…". (Batch 16 section 10) One linked bullet per field red right now, read from the
             fields themselves, so the list and the fields always agree; then any server mistake that belongs to no field. */}
         {!edit && !hasCard && <p className="note" data-card-needed="">Posting needs a card in Payments. <a className="underline" href="/app/payments">Add a card</a>.</p>}

@@ -378,7 +378,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
   // The full app's session page: one centred column; the header card (title, by, badges, Chat, Open the product), then a
   // card per part.
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
+    <div key={`${c.id}:${c.status}:${c.endedAt?.getTime() ?? 0}`} className="mx-auto max-w-3xl space-y-6">
       <AutoRefresh query={`session=${c.id}`} v={pageV} />
       {/* (Batch 16 section 38B) Call changes stop a press once even after a refresh showed them: counted from when the page first loaded here. */}
       <PageLoaded at={seenAt} />
@@ -521,7 +521,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
           {/* (Owner, Nov 5, §264) Below Due: what to do, the build link, languages and devices, moved here from the listing information. They stay live (the
               current listing, "Updated <time>" with before → now), so the sentence under them says so. */}
           {CONTRACT_INFO.map((k) => info.find((l) => l.key === k)).filter((l): l is (typeof info)[number] => !!l).map(infoItem)}
-          <li className="text-slate-400" data-scope-agreed="">Agreed {fmtDate(c.joinedAt)}. Your contract stays as it is: if <NameLink text={dev} href={devHref} /> changes these terms later, you choose Switch or Keep. What to do, the build link, languages and devices are the exception: they follow <NameLink text={dev} href={devHref} />&apos;s changes, marked Updated.</li>
+          <li className="text-slate-400" data-scope-agreed="">Agreed {fmtDate(c.joinedAt)}. Your agreed prices and parts stay as they are unless you choose Switch when new terms are offered. Keep retains your agreed prices and parts. Other listing edits, including questions, what to do, the build link, languages, devices and NDA, still apply. Changes are marked Updated; NDA changes need a separate acknowledgement.</li>
         </ul>
         <p className="mt-3 text-sm font-medium text-white">The listing information</p>
         <p className="text-xs text-slate-400">Always the current listing: it follows <NameLink text={dev} href={devHref} />&apos;s changes as they&apos;re made.</p>

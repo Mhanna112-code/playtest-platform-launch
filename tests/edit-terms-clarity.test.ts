@@ -10,6 +10,6 @@ it("explains that Keep preserves agreed parts and prices while other listing edi
 });
 it("explains consistent addition pricing before the deadline and preservation afterward", () => {
   expect(EDIT_TEST_TERMS).toContain("sending additional recordings updates the unpaid part");
-  expect(EDIT_TEST_TERMS).toContain("After the deadline or once Charge opens, additions preserve");
+  expect(EDIT_TEST_TERMS).toContain("After the tester's deadline or once Charge opens, additions preserve");
   expect(EDIT_TEST_TERMS).toContain("After payment or Charge, additions never reopen Charge");
 });

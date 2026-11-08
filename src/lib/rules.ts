@@ -30,7 +30,7 @@ export const HIGH_PART_TICK = "I confirm this part pays more than $200.";
  */
 // (Owner, Oct 29, batch 28 §21) It covers the automatic charge of listed calls too.
 // (Batch 30 §3) Charge applies to listed work sent by the tester's deadline.
-export const PAY_RULES_TICK = "I understand that a tester can charge my card, up to the listing price, for work they sent by their own deadline that I haven't paid once 7 days have passed since they sent it and that deadline has passed, and listed calls 7 days after they take place.";
+export const PAY_RULES_TICK = "I understand that failing to review and press the Pay button (between $0 and a part's maximum price) allows a tester to charge my card, up to the listing price (or the old listing price for past work sent), for work they sent by their own deadline that I haven't paid once 7 days have passed since they sent it and that deadline has passed, and listed calls 7 days after they take place.";
 export const PAY_RULES_LINK = "How payments work";
 export const PAY_RULES_TICK_MISSING = "Tick to confirm you understand how payments work.";
 /** The Terms' payments section (section 4, How payments work). */
