@@ -1,3 +1,4 @@
+import { limitedTesterSession } from "@/lib/limitedTesterSession";
 import { RejoinTag } from "@/components/RejoinTag";
 import { NameLink } from "@/components/Cut";
 import { withDateZone } from "@/lib/server/dateZone";
@@ -115,10 +116,9 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
     },
   });
   if (!c || c.testerId !== u.id) notFound();
-  // (Batch 16 section 28) A suspended tester side opens only the tests they were removed from, in a limited view: their parts, what each was paid, the work sent,
-  // and Dispute, Charge, Let it go and Rate. Everything else (sending, drafts, calls, chat, the key box, Leave, excerpt requests) stays hidden.
-  const limited = !!u.testerSuspendedAt && c.status !== "working" && c.endKind === "suspended";
-  if (u.testerSuspendedAt && !limited) redirect("/app");
+  // (Batch 16 section 28) A suspended tester can open every owned session in a limited view: their parts, what each was paid, the work sent,
+  // and eligible disputes. Charge, Let it go, Rate and everything else (sending, drafts, calls, chat, the key box, Leave, excerpt requests) stays hidden.
+  const limited = limitedTesterSession(u, c);
   const dev = displayName(c.test.developer);
   // (Batch 12 section 1) A developer who deleted their account.
   const devGone = !!c.test.developer.deletedAt;
@@ -379,7 +379,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
   // card per part.
   return (
     <div key={`${c.id}:${c.status}:${c.endedAt?.getTime() ?? 0}`} className="mx-auto max-w-3xl space-y-6">
-      <AutoRefresh query={`session=${c.id}`} v={pageV} />
+      <AutoRefresh query={`session=${c.id}`} v={pageV} sessionActive={c.status === "working"} />
       {/* (Batch 16 section 38B) Call changes stop a press once even after a refresh showed them: counted from when the page first loaded here. */}
       <PageLoaded at={seenAt} />
       {/* (Design doc 8, owner Oct 26) The top, in this order: the test name, the access-key box, the live updates box (every change except the

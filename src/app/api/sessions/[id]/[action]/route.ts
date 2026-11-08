@@ -1,3 +1,4 @@
+import { limitedTesterSession } from "@/lib/limitedTesterSession";
 import { HttpError, handle, ok, readJson } from "@/lib/server/http";
 import { notListed, sidOf } from "@/lib/server/shownLines";
 import { reportNoShow, testerCancelCall } from "@/lib/server/calls";
@@ -110,7 +111,7 @@ async function stateMoment(contractId: string, action: string, body: Record<stri
 }
 
 /**
- * (Owner, Oct 28, batch 16 section 28; batch 17 section 10) A suspended tester side: the tests they were removed from open in a limited view where Dispute is the only
+ * (Owner, Oct 28, batch 16 section 28; batch 17 section 10) A suspended tester side: all their own sessions open in a limited view where Dispute is the only
  * press, under the same stop-once rules as everywhere (batch 29 section 11). Charge, Let it go and Rate are hidden there and refused here (nothing is lost: Charge never
  * happens on its own, so what was open is still open after the reinstatement). Every other press stays refused while suspended (excerpt requests too, through their
  * own route, until the suspension lifts).
@@ -125,7 +126,7 @@ async function limitedUser(req: Request, contractId: string, action: string) {
   const u = await requireUser(req);
   if (!u.testerSuspendedAt) return null;
   const c = await db.contract.findUnique({ where: { id: contractId }, select: { testerId: true, endKind: true, status: true } });
-  return c && c.testerId === u.id && c.status !== "working" && c.endKind === "suspended" ? u : null;
+  return c && limitedTesterSession(u, c) ? u : null;
 }
 
 // Tester actions on their own session (contract).

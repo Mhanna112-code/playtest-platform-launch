@@ -280,7 +280,7 @@ export default async function ListingPage({ params, searchParams }: { params: Pr
       ) : (
         <>{gaps.map((g) => <p key={g} className="info">{g}</p>)}</>
       )}
-      {t.developerId === u.id || isAdmin(u) || !u.isTester || closed || blocked || ratedHere ? null : (
+      {t.developerId === u.id || isAdmin(u) || !u.isTester || closed || blocked || ratedHere || (!!mine && !canRejoin && !invite) ? null : (
         <div>
           <JoinBox
             termsAgain={needsTermsAgain(u)}

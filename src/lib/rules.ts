@@ -1810,13 +1810,13 @@ export function leftText(ms: number, words = false) {
 
 /**
  * May this tester ask to rejoin? They left, or the developer ended their work (or the team's suspension removed them), BEFORE their deadline
- * passed; not after a stop, a block or a rating.
+ * passed; not after a stop or rating. A past block does not prevent asking once unblocked.
  */
 export function canAskToRejoin(c: { status: string; endKind: string; endedAt: Date | null; dueAt: Date }, rated: boolean) {
   if (rated) return false;
   if (c.status !== "left" && c.status !== "ended") return false;
-  if (["rated", "stopped", "closed", "blocked"].includes(c.endKind)) return false;
-  return !!c.endedAt && c.endedAt.getTime() < c.dueAt.getTime();
+  if (["rated", "stopped", "closed"].includes(c.endKind)) return false;
+  return !!c.endedAt && (c.endKind === "blocked" || c.endedAt.getTime() < c.dueAt.getTime());
 }
 
 // ---------- (Owner, Oct 28, batch 17 sections 1, 2, 12, 14 and 16) When Rate is open, and what stops it ----------

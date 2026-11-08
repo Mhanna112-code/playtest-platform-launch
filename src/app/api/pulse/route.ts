@@ -127,10 +127,12 @@ export async function GET(req: Request) {
     }
     let testId = q.get("test") ?? "";
     const sessionId = q.get("session") ?? "";
+    let sessionActive: boolean | undefined;
     if (sessionId) {
       const c = await db.contract.findUnique({ where: { id: sessionId } });
       if (!c || c.testerId !== u.id) throw new HttpError(404, "not_found", "Not found.");
       testId = c.testId;
+      sessionActive = c.status === "working";
     }
     const t = await db.test.findUnique({ where: { id: testId }, include: { developer: { select: { holdStartedAt: true, devSuspendedAt: true } } } });
     if (!t || (!sessionId && t.developerId !== u.id)) throw new HttpError(404, "not_found", "Not found.");
@@ -143,6 +145,6 @@ export async function GET(req: Request) {
     // tab or browser follows a change made elsewhere on this poll (no refresh needed).
     // (Owner, Nov 4, §169) With the list's version (`v`): an answer read before a save that lands after it is older than that save, and the tab ignores it.
     const alerts = sessionId ? { testerOff: u.testerAlertsOff } : { ignored: t.ignoredAlerts, v: t.alertsV } /* batch 35 §73: this test's */;
-    return ok({ v, adminStopped: !!t.adminStoppedAt, restricted: !!(sessionId ? u.testerSuspendedAt : u.devSuspendedAt || t.developer.holdStartedAt), alerts });
+    return ok({ v, sessionActive, adminStopped: !!t.adminStoppedAt, restricted: !sessionId && !!(u.devSuspendedAt || t.developer.holdStartedAt), alerts });
   });
 }

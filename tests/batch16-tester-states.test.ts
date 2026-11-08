@@ -143,8 +143,8 @@ describe("what still works follows the running test's stop-once rules (batch 29 
   });
 });
 
-describe("a suspended tester's limited view of tests they were removed from (section 28)", () => {
-  it("only Dispute, Charge, Let it go and Rate work; everything else and excerpt requests are refused while suspended; excerpts work after reinstating", async () => {
+describe("a suspended tester's limited view of all their own sessions", () => {
+  it("only eligible Dispute works while suspended; other actions and excerpts wait for reinstatement", async () => {
     const a = await scene("removed", "paid");
     // Allowed (the dispute and the rate are covered above too; batch 29 section 11: after its stop once for the payment).
     expect((await sact(a.sessionId, "dispute", a.tester.cookie, { kind: "submission", id: a.sub.id, reason: "I answered every question in full.", seenAt: a.opened, confirmed: true, boxAt: seen() })).status).toBe(200);
@@ -158,10 +158,10 @@ describe("a suspended tester's limited view of tests they were removed from (sec
     expect((await ask()).status).toBe(403);
     await db.user.update({ where: { id: a.tester.user.id }, data: { testerSuspendedAt: null } });
     expect((await ask()).status).toBe(200); // after reinstating, from a test they were removed from
-    // A tester who was NOT removed (another test) and is suspended: Dispute stays refused there.
+    // A tester whose session already stopped retains eligible Dispute access while suspended.
     const b = await scene("stopped", "paid");
     await db.user.update({ where: { id: b.tester.user.id }, data: { testerSuspendedAt: new Date() } });
-    expect((await sact(b.sessionId, "dispute", b.tester.cookie, { kind: "submission", id: b.sub.id, reason: "I answered every question in full.", seenAt: b.opened })).status).toBe(403);
+    expect((await sact(b.sessionId, "dispute", b.tester.cookie, { kind: "submission", id: b.sub.id, reason: "I answered every question in full.", seenAt: b.opened, confirmed: true, boxAt: seen() })).status).toBe(200);
   }, 60_000);
 
   it("excerpt requests from a test the tester left work (not suspended)", async () => {
@@ -170,15 +170,14 @@ describe("a suspended tester's limited view of tests they were removed from (sec
     expect(r.status, JSON.stringify(r.body)).toBe(200);
   }, 60_000);
 
-  it("the page: open for a suspended tester only as the limited view; the dashboard row opens it", () => {
+  it("the page: all owned sessions open in limited view and dashboard history links remain available", () => {
     const u = { isDeveloper: false, isTester: true, side: "tester", testerSuspendedAt: new Date() };
     expect(closedForSuspended("/app/sessions/abc", u, "tester")).toBe(false); // the page decides
     expect(closedForSuspended("/app/find", u, "tester")).toBe(true); // Find stays closed
     expect(closedForSuspended("/app/testers/x", u, "tester")).toBe(true); // profiles too
     expect(R.LIMITED_VIEW_LINE).toBe("Your account is paused. You can still dispute a payment."); // (batch 17 section 10)
     const page = src("app/app/sessions/[id]/page.tsx");
-    expect(page).toContain('const limited = !!u.testerSuspendedAt && c.status !== "working" && c.endKind === "suspended";');
-    expect(page).toContain('if (u.testerSuspendedAt && !limited) redirect("/app");');
+    expect(page).toContain('const limited = limitedTesterSession(u, c);');
     expect(page).toContain('{limited && <p className="info" data-limited-view="">{LIMITED_VIEW_LINE}</p>}');
     // (Owner, Nov 5, §209) The limited view keeps the Live session for its past calls only (Had / Cancelled: the Call history card is gone).
     expect(page).toContain("{((!limited && (c.calls.length > 0 || canRequestCall || pendingReqs.length > 0)) || overCalls.length > 0) && (");
@@ -187,6 +186,7 @@ describe("a suspended tester's limited view of tests they were removed from (sec
     expect(page).toContain("off={meOff && !limited}");
     // Hidden there: chat, the key box (not working), Leave (not working), excerpt requests (excerptPicks need an active tester side).
     expect(page).toContain("!excerptPending && !u.testerSuspendedAt ? await excerptChoices(written)");
-    expect(src("app/app/page.tsx")).toContain("<Link href={`/app/sessions/${c.id}`} data-removed-open={c.id}><TestName text={c.title} /></Link>"); // (§245) the green test name
+    expect(src("app/app/page.tsx")).toContain('href={`/app/sessions/${c.id}`}');
+    expect(src("app/app/page.tsx")).not.toContain('data-waiting-plain'); // (§245) the green test name
   });
 });

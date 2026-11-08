@@ -30,8 +30,10 @@ function onceFor(key: string) {
   return true;
 }
 
-export function AutoRefresh({ query, refresh = true, v }: { query: string; refresh?: boolean; /** (Batch 17 section 9) The fingerprint the page was rendered with: a page shown again from the browser's cache (Back) refreshes at its first poll if it changed since. */ v?: string }) {
+export function AutoRefresh({ query, refresh = true, v, sessionActive }: { query: string; refresh?: boolean; sessionActive?: boolean; /** (Batch 17 section 9) The fingerprint the page was rendered with: a page shown again from the browser's cache (Back) refreshes at its first poll if it changed since. */ v?: string }) {
   const router = useRouter();
+  const shownActive = useRef(sessionActive);
+  useEffect(() => { shownActive.current = sessionActive; }, [sessionActive]);
   const last = useRef<string | null>(v ?? null);
   // (Batch 19 section 5) The fingerprint the page is SHOWING (the `v` it was last rendered with): a poll that differs refreshes until the page shows it, so a refresh that
   // didn't take (a page shown again with Back) is tried again, and one that still hasn't shown after a few seconds loads the page again.
@@ -70,7 +72,7 @@ export function AutoRefresh({ query, refresh = true, v }: { query: string; refre
       try {
         const r = await fetch(`/api/pulse?${query}`, { cache: "no-store" });
         if (!r.ok) return;
-        const { v, adminStopped, restricted, alerts } = (await r.json()) as { v: string; adminStopped?: boolean; restricted?: boolean; alerts?: { ignored?: string[]; v?: number; testerOff?: boolean } };
+        const { v, adminStopped, restricted, alerts, sessionActive: activeNow } = (await r.json()) as { v: string; sessionActive?: boolean; adminStopped?: boolean; restricted?: boolean; alerts?: { ignored?: string[]; v?: number; testerOff?: boolean } };
         // (Batch 20 section 8) The Alerts setting as saved now (changed in another browser or device): the menu, toggle and chips follow.
         if (alive && testId && Array.isArray(alerts?.ignored)) publishIgnoredAlerts(testId, alerts.ignored, false, alerts.v); // (batch 35 §73) this test's; (§169) never over a newer save
         if (alive && typeof alerts?.testerOff === "boolean") publishTesterAlertsOff(alerts.testerOff, false);
@@ -83,6 +85,11 @@ export function AutoRefresh({ query, refresh = true, v }: { query: string; refre
         restrictedNow.current = !!restricted;
         // (Batch 17 §11) While the bank's check is open inline, the page waits: a refresh could move the piece (and the check) away from under the developer.
         if (refresh && bankCheckOpen()) return;
+        // Rejoining restores the same session URL. Load its current server tree rather than retaining an ended client view.
+        if (refresh && shownActive.current === false && activeNow === true && alive && onceFor(`${query}|rejoined|${v}`)) {
+          reloadWhenFree(() => shownActive.current === false && !bankCheckOpen());
+          return;
+        }
         // A suspension / hold is routed by SessionWatch (a hard move to the dashboard): refreshing a page the server is about to redirect would race it.
         const was = shown.current ?? last.current;
         if (refresh && !restricted && was !== null && v !== was && alive) {
@@ -103,6 +110,7 @@ export function AutoRefresh({ query, refresh = true, v }: { query: string; refre
     const leave = rideLiveClock();
     const onBeat = () => void tick();
     window.addEventListener(LIVE_TICK, onBeat);
+    window.addEventListener("focus", liveBeat);
     // (Batch 35 §37) The live top box found a new line: the page redraws at once (not on Edit's watch-only AutoRefresh, not while the bank's check is open, not
     // while SessionWatch is routing a hold or suspension).
     const offLines = onBoxLines(() => {
@@ -129,6 +137,7 @@ export function AutoRefresh({ query, refresh = true, v }: { query: string; refre
       alive = false;
       leave();
       window.removeEventListener(LIVE_TICK, onBeat);
+      window.removeEventListener("focus", liveBeat);
       offLines();
       window.removeEventListener("pageshow", onShow);
       window.removeEventListener(PRESS_REFUSED_EVENT, onRefused);

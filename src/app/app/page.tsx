@@ -501,7 +501,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
               return (
                 <li key={s.id} data-panel-search={`${c.title} ${displayName(c.test.developer)}`}>
                   {/* (Owner, Oct 28) Suspended: the session page is closed, so the row doesn't open. */}
-                  {suspended ? <div className="card flex flex-wrap items-center gap-3 p-4" data-waiting-plain="">{inner}</div> : <Link href={`/app/sessions/${c.id}#parts`} className="card card-hover flex flex-wrap items-center gap-3 p-4 no-underline hover:no-underline">{inner}</Link>}
+                  {<Link href={`/app/sessions/${c.id}#parts`} className="card card-hover flex flex-wrap items-center gap-3 p-4 no-underline hover:no-underline">{inner}</Link>}
                 </li>
               );
             })}
@@ -517,7 +517,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
               );
               return (
                 <li key={x.id} data-panel-search={`${c.title} ${displayName(c.test.developer)}`} data-waiting-call={x.id}>
-                  {suspended ? <div className="card flex flex-wrap items-center gap-3 p-4" data-waiting-plain="">{inner}</div> : <Link href={`/app/sessions/${c.id}#call-${x.id}`} className="card card-hover flex flex-wrap items-center gap-3 p-4 no-underline hover:no-underline">{inner}</Link>}
+                  {<Link href={`/app/sessions/${c.id}#call-${x.id}`} className="card card-hover flex flex-wrap items-center gap-3 p-4 no-underline hover:no-underline">{inner}</Link>}
                 </li>
               );
             })}
