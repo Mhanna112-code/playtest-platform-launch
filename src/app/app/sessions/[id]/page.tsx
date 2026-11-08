@@ -1,3 +1,4 @@
+import { RejoinTag } from "@/components/RejoinTag";
 import { NameLink } from "@/components/Cut";
 import { withDateZone } from "@/lib/server/dateZone";
 import { fmtTimeIn } from "@/lib/format";
@@ -186,6 +187,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
   // (Design doc 9) Terms history: what they joined on, every offer and what they chose (previous questions, answers and NDAs stay here).
   const offers = await db.termsOffer.findMany({ where: { contractId: c.id }, orderBy: { createdAt: "asc" } });
   // (Owner, Oct 30, batch 15 sections 24 and 43) Their own deal history, in order: renames, previous question sets and payments too (never other testers' choices).
+  const rejoinHistoryLabel = (await (await import("@/lib/server/rejoinHistory")).rejoinLabels(c.testId, [c])).get(c.id);
   const participationHistory = (await (await import("@/lib/server/contractHistory")).contractHistory(c.testId, [c])).get(c.id) ?? [];
   const contractNotes = await db.contractNote.findMany({ where: { contractId: c.id }, orderBy: { createdAt: "asc" } });
   const historyPays = await db.payment.findMany({ where: { contractId: c.id, status: { in: ["charged", "not_set_up"] }, kind: { notIn: ["chargeback", "subscription"] } }, orderBy: { createdAt: "asc" }, select: { id: true, amountCents: true, createdAt: true, kind: true, callId: true, submissionId: true } });
@@ -424,6 +426,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
             <div className="mt-1 flex flex-wrap gap-2">
               {c.test.status === "stopped" && <span className="badge border-sky-300/40 text-sky-200"><span className="h-2 w-2 rounded-sm bg-sky-300" /> Stopped</span>}
               <span className={`badge ${c.status === "working" ? "border-emerald-400/40 text-emerald-200" : ""}`}>{c.status === "working" ? "Working" : c.status === "left" ? "You left" : "Ended"}</span>
+              <RejoinTag label={rejoinHistoryLabel} />
               {/* (Batch 30 §15) The current listing, live: its categories (with their icons), parts, devices and languages, as on the join page and Find cards. */}
               <CategoryBadges categories={c.test.categories} />
               <PartBadges written={c.test.writtenCents != null} recording={c.test.recordingCents != null} live={c.test.liveRateCents != null} />

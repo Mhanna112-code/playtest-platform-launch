@@ -1,3 +1,4 @@
+import { RejoinTag } from "@/components/RejoinTag";
 import { withLineLinks } from "@/components/LineLinks";
 import { NameLink } from "@/components/Cut";
 import { withDateZone } from "@/lib/server/dateZone";
@@ -130,6 +131,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const perks = await hasPerks(u);
   // (Batch 14 section 6) The read-only Access keys notice (only when the test uses keys).
   const keysView = await keyBoxes(id);
+  const rejoined = await (await import("@/lib/server/rejoinHistory")).rejoinLabels(id, t.contracts);
   const participationHistory = await (await import("@/lib/server/contractHistory")).contractHistory(id, t.contracts, true);
   // (Owner, Oct 30, batch 15 sections 23, 29 and 37) ANY pause (the team's, a payment or chargeback hold, a developer-side suspension) shows the restricted view: the
   // overview with Stop and End early, Booked calls with Cancel, the excerpt requests and the disputes. Only the banner's title and reason differ by cause.
@@ -747,6 +749,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                   {/* (Owner, Nov 4, §199; the §187 rule) The whole name, cut with "…" only when the row is actually full (it was cut at 12 characters with room to
                       spare): `NameLink fit`, the heading `min-w-0` so it can shrink, never wider than the row less the arrow (so the arrow stays beside it); the badges and the paid figure (§195) never cut (they wrap below on a phone). */}
                   <h3 className="mr-auto min-w-0 max-w-[calc(100%-1.25rem)] font-semibold text-white" data-tester-fold-name=""><NameLink fit text={name} href={personHref} /><span hidden className="text-xs font-normal text-slate-400" data-previous-name-match="" /></h3>
+                  <RejoinTag label={rejoined.get(c.id)} />
                   <span className="badge shrink-0 whitespace-nowrap">{c.status === "working" ? `Working · due ${fmtDate(c.dueAt)}` : c.status === "left" ? "Left the test" : "Work ended"}</span>
                   {/* (Owner, Nov 4, §195) Paid so far for their work on this test, once, on the right of the name row (it was the first line of the summary under the row). */}
                   <PaidSoFar cents={paidSoFar(c.id)} className="!ml-0" />

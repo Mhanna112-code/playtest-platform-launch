@@ -1189,11 +1189,15 @@ model TestVisit {
 /// (In development without RESEND_API_KEY, emails still go to the dev outbox, OutboxEmail.)
 model EmailQueue {
   id          String    @id @default(cuid())
+  /// Account and originating notices let retries remove reminders after deletion without losing payment receipts.
+  recipientId String?
+  notificationIds String[] @default([])
+  reminderKey String?
   to          String
   subject     String
   text        String
   html        String    @default("")
-  /// "pending" | "sent" | "failed" (failed for good)
+  /// "pending" | "sent" | "failed" (failed for good) | "cancelled" (recipient deleted; reminder suppressed)
   status      String    @default("pending")
   /// Tries that failed or went through (a daily-limit wait isn't counted)
   attempts    Int       @default(0)

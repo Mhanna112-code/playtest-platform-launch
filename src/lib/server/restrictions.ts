@@ -288,6 +288,7 @@ export async function deleteAccount(userId: string, by: "self" | "admin", reason
     return r.count === 1;
   });
   if (!claimed) throw new HttpError(409, "deleted", "That account was already deleted.");
+  await db.notification.updateMany({ where: { userId, reminderKey: { not: null }, summarizedAt: null }, data: { summarizedAt: new Date() } });
   // (Owner, Oct 29, batch 12 section 1) A developer can always delete their account (the warning lists what is left; nothing blocks it).
   // (Batch 8) The subscription ends at once, with no refund.
   if (u.isDeveloper) await (await import("./subscription")).endOnDelete(userId);
@@ -563,10 +564,10 @@ const REMIND_DAYS = 3;
 /** Stripe says a payout failed (or the payout account needs attention): the tester gets the banner and a bell now, then (§317a) 3, 10 and 30 days after, until fixed. */
 export async function payoutProblem(accountId: string, now = new Date()) {
   const u = await db.user.findUnique({ where: { stripeAccountId: accountId } });
-  if (!u) return false;
+  if (!u || u.deletedAt) return false;
   if (!u.payoutProblemAt) {
     await db.user.update({ where: { id: u.id }, data: { payoutProblemAt: now, payoutRemindedAt: now } });
-    await bell(u.id, PAYOUT_LINE, "/app/payments#payout", undefined, { side: "tester", payment: true, group: "payout" });
+    await bell(u.id, PAYOUT_LINE, "/app/payments#payout", undefined, { side: "tester", payment: true, group: "payout", reminder: "payout" });
   }
   return true;
 }
@@ -592,7 +593,7 @@ export function payoutMarkDue(problemAt: Date, remindedAt: Date | null, now: Dat
 /** The daily job: the payout problem's reminders on days 3, 10 and 30 (§317a; it was every 3 days until fixed). */
 export async function payoutReminders(now = new Date()) {
   let n = 0;
-  for (const u of await db.user.findMany({ where: { payoutProblemAt: { not: null } }, select: { id: true, payoutProblemAt: true, payoutRemindedAt: true } })) {
+  for (const u of await db.user.findMany({ where: { payoutProblemAt: { not: null }, deletedAt: null }, select: { id: true, payoutProblemAt: true, payoutRemindedAt: true } })) {
     if (payoutMarkDue(u.payoutProblemAt!, u.payoutRemindedAt, now) === null) continue;
     await bell(u.id, PAYOUT_LINE, "/app/payments#payout", undefined, { side: "tester", payment: true, group: "payout", reminder: "payout" });
     await db.user.update({ where: { id: u.id }, data: { payoutRemindedAt: now } });

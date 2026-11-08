@@ -88,3 +88,8 @@ A second full check hit the database-size measurement's 120-second timeout and f
 Final validation: the ten-file focused suite passed all 67 tests after the implementation changes. Typecheck, lint (existing warnings) and production build passed. The complete `npm run check` remains **not green**, for the full-suite failures above; do not treat the focused suite or build as a substitute for that result.
 
 Changes delivered on this branch: Terms §1/§2/§3/§6/§7/§8 and payment-email timing; 50-character answer additions; private previous-name search; scoped review-reminder generation; refreshed caption-led reels and social copy. No ranking policy was changed. Open product question: keep §276's rated-first override, or adopt the exact score-first order quoted in this chat?
+
+
+## Follow-up status
+
+See [November 7 request status](../NOV7-REQUEST-STATUS.md) for the implemented fixes and remaining manual checks. The owner subsequently chose to retain the current rated-first Suggested order. Automatic sign-out and password changes are deferred. The extra waiting-for-lift notice and automatic spot reduction were declined.

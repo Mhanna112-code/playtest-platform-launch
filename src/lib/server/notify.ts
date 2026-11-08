@@ -7,6 +7,7 @@ import { renderTimes, safeZone } from "@/lib/tz";
 import { bellKeyIn, bellStacks, stackHeading } from "@/lib/bell";
 import { appUrl } from "./auth";
 import { sendEmail } from "./email";
+import { NON_REMINDER_NOTICE, REMINDER_ONLY_GROUPS } from "@/lib/reminderPolicy";
 
 // Every update goes to the person's bell. Email follows their setting: each update (default), one daily summary,
 // or none. Sign-in links (sent elsewhere) and payment receipts (always: true) always send.
@@ -58,7 +59,8 @@ export const lineSide = (userId: string, link: string, side: Side | null | undef
 const EMAIL_ON = ["daily", "weekly", "monthly"];
 
 export async function notify(to: string, subject0: string, lines0: string[], path: string, opts: Opts = {}, client: Prisma.TransactionClient | typeof db = db) {
-  const user = await client.user.findUnique({ where: opts.recipientId ? { id: opts.recipientId } : { email: to }, select: { id: true, timeZone: true, emailPref: true } });
+  const user = await client.user.findUnique({ where: opts.recipientId ? { id: opts.recipientId } : { email: to }, select: { id: true, timeZone: true, emailPref: true, deletedAt: true } });
+  if (user?.deletedAt && (opts.reminder || REMINDER_ONLY_GROUPS.includes(opts.group ?? ""))) return;
   if (user && opts.about && !opts.payment && !(await inReach(user.id, opts.about))) return; // (Owner, Nov 6, §299) payment lines always reach
   // (Batch 15 section 11) Times in the line are written in the recipient's own time zone (unknown: UTC).
   const subject = renderTimes(subject0, user?.timeZone), lines = lines0.map((l) => renderTimes(l, user?.timeZone));
@@ -81,7 +83,7 @@ export async function notify(to: string, subject0: string, lines0: string[], pat
     await client.notification.create({ data: { side: lineSide(user.id, path, opts.side), userId: user.id, text: subject, link: path, testId: opts.testId ?? (await testIdOfLink(path)), mustEmail: !!opts.always, summarizedAt: new Date(), reminderKey: opts.reminder ?? null, ...flags(opts) } });
     if (!opts.always && !opts.payment && !EMAIL_ON.includes(user.emailPref)) return;
     try {
-      await sendEmail({ to, subject, text: [...lines.filter(Boolean), "", `${appUrl()}${path}`].join("\n") /* (Owner, Nov 6, §325) no closing "Playtest" signature */, button: { label: "Open Playtest", url: `${appUrl()}${path}` } });
+      await sendEmail({ to, subject, text: [...lines.filter(Boolean), "", `${appUrl()}${path}`].join("\n") /* (Owner, Nov 6, §325) no closing "Playtest" signature */, button: { label: "Open Playtest", url: `${appUrl()}${path}` }, recipientId: user.id, reminderKey: opts.reminder });
     } catch (e) {
       console.error("[email] failed:", subject, (e as Error).message);
     }
@@ -97,6 +99,7 @@ export async function notify(to: string, subject0: string, lines0: string[], pat
  * person's Daily / Weekly / Monthly summary; with `always` or `payment` it also reaches the end-of-day email with email Off.
  */
 export async function bell(userId: string, text0: string, link: string, about?: string, opts: Pick<Opts, "own" | "testId" | "group" | "payment" | "reminder" | "always" | "side"> = {}) {
+  if ((opts.reminder || REMINDER_ONLY_GROUPS.includes(opts.group ?? "")) && (await db.user.findUnique({ where: { id: userId }, select: { deletedAt: true } }))?.deletedAt) return;
   if (about && !opts.payment && !(await inReach(userId, about))) return; // (Owner, Nov 6, §299) payment lines always reach
   const text = await renderFor(userId, text0);
   await db.notification.create({ data: { side: lineSide(userId, link, opts.side), userId, text, link, testId: opts.testId ?? (await testIdOfLink(link)), mustEmail: !!opts.always, reminderKey: opts.reminder ?? null, ...flags(opts) } });
@@ -254,7 +257,7 @@ export async function sendSummaries(now = new Date(), only?: string[]) {
       ...(only ? { id: { in: only } } : {}),
       OR: [{ notifications: { some: { summarizedAt: null, ...({ OR: [{ mustEmail: true }, { payment: true }, { user: { emailPref: { in: ["daily", "weekly", "monthly"] } } }] } as object) } } }, ...(admins.size ? [{ id: { in: [...admins] } }] : [])],
     },
-    select: { id: true, email: true, emailPref: true, lastSummaryAt: true, isDeveloper: true, isTester: true, timeZone: true },
+    select: { id: true, email: true, emailPref: true, lastSummaryAt: true, isDeveloper: true, isTester: true, timeZone: true, deletedAt: true },
   });
   const line = (n: { text: string; link: string }) => `• ${n.text}${n.link ? ` ${appUrl()}${n.link}` : ""}`;
   // (§306) The "For the team" section of each admin whose summary is due (Off is never due).
@@ -269,7 +272,7 @@ export async function sendSummaries(now = new Date(), only?: string[]) {
     const t = due ? team.get(u.id) : undefined;
     // (Owner, Nov 7, §328) The NEWEST 200 unsent lines (it was the oldest 200, so a backlog came as a flood over the next days); the older ones are marked emailed
     // too and the email ends with "And N older updates — see your bell".
-    const fetched = (await db.notification.findMany({ where: { userId: u.id, summarizedAt: null, ...only }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: SUMMARY_MAX })).reverse();
+    const fetched = (await db.notification.findMany({ where: { userId: u.id, summarizedAt: null, ...only, ...(u.deletedAt ? { AND: [NON_REMINDER_NOTICE] } : {}) }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: SUMMARY_MAX })).reverse();
     const olderIds = fetched.length === SUMMARY_MAX
       ? (await db.notification.findMany({ where: { userId: u.id, summarizedAt: null, ...only, id: { notIn: fetched.map((n) => n.id) }, createdAt: { lte: fetched[0].createdAt } }, select: { id: true } })).map((n) => n.id)
       : [];
@@ -290,7 +293,7 @@ export async function sendSummaries(now = new Date(), only?: string[]) {
       // (§306) An admin's: "Your Playtest summary: 2 updates, 3 items for the team" (either part alone when the other is empty).
       const subject = due
         ? `Your Playtest summary: ${[...(items.length ? [plural(items.length, "update")] : []), ...(teamN ? [`${plural(teamN, "item")} for the team`] : [])].join(", ")}`
-        : off && items.some((n) => !n.payment) ? `Your Playtest account updates: ${items.length}` : `Your Playtest payment updates: ${items.length}`;
+        : items.some((n) => !n.payment) ? `Your Playtest account updates: ${items.length}` : `Your Playtest payment updates: ${items.length}`;
       // (Owner, Nov 6, §295) The body opens with its heading, above the sections or the lines: a due Weekly / Monthly summary names its period (from the last
       // summary, or its oldest line, to now), a Daily one and every end-of-day email the day. (Owner, Nov 6, §297) From the day after the last summary.
       const period = due && (u.emailPref === "weekly" || u.emailPref === "monthly") ? u.emailPref : "daily";
@@ -299,7 +302,7 @@ export async function sendSummaries(now = new Date(), only?: string[]) {
       if (olderIds.length) own.push("", line({ text: olderLine(olderIds.length), link: "/app/notifications" })); // (§328)
       const forTeam = t && teamN ? [...(own.length ? [""] : []), ad.TEAM_HEADING, ...ad.teamLines(t, u.timeZone)] : [];
       // (§306) With the team's section, the admin email's button: Open the admin console.
-      await sendEmail({ to: u.email, subject, text: [heading, "", ...own, ...forTeam].join("\n") /* (§325) no closing signature */, button: { label: forTeam.length ? "Open the admin console" : "Open Playtest", url: `${appUrl()}${forTeam.length ? "/admin" : "/app/notifications"}` }, heading });
+      await sendEmail({ to: u.email, subject, text: [heading, "", ...own, ...forTeam].join("\n") /* (§325) no closing signature */, button: { label: forTeam.length ? "Open the admin console" : "Open Playtest", url: `${appUrl()}${forTeam.length ? "/admin" : "/app/notifications"}` }, heading, recipientId: u.id, notificationIds: items.map((n) => n.id) });
       await db.notification.updateMany({ where: { id: { in: [...items.map((n) => n.id), ...dropped, ...repeats, ...olderIds] } }, data: { summarizedAt: now } });
       if (due) await db.user.update({ where: { id: u.id }, data: { lastSummaryAt: now } });
       if (t) await ad.teamSent([u.id], t.noShowIds, now);
@@ -323,4 +326,15 @@ export async function unreadEntryCount(userId: string) {
   const unread = await db.notification.findMany({ where: { userId, readAt: null, ...await notificationScopeFor(userId) }, orderBy: { createdAt: "desc" }, take: 500, select: { id: true, testId: true, own: true, groupKey: true, createdAt: true } });
   const zone = (await db.user.findUnique({ where: { id: userId }, select: { timeZone: true } }))?.timeZone;
   return new Set(unread.map((n) => bellKeyIn(n, zone))).size;
+}
+
+/** Rebuild a queued summary after deletion, keeping actual updates and receipts but removing reminders. */
+export async function queuedSummaryWithoutReminders(userId: string, ids: string[], heading: string) {
+  const u = await db.user.findUnique({ where: { id: userId } });
+  if (!u) return null;
+  const items = await db.notification.findMany({ where: { id: { in: ids }, userId, ...NON_REMINDER_NOTICE }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] });
+  if (!items.length) return null;
+  const line = (n: { text: string; link: string }) => `• ${n.text}${n.link ? ` ${appUrl()}${n.link}` : ""}`;
+  const own = sidedEmailLines(items, line, hasBoth(u), u.timeZone, await testTitlesOf(items));
+  return { subject: `Your Playtest ${items.some((n) => !n.payment) ? "account" : "payment"} updates: ${items.length}`, text: [heading, "", ...own].join("\n"), heading, button: { label: "Open Playtest", url: `${appUrl()}/app/notifications` }, notificationIds: items.map((n) => n.id) };
 }

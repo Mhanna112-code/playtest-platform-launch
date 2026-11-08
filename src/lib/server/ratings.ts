@@ -175,9 +175,9 @@ export async function maybePromptRating(contractId: string) {
   const c = await db.contract.findUnique({ where: { id: contractId }, include: { tester: true, test: { include: { developer: true } } } });
   if (!c) return;
   await maybeOpenDevRating(c.id);
-  if (c.ratePromptedAt || (await rateBlocker(c.id, "tester"))) return;
+  if (c.tester.deletedAt || c.ratePromptedAt || (await rateBlocker(c.id, "tester"))) return;
   await db.contract.update({ where: { id: c.id }, data: { ratePromptedAt: new Date() } });
-  await notify(c.tester.email, `Rate ${displayName(c.test.developer)} on “${c.title}”`, [`You can now rate ${displayName(c.test.developer)} for “${c.title}”.`], RATINGS_HREF, { side: "tester", ...RATINGS, testId: c.testId });
+  await notify(c.tester.email, `Rate ${displayName(c.test.developer)} on “${c.title}”`, [`You can now rate ${displayName(c.test.developer)} for “${c.title}”.`], RATINGS_HREF, { side: "tester", ...RATINGS, testId: c.testId, reminder: `rate-open-tester:${c.id}` });
 }
 
 /** (Batch 17 section 16) The developer's Rate for this tester just opened (they rated and everything they sent is settled): "<tester> finished <test>. You can rate them for 14 days.", once. */
@@ -186,6 +186,7 @@ export async function maybeOpenDevRating(contractId: string, now = new Date()) {
   if (!s || s.kind !== "open" || s.paused) return false;
   const key = `rate-open:${contractId}`;
   const c = await db.contract.findUniqueOrThrow({ where: { id: contractId }, include: { tester: true, test: true } });
+  if ((await db.user.findUnique({ where: { id: c.test.developerId }, select: { deletedAt: true } }))?.deletedAt) return false;
   if (await db.notification.findFirst({ where: { userId: c.test.developerId, reminderKey: key }, select: { id: true } })) return false;
   await bell(c.test.developerId, `${displayName(c.tester)} finished ${c.title}. You can rate ${pronouns(c.tester.pronoun).obj} for ${WINDOW_DAYS} days.`, RATINGS_HREF, undefined, { side: "developer", ...RATINGS, testId: c.testId, reminder: key });
   return true;
@@ -317,7 +318,7 @@ export async function ratingReminders(now = new Date()) {
     return last && last.createdAt > fallback ? last.createdAt : fallback;
   };
   // Tester: prompted once (when their Rate opens), then every 3 days until they rate or the close-out, whatever the test's state (batch 29 §21: running tests too).
-  const prompted = await db.contract.findMany({ where: { ratePromptedAt: { not: null, lt: new Date(now.getTime() - every), gt: new Date(now.getTime() - 365 * DAY) } }, orderBy: { ratePromptedAt: "desc" }, take: 500, include: { tester: { select: { testerSuspendedAt: true } }, test: { include: { developer: true } } } });
+  const prompted = await db.contract.findMany({ where: { tester: { deletedAt: null }, ratePromptedAt: { not: null, lt: new Date(now.getTime() - every), gt: new Date(now.getTime() - 365 * DAY) } }, orderBy: { ratePromptedAt: "desc" }, take: 500, include: { tester: { select: { testerSuspendedAt: true } }, test: { include: { developer: true } } } });
   const rated = new Set((await db.rating.findMany({ where: { contractId: { in: prompted.map((c) => c.id) }, side: "tester" }, select: { contractId: true } })).map((r) => r.contractId));
   for (const c of prompted) {
     if (rated.has(c.id) || c.tester.testerSuspendedAt) continue;
@@ -341,7 +342,7 @@ export async function ratingReminders(now = new Date()) {
     if (!s || s.kind !== "open" || s.paused) continue;
     if (await maybeOpenDevRating(r.contractId, now)) continue; // the opening line itself (once)
     const c = await db.contract.findUnique({ where: { id: r.contractId }, include: { tester: true, test: true } });
-    if (!c) continue; // (batch 29 §21) on a running test too
+    if (!c || (await db.user.findUnique({ where: { id: c.test.developerId }, select: { deletedAt: true } }))?.deletedAt) continue; // (batch 29 §21) on a running test too
     if (now.getTime() - (await sinceLast(c.test.developerId, c.testId, s.opensAt!)).getTime() < every) continue;
     // (Owner, Nov 7, §329) The LAST reminder before their 14 days end (the next 3-day slot would fall after the end) ignores email Off (`always`): it reaches the
     // end-of-day email. The others follow the email setting. (The line already names the end date.)

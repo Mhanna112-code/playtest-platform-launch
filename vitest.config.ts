@@ -28,6 +28,9 @@ export default defineConfig({
       ADMIN_EMAILS: "owner@playtest.test", ANSWER_MIN_CHARS: "1", LISTING_MIN_CHARS: "1", SKIP_EMAIL_CONFIRM: "", APP_URL: "http://localhost:3400", STRIPE_WEBHOOK_SECRET: "whsec_test", CRON_SECRET: "cron-test",
       // (Nov 3) Never the real Cloudflare relay from tests, even when the local .env has its key.
       CLOUDFLARE_TURN_KEY_ID: "", CLOUDFLARE_TURN_API_TOKEN: "", TURN_URL: "", TURN_USERNAME: "", TURN_CREDENTIAL: "",
+      // Daily reminder tests must not inherit deployment storage budgets and scan the whole shared cluster on every fake day.
+      // Storage-specific tests set their own limits and still exercise measureStorage() explicitly.
+      DB_STORAGE_LIMIT_GB: "", UPLOADS_LIMIT_GB: "",
     },
     fileParallelism: false,
     testTimeout: 30_000,

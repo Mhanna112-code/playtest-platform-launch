@@ -650,6 +650,7 @@ export const switchedLine = (n: number, name = "") => (n === 1 ? `${name} switch
  * stop them, as reason E, through the action log; events written as "You ..." are their own and come only that way.)
  */
 export const DEV_EXEMPT_KINDS: Record<string, string> = {
+  withdrew_app: "a withdrawn application is a quiet live line and bell notice, never a stop; answering it is a final refusal",
   renamed: "info only (owner, correction 2): a top-box line; a press goes through with a note, never stops",
   spot_open: "follows a tester leaving / being ended or the developer's own spots edit: those lines show instead",
   edited: "the developer's own edit (reason E from another tab; F for listing info)",
@@ -690,6 +691,7 @@ export const RENAMED = "renamed";
 export const TESTER_EVENT_KINDS = ["info", "renamed", "full", "spot_open", "listing_save", "t_req_closed", "t_req_dropped"] as const;
 /** Every other recorded event kind, and why a tester never sees it as such (or sees it another way). */
 export const TESTER_EXEMPT_KINDS: Record<string, string> = {
+  withdrew_app: "the tester's own application withdrawal; its developer live line is quiet and the withdrawing tester already sees the result",
   payment: "the developer's own payments (batch 11: a chargeback reversed in their favour) are never shown to testers",
   joined: "another tester's activity is never shown to a tester",
   auto_joined: "the tester is told they joined through the usual joined notification, not a session event",
