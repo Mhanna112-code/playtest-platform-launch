@@ -111,7 +111,7 @@ export default function TermsPage() {
             {(s.payments || s.rules) && (
               <div className="space-y-3 text-sm" data-payment-rules="">
                 {(s.rules ?? PAYMENT_RULES.filter(r => r.heading !== "Unreviewed work: Charge or Let it go")).map((r) => (
-                  <div key={r.heading} className="space-y-1">
+                  <div key={r.heading} className="space-y-1 scroll-mt-24" id={r.heading === "Editing a test: Switch or Keep" ? "editing-a-test" : undefined}>
                     <h3 className="font-semibold text-slate-100">{r.heading}</h3>
                     <p className="text-slate-300">{r.text}</p>
                     <p className="text-xs text-slate-400">Example: {r.example}</p>
