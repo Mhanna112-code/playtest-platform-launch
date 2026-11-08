@@ -1,3 +1,4 @@
+import { blockUser } from "@/lib/server/blocks";
 import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import { db } from "@/lib/db";
@@ -21,28 +22,31 @@ describe("released keys and participation dates in Terms history", () => {
     expect(history.find((e) => e.id === `choice-${offer.id}`)).toMatchObject({ at: decided.decidedAt, label: choice === "keep" ? "Kept existing parts and prices" : "Switched to new parts and prices", value: offer.diff });
     expect(c.writtenCents).toBe(choice === "keep" ? 1000 : 1200);
   });
-  it.each(["leave", "end early", "delete"])("%s releases the key and preserves its assignment and departure date", async (action) => {
+  it.each(["leave", "end early", "stop", "block", "delete"])("%s releases the key and preserves its assignment and departure date", async (action) => {
     const { dev, testId } = await setup({ spots: 2, accessKeys: "HISTORY-K1\nHISTORY-K2" });
     const j = await joined(testId, "History Tester", "they");
     if (action === "leave") expect((await sact(j.sessionId, "leave", j.tester.cookie, { seenAt: seen(), confirmed: true })).status).toBe(200);
     else if (action === "end early") expect((await act(testId, "end-early", dev.cookie, { contractId: j.sessionId, reason: "The sample work is complete.", seenAt: seen(), confirmed: true })).status).toBe(200);
+    else if (action === "stop") expect((await act(testId, "stop", dev.cookie, {reason:"The sample test is complete.",seenAt:seen(),confirmed:true})).status).toBe(200);
+    else if (action === "block") await blockUser(j.tester.user,dev.user.id,{seenAt:seen(),confirmed:true});
     else await deleteAccount(j.tester.user.id, "self");
     const key = await db.accessKey.findFirstOrThrow({ where: { testId, value: "HISTORY-K1" } });
-    expect(key).toMatchObject({ status: "free", contractId: null, assignedAt: null });
+    expect(key).toMatchObject({ status: "unassigned", contractId: null, assignedAt: null });
     expect((await keyBoxes(testId)).inUse).toHaveLength(0);
+    expect((await keyBoxes(testId)).free.map(k=>k.value)).not.toContain("HISTORY-K1");
     const c = await db.contract.findUniqueOrThrow({ where: { id: j.sessionId } });
     const h = (await contractHistory(testId, [c])).get(c.id)!;
     expect(h.find((e) => e.label === "Access key assigned")?.value).toBe("HISTORY-K1");
-    expect(h.some((e) => e.label === (action === "end early" ? "Work ended early" : "Left test"))).toBe(true);
+    expect(h.some((e) => e.label === (action === "end early" ? "Work ended early" : action === "stop" || action === "block" ? "Work ended" : "Left test"))).toBe(true);
     expect(h.every((e) => e.at instanceof Date)).toBe(true);
     expect(h.some((e) => /NDA/.test(e.label))).toBe(false);
   });
 
   it("rejoining gets a free key, retaining the old assignment, departure and rejoin dates", async () => {
-    const { dev, testId } = await setup({ spots: 2, accessKeys: "OLD-KEY\nNEW-KEY" });
+    const { dev, testId } = await setup({ spots: 3, accessKeys: "OLD-KEY\nOTHER-KEY\nNEW-KEY" });
     const j = await joined(testId, "Returning Tester", "they");
     await sact(j.sessionId, "leave", j.tester.cookie, { seenAt: seen(), confirmed: true });
-    await joined(testId, "Another Tester", "they"); // takes the released old key
+    await joined(testId, "Another Tester", "they"); // takes OTHER-KEY; OLD-KEY stays unassigned
     const t = await db.test.findUniqueOrThrow({ where: { id: testId } });
     expect((await act(testId, "rejoin-ask", j.tester.cookie, { listingVersion: t.listingVersion, seenAt: seen(), confirmed: true, anyway: true, ndaAccepted: true })).status).toBe(200);
     const ask = await db.application.findFirstOrThrow({ where: { testId, testerId: j.tester.user.id, kind: "rejoin", status: "pending" } });

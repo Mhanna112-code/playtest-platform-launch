@@ -277,6 +277,7 @@ export async function testerRate(tester: { id: string; name: string; email: stri
     const wasWorking = c.status === "working";
     if (wasWorking) {
       await tx.contract.update({ where: { id: c.id }, data: { status: "left", endKind: "rated", endedAt: new Date() } });
+      await (await import("./accessKeys")).releaseTesterKeys(tx, c.id);
       await cancelCallsAhead(tx, [c.id], `${displayName(tester)} finished ${pronouns(tester.pronoun).poss} part.`);
       await closeOffersOfEnded(tx, [c.id]); // (batch 35 §118) rating ends the part: its open new-terms offer closes
       // (Owner, Oct 29, batch 24 section 2) Said in the tester's terms: they finished their part (Leave and a suspension's removal keep "the tester left").

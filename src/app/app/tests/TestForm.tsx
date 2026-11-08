@@ -19,7 +19,7 @@ import { KEYS_UNIT, testFieldsOf, testUnitOf, type Units } from "@/lib/draftUnit
 import { signInKeeps } from "@/lib/keptText";
 import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
 import { LIMITS, changesLeftLine, counterOf, countersOf, countsOf, criticalLine, type CriticalCounts, type CriticalField } from "@/lib/limits";
-import { keyAdditionsByEdit, givenDeletedLine, keyGivenLine, keyNeedLine, keysAddedLine, keysRemovedLine, parseKeys } from "@/lib/keys";
+import { givenDeletedLine, keyGivenLine, keyNeedLine, keysAddedLine, keysRemovedLine, parseKeys } from "@/lib/keys";
 import { LISTING_MIN_CHARS, TITLE_MIN_CHARS, OPEN_UNTIL_PASSED, openUntilHasPassed, openUntilExtendLine, duplicateQuestion, duplicateQuestionLine, STEPS_FIELD, TITLE_FIELD, PART_PRICE_MISSING, PAY_RULES_LINK, PAY_RULES_TICK, PAYMENTS_TERMS_HREF, OPEN_UNTIL_MAX_LINE, openUntilCapHint, openUntilCapLine, DESCRIPTION_REQUIRED, HIGH_PART_CENTS, HIGH_PART_TICK, MATURE_WHY_MIN, MATURE_WHY_REQUIRED, MATURE_WHY_SHORT, NDA_TOO_LONG, OPEN_UNTIL_RANGE, QUESTION_TOO_LONG, daysBetween, partHighLine, partLowLine, rateHighLine, rateLowLine, openUntilLine, openUntilDay, MAX_SPOTS, SPOTS_MAX_LINE, spotsCap, spotsKeptLine, type Listing } from "@/lib/rules";
 /** The browser's own date (YYYY-MM-DD) and zone. */
 const localToday = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
@@ -219,7 +219,6 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
   const prior = useRef<Partial<Record<keyof F, { had: unknown; took: unknown }>>>({});
   const details = useRef<Partial<Record<keyof F, NoteItem>>>({});
   // (Batch 16 section 18) The free keys as of the page load (or its last stop box): Save's stop always lists what changed in them since.
-  const keysInUseSeen = useRef<string[]>(edit?.keys.inUse.map(k => k.value) ?? []);
   const keysSeen = useRef<string[]>(edit?.keys.free.map((k) => k.value) ?? []);
   const [stopDetails, setStopDetails] = useState<Record<string, NoteItem[]>>({});
   // (NEXT-UI 10) The form typed and not sent is kept on the server, for Post and for each Edit. (Owner, Oct 30, batch 35 §8) After signing in, it comes back with
@@ -426,14 +425,12 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
   /**
    * (Owner, Oct 28, batch 16 sections 18 and 20) The keys another tab, device or joining tester changed, as soon as the page sees them: the Free box becomes
    * the current free keys with this tab's own additions and deletions still applied (a key typed here that was added elsewhere shows once; a key deleted
-   * elsewhere leaves the box: it never comes back by itself). Automatic returns from In use to Free stay quiet. Actual developer edits still say so, even for a change this tab also made: "Added: …", "Removed: …", a join
+   * elsewhere leaves the box: it never comes back by itself). Unassignment changes only In use. Actual developer edits still say so, even for a change this tab also made: "Added: …", "Removed: …", a join
    * on its own line, and for a key this tab had deleted that a joining tester was given, the warning (it simply leaves this tab's pending deletions).
    */
   function applyKeys(next: { free: string[]; inUse: KeysData["inUse"] }, at: string) {
-    keysInUseSeen.current = [...new Set([...keysInUseSeen.current, ...(keysData?.inUse.map(k => k.value) ?? []), ...next.inUse.map(k => k.value)])];
     const nowFree = next.free;
     const addedElse = nowFree.filter((v) => !freeLoaded.includes(v));
-    const addedByEdit = keyAdditionsByEdit(addedElse, keysInUseSeen.current);
     const goneElse = freeLoaded.filter((v) => !nowFree.includes(v));
     if (!addedElse.length && !goneElse.length) return;
     const mine = freeBoxCheck(keysText, freeLoaded, null);
@@ -444,7 +441,7 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
     const removed = goneElse.filter((v) => !givenTo(v));
     // (Batch 23 section 5) Your own saves elsewhere, and what other people caused (a tester joining and given a key), each under its own heading.
     const ownLines = [
-      ...(addedByEdit.length ? [keysAddedLine(addedByEdit)] : []),
+      ...(addedElse.length ? [keysAddedLine(addedElse)] : []),
       ...(removed.length ? [keysRemovedLine(removed)] : []),
     ];
     const otherLines = [
@@ -578,7 +575,7 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
         version, fields, confirmHigh: confirmHigh(), payRulesOk: payTick, seenAt: edit.seenAt, confirmed: changes != null, ...(changes != null && boxAt ? { boxAt } : {}), timeZone: browserZone(),
         keysAdd: fb.added, keysRemove: fb.removed,
         // (Batch 16 section 17) What this tab loaded and what it holds: another tab's save of the same values is no reason to stop.
-        base: toApi(seenBase.current), has: toApi(holding()), keysLoaded: keysSeen.current, keysInUseLoaded: keysInUseSeen.current,
+        base: toApi(seenBase.current), has: toApi(holding()), keysLoaded: keysSeen.current,
       });
       if (r.listing && typeof r.version === "number") savedHere(r.listing, r.version, r.keys);
       else leaving.current = true;

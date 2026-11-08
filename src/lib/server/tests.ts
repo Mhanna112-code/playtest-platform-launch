@@ -14,7 +14,7 @@ import { ADDITIONS_MAX, ADD_UNDER_QUESTION, ANYTHING_ELSE_KEY, ANYTHING_ELSE_TIT
 import { countersOf, countingSince, countsAfter, countsOf, criticalLine, lockedFields, storedCounts, type CriticalCounts } from "@/lib/limits";
 import { alertOf } from "@/lib/alerts";
 import { KEY_GIVEN, applyKeyChange, assignKeyAtJoin, checkTypedKeys, giveKeysToWorking, planKeyChange } from "./accessKeys";
-import { keyAdditionsByEdit, givenDeletedLine, keyGivenEventLine, keyNeedLine, keysAddedLine, keysRemovedLine, parseKeys } from "@/lib/keys";
+import { givenDeletedLine, keyGivenEventLine, keyNeedLine, keysAddedLine, keysRemovedLine, parseKeys } from "@/lib/keys";
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { LIMITS } from "@/lib/limits";
@@ -714,7 +714,7 @@ export async function editNews(tx: Tx, testId: string, body: Record<string, unkn
     const keys = await tx.accessKey.findMany({ where: { testId }, select: { value: true, status: true } });
     const free = keys.filter((k) => k.status === "free").map((k) => k.value);
     const used = keys.filter((k) => k.status === "inuse" || k.status === "broken").map((k) => k.value);
-    added = keyAdditionsByEdit(free.filter((v) => !loaded.includes(v)), parseKeys(body.keysInUseLoaded));
+    added = free.filter((v) => !loaded.includes(v));
     removed = loaded.filter((v) => !free.includes(v) && !used.includes(v));
   }
   return { fields, added, removed };
@@ -843,6 +843,7 @@ export async function stopTest(dev: U, testId: string, body: Record<string, unkn
     const cs = await tx.contract.findMany({ where: working(testId), include: { tester: true } });
     // (Batch 17 §15) The reason is each ended contract's endReason, and an entry in each tester's contract changes (the marker that it's the developer's own reason).
     await tx.contract.updateMany({ where: working(testId), data: { status: "ended", endKind: "stopped", endedAt: new Date(), endReason: reason } });
+    await (await import("./accessKeys")).releaseInactiveKeys(tx, testId);
     if (cs.length) await tx.contractNote.createMany({ data: cs.map((c) => ({ contractId: c.id, kind: STOP_NOTE_KIND, text: stopNoteText(reason) })) });
     cancelled = await cancelCallsAhead(tx, cs.map((c) => c.id), "The test was stopped.");
     await closeOffersOfEnded(tx, cs.map((c) => c.id)); // (batch 35 §118)

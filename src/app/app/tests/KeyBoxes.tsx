@@ -8,6 +8,7 @@ export type KeysData = {
   free: { id: string; value: string; reused?: { from: string } }[];
   /** Working testers' keys; keys of testers who left or finished come last, greyed ("(left)" / "(finished)"): those can be typed back into Free. */
   inUse: { id: string; value: string; tester: string; /** (Owner, Nov 3, §166) their profile: the name is the green link */ testerHref?: string | null; contractId: string; gone?: "left" | "finished" }[];
+  previous?: { value: string; tester: string }[];
   open: number;
   /** The working testers now (the open spots follow them live). */
   testersIn?: number;
@@ -28,7 +29,7 @@ export function freeBoxCheck(text: string, loaded: string[], data: KeysData | nu
   if (dup.length) errors.push(`${dup.join(", ")} ${dup.length === 1 ? "is" : "are"} typed more than once. Each key goes in once.`);
   for (const v of added) {
     const k = inUse.find((x) => x.value === v);
-    if (!k) continue;
+    if (!k) { const previous=data?.previous?.find(x=>x.value===v); if(previous)warnings.push(reusedKeyLine(v,previous.tester)); continue; }
     if (!k.gone) errors.push(`${v} is in use by ${k.tester}, so it can't be added.`);
     else warnings.push(reusedKeyLine(v, k.tester));
   }

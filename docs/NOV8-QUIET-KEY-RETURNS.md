@@ -1,3 +1,5 @@
+Historical implementation note: superseded by NOV8-UNASSIGNED-KEYS.md. Keys no longer return to Free automatically.
+
 # Returned access keys move quietly
 
 A key automatically released when a tester leaves or their work ends moves from In use to Free without an Added-in-another-tab notice. The form still merges the current free pool with unsaved local additions/deletions. Genuine developer additions/deletions and assignment warnings keep their notices.

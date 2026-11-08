@@ -146,7 +146,7 @@ describe("the notes under Edit's fields and in Save's stop box (sections 17-19)"
     expect(form).not.toMatch(/added in another tab|is no longer free/);
     // Always listed (the owner's exception to section 17): no filtering by what this tab also did.
     expect(form).toContain("const addedElse = nowFree.filter((v) => !freeLoaded.includes(v));");
-    expect(form).toContain("...(addedByEdit.length ? [keysAddedLine(addedByEdit)] : [])");
+    expect(form).toContain("...(addedElse.length ? [keysAddedLine(addedElse)] : [])");
     expect(form).toContain("...(removed.length ? [keysRemovedLine(removed)] : [])");
     expect(form).toContain("joinedOnly.map((v) => keyGivenLine(givenTo(v)!, v))");
   });

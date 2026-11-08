@@ -8,7 +8,7 @@ type Tx = Prisma.TransactionClient | typeof db;
 
 // (Design doc 5) Access keys. Free keys go to NEW testers (the oldest free key at join). (Owner, Oct 29, batch 14 section 6) Nothing ever replaces a key on its own
 // and there is no "Assign a free key": a tester whose key doesn't work is sent one by the developer in a message (a free key deleted in Edit).
-// (Owner, Nov 7) Leaving or End early returns assigned keys to Free; their previous recipient remains on the reuse warning.
+// (Owner, Nov 7) Leaving or ending work unassigns keys without returning them to Free; manual reuse retains the previous recipient.
 // (Owner, Nov 6, §304) There is no "This key doesn't work" any more: a tester whose key fails says so in chat. A key still stored as "broken" (reported before
 // §304) is simply a key in use: shown normally everywhere, given back to its tester on rejoining like any held key. The status and its columns stay, unused.
 
@@ -27,18 +27,18 @@ export async function releaseTesterKeys(tx: Tx, contractId: string) {
   const keys = await tx.accessKey.findMany({ where: { contractId, status: { in: ["inuse", "held", "broken"] } }, select: { id: true, value: true, assignedAt: true, createdAt: true, contract: { select: { tester: { select: { name: true, email: true, deletedAt: true } } } } } });
   for (const key of keys) {
     if (!(await tx.contractNote.findFirst({ where: { contractId, kind: "key_assigned", text: key.value } }))) await tx.contractNote.create({ data: { contractId, kind: "key_assigned", text: key.value, createdAt: key.assignedAt ?? key.createdAt } });
-    await tx.accessKey.updateMany({ where: { id: key.id, contractId }, data: { status: "free", contractId: null, assignedAt: null, brokenAt: null, fixedAt: null, brokenDismissedAt: null, reusedFrom: key.contract ? displayName(key.contract.tester) : "", reusedBroken: false } });
+    await tx.accessKey.updateMany({ where: { id: key.id, contractId }, data: { status: "unassigned", contractId: null, assignedAt: null, brokenAt: null, fixedAt: null, brokenDismissedAt: null, reusedFrom: key.contract ? displayName(key.contract.tester) : "", reusedBroken: false } });
   }
 }
 
 /** Also releases assignments made before automatic unassignment was introduced. Caller holds the test lock. */
-async function releaseInactiveKeys(tx: Tx, testId: string) {
+export async function releaseInactiveKeys(tx: Tx, testId: string) {
   const rows = await tx.accessKey.findMany({ where: { testId, status: { in: ["inuse", "held", "broken"] }, contract: { OR: [{ status: { not: "working" } }, { tester: { deletedAt: { not: null } } }] } }, select: { contractId: true }, distinct: ["contractId"] });
   for (const row of rows) if (row.contractId) await releaseTesterKeys(tx, row.contractId);
 }
 
 /**
- * The keys of a test grouped for the Edit page. Departed testers' assignments return to Free; their key history stays in ContractNote.
+ * The keys of a test grouped for the Edit page. Departed testers' assignments leave both boxes; their key history stays in ContractNote.
  * Every key a refusal calls "in use" belongs to a working tester.
  * (Owner, Nov 6, §304) No "broken" flag or rows: a key once reported shows as a normal key.
  */
@@ -62,7 +62,8 @@ export async function keyBoxes(testId: string) {
   const testersIn = await db.contract.count({ where: { testId, status: "working" } });
   // (Batch 30 §17) Working testers without a key (the test had none when they joined): each gets one of the free keys at the next Save.
   const keyless = await keylessWorking(db, testId).then((x) => x.length);
-  return { free, inUse, open, testersIn, keyless, uses: keys.length > 0, now: new Date().toISOString() };
+  const previous = [...(await previousKeyUsers(db, testId))].map(([value, tester]) => ({ value, tester }));
+  return { free, inUse, previous, open, testersIn, keyless, uses: keys.length > 0, now: new Date().toISOString() };
 }
 
 /**
@@ -136,15 +137,16 @@ export async function planKeyChange(tx: Tx, testId: string, add: string[], remov
   const existing = await tx.accessKey.findMany({ where: { testId }, include: { contract: { include: { tester: true } } } });
   const errors: string[] = [];
   const warnings: string[] = [];
+  const history = await previousKeyUsers(tx, testId);
   const toAdd: string[] = [];
   const toReuse: { id: string; from: string }[] = [];
   for (const v of add) {
     const e = existing.find((k) => k.value === v);
-    if (!e) toAdd.push(v);
+    if (!e) { toAdd.push(v); if (history.has(v)) warnings.push(reusedKeyLine(v, history.get(v)!)); }
     // (Batch 16 section 17) Already free (another tab added the same key meanwhile): what this tab wanted is there, so it's neither a mistake nor added twice.
     else if (e.status === "free") continue;
     else {
-      const name = e.contract ? displayName(e.contract.tester) : "";
+      const name = e.contract ? displayName(e.contract.tester) : e.reusedFrom || history.get(v) || "";
       const why = keyRefusal(v, e.status, { working: e.contract?.status === "working", name });
       if (why) errors.push(why);
       else {
@@ -169,7 +171,20 @@ export async function planKeyChange(tx: Tx, testId: string, add: string[], remov
 
 export async function applyKeyChange(tx: Tx, testId: string, toAdd: string[], removeIds: string[], toReuse: { id: string; from: string }[] = []) {
   if (removeIds.length) await tx.accessKey.deleteMany({ where: { id: { in: removeIds }, status: "free" } });
-  if (toAdd.length) await tx.accessKey.createMany({ data: toAdd.map((value) => ({ testId, value })) });
+  if (toAdd.length) {
+    const history = await previousKeyUsers(tx, testId);
+    await tx.accessKey.createMany({ data: toAdd.map((value) => ({ testId, value, reusedFrom: history.get(value) ?? "" })) });
+  }
   // (Batch 15 sections 19 and 44) A key typed back from a tester who left or finished: free again, its notice chip says where it came from.
   for (const r of toReuse) await tx.accessKey.update({ where: { id: r.id }, data: { status: "free", contractId: null, assignedAt: null, brokenAt: null, fixedAt: null, brokenDismissedAt: null, reusedFrom: r.from, reusedBroken: false } });
+}
+
+/** Assignment history survives unassignment and deletion from the free pool. Latest recipient wins. */
+async function previousKeyUsers(tx: Tx, testId: string) {
+ const contracts=await tx.contract.findMany({where:{testId},select:{id:true,tester:true}});
+ const names=new Map(contracts.map(c=>[c.id,displayName(c.tester)]));
+ const notes=await tx.contractNote.findMany({where:{kind:"key_assigned",contractId:{in:contracts.map(c=>c.id)}},orderBy:[{createdAt:"desc"},{id:"desc"}],select:{text:true,contractId:true}});
+ const result=new Map<string,string>();
+ for(const note of notes)if(!result.has(note.text))result.set(note.text,names.get(note.contractId) ?? "Previous tester");
+ return result;
 }

@@ -35,7 +35,7 @@ describe("the Free box (section 19)", () => {
     expect(keyRefusal("HR-9", "held", { working: false, name: "Ben" })).toBe("");
     expect(keyRefusal("HR-9", "broken", { working: true, name: "Ben Okafor" })).toBe("HR-9 is in use by Ben Okafor, so it can't be added.");
     expect(reusedKeyLine("HR-3333", "Ben Okafor")).toBe("HR-3333: reused, previously given to Ben Okafor.");
-    expect(FREE_KEYS_RULE).toBe("Keys in use can't be added. When a tester leaves or their work ends, their key returns to Free. Assigned keys stay in Terms history.");
+    expect(FREE_KEYS_RULE).toBe("Keys in use can't be added. When a tester leaves or their work ends, their key is unassigned, not returned to Free. Add it to Free yourself to reuse it. Assigned keys stay in Terms history.");
     expect(src("app/app/tests/TestForm.tsx")).toContain("keysAdd: fb.added, keysRemove: fb.removed");
   });
 
@@ -52,7 +52,7 @@ describe("the Free box (section 19)", () => {
     await sact(b.sessionId, "leave", b.tester.cookie, { seenAt: seen() });
     k = await keyBoxes(testId);
     expect(k.inUse).toEqual([]);
-    expect(k.free.map((x) => x.value)).toEqual(["K1", "K2", "K3", "K4"]);
+    expect(k.free.map((x) => x.value)).toEqual(["K3", "K4"]);
     expect((await edit(testId, dev.cookie, { keysAdd: ["K1", "K2"] })).status).toBe(200);
     k = await keyBoxes(testId);
     expect(k.free.filter((x) => x.reused).map((x) => [x.value, x.reused])).toEqual([["K1", { from: "Ana Silva" }], ["K2", { from: "Ben Okafor" }]]);

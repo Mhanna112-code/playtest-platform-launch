@@ -75,12 +75,9 @@ export function keyRefusal(value: string, status: string | null, who: { working?
  * "reported as broken" any more: no key is reported. */
 export const reusedKeyLine = (value: string, name: string) => `${value}: reused, previously given to ${name}.`;
 /** The hint under the boxes. */
-export const FREE_KEYS_RULE = "Keys in use can't be added. When a tester leaves or their work ends, their key returns to Free. Assigned keys stay in Terms history.";
+export const FREE_KEYS_RULE = "Keys in use can't be added. When a tester leaves or their work ends, their key is unassigned, not returned to Free. Add it to Free yourself to reuse it. Assigned keys stay in Terms history.";
 
 /** (Owner, Nov 6, §304) No "This key doesn't work": a tester whose key fails tells the developer in chat, and the developer sends one by message (this hint). */
 /** The Free keys notice's hint (its "in Edit" opens Edit's access keys section in a new tab). */
 export const FREE_KEYS_HINT = ["If a tester's key doesn't work, delete a free key ", "in Edit", " and send it to them in a message."] as const;
 export const openSpotsKeyLine = (open: number) => `${open} open spot${open === 1 ? "" : "s"}: each new tester gets one.`;
-
-/** Returning an assigned key to Free is an availability move, not a developer adding a key elsewhere. */
-export const keyAdditionsByEdit = (added: string[], previouslyInUse: string[]) => added.filter(value => !previouslyInUse.includes(value));

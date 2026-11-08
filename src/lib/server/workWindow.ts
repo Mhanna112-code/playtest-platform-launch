@@ -42,6 +42,7 @@ export async function finishWorkIfDue(testId: string, now = new Date()) {
     // (Owner, Nov 6, §286) The testers whose work this ends: their top box reads "This test ended", so their bell does too (below).
     const ending = await tx.contract.findMany({ where: { testId, status: "working" }, select: { id: true, title: true, testerId: true, tester: { select: { email: true } } } });
     await tx.contract.updateMany({ where: { testId, status: "working" }, data: { status: "ended", endKind: "closed", endedAt: at, endReason: "The test ended." } });
+    await (await import("./accessKeys")).releaseInactiveKeys(tx, testId);
     const cancelled = await cancelCallsAhead(tx, ids, "The test ended.", at);
     await closeOffersOfEnded(tx, ids, at); // (batch 35 §118) the part ended: its offer closes
     await tx.callRequest.updateMany({ where: { contractId: { in: ids }, status: "pending" }, data: { status: "closed", closedReason: "the test ended", decidedAt: at } });

@@ -301,6 +301,7 @@ export async function deleteAccount(userId: string, by: "self" | "admin", reason
       const cancelled = await db.$transaction(async (tx) => {
         invitesClosed = await (await import("./invites")).openInviteIds({ testId: t.id }, tx);
         await tx.contract.updateMany({ where: { testId: t.id, status: "working" }, data: { status: "ended", endKind: "stopped", endedAt: new Date(), endReason: "The test was stopped." } });
+        await (await import("./accessKeys")).releaseInactiveKeys(tx, t.id);
         const list = await cancelCallsAhead(tx, cs.map((c) => c.id), "The test was stopped.");
         await closeOffersOfEnded(tx, cs.map((c) => c.id)); // (batch 35 §118)
         await tx.callRequest.updateMany({ where: { contractId: { in: cs.map((c) => c.id) }, status: "pending" }, data: { status: "closed", closedReason: "the test was stopped", decidedAt: new Date() } });
@@ -516,6 +517,7 @@ export async function adminStopTest(testId: string, note: string, adminId: strin
     cs = await tx.contract.findMany({ where: { testId, status: "working" }, include: { tester: true } });
     invitesClosed = await (await import("./invites")).openInviteIds({ testId }, tx);
     await tx.contract.updateMany({ where: { testId, status: "working" }, data: { status: "ended", endKind: "stopped", endedAt: new Date(), endReason: "The test was stopped." } });
+    await (await import("./accessKeys")).releaseInactiveKeys(tx, testId);
     const list = await cancelCallsAhead(tx, cs.map((c) => c.id), "The test was stopped.");
     await closeOffersOfEnded(tx, cs.map((c) => c.id)); // (batch 35 §118)
     await tx.callRequest.updateMany({ where: { contractId: { in: cs.map((c) => c.id) }, status: "pending" }, data: { status: "closed", closedReason: "the test was stopped", decidedAt: new Date() } });

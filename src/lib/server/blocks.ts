@@ -75,6 +75,7 @@ export async function blockUser(me: { id: string; email: string; name: string },
     for (const call of await db.call.findMany({ where: { contractId: c.id, status: "booked", startsAt: { lte: now }, endedAt: null, measuredAt: null, actualMinutes: null } })) await endCallForBlock(call.id, by, now);
     // (§157) Each session ends once (both people blocking each other at the same moment: one of them ends it and sends its line).
     if ((await db.contract.updateMany({ where: { id: c.id, status: "working" }, data: { status: "ended", endKind: "blocked", endedAt: now, endReason: "" } })).count !== 1) continue;
+    await db.$transaction(async tx => { await (await import("./tests")).lockTest(tx, c.testId); await (await import("./accessKeys")).releaseTesterKeys(tx, c.id); });
     ended.push(c);
     const calls = await db.call.findMany({ where: { contractId: c.id, status: "booked", startsAt: { gt: now } } });
     for (const call of calls) {
