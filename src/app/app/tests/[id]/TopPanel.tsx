@@ -145,7 +145,7 @@ export function TopPanel(p: { timeZone?: string | null; joinClosedLine?: string;
           {/* (Owner, Nov 3, batch 35 §168) A closed test has no Edit either. */}
           {(
             <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
-              {!p.restricted && !noEdit && <a className="btn-secondary px-3 py-1.5 text-sm no-underline hover:no-underline" href={`/app/tests/${p.id}/edit`}><Pencil className="h-4 w-4" /> Edit</a>}
+              {p.status !== "closed" && p.status !== "draft" && <a className="btn-secondary px-3 py-1.5 text-sm no-underline hover:no-underline" href={`/app/tests/${p.id}/edit`}><Pencil className="h-4 w-4" /> {p.restricted || stopped ? "Edit NDA" : "Edit"}</a>}
               {(!p.restricted || p.alertKeys) && <AlertsMenu testId={p.id} ignored={p.ignoredAlerts ?? []} v={p.alertsV} keys={p.alertKeys} />}
               {/* (Owner, Nov 3, batch 35 §168) One tap: every press makes a new draft and opens it in Post a test (no box, no stop-once, no second button for an earlier draft). */}
               {!(p.restricted || p.teamStopped || p.status === "draft") && (

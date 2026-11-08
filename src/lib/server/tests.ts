@@ -1,3 +1,4 @@
+import { ndaOnlyEdit, NDA_ONLY_EDIT } from "@/lib/ndaEditing";
 import { additionTerms } from "./submissionAdditions";
 import { dateZone } from "./dateZone";
 import { TEAM_LIFTED_EVENT, TEAM_PAUSED_EVENT, devLiftSince, devPauseMoments, devPauseSince, devStopSince, loadedOf } from "./stopMoment";
@@ -383,7 +384,9 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
   let editedFor: { id: string; testerId: string; tester: { email: string } }[] = [];
   const result = await db.$transaction(async (tx) => {
     const t = await lockTest(tx, testId);
-    if (t.status === "stopped") throw new HttpError(409, "stopped", "This test was stopped.");
+    const devNow = await tx.user.findUniqueOrThrow({ where: { id: dev.id }, select: { holdStartedAt: true, devSuspendedAt: true } });
+    const ndaOnly = ndaOnlyEdit(t, devNow) || body.ndaOnly === true;
+    if (ndaOnly && (Object.keys((body.fields ?? {}) as Record<string, unknown>).some((k) => k !== "ndaText") || keysAdd.length || keysRemove.length)) throw new HttpError(409, "nda_only", NDA_ONLY_EDIT);
     if (t.status === "closed") throw new HttpError(409, "closed", TEST_CLOSED_NO_EDIT); // (§168) closed while this Save waited for the lock
     if (typeof touched.title === "string" && touched.title.trim().toLowerCase() !== t.title.trim().toLowerCase()) await requireUniqueTitle(tx, dev.id, touched.title, testId);
     // (Batch 34 §9, owner's finding) A save made from this same browser tab is never "another tab": its own saves never stop it, and when every listing save since
@@ -412,7 +415,7 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     const next = mergeEdit(current, touched);
     if (!next.mature) next.matureWhy = "";
     const ou = checkOpenUntilChange(t.openUntil, next.openUntil ? new Date(next.openUntil) : null, new Date(), dev.timeZone);
-    if (!ou.ok) throw new HttpError(409, "open_until_passed", ou.message);
+    if (!ndaOnly && !ou.ok) throw new HttpError(409, "open_until_passed", ou.message);
     if (current.openUntil && next.openUntil && openUntilDay(current.openUntil, dev.timeZone) === openUntilDay(next.openUntil, dev.timeZone)) next.openUntil = current.openUntil;
     if (next.liveRateCents == null) next.liveMinutes = null;
     const testersIn = await tx.contract.count({ where: working(testId) });
@@ -433,9 +436,9 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     errs.push(...lockedNow.map(criticalLine));
     const plan = await planKeyChange(tx, testId, keysAdd, keysRemove, next.spots);
     const keyErrs = [...plan.errors, ...(plan.need ? [plan.need] : [])];
-    errs.push(...keyErrs);
+    if (!ndaOnly) errs.push(...keyErrs);
     // (Batch 19 section 7) Every Save needs the tick about Charge (the page shows it while Save is enabled), red at the tick.
-    if (!payRulesTicked(body)) errs.push(PAY_RULES_TICK_MISSING);
+    if (!ndaOnly && !payRulesTicked(body)) errs.push(PAY_RULES_TICK_MISSING);
     const keysChanged = plan.toAdd.length > 0 || plan.removable.length > 0 || plan.toReuse.length > 0;
     // (Owner, Oct 28, batch 16 sections 17 and 18) Another tab's (or device's) save is a reason to stop only for the fields where what this press holds
     // differs from what's saved now. Its lines are replaced by one line naming just those fields ("You changed the description in another tab", carrying
@@ -470,7 +473,8 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     // (Owner, Nov 5, §271) A pause since Edit opened (their own hold or suspension starting, e.g. a charge declined in another tab; a team pause is the banner's
     // refusal instead) or the team's lift of its pause stops Save once, whatever the Alerts, in their own words ("Your tests were paused at 3:10 PM.", "The team
     // lifted its pause on this test at 3:10 PM."). It stands in for the team's own pause / lift records among the listing's version changes (no line twice).
-    const pauseLines = notListed(await devPauseMoments(testId, loadedOf(body)), body);
+    const stopMoment = await devStopSince(testId, null, loadedOf(body));
+    const pauseLines = notListed([...(await devPauseMoments(testId, loadedOf(body))), ...(stopMoment ? [stopMoment] : [])], body);
     if (pauseLines.length) {
       const teamRecord = (e: TestEventLike) => (e.kind === "paused" && e.text === TEAM_PAUSED_EVENT) || (e.kind === "resumed" && e.text === TEAM_LIFTED_EVENT);
       const others = gateChanges.filter((e) => !teamRecord(e));
@@ -480,13 +484,13 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     const stop = dcN.length ? dcN.map((c) => ({ ...devLine(c, false), ...(c.fields ? { fields: c.fields } : {}), ...(c.kind === "yours" ? { kind: "yours" } : {}) })) : gateChanges.length ? gateChanges.map((c) => ({ text: renderTimes(c.text, dateZone()), at: c.createdAt, ...sidOf(c) })) : null;
     if (stop) {
       // Both together: the blue stop and any red mistakes (red wins: the next press still saves nothing while red remains).
-      throw new HttpError(409, "changed", dcN.length ? "Press Save again to save." : "This test changed since you opened Edit. Press Save again to save your changes on top.", {
+      throw new HttpError(409, body.ndaOnly === true ? "stop_once" : "changed", dcN.length ? "Press Save again to save." : "This test changed since you opened Edit. Press Save again to save your changes on top.", {
         changes: stop, version: t.version, criticalCounts: counts, current, listingEdited, errors: errs, keys: await keysState(tx, testId), critical: critical.length ? critical : undefined,
       });
     }
     if (errs.length) throw new HttpError(400, "bad_listing", errs[0], { errors: errs, critical: lockedNow.length ? lockedNow : undefined, criticalCounts: counts });
     if (!fields.length && !keysChanged) {
-      keysGiven = await giveKeysToWorking(tx, testId); // (Batch 30 §17)
+      if (!ndaOnly) keysGiven = await giveKeysToWorking(tx, testId); // (Batch 30 §17)
       // (§269) A Save that only reorders the questions: the order is saved and shown, nothing else happens.
       if (reordered) {
         await saveQuestionOrder(tx, testId, next.questions);
@@ -525,7 +529,7 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     if (reordered) await saveQuestionOrder(tx, testId, next.questions);
     // (Owner, Nov 5, §267) The NDA follows the listing the same way: copied into every working contract, with the change's kind for its notice (and block).
     // (Owner, Nov 6, §283) And into every other contract on the test (left, ended), with no notice (followNda).
-    if (fields.includes("ndaText")) ndaFollowed = await followNda(tx, testId, current.ndaText ?? "", next.ndaText ?? "", new Date());
+    if (fields.includes("ndaText")) ndaFollowed = await followNda(tx, testId, current.ndaText ?? "", next.ndaText ?? "", new Date(), ndaOnly);
     // (Owner, Oct 29, batch 30 §17) Keys added to a test whose working testers have none: each still WORKING tester gets one of the free keys, in order of joining.
     keysGiven = await giveKeysToWorking(tx, testId);
     // (Owner, Oct 30, batch 15 section 43) A Save that changed the terms or the names: one entry in the developer's Contract changes.
@@ -578,7 +582,7 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     // (§286) The fields a working tester's line counts (saveLine's "session" side): the title and the listing information.
     if (listingFields.some((f) => f === "title" || INFO_FIELDS.includes(f))) editedFor = await tx.contract.findMany({ where: working(testId), select: { id: true, testerId: true, tester: { select: { email: true } } } });
     changedNames = [...fields.map((f) => FIELD_NAMES[f]), ...(keysChanged ? ["access keys"] : [])];
-    reinvite = fields.some((f) => CLOSING_FIELDS.includes(f));
+    reinvite = !ndaOnly && fields.some((f) => CLOSING_FIELDS.includes(f));
     spotsChanged = fields.includes("spots");
     switchedToInvite = fields.includes("joinMode") && next.joinMode === "invite";
     return tx.test.findUniqueOrThrow({ where: { id: testId } });

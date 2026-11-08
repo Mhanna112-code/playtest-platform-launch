@@ -45,13 +45,14 @@ describe("§172: the developer's presses on a test the team paused are a suspend
     await pauseTest(await admin(), s.testId, "Checking");
     for (const [action, body] of [["message", { contractId: a.sessionId, body: "Hi" }], ["edit", { version: 1, fields: { title: "x" } }], ["invite", { testerIds: [] }], ["next-round", {}], ["pay-extra", { contractId: a.sessionId }]] as const) {
       const r = await act(s.testId, action, s.dev.cookie, { ...body, seenAt: seen() });
+      if (action === "edit") { expect(r.body.error?.code).toBe("nda_only"); continue; }
       expect(r.body.error?.code, action).toBe("admin_paused");
       expect(r.body.error.message).toBe(TEAM_PAUSED_LINE);
       expect(r.body.error.testId).toBe(s.testId);
       expect(r.body.error.failed).toMatch(/didn't go through$/);
     }
-    expect((await act(s.testId, "end-early", s.dev.cookie, { contractIds: [a.sessionId], reason: "Enough", seenAt: seen() })).status).toBe(200);
-    expect((await act(s.testId, "stop", s.dev.cookie, { reason: "Done.", seenAt: seen() })).status).toBe(200);
+    expect((await act(s.testId, "end-early", s.dev.cookie, { contractIds: [a.sessionId], reason: "Enough for now.", seenAt: seen() })).status).toBe(200);
+    expect((await act(s.testId, "stop", s.dev.cookie, { reason: "This trial is finished.", seenAt: seen() })).status).toBe(200);
   });
 
   it("Pay waits for the lift on that test (refused back to its banner); Pay on the developer's other test goes through", async () => {
@@ -189,7 +190,7 @@ describe("§172: what a suspension runs or cancels, done for the one test", () =
   it("a stopped test isn't team-paused any more: its presses follow a stopped test's rules", async () => {
     const x = await sentWork();
     await pauseTest(await admin(), x.testId, "Checking");
-    expect((await act(x.testId, "stop", x.dev.cookie, { reason: "Done.", seenAt: seen() })).status).toBe(200);
+    expect((await act(x.testId, "stop", x.dev.cookie, { reason: "This trial is finished.", seenAt: seen() })).status).toBe(200);
     expect((await pay(x.dev.cookie, { kind: "submission", id: x.sub.id, amount: "10.00", tickedCents: 1000 })).status).toBe(200);
   });
 });

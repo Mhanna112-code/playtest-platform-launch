@@ -46,7 +46,7 @@ export async function POST(req: Request, { params }: Ctx) {
     const { id, action } = await params;
     // (Batch 17 section 2) Rate reaches its own refusal ("You can rate once your account is active again.") while the developer is suspended or on a hold.
     const what = await pressWhat(req, action);
-    const u = await requireActive(req, { devOk: SUSPENDED_OK.has(action) || action === "rate", devSide: !TESTER_SIDE.has(action), what });
+    const u = await requireActive(req, { devOk: SUSPENDED_OK.has(action) || action === "rate" || action === "edit", devSide: !TESTER_SIDE.has(action), what });
     const body = await readJson(req, 900_000); // (batch 15 sections 3 and 17) an Edit with 20 questions and the steps at 20,000 characters each
     if (NEEDS_CONFIRMED.has(action)) requireConfirmed(u);
     await adminRefusal(req, u.id, id, action, what);
@@ -75,12 +75,12 @@ async function adminRefusal(req: Request, userId: string, testId: string, action
   if (!t || t.developerId !== userId) return;
   // (Owner, Oct 28) A team stop is a HARD refusal for every press a stopped test does not allow (no stop-once); what a stopped test allows (chat, rate, a dispute reply, extra pay, a call's length
   // and problem report) goes on under its own rules.
-  if (t.adminStoppedAt && !STOPPED_ALLOWS.has(action)) throw new HttpError(409, "admin_stopped", "The team stopped this test.", { failed: await failedLine(req, what) });
+  if (t.adminStoppedAt && !STOPPED_ALLOWS.has(action) && action !== "edit") throw new HttpError(409, "admin_stopped", "The team stopped this test.", { failed: await failedLine(req, what) });
   if (t.adminStoppedAt) return;
   // (Owner, Nov 4, §172; replaces batch 15 sections 1, 23 and 37) A test the team paused follows a developer suspension's rules: Stop, End early, Cancel call and the
   // side of a dispute go on; Rate goes on to its own refusal (as a suspended developer's does: batch 17 section 2); every other press, chat included, goes to the
   // banner. A stopped or closed test isn't paused any more.
-  if (teamPausedNow(t) && !TEAM_PAUSED_OK_ACTIONS.has(action) && action !== "rate") throw new HttpError(409, "admin_paused", TEAM_PAUSED_LINE, { failed: await failedLine(req, what), testId });
+  if (teamPausedNow(t) && !TEAM_PAUSED_OK_ACTIONS.has(action) && action !== "rate" && action !== "edit") throw new HttpError(409, "admin_paused", TEAM_PAUSED_LINE, { failed: await failedLine(req, what), testId });
 }
 
 /**

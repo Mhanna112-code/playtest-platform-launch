@@ -1,9 +1,11 @@
+import { ndaOnlyEdit } from "@/lib/ndaEditing";
+import { NdaOnlyForm } from "../../NdaOnlyForm";
 import { withDateZone } from "@/lib/server/dateZone";
 import { hasPerks } from "@/lib/server/subscription";
 import { openUntilCapDay, testerDaysOf, TEST_CLOSED_NO_EDIT } from "@/lib/rules";
 import { notFound, redirect } from "next/navigation";
 import { db } from "@/lib/db";
-import { requireOpenDevPage } from "@/lib/server/page-auth";
+import { requireOpenPage } from "@/lib/server/page-auth";
 import { asListing, countingState } from "@/lib/server/tests";
 import { TestForm } from "../../TestForm";
 import { LiveTop } from "@/components/LiveTop";
@@ -21,7 +23,7 @@ export const dynamic = "force-dynamic";
 export default async function EditTest({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<SavedParams> }) {
   const { id } = await params;
   const savedNote = savedNoteText(await searchParams);
-  const u = await requireOpenDevPage();
+  const u = await requireOpenPage(`/app/tests/${id}/edit`);
   return withDateZone(u.timeZone, async () => {
 
   const otherSide = await otherSideNotice(u); // (batch 34 §5) a page of the other side: only the switch notice
@@ -33,6 +35,7 @@ export default async function EditTest({ params, searchParams }: { params: Promi
   const testersIn = await db.contract.count({ where: { testId: id, status: "working" } });
   const counting = await countingState(t); // (batch 35 §66) the count runs once a tester joined
   const seenAt = new Date().toISOString();
+  const ndaOnly = ndaOnlyEdit(t, u);
   return (
     <>
       <AutoRefresh query={`test=${id}`} refresh={false} />
@@ -41,11 +44,10 @@ export default async function EditTest({ params, searchParams }: { params: Promi
         <h1 className="text-3xl font-bold tracking-tight text-white">Edit “{t.title}”</h1>
         <AlertsMenu testId={t.id} ignored={t.ignoredAlerts} v={t.alertsV} />
       </div>
-      {t.status === "stopped" ? (
-        <p className="err-field" role="alert" data-stopped="">This test was stopped.</p>
-      ) : t.status === "closed" ? (
-        // (Owner, Nov 3, batch 35 §168) A closed test has no Edit: the page says so plainly (no form).
+      {t.status === "closed" ? (
         <p className="err-field" role="alert" data-closed="">{TEST_CLOSED_NO_EDIT}</p>
+      ) : ndaOnly ? (
+        <><NdaOnlyForm id={id} version={t.version} ndaText={t.ndaText} seenAt={seenAt} /><LiveTop scope={`test:${id}`} seenAt={seenAt} contractLink={{ testId: id }} /><PageLoaded at={seenAt} /></>
       ) : (
         <>
           <p className="note">Testers already in choose to accept new terms or keep their own for prices and parts.</p>

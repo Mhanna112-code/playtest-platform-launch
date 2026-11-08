@@ -73,16 +73,17 @@ export async function ndaBlockFirst(contractId: string) {
 /**
  * (Owner, Nov 5, §267) A Save changed the NDA: every working contract takes the listing's at once (no Switch / Keep), with the change's kind and time for its
  * notice and block. An added or removed NDA clears `ndaAcceptedAt` (an added one counts as accepted once its notice is opened); a changed text keeps it.
+ * NDA-only restricted edits include ended participants so they can acknowledge the new NDA too.
  * Returns the contracts changed.
  */
-export async function followNda(tx: Prisma.TransactionClient, testId: string, before: string, after: string, now: Date) {
+export async function followNda(tx: Prisma.TransactionClient, testId: string, before: string, after: string, now: Date, includeEnded = false) {
   const kind = ndaChangeOf(before, after);
   if (!kind) return [];
-  const cs = await tx.contract.findMany({ where: { testId, status: "working" }, select: { id: true, tester: { select: { email: true } } } });
+  const cs = await tx.contract.findMany({ where: { testId, ...(includeEnded ? {} : { status: "working" }) }, select: { id: true, tester: { select: { email: true } } } });
   if (cs.length) await tx.contract.updateMany({ where: { id: { in: cs.map((c) => c.id) } }, data: { ndaText: after, ...(kind === "changed" ? {} : { ndaAcceptedAt: null }), ndaChangedAt: now, ndaChangeKind: kind } });
   // (Owner, Nov 6, §283) Every other contract on the test (left, ended) takes the listing's NDA text too, with no notice or block (nothing to press there); one
   // who rejoins accepts the listing's NDA on joining as usual.
-  await tx.contract.updateMany({ where: { testId, status: { not: "working" } }, data: { ndaText: after } });
+  if (!includeEnded) await tx.contract.updateMany({ where: { testId, status: { not: "working" } }, data: { ndaText: after } });
   return cs.map((c) => ({ contractId: c.id, email: c.tester.email, kind }));
 }
 
