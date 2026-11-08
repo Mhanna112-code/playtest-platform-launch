@@ -460,6 +460,23 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
         <StatTile icon={ListTodo} label="To do" value={compact(suspended?0:working.length)} hint="tests you are working on" tone="indigo" />
       </section>
 
+      {chargeable.length > 0 && (
+        <section className="space-y-3" id="charge-or-cancel">
+          {sectionTitle(<Banknote className="h-5 w-5 text-amber-300" />, "Charge or cancel", chargeable.length)}
+          <p className="note">Parts the developer hasn&apos;t reviewed once {REVIEW_DAYS} days have passed since you sent them and your deadline has passed: charge for them, or let them go.</p>
+          <ScopedPanelSearch label="Charge or cancel"><ScrollList className="space-y-2" label="Charge or cancel">
+            {chargeable.map(({ c, parts }) => (
+              <li key={c.id} data-panel-search={`${c.title} ${displayName(c.test.developer)}`}>
+                <Link href={`/app/sessions/${c.id}#part-${parts[0].kind}`} className="card card-hover flex flex-wrap items-center gap-3 border-amber-400/30 p-4 no-underline hover:no-underline">
+                  <p className="min-w-[12rem] flex-1 font-medium text-white [overflow-wrap:anywhere]"><TestName text={c.title} /> · {plural(parts.length, "part")} {pausedTest(c.test) && <PausedTag />}</p>
+                  <span className="btn px-3 py-1.5 text-sm">Charge or let it go <ArrowRight className="h-4 w-4" /></span>
+                </Link>
+              </li>
+            ))}
+          </ScrollList></ScopedPanelSearch>
+        </section>
+      )}
+
       <SearchPanel id="to-do" title="To do" placeholder="Search To do by developer or test" items={(suspended?[]:working).map(c=>({key:c.id,search:`${c.title} ${displayName(c.test.developer)}`,node:<TodoTestRow id={c.id} title={c.title} dueAt={c.dueAt} now={now} timeZone={user.timeZone}/>}))}/>
 
       {/* (Batch 17 section 17) Every rating the tester can give now (hidden while their tester side is suspended). */}
@@ -525,23 +542,6 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
         </section>
       )}
 
-
-      {chargeable.length > 0 && (
-        <section className="space-y-3" id="charge-or-cancel">
-          {sectionTitle(<Banknote className="h-5 w-5 text-amber-300" />, "Charge or cancel", chargeable.length)}
-          <p className="note">Parts the developer hasn&apos;t reviewed once {REVIEW_DAYS} days have passed since you sent them and your deadline has passed: charge for them, or let them go.</p>
-          <ScopedPanelSearch label="Charge or cancel"><ScrollList className="space-y-2" label="Charge or cancel">
-            {chargeable.map(({ c, parts }) => (
-              <li key={c.id} data-panel-search={`${c.title} ${displayName(c.test.developer)}`}>
-                <Link href={`/app/sessions/${c.id}#part-${parts[0].kind}`} className="card card-hover flex flex-wrap items-center gap-3 border-amber-400/30 p-4 no-underline hover:no-underline">
-                  <p className="min-w-[12rem] flex-1 font-medium text-white [overflow-wrap:anywhere]"><TestName text={c.title} /> · {plural(parts.length, "part")} {pausedTest(c.test) && <PausedTag />}</p>
-                  <span className="btn px-3 py-1.5 text-sm">Charge or let it go <ArrowRight className="h-4 w-4" /></span>
-                </Link>
-              </li>
-            ))}
-          </ScrollList></ScopedPanelSearch>
-        </section>
-      )}
 
       {upcoming.length > 0 && (
         <section className="space-y-3" id="upcoming-calls">
