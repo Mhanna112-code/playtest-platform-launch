@@ -125,7 +125,7 @@ export function PayBox(p: {
   const below = listed && cents != null && cents < p.listingCents!;
   const over = cents != null && cents > PAY_TICK_CENTS;
   const needsReason = !more && cents != null && (cents === 0 || (REASON_WHEN_UNDER_LISTING && below));
-  const reasonMissing = needsReason && reason.trim().length < 5;
+  const reasonMissing = needsReason && reason.trim().length < 10;
   // (Batch 15 section 40) Rate and Amount fill each other; the last one typed wins.
   const typeAmount = (v: string) => {
     setAmount(v);
@@ -228,7 +228,7 @@ export function PayBox(p: {
       <div className="w-full min-w-0 max-w-full" data-pay-note="">
         <label className={`label [overflow-wrap:anywhere] ${needsReason ? "req" : ""}`} htmlFor={`why-${p.id}`}>Note to {p.name}{needsReason ? "" : " (optional)"}</label>
         <textarea id={`why-${p.id}`} className="input min-h-[2.75rem]" rows={2} maxLength={LIMITS.reason} data-match="why you're paying" data-red-msg={reasonMissing ? (cents === 0 ? ZERO_PAY_REASON : `Say why you're paying less than the listing's ${money(p.listingCents)} (the tester reads it).`) : undefined} value={reason} onChange={(e) => setReason(e.target.value)} placeholder={listed ? "What it's missing, or a thank-you" : "A thank-you, or what the pay is for"} {...lockText(sending)} />
-        <CharacterCount value={reason} min={needsReason ? 5 : 0} max={LIMITS.reason} required={needsReason} data-note-count="" />
+        <CharacterCount value={reason} min={needsReason ? 10 : 0} max={LIMITS.reason} required={needsReason} data-note-count="" />
         {reasonMissing && <p className="err-field" data-reason-needed="">{cents === 0 ? ZERO_PAY_REASON : `Say why you're paying less than the listing's ${money(p.listingCents)} (the tester reads it).`}</p>}
         {keep.restored && (reason !== "" || amount !== startAmount || rate !== startRate) && <DraftTag disabled={busy} kind="discard" onUseSaved={useSaved} /> /* (batch 35 §39) nothing saved: Discard (the amount back to its start, the note emptied, the ticks off) */}
       </div>

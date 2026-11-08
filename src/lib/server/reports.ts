@@ -7,7 +7,7 @@ import { adminUsers, notify } from "./notify";
 // Each person may report another person ONCE (per pair, ever). The admin sees it in the reports list. The only stop is a race check: already reported in another tab.
 // (The call's "Report a problem with this call" is a different thing and stays on the call.)
 
-export const REPORT_NOTE_MIN = 5;
+export const REPORT_NOTE_MIN = 10;
 
 export async function reportPerson(me: { id: string }, body: Record<string, unknown>) {
   const otherId = String(body.userId ?? "");

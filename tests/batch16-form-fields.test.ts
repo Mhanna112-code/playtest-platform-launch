@@ -120,13 +120,13 @@ describe("every Post / Edit field mistake lands on its field (section 10)", () =
 });
 
 describe("Mature (18+): say why the box is red (section 9)", () => {
-  it("empty and too short give their own lines, the same at the field and from the server; 5 characters pass", () => {
+  it("empty and too short give their own lines, the same at the field and from the server; 10 characters pass", () => {
     const now = new Date();
     expect(R.checkListing(listing({ mature: true, matureWhy: "" }), 0, now)).toContain(R.MATURE_WHY_REQUIRED);
     expect(R.checkListing(listing({ mature: true, matureWhy: "  idk " }), 0, now)).toContain(R.MATURE_WHY_SHORT);
-    expect(R.MATURE_WHY_SHORT).toBe("Say a little more: at least 5 characters.");
+    expect(R.MATURE_WHY_SHORT).toBe("Say a little more: at least 10 characters.");
     expect(R.MATURE_WHY_REQUIRED).toBe("Say why this test is mature (18+): it's required for mature content.");
-    expect(R.checkListing(listing({ mature: true, matureWhy: "Gore!" }), 0, now).some((m) => fieldOfMistake(m) === "matureWhy")).toBe(false);
+    expect(R.checkListing(listing({ mature: true, matureWhy: "Fantasy gore" }), 0, now).some((m) => fieldOfMistake(m) === "matureWhy")).toBe(false);
     const form = src("app/app/tests/TestForm.tsx");
     expect(form).toContain("data-required-msg={MATURE_WHY_REQUIRED} data-min-chars={String(MATURE_WHY_MIN)} data-msg={MATURE_WHY_SHORT}");
     expect(form).toContain('min={MATURE_WHY_MIN} max={LIMITS.matureWhy} required data-mature-count=""');

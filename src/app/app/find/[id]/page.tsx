@@ -3,12 +3,12 @@ import { NameLink, TestName } from "@/components/Cut";
 import { NameLine } from "@/components/WholeLine";
 import { cutNamesIn } from "@/lib/cutNames";
 import { notFound, redirect } from "next/navigation";
-import { ArrowRight, BarChart3, CheckCircle2, Clock, FileSignature, FileText, HelpCircle, Languages, Lock, Monitor, Radio, Timer, Users, Video } from "lucide-react";
+import { ArrowRight, BarChart3, CheckCircle2, Clock, FileSignature, FileText, HelpCircle, Languages, Monitor, Radio, Users, Video } from "lucide-react";
 import { CategoryBadges } from "@/components/Category";
 import { CategoryTile, mainCategory, PartBadges } from "@/components/Ui";
 import { db } from "@/lib/db";
-import { displayName, fmtDateIn, fmtDateTimeIn, money, pronouns } from "@/lib/format";
-import { REVIEW_DAYS, closedToNewLine, dueFromJoin, joinerDays, perTesterLine, termsLine, testerDaysOf, testerShare, testPaused, yourDeadlineLine } from "@/lib/rules";
+import { displayName, fmtDateIn, fmtDateTimeIn, money } from "@/lib/format";
+import { closedToNewLine, dueFromJoin, joinerDays, perTesterLine, testerDaysOf, testerShare, testPaused, yourDeadlineLine } from "@/lib/rules";
 import { QuestionTexts } from "@/components/QA";
 import { requireOpenPage } from "@/lib/server/page-auth";
 import { asListing, needsLines } from "@/lib/server/tests";
@@ -176,6 +176,12 @@ export default async function ListingPage({ params, searchParams }: { params: Pr
         </>}
       />
 
+      <div className="flex flex-wrap gap-2 text-xs text-slate-300" data-listing-facts="">
+          {t.status === "open" && !joinClosed && <span className="chip" title="Every tester gets the same number of days from when they join"><Clock className="h-3.5 w-3.5" /> {t.openUntil ? perTesterLine(days, t.openUntil, localDay) : `Your deadline: ${dueIfNow}`}</span>}
+          {joinClosed && <span className="chip" data-join-closed=""><Clock className="h-3.5 w-3.5" /> {joinClosed}</span>}
+          <span className="chip"><CheckCircle2 className="h-3.5 w-3.5" /> {t.spots - testersIn} spot{t.spots - testersIn === 1 ? "" : "s"} left</span>
+      </div>
+
       {/* (An invitation shows here, as in the full app: who invited you, how long you'd have, No thanks.) */}
       {invite && !blocked && (
         <section className="card flex flex-wrap items-start gap-3 border-emerald-400/30" id="invitation">
@@ -234,17 +240,7 @@ export default async function ListingPage({ params, searchParams }: { params: Pr
             </div>
           ))}
         </div>
-        <p className="text-xs text-slate-500">
-          <b>What you get:</b> {termsLine(l, true)}. You&apos;re paid for each part you deliver.
-        </p>
-        <div className="flex flex-wrap gap-2 text-xs text-slate-300">
-          {t.status === "open" && !joinClosed && <span className="chip" title="Every tester gets the same number of days from when they join"><Clock className="h-3.5 w-3.5" /> {t.openUntil ? perTesterLine(days, t.openUntil, localDay) : `Your deadline: ${dueIfNow}`}</span>}
-          {joinClosed && <span className="chip" data-join-closed=""><Clock className="h-3.5 w-3.5" /> {joinClosed}</span>}
-          <span className="chip" title={`If the developer doesn't review it in time, you choose: charge ${pronouns(t.developer.pronoun).obj}, or let it go`}><Timer className="h-3.5 w-3.5" /> Not reviewed in {REVIEW_DAYS} days? You choose</span>
-          <span className="chip" title="Later edits to the test come to you as a request: switch to the new terms or keep yours"><Lock className="h-3.5 w-3.5" /> Locked in when you join</span>
-          <span className="chip"><CheckCircle2 className="h-3.5 w-3.5" /> {t.spots - testersIn} spot{t.spots - testersIn === 1 ? "" : "s"} left</span>
-        </div>
-        <p className="note">Everything above is fixed in your contract when you join. If the developer changes the listing later, they can offer you the new terms: you choose Switch or Keep.</p>
+        <p className="note">Prices and parts are agreed when you join. Later changes to those are offered as Switch or Keep; questions and other listing edits still apply.</p>
       </section>
 
       <section className="card space-y-2">

@@ -25,7 +25,7 @@ describe("invite limits (batch 35 §128)", () => {
     expect(INVITES_PER_DAY).toBe(100);
     expect(invitesLeftLine(2)).toBe("You can send up to 100 invites a day. You have 2 left today.");
     expect(invitesLeftLine(0)).toBe("You've sent 100 invites today. You can invite more tomorrow.");
-    expect(sameTesterLimitLine("Ana Silva")).toBe("Ana Silva: you've invited them to this test 3 times today. You can invite them again tomorrow.");
+    expect(sameTesterLimitLine("Ana Silva")).toBe("Ana Silva: you've invited them to this test 2 times today. You can invite them again tomorrow.");
   });
 
   it("100 a day, then refused with nothing sent; a day later it works", async () => {
@@ -59,7 +59,7 @@ describe("invite limits (batch 35 §128)", () => {
     expect((await db.invite.findFirstOrThrow({ where: { testId, testerId: first.user.id } })).status).toBe("cancelled");
   });
 
-  it("cancel and re-invite counts each time: 3 to one tester on one test, then only they're skipped; those 3 count toward the 100; another test has its own 3", async () => {
+  it("cancel and re-invite counts each time: 2 to one tester on one test, then only they're skipped; those 2 count toward the 100; another test has its own 2", async () => {
     const { dev, testId } = await setup();
     const ana = await tester();
     const name = (await db.user.findUniqueOrThrow({ where: { id: ana.user.id } })).name;
@@ -67,9 +67,9 @@ describe("invite limits (batch 35 §128)", () => {
       expect((await invite(testId, dev.cookie, [ana.user.id])).status).toBe(200);
       await cancel(testId, dev.cookie, ana.user.id);
     }
-    // The 3 invites of one tester are 3 of the 100: 97 left.
+    // Two invitations count toward the total of 100.
     const ben = await tester("Ben Ode");
-    await alreadySent(testId, 96); // 99 sent: 1 left
+    await alreadySent(testId, INVITES_PER_DAY - INVITES_PER_TESTER_PER_TEST - 1); // 99 sent: 1 left
     const r = await invite(testId, dev.cookie, [ana.user.id, ben.user.id]);
     expect(r.status).toBe(200);
     expect(r.body.message).toContain(sameTesterLimitLine(name));
@@ -80,7 +80,7 @@ describe("invite limits (batch 35 §128)", () => {
     expect((await invite(testId, dev.cookie, [(await tester("Dee Kim")).user.id])).status).toBe(429);
   });
 
-  it("another test of the same developer has its own 3 for the same tester", async () => {
+  it("another test of the same developer has its own 2 for the same tester", async () => {
     const one = await setup();
     const two = await setup();
     await db.test.update({ where: { id: two.testId }, data: { developerId: one.dev.user.id } });

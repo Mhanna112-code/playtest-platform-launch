@@ -91,8 +91,8 @@ export function checkPay(amountCents: number | null, listingCents: number | null
   if (amountCents == null || !Number.isInteger(amountCents) || amountCents < 0) return no("Enter an amount like 7.50.");
   if (amountCents > STRIPE_MAX_CENTS) return no(STRIPE_MAX_LINE);
   // (Owner, Oct 30, batch 15 section 30) $0 always needs a reason, listed or not.
-  if (amountCents === 0 && reason.trim().length < 5) return no(ZERO_PAY_REASON);
-  if (REASON_WHEN_UNDER_LISTING && listingCents != null && amountCents < listingCents && reason.trim().length < 5)
+  if (amountCents === 0 && reason.trim().length < 10) return no(ZERO_PAY_REASON);
+  if (REASON_WHEN_UNDER_LISTING && listingCents != null && amountCents < listingCents && reason.trim().length < 10)
     return no(`Say why you're paying less than the listing's ${money(listingCents)} (the tester reads it).`);
   if (amountCents > 0 && amountCents < MIN_CHARGE_CENTS) return no(`The smallest card charge is ${money(MIN_CHARGE_CENTS)}: pay $0.00 or at least ${money(MIN_CHARGE_CENTS)}.`);
   return payTicks(amountCents, tickedCents, over200);
@@ -303,8 +303,8 @@ export function duplicateQuestion(questions: string[]) {
   return "";
 }
 export const duplicateQuestionLine = (q: string) => `“${q.length > 80 ? q.slice(0, 80) + "…" : q}” is in the list twice: each question can be there once.`;
-/** (Owner, Oct 28, batch 16 section 9) The Mature (18+) "why": required, at least 5 characters; the same two lines at the field and from the server. */
-export const MATURE_WHY_MIN = 5;
+/** (Owner, Oct 28, batch 16 section 9) The Mature (18+) "why": required, at least 10 characters; the same two lines at the field and from the server. */
+export const MATURE_WHY_MIN = 10;
 export const MATURE_WHY_REQUIRED = "Say why this test is mature (18+): it's required for mature content.";
 export const MATURE_WHY_SHORT = `Say a little more: at least ${MATURE_WHY_MIN} characters.`;
 export const NDA_TOO_LONG = `Keep the NDA to ${LIMITS.nda.toLocaleString("en-US")} characters.`;
@@ -456,10 +456,10 @@ export const partHighLine = (name: string) => `The ${name} price can be at most 
 export const rateLowLine = () => `The live call rate must be at least ${money(PRICE_LIMITS.rateMin)} an hour (or free).`;
 export const rateHighLine = () => `The live call rate can be at most ${money(PRICE_LIMITS.rateMax)} an hour.`;
 export const DESCRIPTION_REQUIRED = "Say what testers should do (What to do).";
-/** (Owner, Oct 29, batch 30 §18) "Name of this test" (5 since Nov 3: TITLE_MIN_CHARS) and "What should testers do?" (10) are a minimum length (trimmed) on Post, Edit and posting a draft. */
+/** (Owner, Oct 29, batch 30 §18) "Name of this test" (10: TITLE_MIN_CHARS) and "What should testers do?" (10) are a minimum length (trimmed) on Post, Edit and posting a draft. */
 export const LISTING_MIN_CHARS = 10;
-/** (Owner, Nov 3) "Name of this test" is at least 5 characters (was 10); What to do stays at LISTING_MIN_CHARS. */
-export const TITLE_MIN_CHARS = 5;
+/** (Owner, Nov 3) "Name of this test" is at least 10 characters (was 10); What to do stays at LISTING_MIN_CHARS. */
+export const TITLE_MIN_CHARS = 10;
 /**
  * The minimum the server checks: LISTING_MIN_CHARS, except where the LISTING_MIN_CHARS setting says otherwise. Only the test suite sets it (to 1, since the tests written
  * before batch 30 post short titles such as "Run"; the batch 30 tests set it back to 10). Production never sets it.
@@ -1321,8 +1321,8 @@ export const rateNeedsLine = (name: string, endsAt: Date, now = new Date()) => {
 };
 
 /** (Owner, Oct 28, batch 20 section 27) End early's and Stop's reasons: at least this many characters (after trimming), like the Mature reason. */
-export const WHY_MIN_CHARS = 5;
-export const WHY_TOO_SHORT = "Say a little more: at least 5 characters.";
+export const WHY_MIN_CHARS = 10;
+export const WHY_TOO_SHORT = "Say a little more: at least 10 characters.";
 
 /** (Owner, Oct 28, batch 20 section 26) "Send my updated answers / recording" with nothing different from the last send: disabled (its tooltip), and the server's refusal. */
 export const NOTHING_CHANGED_LINE = "Nothing has changed since you sent it.";
@@ -1469,7 +1469,7 @@ export function paidByKind(parts: { kind: "written" | "recording" | "call"; amou
 export const DEV_SIDE_ALREADY = "You already added your side.";
 export function checkDevSide(text: string, already: boolean): Check {
   if (already) return no(DEV_SIDE_ALREADY); // (batch 16 section 21) the same press already made, in another tab or here
-  if (text.trim().length < 5) return no("Write your side in a sentence or two.");
+  if (text.trim().length < 10) return no("Write your side in a sentence or two.");
   return yes;
 }
 

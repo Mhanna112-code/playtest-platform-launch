@@ -1,3 +1,4 @@
+import { previousTestGroup } from "@/lib/dashboardPanels";
 import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
@@ -76,9 +77,9 @@ describe("the server: a required reason (section 15)", () => {
     expect(stopReasonOf(ev.text)).toBe(why);
     // Nobody working: still required, still recorded on the test.
     const s2 = await setup();
-    expect((await stop(s2.testId, s2.dev.cookie, { reason: "Wrap" })).body.error.message).toBe("Say a little more: at least 5 characters."); // (batch 20 section 27)
-    expect((await stop(s2.testId, s2.dev.cookie, { reason: "Wrap!" })).status).toBe(200);
-    expect((await db.testEvent.findFirstOrThrow({ where: { testId: s2.testId, kind: "stopped" } })).text).toBe(stopEventText("Wrap!"));
+    expect((await stop(s2.testId, s2.dev.cookie, { reason: "Wrap" })).body.error.message).toBe("Say a little more: at least 10 characters."); // (batch 20 section 27)
+    expect((await stop(s2.testId, s2.dev.cookie, { reason: "Wrap it up!" })).status).toBe(200);
+    expect((await db.testEvent.findFirstOrThrow({ where: { testId: s2.testId, kind: "stopped" } })).text).toBe(stopEventText("Wrap it up!"));
   });
 
   it("the helpers: older stops and other lines carry no reason", () => {
@@ -110,8 +111,7 @@ describe("what testers read (section 15)", () => {
     expect(block).toContain('c.status === "ended" && c.endKind === "stopped" && c.endReason && contractNotes.some((n) => n.kind === STOP_NOTE_KIND) && <ReasonQuote text={c.endReason} />');
     expect(page).toContain("Test stopped`}<ReasonQuote text={stopReasonOf(n.text)} />");
     // (Owner §98, already on master) History now links to the session with a Stopped tag; the reason stays on that session.
-    expect(src("app/app/page.tsx")).toContain('data-history-tag="">{tag}</span>');
-    expect(src("app/app/page.tsx")).toContain('c.endKind === "stopped" ? "Stopped"');
+    expect(previousTestGroup({status:"ended",endKind:"stopped",test:{status:"stopped",workEndedAt:null}})).toBe("Closed");
     // ReasonQuote is the italic box End early's reason uses: (Owner, Nov 5, §237) the shared draggable box (ResizeBox in OwnPanel).
     expect(src("components/ScrollText.tsx")).toMatch(/export function ReasonQuote[\s\S]*<OwnPanel>[\s\S]*<ResizeBox[\s\S]*italic/);
   });

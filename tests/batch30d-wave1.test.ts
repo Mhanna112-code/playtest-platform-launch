@@ -102,8 +102,8 @@ describe("batch 30 §18: the test's name and what testers should do are at least
     // (Owner, Nov 3) The test's name: at least 5 (was 10); What to do stays at 10.
     const t4 = await post({ title: "Harb" });
     expect(t4.r.status).toBe(400);
-    expect(t4.r.body.error.errors).toContain("Name of this test: at least 5 characters (4 so far).");
-    expect((await post({ title: "Harbo" })).r.status).toBe(200);
+    expect(t4.r.body.error.errors).toContain("Name of this test: at least 10 characters (4 so far).");
+    expect((await post({ title: "Harbor Run" })).r.status).toBe(200);
     // Trimmed: spaces around don't count.
     const d8 = await post({ description: "  Sail now  " });
     expect(d8.r.body.error.errors).toContain(minCharsLine("What should testers do", 8));
@@ -113,7 +113,7 @@ describe("batch 30 §18: the test's name and what testers should do are at least
     expect(ok.r.status).toBe(200);
   });
 
-  it("Edit: an old short title doesn't block saving another field; changing it needs 5", async () => {
+  it("Edit: an old short title doesn't block saving another field; changing it needs 10", async () => {
     process.env.LISTING_MIN_CHARS = "1";
     const { dev, testId } = await setup({ title: "Run", description: "Sail" });
     process.env.LISTING_MIN_CHARS = "10";
@@ -121,8 +121,8 @@ describe("batch 30 §18: the test's name and what testers should do are at least
     expect((await act(testId, "edit", dev.cookie, { version: await v(), fields: { writtenCents: "12.00" }, seenAt: seen(), confirmed: true })).status).toBe(200);
     const bad = await act(testId, "edit", dev.cookie, { version: await v(), fields: { title: "Runs" }, seenAt: seen(), confirmed: true });
     expect(bad.status).toBe(400);
-    expect(bad.body.error.errors).toEqual(["Name of this test: at least 5 characters (4 so far)."]);
-    expect((await act(testId, "edit", dev.cookie, { version: await v(), fields: { title: "Run 2" }, seenAt: seen(), confirmed: true })).status).toBe(200);
+    expect(bad.body.error.errors).toEqual(["Name of this test: at least 10 characters (4 so far)."]);
+    expect((await act(testId, "edit", dev.cookie, { version: await v(), fields: { title: "Run number 2" }, seenAt: seen(), confirmed: true })).status).toBe(200);
   });
 
   it("the rule, the counter and the form: red on leaving and on the press, only for a changed field on Edit; product name unchanged", () => {
@@ -133,7 +133,7 @@ describe("batch 30 §18: the test's name and what testers should do are at least
     expect(checkListing({ ...base, title: "shor" }, 0, new Date(), { changed: new Set(["writtenCents"]) }).some((e) => /^Name of this test/.test(e))).toBe(false);
     const form = src("app/app/tests/TestForm.tsx");
     expect(form).toContain('{ "data-min-chars": String(k === "title" ? TITLE_MIN_CHARS : LISTING_MIN_CHARS), "data-min-label": label }');
-    expect(TITLE_MIN_CHARS).toBe(5);
+    expect(TITLE_MIN_CHARS).toBe(10);
     expect(form).toContain("max: LIMITS.testName, min: TITLE_MIN_CHARS,");
     expect(form).toContain("!edit || f[k] !== base[k]");
     expect(form).toContain("min={!edit || f.description !== base.description ? LISTING_MIN_CHARS : 0} required data-steps-count");

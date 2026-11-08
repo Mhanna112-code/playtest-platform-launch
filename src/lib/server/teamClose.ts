@@ -62,7 +62,7 @@ export async function previewTeamClose(scope: TeamCloseScope) {
  */
 export async function teamClose(adminId: string, scope: TeamCloseScope, body: Record<string, unknown>) {
   const reason = readText(body.reason ?? body.note, LIMITS.reason, "bad_reason");
-  if (reason.trim().length < 5) throw new HttpError(400, "bad_reason", TEAM_CLOSE_REASON);
+  if (reason.trim().length < 10) throw new HttpError(400, "bad_reason", TEAM_CLOSE_REASON);
   const asked = Array.isArray(body.pieces) ? (body.pieces as { kind?: unknown; id?: unknown }[]).filter((p) => p && (p.kind === "submission" || p.kind === "call") && typeof p.id === "string") : [];
   if (!asked.length) throw new HttpError(400, "no_preview", "Press Preview first: it lists what this closes.");
   // (Owner, Oct 30, batch 34 §1) Another admin suspended or reinstated the developer since the Preview: the close-out stops once; the second press goes ahead.

@@ -438,7 +438,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
             </div>
           </div>
           {!meOff && <a href={`/app/chat/${c.id}`} className="btn-secondary relative min-w-0 max-w-full no-underline hover:no-underline"><MessagesSquare className="h-4 w-4 shrink-0" /> <span className="min-w-0 [overflow-wrap:anywhere]">Chat with {dev}</span>
-            {unread > 0 && <span className="absolute -right-1.5 -top-1.5 rounded-full bg-fuchsia-400 px-1.5 text-[10px] font-bold text-ink-950" aria-label={`${unread} unread`}>{unread}</span>}
+            {unread > 0 && <span className="absolute -right-1.5 -top-1.5 rounded-full bg-fuchsia-400 px-1.5 text-[10px] font-bold text-ink-950" aria-label={`${unread} unread`}>{Math.min(unread,9)}</span>}
           </a>}
         </div>
         {/* (Batch 15 section 17) The steps in a scroll box about 6 lines tall. */}

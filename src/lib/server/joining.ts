@@ -1,3 +1,4 @@
+import { TESTING_NO_LIMITS } from "@/lib/testingLimits";
 import { Prisma } from "@prisma/client";
 import { T } from "@/lib/tz";
 import { db } from "@/lib/db";
@@ -230,6 +231,19 @@ export async function join(tester: U, testId: string, body: Record<string, unkno
   return c;
 }
 
+export const JOIN_REQUESTS_PER_TEST_PER_DAY = 2;
+export async function saveJoinRequest(testerId:string,testId:string,data:{note:string;listing:Prisma.InputJsonValue;kind:string;ndaAcceptedAt:Date|null},text:string,bypassLimit=false) {
+ return db.$transaction(async tx=>{
+  await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${testId} FOR UPDATE`;
+  const previous=await tx.application.findUnique({where:{testId_testerId:{testId,testerId}}});
+  if(previous?.status==="pending")throw new HttpError(409,"waiting","You already have a request waiting for this test.");
+  if(!TESTING_NO_LIMITS&&!bypassLimit&&previous && await tx.testEvent.count({where:{testId,kind:"applied",link:`item-app-${previous.id}`,createdAt:{gt:new Date(Date.now()-24*3600000)}}})>=JOIN_REQUESTS_PER_TEST_PER_DAY)throw new HttpError(429,"too_many_requests","You can apply or ask to rejoin this test twice in 24 hours. Try again later.");
+  const application=await tx.application.upsert({where:{testId_testerId:{testId,testerId}},update:{...data,status:"pending",changedAt:null,decidedAt:null,createdAt:new Date()},create:{testId,testerId,...data}});
+  await tx.testEvent.create({data:{testId,kind:"applied",link:`item-app-${application.id}`,text}});
+  return application;
+ });
+}
+
 /** Apply to join (optional note). If the test now lets anyone join, the second press simply joins. */
 export async function apply(tester: U, testId: string, body: Record<string, unknown>) {
   if (!tester.isTester) throw new HttpError(403, "not_tester", "Turn on “test apps, games and more” in your profile to join tests.");
@@ -253,12 +267,7 @@ export async function apply(tester: U, testId: string, body: Record<string, unkn
   // (7.3) The NDA is accepted when applying; the developer's Accept joins them on it.
   if (t.ndaText && body.ndaAccepted !== true) throw new HttpError(400, "nda", "Accept the NDA to apply.");
   const ndaAcceptedAt = t.ndaText ? new Date() : null;
-  const application = await db.application.upsert({
-    where: { testId_testerId: { testId, testerId: tester.id } },
-    update: { note, listing: snap, status: "pending", changedAt: null, decidedAt: null, kind: "apply", ndaAcceptedAt, createdAt: new Date() }, // (batch 34 §16) applied now
-    create: { testId, testerId: tester.id, note, listing: snap, ndaAcceptedAt },
-  });
-  await db.$transaction((tx) => tx.testEvent.create({ data: { testId, kind: "applied", link: `item-app-${application.id}`, text: `${displayName(tester)} applied to join` } }));
+  await saveJoinRequest(tester.id,testId,{note,listing:snap,kind:"apply",ndaAcceptedAt},`${displayName(tester)} applied to join`);
   await notify(t.developer.email, `${displayName(tester)} applied to join “${t.title}”`, [`${displayName(tester)} applied to join “${t.title}”.`, ...(note ? [`${pronouns(tester.pronoun).Poss} note: “${note}”`] : []), "Accept or decline on the test page."], `/app/tests/${testId}#needs-you`, { testId, group: APPLICATIONS_GROUP }); // (Owner, Nov 6, §308) "Applications · N", one entry a day across tests
   return { applied: true };
 }
@@ -458,11 +467,7 @@ export async function askToRejoin(tester: U, testId: string, body: Record<string
   const ndaAcceptedAt = t.ndaText ? new Date() : null;
   const snap = listingSnapshot(t) as Prisma.InputJsonValue;
   const invited = await db.invite.findFirst({ where: { testId, testerId: tester.id, status: "sent" } });
-  const application = await db.application.upsert({
-    where: { testId_testerId: { testId, testerId: tester.id } },
-    update: { note, listing: snap, status: "pending", changedAt: null, decidedAt: null, kind: "rejoin", ndaAcceptedAt, createdAt: new Date() }, // (batch 34 §16) asked now
-    create: { testId, testerId: tester.id, note, listing: snap, kind: "rejoin", ndaAcceptedAt },
-  });
+  await saveJoinRequest(tester.id,testId,{note,listing:snap,kind:"rejoin",ndaAcceptedAt},`${displayName(tester)} asks to rejoin`,!!invited);
   // (Owner, Oct 28) A test a suspension removed them from leaves the dashboard top once they ask (or dismiss it).
   if (old.endKind === "suspended" && !old.removedDismissedAt) await db.contract.update({ where: { id: old.id }, data: { removedDismissedAt: new Date() } });
   if (invited) {
@@ -471,7 +476,7 @@ export async function askToRejoin(tester: U, testId: string, body: Record<string
     if (c) return { joined: true, sessionId: c.id };
   }
   const name = displayName(tester);
-  await db.$transaction((tx) => tx.testEvent.create({ data: { testId, kind: "applied", link: `item-app-${application.id}`, text: `${name} asks to rejoin` } }));
+
   const line = rejoinAskLine(name, pronouns(tester.pronoun), old);
   await notify(t.developer.email, `${name} asks to rejoin “${t.title}”`, [line, ...(note ? [`${pronouns(tester.pronoun).Poss} note: “${note}”`] : [])], `/app/tests/${testId}#needs-you`, { about: tester.id, testId, group: APPLICATIONS_GROUP }); // (Owner, Nov 6, §308) "Applications · N", one entry a day across tests
   return { asked: true };

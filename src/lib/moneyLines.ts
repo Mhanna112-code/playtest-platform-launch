@@ -49,8 +49,8 @@ export const DEV_SIDE_LABEL = "The developer's side";
 export const TEAM_CLOSED_NO_DISPUTE = "The team closed this for $0, so it can't be disputed.";
 export const TEAM_CLOSED_NO_CHANGE = "The team closed this for $0, so it can't be changed.";
 export const TEAM_CLOSED_NO_PAY = "The team closed this for $0.";
-/** Reason rules: 5 to 1,000 characters (testers read it). */
-export const TEAM_CLOSE_REASON = "Say why the team closes these (at least 5 characters; the testers read it).";
+/** Reason rules: 10 to 1,000 characters (testers read it). */
+export const TEAM_CLOSE_REASON = "Say why the team closes these (at least 10 characters; the testers read it).";
 
 /** (Batch 30 §2) A paid piece whose latest update hasn't been answered by a Pay more yet (any amount, $0 included). The caller also checks the cap and Pay more's close-out. */
 export const updateWaiting = (s: { paidUpdateAt: Date | null; paidUpdateDoneAt: Date | null; review?: { rejected: boolean; teamClosedById?: string | null } | null }) =>

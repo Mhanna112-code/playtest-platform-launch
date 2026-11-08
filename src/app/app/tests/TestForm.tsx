@@ -636,7 +636,7 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
     }
   }
 
-  // (Owner, Oct 29, batch 30 §18) Title (at least 5; owner, Nov 3) and steps (at least 10), red on leaving the field and on the press ("Name of this test: at least 10 characters (6 so
+  // (Owner, Oct 29, batch 30 §18) Title (at least 10; owner, Nov 3) and steps (at least 10), red on leaving the field and on the press ("Name of this test: at least 10 characters (6 so
   // far)."). On Edit only once that field is changed: an older test's short value never blocks saving another field.
   const minAttrs = (k: "title" | "description", label: string): Record<string, string> => (!edit || f[k] !== base[k] ? { "data-min-chars": String(k === "title" ? TITLE_MIN_CHARS : LISTING_MIN_CHARS), "data-min-label": label } : {});
   // (Owner) Every box with a range says it next to it and is checked as soon as it's left (FieldChecks).
@@ -754,7 +754,7 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
           {f.mature && (
             <div>
               <label className="label req" htmlFor="matureWhy">Why is this test mature?{draftMark("matureWhy")}</label>
-              {/* (Batch 16 section 9) At least 5 characters: the red line under the box says which rule (empty, or too short), the same lines as the server. */}
+              {/* (Batch 16 section 9) At least 10 characters: the red line under the box says which rule (empty, or too short), the same lines as the server. */}
               <textarea id="matureWhy" rows={2} className="input" maxLength={LIMITS.matureWhy} value={f.matureWhy} placeholder="e.g. Violence in the boss fights; testers must be 18 or older"
                 data-required="" data-required-msg={MATURE_WHY_REQUIRED} data-min-chars={String(MATURE_WHY_MIN)} data-msg={MATURE_WHY_SHORT} onBlur={() => leave("matureWhy")} onChange={(e) => set({ matureWhy: e.target.value })} />
               <CharacterCount value={f.matureWhy} min={MATURE_WHY_MIN} max={LIMITS.matureWhy} required data-mature-count="" />

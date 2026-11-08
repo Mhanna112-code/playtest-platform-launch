@@ -30,7 +30,7 @@ export function TeamCloseBox({ id, scope }: { id: string; scope: "developer" | "
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const stop = useAdminStop();
   const label = scope === "developer" ? "Close all open reviews for $0" : "Close this test's open reviews for $0";
-  const short = reason.trim().length < 5;
+  const short = reason.trim().length < 10;
   const long = reason.length > LIMITS.reason;
   const keep = useKept<{ reason?: unknown }>(adminDraftKey(`team-close-${scope}`, id), { reason }, reason.trim() === "", (d) => setReason(typeof d.reason === "string" ? d.reason : ""));
   const boxShown = !!preview && preview.pieces.length > 0;
@@ -58,7 +58,7 @@ export function TeamCloseBox({ id, scope }: { id: string; scope: "developer" | "
             <textarea id={`team-close-${scope}-${id}`} aria-label="Why (the testers read it)" placeholder="Why (the testers read it)" rows={2} maxLength={LIMITS.reason} className={`input w-full ${long ? "field-bad" : ""}`}
               data-required="" data-required-msg={TEAM_CLOSE_REASON} data-min-chars="5" data-msg={TEAM_CLOSE_REASON} data-match="why the team closes|keep it to" data-red-msg={long ? reasonTooLong() : undefined}
               value={reason} onChange={(e) => setReason(e.target.value)} {...lockText(busy)} />
-            <CharacterCount value={reason} min={5} max={LIMITS.reason} required data-reason-count="" />
+            <CharacterCount value={reason} min={10} max={LIMITS.reason} required data-reason-count="" />
           </span>
           <button
             type="button"

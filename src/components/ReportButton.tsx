@@ -32,7 +32,7 @@ export function ReportButton({ userId, name, reportedOn, seenAt }: { userId: str
           {/* (Owner, Nov 5, §261) While Send to the team is going through, the box is read-only. */}
           <label className="label req" htmlFor={`report-${userId}`}>What happened? (the team reads it)</label>
           <textarea id={`report-${userId}`} rows={3} className="input" maxLength={2000} data-required="" data-required-msg="Say what happened (the team reads it)." data-min-chars="5" data-msg="Say what happened (the team reads it)." data-match="say what happened" value={note} onChange={(e) => setNote(e.target.value)} {...lockText(busy)} />
-          <CharacterCount value={note} min={5} max={2000} required />
+          <CharacterCount value={note} min={10} max={2000} required />
           <div className="flex gap-2">
             <button
               type="button"

@@ -71,7 +71,7 @@ export function TopPanel(p: { timeZone?: string | null; joinClosedLine?: string;
   const [reason, setReason] = useState("");
   // (Batch 17 §15) Stop the test's "Why?" (testers read it): required, like End early's.
   const [stopReason, setStopReason] = useState("");
-  // (Batch 20 section 27) At least 5 characters after trimming.
+  // (Batch 20 section 27) At least 10 characters after trimming.
   const stopReady = stopReason.trim().length >= WHY_MIN_CHARS && stopReason.length <= LIMITS.stopReason;
   // (Owner, Oct 28, batch 20 section 18) End early's and Stop's reasons survive any reload (kept on the server), and are forgotten once pressed.
   const keepEnd = useKept<{ reason: string }>(`endearly:${p.id}`, { reason }, !reason.trim(), (v) => setReason(typeof v.reason === "string" ? v.reason : ""));
@@ -219,7 +219,7 @@ export function TopPanel(p: { timeZone?: string | null; joinClosedLine?: string;
               ))}
             </fieldset>
             {noTick && <p className="err-field">Tick at least one tester.</p>}
-            {/* (Owner, Oct 30, batch 15 section 22) Required, up to 10,000 characters with a counter. (Batch 17 §15) The same box as Stop's. (Batch 20 section 27) At least 5 characters. */}
+            {/* (Owner, Oct 30, batch 15 section 22) Required, up to 10,000 characters with a counter. (Batch 17 §15) The same box as Stop's. (Batch 20 section 27) At least 10 characters. */}
             <WhyBox id="reason" label="Why? (each tester you tick reads it)" placeholder="e.g. We have what we need for this build: thank you!" requiredMsg="Say why you're ending their work (they read it)."
               match="ending their work|keep it to" value={reason} onChange={setReason} max={LIMITS.endEarlyReason} countAttr="data-end-count" locked={sendingAs("end-early")} />
             {keepEnd.restored && reason !== "" && <DraftTag disabled={busy} kind="discard" onUseSaved={() => setReason("")} />}

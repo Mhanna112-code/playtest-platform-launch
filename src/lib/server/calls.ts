@@ -107,7 +107,7 @@ export async function reportNoShow(user: U, callId: string, body: Record<string,
   // (The full app's Report a problem) No-show / Late, plus an optional note; without a kind, the note says what happened.
   const kind = body.kind === "late" ? "was late" : body.kind === "no_show" ? "didn't show up" : "";
   const typed = typeof body.note === "string" ? body.note.trim().slice(0, 1000) : "";
-  if (!kind && typed.length < 5) throw new HttpError(400, "bad_note", "Say what happened.");
+  if (!kind && typed.length < 10) throw new HttpError(400, "bad_note", "Say what happened.");
   const note = kind ? `${kind[0].toUpperCase()}${kind.slice(1)}${typed ? `: ${typed}` : "."}` : typed;
   if (side === "developer") await devGateIfSeen(call.contract.testId, body, { acts: ["no-show", "cancel-call", "cancel-set"], keys: [`call:${call.id}`] });
   else await sharedTesterGate(user.id, call.contractId, call.contract.testId, body);

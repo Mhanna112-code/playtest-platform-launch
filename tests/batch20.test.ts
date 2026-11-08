@@ -1011,19 +1011,19 @@ describe("batch 20 section 26 (replaced by batch 35 §136): sent work is locked,
   });
 });
 
-describe("batch 20 section 27: End early's and Stop's reason need at least 5 characters", () => {
-  it("0, 4 and 5 characters for both", async () => {
+describe("batch 20 section 27: End early's and Stop's reason need at least 10 characters", () => {
+  it("0, 4 and 10 characters for both", async () => {
     const { dev, testId } = await setup({ spots: 5 });
     const a = await joined(testId, "Ana Silva");
     const ee = (reason: string) => act(testId, "end-early", dev.cookie, { contractIds: [a.sessionId], reason, seenAt: seen(), confirmed: true });
     expect((await ee("")).body.error.message).toBe("Say why you're ending their work (they read it).");
-    expect((await ee("Done")).body.error.message).toBe("Say a little more: at least 5 characters.");
-    expect((await ee(" Done  ")).body.error.message).toBe("Say a little more: at least 5 characters.");
-    expect((await ee("Done.")).status).toBe(200);
+    expect((await ee("Done")).body.error.message).toBe("Say a little more: at least 10 characters.");
+    expect((await ee(" Done  ")).body.error.message).toBe("Say a little more: at least 10 characters.");
+    expect((await ee("Done now..")).status).toBe(200);
     const st = (reason: string) => act(testId, "stop", dev.cookie, { reason, seenAt: seen(), confirmed: true });
     expect((await st("")).body.error.message).toBe("Say why you're stopping the test (testers read it).");
-    expect((await st("Over")).body.error.message).toBe("Say a little more: at least 5 characters.");
-    expect((await st("Over.")).status).toBe(200);
+    expect((await st("Over")).body.error.message).toBe("Say a little more: at least 10 characters.");
+    expect((await st("Over now..")).status).toBe(200);
     expect(src("components/WhyBox.tsx")).toContain("data-min-chars={String(WHY_MIN_CHARS)} data-msg={WHY_TOO_SHORT}");
     // (§278) The button counts only ticks still in the list (`chosenIds`), not hidden stale ones.
     expect(src("app/app/tests/[id]/TopPanel.tsx")).toContain("disabled={busy || reason.trim().length < WHY_MIN_CHARS || !chosenIds.length");
