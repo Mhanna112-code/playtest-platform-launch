@@ -51,6 +51,7 @@ describe("profile tiles", () => {
     await db.dispute.create({ data: { submissionId: sub.id, contractId: j.sessionId, testerId: j.tester.user.id, reason: "I answered all", status: "decided", decidedCents: 1000, decidedAt: new Date() } });
     const s = await developerStats(dev.user.id);
     expect(s.pays.value).toBe("100%");
+    expect((await developerStats(dev.user.id, false)).review.hint).toBe("0 charged by testers after the review window");
     expect(s.review.hint).toBe("0 charged by testers after the review window · 1 dispute decided for testers");
   });
 });

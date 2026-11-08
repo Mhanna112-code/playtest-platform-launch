@@ -34,7 +34,7 @@ export async function ratingTile(userId: string, as: RatedAs) {
 }
 
 /** A developer's tiles (the full app's "Pays on average", "Typical review"), from lean data. */
-export async function developerStats(developerId: string) {
+export async function developerStats(developerId: string, includeDisputes = true) {
   const contractIds = (await db.contract.findMany({ where: { test: { developerId } }, select: { id: true } })).map((c) => c.id);
   const [reviews, disputes] = await Promise.all([
     db.review.findMany({ where: { contractId: { in: contractIds } }, include: { submission: { select: { sentAt: true } }, call: { select: { startsAt: true, minutes: true, actualMinutes: true } } } }),
@@ -65,7 +65,7 @@ export async function developerStats(developerId: string) {
   return {
     // (Owner, Oct 28, batch 16 section 5) No split by outcome: the average share, over how many pieces it counts.
     pays: { value: pct(avg), hint: paysHint(shares.length) },
-    review: { value: n == null ? "-" : `${n} day${n === 1 ? "" : "s"}`, hint: `${charged} charged by testers after the review window · ${disputesWon} dispute${disputesWon === 1 ? "" : "s"} decided for testers` },
+    review: { value: n == null ? "-" : `${n} day${n === 1 ? "" : "s"}`, hint: `${charged} charged by testers after the review window${includeDisputes ? ` · ${disputesWon} dispute${disputesWon === 1 ? "" : "s"} decided for testers` : ""}` },
   };
 }
 

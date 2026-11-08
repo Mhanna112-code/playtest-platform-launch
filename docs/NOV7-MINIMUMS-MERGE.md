@@ -17,3 +17,6 @@ Quota and ten-character focused tests: 13 passed; listing/chat display checks: 2
 
 The email-queue migration was applied to local public with the user's explicit separate exception. No hosted database was accessed. This branch is not merged: the latest supplied AGENTS.md says never merge into master; Claude reviews and merges. No push was made.
 
+
+## Final profile change and merge authorization
+The owner explicitly authorized merging into master after the prior branch-only handoff. Tester-facing developer profile tiles now omit the disputes-decided count; the developer's own dashboard retains it. The profile-stat suite passes both tests, including a decided dispute whose outcome still correctly affects payment statistics. Typecheck and lint pass; full-check result remains recorded separately.

@@ -7,7 +7,7 @@ import { DEV_FOOTNOTE, DEV_FOOTNOTE_NO_PAYS, TESTER_FOOTNOTE, developerStats, ra
  * developer's own dashboard (`pays`): nothing testers see shows it (the profile, its "as testers see it" view, the join page).
  */
 export async function DeveloperTiles({ userId, pays = false }: { userId: string; /** the developer's own dashboard */ pays?: boolean }) {
-  const [s, r] = await Promise.all([developerStats(userId), ratingTile(userId, "developer")]);
+  const [s, r] = await Promise.all([developerStats(userId, pays), ratingTile(userId, "developer")]);
   return (
     <>
       <section className={`grid gap-4 ${pays ? "sm:grid-cols-3" : "sm:grid-cols-2"}`} aria-label="How this developer reviews">
