@@ -11,7 +11,7 @@ import { cancelCallsAhead, lockTest, ownContract, ownTest, recordEvent, spotOpen
 import { seenOf, unanswered, tabOf, testerPaymentChanges } from "./live";
 import { FINISHED_PART_REASON, payMoreLine, TESTER_CALL_KINDS, testerChanges, testerGate } from "./testerGate";
 import { devPauseMoments, devStopSince, loadedOf, stopBox, testerStopSince } from "./stopMoment";
-import { closeOutOf, closedOut, devPauseSpans, mergeSpans, teamPauseSpans, windowEnd, type Span } from "./closeOut";
+import { closeOutOf, testerRatingClosesAt, closedOut, devPauseSpans, mergeSpans, teamPauseSpans, windowEnd, type Span } from "./closeOut";
 import { closeOffersOfEnded } from "./offerClose";
 import { RATE_TEAM_PAUSED, teamPausedNow } from "@/lib/restricted";
 import { testerRow } from "@/lib/lineAnchors";
@@ -59,7 +59,7 @@ export async function testerRateState(contractId: string, now = new Date()): Pro
   const done = c.calls.filter((x) => x.status === "booked" && x.startsAt <= now);
   if (!c.submissions.length && !done.length) return { kind: "hidden", line: "Rating opens once some work was sent or a call took place." };
   // (Batch 17 section 19) The test's close-out ends the tester's Rate: "Rating closed on <date>." (shown as a note, refused on the server).
-  const closeOut = await closeOutOf(c.testId, now);
+  const closeOut = await testerRatingClosesAt(contractId, now);
   if (closedOut(closeOut, now)) return { kind: "closed", line: ratingClosedLine(fmtDateIn(closeOut!, c.tester.timeZone)) };
   // A part or listed call they can still Charge or Let it go (Charge never happens on its own: they settle it first).
   // (Batch 30 §3) Late work never has a Charge to settle.
@@ -329,14 +329,14 @@ export async function ratingReminders(now = new Date()) {
     return last && last.createdAt > fallback ? last.createdAt : fallback;
   };
   // Tester: prompted once (when their Rate opens), then every 3 days until they rate or the close-out, whatever the test's state (batch 29 §21: running tests too).
-  const prompted = await db.contract.findMany({ where: { tester: { deletedAt: null }, ratePromptedAt: { not: null, lt: new Date(now.getTime() - every), gt: new Date(now.getTime() - 365 * DAY) } }, orderBy: { ratePromptedAt: "desc" }, take: 500, include: { tester: { select: { testerSuspendedAt: true } }, test: { include: { developer: true } } } });
+  const prompted = await db.contract.findMany({ where: { tester: { deletedAt: null }, ratePromptedAt: { not: null, lt: new Date(now.getTime() - every) } }, orderBy: { ratePromptedAt: "desc" }, take: 500, include: { tester: { select: { testerSuspendedAt: true } }, test: { include: { developer: true } } } });
   const rated = new Set((await db.rating.findMany({ where: { contractId: { in: prompted.map((c) => c.id) }, side: "tester" }, select: { contractId: true } })).map((r) => r.contractId));
   for (const c of prompted) {
     if (rated.has(c.id) || c.tester.testerSuspendedAt) continue;
     if (now.getTime() - (await sinceLast(c.testerId, c.testId, c.ratePromptedAt!)).getTime() < every) continue;
     if ((await rateBlocker(c.id, "tester", now)) !== "") continue; // disabled, or (§331) closed at the close-out: no reminder
     // (Owner, Nov 7, §331) The last one before the close-out (the next 3-day slot would fall after it) ignores email Off and names the date.
-    const closes = await closeOutOf(c.testId, now);
+    const closes = await testerRatingClosesAt(c.id, now);
     const last = !!closes && now.getTime() + every >= closes.getTime();
     await bell(c.testerId, `Reminder: rate ${displayName(c.test.developer)} on “${c.title}”${last ? `: rating closes on ${T(closes!, "date")}` : ""}`, RATINGS_HREF, undefined, { side: "tester", ...RATINGS, testId: c.testId, reminder: `rate:${c.id}`, ...(last ? { always: true } : {}) });
     n++;

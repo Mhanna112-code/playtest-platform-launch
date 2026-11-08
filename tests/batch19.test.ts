@@ -105,9 +105,9 @@ describe("batch 19 sections 3 and 6: the Terms of Use", () => {
     }
     expect(PAYMENT_RULES[0].text).toContain("The tester receives 80% of every payment; the platform keeps 20%.");
     expect(PAYMENT_RULES[1].example).toBe("Opened Nov 6 with Open until Nov 20: 14 days per tester, so a tester who joins Nov 19 is due Dec 3.");
-    expect(PAYMENT_RULES[5].text).toContain("A Charge over $200 needs a tick. Each piece gets at least 14 days of Charge.");
+    expect(PAYMENT_RULES[5].text).toContain("Each piece gets at least 14 days of Charge.");
     expect(PAYMENT_RULES[9].text).toContain("adds a $15 fee");
-    expect(page).toContain('title: "4. How payments work"');
+    expect(page).toContain('title: "5. How payments work"');
     expect(page).toContain("Example: {r.example}");
     expect(page).not.toContain("4. Reviews and payment");
     expect(page).not.toContain("5. Disputes");
@@ -399,7 +399,7 @@ describe("batch 19 section 5: the smaller bugs", () => {
 describe("batch 19 section 7: a required tick about Charge on Post and Edit", () => {
   // (Batch 28 §21) It covers the automatic charge of listed calls too.
   // (Batch 30 §3) Only work sent by the tester's deadline can be charged.
-  const TICK = "I understand that a tester can charge my card, up to the listing price, for work they sent by their own deadline that I haven't paid once 7 days have passed since they sent it and that deadline has passed, and listed calls 7 days after they take place.";
+  const TICK = "I understand that failing to review and press the Pay button (between $0 and a part's maximum price) allows a tester to charge my card, up to the listing price (or the old listing price for past work sent), for work they sent by their own deadline that I haven't paid once 7 days have passed since they sent it and that deadline has passed, and listed calls 7 days after they take place.";
   const refusedTick = (r: { status: number; body: { error?: { code: string; errors?: string[] } } }) => {
     expect(r.status).toBe(400);
     expect(r.body.error?.code).toBe("bad_listing");

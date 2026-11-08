@@ -22,7 +22,7 @@ const refusedForTerms = (r: { status: number; body: { error?: { code: string; me
 describe("batch 18 section 1: re-accepting updated Terms of Use", () => {
   it("the version: stored at sign-up; the constant is 2 after section 2's change; the box's words", async () => {
     expect(TERMS_VERSION).toBe(2);
-    expect(TERMS_UPDATED_LINE).toBe("We updated our Terms of Use. Read what changed.");
+    expect(TERMS_UPDATED_LINE).toBe("We updated our Terms of Use. Read the Terms.");
     expect(TERMS_AGREE_LABEL).toBe("I agree to the updated Terms");
     expect(TERMS_CHANGED_HREF).toBe("/terms#what-changed");
     const r = await signUp({ email: `terms-${Date.now()}@test.playtest.test`, password: "longenough1", role: "tester", devices: ["Windows PC"], languages: ["English"], name: "Ana Silva", acceptTerms: "yes", over18: "yes" }, "http://localhost:3400");
@@ -110,7 +110,7 @@ describe("batch 18 section 1: re-accepting updated Terms of Use", () => {
 
   it("the pages: the box (link + tick) under Post the test and Join / Apply / Ask to rejoin, sending the tick with the press", () => {
     const box = src("components/TermsAgainBox.tsx");
-    // (Batch 20 section 21) One more tick above the button: "I agree to the updated Terms of Use. Read what changed".
+    // (Batch 20 section 21) One more tick above the button: "I agree to the updated Terms of Use. Read the Terms".
     expect(box).toContain("<span>{TERMS_TICK_LABEL} <a href={TERMS_CHANGED_HREF} target=\"_blank\" rel=\"noreferrer\">{TERMS_TICK_LINK}</a></span>");
     const join = src("app/app/find/[id]/JoinBox.tsx");
     expect(join).toContain("{termsAsk && <TermsAgainBox agreed={agreeTerms} onAgree={setAgreeTerms} red={termsErr} />}");
@@ -127,11 +127,12 @@ describe("batch 18 section 2: the Terms' content rule matches the Mature line", 
     expect(terms).not.toContain("No graphic content");
     expect(terms).toContain("\"Never allowed: sexual content involving minors, illegal content, real-world gore. Other graphic or mature content must be marked Mature (18+), with a reason.\"");
     expect(terms).toContain("Version {TERMS_VERSION} · DRAFT");
-    expect(terms).toContain("<details id={WHAT_CHANGED_ID}"); // (owner, Nov 2) a dropdown, latest version only; #what-changed opens it
+    expect(terms).toContain("<div id={WHAT_CHANGED_ID}");
+    expect(terms).not.toContain("What changed in version"); // (owner, Nov 2) a dropdown, latest version only; #what-changed opens it
     expect(terms).toContain("<HashJump />");
     expect(WHAT_CHANGED_ID).toBe("what-changed");
     expect(WHAT_CHANGED[0].version).toBe(TERMS_VERSION);
-    expect(WHAT_CHANGED[0].points[0]).toContain("Never allowed: sexual content involving minors, illegal content, real-world gore.");
+    expect(WHAT_CHANGED[0].points.some(p=>p.includes("Never allowed: sexual content involving minors, illegal content, real-world gore."))).toBe(true);
     // The same rule as Post / Edit's Mature line.
     expect(src("app/app/tests/TestForm.tsx")).toContain("Never allowed: sexual content involving minors, illegal content, real-world gore.");
   });

@@ -318,6 +318,6 @@ describe("the pages (section 19)", () => {
     expect(page).toContain("!y.review && !payShut(y.id)");
     expect(page).toContain("s.choiceOfferedAt && !chargeShut(s.id)");
     expect(page).toContain("!s.review && !chargeShut(s.id)");
-    expect(page).toContain("data-pay-closes");
+    expect(page).toContain("developerNeedsRows(userId,testIds,now)");
   });
 });

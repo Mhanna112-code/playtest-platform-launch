@@ -838,7 +838,7 @@ describe("batch 20 section 21: the updated-Terms tick sits above the button, wit
     expect(TERMS_TICK_MISSING).toBe("Tick to agree to the updated Terms of Use.");
     const { TermsAgainBox } = await import("@/components/TermsAgainBox");
     const box = html(createElement(TermsAgainBox, { agreed: false, onAgree: () => undefined }));
-    expect(box).toContain("I agree to the updated Terms of Use. <a href=\"/terms#what-changed\" target=\"_blank\" rel=\"noreferrer\">Read what changed</a>");
+    expect(box).toContain("I agree to the updated Terms of Use. <a href=\"/terms#what-changed\" target=\"_blank\" rel=\"noreferrer\">Read the Terms</a>");
     expect(box).not.toContain("18");
     const dev = await makeUser({ dev: true, name: "Nora Lane", termsVersion: TERMS_VERSION - 1 });
     const { listingBody } = await import("./fixtures");

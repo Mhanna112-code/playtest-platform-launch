@@ -125,6 +125,20 @@ export async function closeOutOf(testId: string, now = new Date()) {
   return windowEnd(base, await testSpans(t, base, now), now, CLOSE_OUT_DAYS).end;
 }
 
+/** The tester's rating countdown pauses while their disputes await a team decision. Payment and dispute close-outs are unchanged. */
+export async function testerRatingClosesAt(contractId: string, now = new Date()) {
+ const c=await db.contract.findUnique({where:{id:contractId},select:{testId:true}});
+ if(!c)return null;
+ const t=await db.test.findUnique({where:{id:c.testId},include:{developer:true,contracts:CONTRACTS}});
+ if(!t)return null;
+ const base=closeOutBase(t,t.contracts,now);
+ if(!base)return null;
+ const disputes=await db.dispute.findMany({where:{contractId,createdAt:{lte:now}},select:{createdAt:true,decidedAt:true,status:true}});
+ const disputeSpans=disputes.filter(d=>d.status!=="withdrawn").map(d=>({start:d.createdAt.getTime(),end:Math.min((d.status === "open" ? now : d.decidedAt ?? d.createdAt).getTime(),now.getTime()),open:d.status==="open"}));
+ const spans=mergeSpans([...await testSpans(t,base,now),...disputeSpans]);
+ return windowEnd(base,spans,now,CLOSE_OUT_DAYS).end;
+}
+
 /**
  * (Owner, final; Batch 17 §19) When Pay more closes: together with the last Pay / Charge on the test. One date per test: the test's close-out, or, when a piece's own
  * window runs later (14 days after its Charge opened, the developer's side as pieceCloseOut: the later of its tester's deadline and 7 days after sending), that later

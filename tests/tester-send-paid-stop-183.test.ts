@@ -149,6 +149,6 @@ describe("§183 adding recordings after a payment on the recording", () => {
 describe("§183 the Terms", () => {
   it("“Changes while you pay” says a payment on the part a tester is adding to stops her press once", () => {
     const c = PAYMENT_RULES.find((r) => r.heading === "Changes while you pay")!;
-    expect(c.text).toContain("A payment by the developer on a part the tester is sending more to (Send, Add to this answer, adding recordings) since the tester's page showed it also stops that press once, whatever the tester's Alerts.");
+    expect(c.text).toContain("A developer payment on a part the tester is adding to also stops their Send or Add press once, whatever their Alerts.");
   });
 });
