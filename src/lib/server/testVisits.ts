@@ -75,7 +75,7 @@ export async function visitedTests(testerId: string, now = new Date()) {
   const visits = await db.testVisit.findMany({
     where: { testerId, test: { status: { not: "draft" }, contracts: { none: { testerId } } } },
     orderBy: { visitedAt: "desc" },
-    include: { test: { include: { developer: { select: { id: true, name: true, email: true, deletedAt: true, holdStartedAt: true, devSuspendedAt: true } }, contracts: { where: { status: "working" }, select: { id: true } } } } },
+    include: { test: { include: { developer: { select: { id: true, name: true, email: true, deletedAt: true, holdStartedAt: true, devSuspendedAt: true, timeZone: true } }, contracts: { where: { status: "working" }, select: { id: true } } } } },
   });
   const partners = new Set(await blockPartners(testerId));
   const shown = visits.filter((v) => !partners.has(v.test.developerId));
@@ -92,6 +92,7 @@ export async function visitedTests(testerId: string, now = new Date()) {
     const t = v.test;
     const { state, label } = visitState(t, t.developer, t.contracts.length, { invited: invited.has(t.id), applied: applied.has(t.id) }, now);
     return {
+      test: t,
       testId: t.id,
       title: t.title,
       productName: t.productName,

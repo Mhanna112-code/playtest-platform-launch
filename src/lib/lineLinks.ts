@@ -2,7 +2,7 @@
 // `links: { text, href, kind }[]`; the client turns those exact substrings into green links (components/LineLinks.tsx). No JSX here: the server builds
 // the lists with the same code the client draws them with.
 
-export type LineLinkKind = "person" | "test";
+export type LineLinkKind = "person" | "test" | "part";
 /** (Owner, Nov 5, §270) A person or test named in a line: the name as the line writes it, and where it opens (a profile; the test page, a session page or the public page). */
 export type LineLink = { text: string; href: string; kind: LineLinkKind };
 

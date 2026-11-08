@@ -327,7 +327,7 @@ export async function paidRows(ps: Row[], side: "developer" | "tester"): Promise
     // (Owner, Nov 7, §327) A call with its date and time: "from Nora Lane for your live call on “Harbor Run” (Fri, Oct 30, 12:17 AM)".
     const when = callWhen(ctx, o);
     const what = `from ${displayName(c.test.developer)} for your ${ctx.partOf(o)} on “${c.title}”${when ? ` (${when})` : ""}${p.kind === "extra" ? " (extra pay)" : p.kind === "dispute" ? " (dispute decision)" : ""}`;
-    out.set(p.id, { what, full: what, how, testId: c.testId, reversed: false, links: linksIn(what, pool) });
+    out.set(p.id, { what, full: what, how, testId: c.testId, reversed: false, links: [...linksIn(what, pool), ...(o.callId||o.submissionId?[{ text: `your ${ctx.partOf(o)}`, kind: "part" as const, href: `/app/sessions/${c.id}#payment-${o.callId??o.submissionId}` }]:[])] });
   }
   return out;
 }

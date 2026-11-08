@@ -26,7 +26,7 @@ export function VisitedCard({ testId, title, children }: { testId: string; title
     }
   };
   return (
-    <li className="card card-hover relative flex flex-wrap items-center gap-3 p-4" data-visited={testId}>
+    <div className="relative space-y-1" data-visited={testId}>
       {children}
       <span className="relative z-10 inline-flex flex-col items-end gap-1">
         <button type="button" className="btn-ghost inline-flex items-center gap-1 px-2 py-1 text-xs" onClick={() => void remove()} aria-label={`Remove “${title}” from Tests visited`} data-remove-visit={testId}>
@@ -34,6 +34,6 @@ export function VisitedCard({ testId, title, children }: { testId: string; title
         </button>
         <Err text={err} press="Remove" />
       </span>
-    </li>
+    </div>
   );
 }

@@ -57,9 +57,9 @@ The queued-email context has an additive migration (20261107220000_deleted_remin
 
 See docs/marketing/NOV7-AUDIT.md for the original bounded code audit, email timing/coverage, and ratings/excerpts findings. Latest checks and commit IDs are reported in the chat; a full check with an unrelated storage-size timeout is not reported as green.
 
-## Later dashboard request — paused
+## Later dashboard request — resumed and implemented
 
-The owner requested earnings part links, expanded bell links, separate searchable/resizable message panels, shared Find/Previous/Visited cards, new developer filters (Stopped by admin and Stopped by you separately), and closing ratings after either account is deleted. These changes were paused at the owner's explicit request to finish earlier work first. Uncommitted implementation snapshots are retained under ignored scratch/paused-dashboard-request; they are not active or committed. Resume with focused tests and UI verification.
+The owner resumed all dashboard/message/link changes and added local panel search, simpler To do rows and Needs you eligibility matching the test page. See [dashboard changes](NOV7-DASHBOARD-CHANGES.md) for the final scope, behavior and validation. The earlier untracked snapshots are historical only; the current implementation is in the branch. Automatic sign-out and password changes remain deferred.
 
 ## Highlight reels
 

@@ -19,6 +19,10 @@ export function bellWords(text: string, test?: string): ReactNode {
   if (!test || !text.includes(test)) return keepAmounts(text);
   return text.split(test).map((part, i) => <Fragment key={i}>{i > 0 && <span className="text-volt-300" data-test-name="">{test}</span>}{keepAmounts(part)}</Fragment>);
 }
+/** Expanded words retain independent person/test links and the exact destination on every other word. */
+export function FullBellLine({line:l,onRead}: {line:BellLine;onRead:()=>void}) {
+ return <span className="block whitespace-pre-wrap break-words" data-bell-full={l.id}>{withLineLinks(l.text,l.links,{rest:l.href||null,restClass:"text-inherit no-underline hover:underline",onClick:onRead,Anchor:Link})}</span>;
+}
 export type BellEntry = { key: string; title?: string; day?: string; lines: BellLine[]; /** (batch 14) the title already counts: no "N updates" */ counted?: boolean; /** (Owner, Nov 3) the title is a test's name (cut at NAME_CUT, 20 characters; owner, Nov 5, §203: was 12), not a kind of update */ test?: boolean;
   /** (Owner, Nov 5, §270) where the title's test name opens (its own green link) */ testHref?: string };
 
@@ -57,7 +61,7 @@ export function BellList({ entries }: { entries: BellEntry[] }) {
     // (Owner, Nov 5, §270) A line naming people or tests: each is its own green link (opened and closed); closed, the rest of the words still open the line's place,
     // side by side with them (never nested); whichever piece is pressed marks the line read.
     const linked = !!l.links?.length;
-    const all = <span className="block whitespace-pre-wrap break-words" data-bell-full={l.id}>{linked ? withLineLinks(l.text, l.links, { onClick: () => markRead([l]), Anchor: Link }) : bellWords(l.text, l.test)}</span>;
+    const all = <FullBellLine line={l} onRead={()=>markRead([l])} />;
     const words = wide ? (opensInBox(l.text) ? <OwnPanel><ResizeBox id={`bell-${l.id}`} label="The whole line" defaultMax="6rem" tallest={0.5}>{all}</ResizeBox></OwnPanel> : all) : bellWords(short ?? l.text, l.test);
     const look = `flex-1 min-w-0 ${isRead(l) ? "text-slate-400" : "font-semibold text-slate-100"}`;
     const pieces = linked && !wide ? withLineLinks(short ?? l.text, l.links, { rest: l.href || null, restClass: "text-inherit no-underline hover:underline", onClick: () => markRead([l]), Anchor: Link }) : null;

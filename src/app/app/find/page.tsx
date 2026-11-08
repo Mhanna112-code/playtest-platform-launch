@@ -1,25 +1,26 @@
-import { Cut, TestName } from "@/components/Cut";
+import { FindTestCard } from "@/components/FindTestCard";
+
 import { withDateZone } from "@/lib/server/dateZone";
 import { fmtDateIn } from "@/lib/format";
 import { discoveryV } from "@/lib/server/pageFreshness";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { fmtIn } from "@/lib/tz";
 import Link from "next/link";
-import { keepAmounts } from "@/components/Amounts";
-import { Languages, Monitor, SearchX } from "lucide-react";
+
+import { SearchX } from "lucide-react";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
-import { CategoryBadges } from "@/components/Category";
-import { CategoryTile, mainCategory, PartBadges } from "@/components/Ui";
-import { displayName, money } from "@/lib/server/dateFormat";
+
+
+import { displayName } from "@/lib/server/dateFormat";
 import { ratingSummary } from "@/lib/server/ratings";
-import { byMostTimeToFinish, perTesterLine, termsLine, testerDaysOf, testerShare } from "@/lib/rules";
+import { byMostTimeToFinish, perTesterLine, termsLine, testerDaysOf } from "@/lib/rules";
 import { requireOpenPage } from "@/lib/server/page-auth";
 import { asListing, findTests, joinedContract, needsLines } from "@/lib/server/tests";
 import { exactFirst } from "@/lib/nameSearch";
 import { isAdmin } from "@/lib/server/session";
 import { adminFindTests, ADMIN_FIND_LIMIT } from "@/lib/server/findSearch";
-import { findQuery, noFindMatchLine, statesFrom, type TestState } from "@/lib/findSearch";
+import { findQuery, noFindMatchLine, statesFrom } from "@/lib/findSearch";
 import { FindSearch, StateTicks } from "./FindSearch";
 import { CategoryTicks, FindFilters } from "./FindFilters";
 import { filtersHidLine, findEmpty, findHref, oneOf, passesTicks, profileHidLine, profileTicks, ticksFrom, type FindLink, type FindSp } from "@/lib/findFilters";
@@ -31,23 +32,6 @@ export const dynamic = "force-dynamic";
 const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
 
 /** (Batch 17 section 8) The state badge on an admin's card. */
-const STATE_TONE: Record<TestState, string> = {
-  Open: "border-emerald-400/40 text-emerald-200",
-  Full: "border-amber-300/40 text-amber-200",
-  "Joining closed": "border-amber-300/40 text-amber-200",
-  Paused: "border-sky-300/40 text-sky-200",
-  Stopped: "border-rose-300/40 text-rose-200",
-  Closed: "border-rose-300/40 text-rose-200",
-  Draft: "border-white/20 text-slate-300",
-  "Invite only": "border-indigo-400/40 text-indigo-200",
-};
-
-/** The cheapest fixed part (what the tester gets), else the live rate: the big "from $8.00" figure on a card. */
-function fromText(t: { writtenCents: number | null; recordingCents: number | null; liveRateCents: number | null }) {
-  const fixed = [t.writtenCents, t.recordingCents].filter((c): c is number => c != null);
-  if (fixed.length) return `from ${money(testerShare(Math.min(...fixed)))}`.replace("from $0.00", "free");
-  return t.liveRateCents != null ? (t.liveRateCents === 0 ? "free" : `${money(testerShare(t.liveRateCents))}/h`) : "free";
-}
 const topPrice = (t: { writtenCents: number | null; recordingCents: number | null; liveRateCents: number | null }) => Math.max(t.writtenCents ?? 0, t.recordingCents ?? 0, t.liveRateCents ?? 0);
 
 export default async function FindPage({ searchParams }: { searchParams: Promise<FindSp> }) {
@@ -141,46 +125,7 @@ export default async function FindPage({ searchParams }: { searchParams: Promise
             const left = t.spots - t._count.contracts;
             const state = "state" in t ? t.state : null;
             return (
-              // (Owner, Nov 3, long text) min-w-0: a long title is cut with "…" inside the card instead of widening the grid past the screen.
-              <li key={t.id} className="min-w-0">
-                <Link href={mine ? `/app/sessions/${mine.id}` : `/app/find/${t.id}`} data-find-card={mine ? "joined" : undefined} className="card card-hover flex h-full gap-4 text-ink-100 no-underline hover:no-underline">
-                  <CategoryTile category={mainCategory(t.categories)} />
-                  <div className="min-w-0 flex-1 space-y-2">
-                    {/* (Owner, Nov 3, long text) The pay never shrinks or splits: beside the title when there is room (at most half the card), under it on a
-                        phone. The title keeps at least 10rem and is cut with "…". */}
-                    <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
-                      <div className="min-w-[min(100%,10rem)] flex-1">
-                        {t.productName && <p className="kicker"><Cut text={t.productName} kind="product" /></p>}
-                        <p className="font-semibold"><TestName text={t.title} /></p>
-                          <p className="text-sm text-slate-400 [overflow-wrap:anywhere]">by <Cut text={displayName(t.developer)} />{"previousName" in t && typeof t.previousName === "string" && <span> · previously {t.previousName}</span>}{devRatings.get(t.developerId) && ` · ${devRatings.get(t.developerId)}`}</p>
-                      </div>
-                      <div className="ml-auto max-w-full shrink-0 text-right sm:max-w-[50%]">
-                        <p className="whitespace-nowrap text-lg font-bold text-emerald-300">{fromText(t)}</p>
-                        <p className="text-xs text-slate-400">{keepAmounts(termsLine(asListing(t), true))}</p>
-                        {!mine && <p className="text-xs text-slate-500">{admin ? `${Math.max(0, left)} of ${t.spots} spots open` : `${plural(left, "spot")} open to you`}</p>}
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {state && <span className={`badge ${STATE_TONE[state]}`} data-test-state={state}>{state}</span>}
-                      {mine && <span className="badge border-emerald-400/40 text-emerald-200" data-find-joined="">Joined</span>}
-                      <CategoryBadges categories={t.categories} />
-                      <PartBadges written={t.writtenCents != null} recording={t.recordingCents != null} live={t.liveRateCents != null} />
-                      {t.devices.length > 0 && <span className="badge" title={t.devices.join(" · ")}><Monitor className="h-3.5 w-3.5" /> {t.devices.slice(0, 3).join(" · ")}{t.devices.length > 3 ? ` +${t.devices.length - 3} more` : ""}</span>}
-                      {t.languages.length > 0 && <span className="badge" title={t.languages.join(" · ")}><Languages className="h-3.5 w-3.5" /> {t.languages.slice(0, 3).join(" · ")}{t.languages.length > 3 ? ` +${t.languages.length - 3} more` : ""}</span>}
-                      {state !== "Invite only" && <span className="badge">{t.joinMode === "invite" ? "Invitation only" : t.joinMode === "apply" ? "Approved only" : "Anyone can join"}</span>}
-                      {/* (Batch 15 section 18) "14 days per tester · join by Nov 20" */}
-                      {t.openUntil && <span className="badge" data-per-tester="">{perTesterLine(t.testerDays ?? testerDaysOf(t.createdAt, t.openUntil, t.developer.timeZone), t.openUntil, (d) => fmtIn(t.developer.timeZone, d, "date"))}</span>}
-                      {t.mature && <span className="badge border-rose-300/40 text-rose-200">Mature (18+)</span>}
-                      {t.ndaText && <span className="badge">NDA</span>}
-                      {invitedTo.has(t.id) && <span className="badge border-emerald-400/40 text-emerald-200">Invited</span>}
-                    </div>
-                    {admin && <p className="text-xs text-slate-500">Posted {fmtDate(t.createdAt)}</p>}
-                    {!mine && "contracts" in t && t.contracts.some((c) => c.status === "left") && <p className="note">You left this test</p>}
-                    {gaps.slice(0, 3).map((g) => <p key={g} className="text-sm text-amber-300" title={g}>{g}</p>)}
-                    {gaps.length > 3 && <p className="text-sm text-amber-300">+{gaps.length - 3} more</p>}
-                  </div>
-                </Link>
-              </li>
+              <li key={t.id} className="min-w-0"><FindTestCard test={t} href={mine?`/app/sessions/${mine.id}`:`/app/find/${t.id}`} developerName={displayName(t.developer)} previousName={"previousName" in t && typeof t.previousName==="string"?t.previousName:undefined} rating={devRatings.get(t.developerId)} terms={termsLine(asListing(t),true)} state={state??undefined} joined={!!mine} invited={invitedTo.has(t.id)} spots={mine?undefined:admin?`${Math.max(0,left)} of ${t.spots} spots open`:`${plural(left,"spot")} open to you`} gaps={gaps} days={t.openUntil?perTesterLine(t.testerDays??testerDaysOf(t.createdAt,t.openUntil,t.developer.timeZone),t.openUntil,d=>fmtIn(t.developer.timeZone,d,"date")):undefined} footer={<>{admin&&<p className="text-xs text-slate-500">Posted {fmtDate(t.createdAt)}</p>}{!mine&&"contracts" in t&&t.contracts.some(c=>c.status==="left")&&<p className="note">You left this test</p>}</>}/></li>
             );
           })}
         </ul>

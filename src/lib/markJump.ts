@@ -67,7 +67,7 @@ const RETIRED = /^(call-history|calls-booked-[\w-]+)$/;
  * (Owner, Oct 30, batch 35 §7) Where a link goes when its target isn't on the page: a sent piece ("piece-<id>", in Needs you) that was paid since is shown on its
  * tester's row ("part-<id>", the part's line there). The first of these on the page wins.
  */
-export const hashTargets = (id: string) => (id.startsWith("piece-") ? [id, `part-${id.slice("piece-".length)}`] : RETIRED.test(id) ? [id, "live"] : lineFallbacks(id));
+export const hashTargets = (id: string) => (id === "needs-review" ? [id,"needs-you","your-tests"] : id === "needs-you" ? [id,"your-tests"] : ["suspended-tests","rejoin","history"].includes(id) ? [id,"previous-tests"] : id.startsWith("piece-") ? [id, `part-${id.slice("piece-".length)}`] : RETIRED.test(id) ? [id, "live"] : lineFallbacks(id));
 /** (Owner, Nov 6, §284) Jump to a line's place, or the first fallback on the page (a request whose row has left: its Call requests box). */
 export const jumpToFirst = (id: string) => jumpTo(hashTargets(id).find((t) => document.getElementById(t)) ?? id);
 

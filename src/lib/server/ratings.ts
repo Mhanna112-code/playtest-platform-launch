@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { notListed } from "./shownLines";
 import { T } from "@/lib/tz";
@@ -52,6 +53,7 @@ export async function rateBlocker(contractId: string, side: Side, now = new Date
 /** (Batch 17 sections 1 and 2) The tester's Rate box. */
 export async function testerRateState(contractId: string, now = new Date()): Promise<RateState> {
   const c = await db.contract.findUniqueOrThrow({ where: { id: contractId }, include: { tester: true, test: { include: { developer: true } }, submissions: { include: { review: true } }, calls: { include: { review: true } } } });
+  if (c.tester.deletedAt || c.test.developer.deletedAt) return { kind: "hidden", line: "Rating is unavailable because an account was deleted." };
   if (await db.rating.findUnique({ where: { contractId_side: { contractId, side: "tester" } } })) return { kind: "rated", line: "" };
   if (c.tester.testerSuspendedAt) return { kind: "hidden", line: RATE_INACTIVE };
   const done = c.calls.filter((x) => x.status === "booked" && x.startsAt <= now);
@@ -111,7 +113,8 @@ export async function devRateStates(contractIds: string[], now = new Date()) {
     // unsettled that long) doesn't hold it back past those 14 days.
     const revealAt = !theirs ? null : (theirs.revealedAt ?? (opensAt && w && opensAt.getTime() <= theirs.createdAt.getTime() + WINDOW_DAYS * DAY ? w.end : new Date(theirs.createdAt.getTime() + WINDOW_DAYS * DAY)));
     const base = { opensAt, endsAt: w?.end ?? null, paused: w?.paused ?? false, revealAt };
-    if (mine) out.set(c.id, { kind: "rated", line: "", ...base });
+    if (dev.deletedAt || c.tester.deletedAt) out.set(c.id, { kind: "hidden", line: "Rating is unavailable because an account was deleted.", ...base });
+    else if (mine) out.set(c.id, { kind: "rated", line: "", ...base });
     else if (dev.devSuspendedAt || dev.holdStartedAt) out.set(c.id, { kind: "hidden", line: RATE_INACTIVE, ...base });
     // (Owner, Nov 4, §172; replaces batch 17 §14) A test the team paused: hidden and refused like a suspended developer's Rate, with the team's wording.
     else if (teamPausedNow(c.test)) out.set(c.id, { kind: "hidden", line: RATE_TEAM_PAUSED, ...base });
@@ -254,6 +257,11 @@ function refuse(s: RateState, already: string): never {
   throw new HttpError(409, s.line === RATE_INACTIVE || s.line === RATE_TEAM_PAUSED ? "inactive" : "not_yet", s.line);
 }
 
+async function assertRatingAccounts(tx: Prisma.TransactionClient, first: string, second: string) {
+ await tx.$queryRaw`SELECT id FROM "User" WHERE id IN (${first}, ${second}) ORDER BY id FOR UPDATE`;
+ if(await tx.user.count({where:{id:{in:[first,second]},deletedAt:{not:null}}})) throw new HttpError(409,"deleted","Rating is unavailable because an account was deleted.");
+}
+
 /** Tester rates the developer. Like Leave (no rejoin ever); Dispute stays. Hidden until revealed. */
 export async function testerRate(tester: { id: string; name: string; email: string; pronoun?: string }, contractId: string, body: Record<string, unknown>) {
   const c0 = await ownContract(tester.id, contractId);
@@ -263,6 +271,7 @@ export async function testerRate(tester: { id: string; name: string; email: stri
   await testerRateGate(tester.id, contractId, c0.testId, body);
   await db.$transaction(async (tx) => {
     await lockTest(tx, c0.testId);
+    await assertRatingAccounts(tx, tester.id, c0.test.developerId);
     await tx.rating.create({ data: { testId: c0.testId, contractId, side: "tester", raterId: tester.id, rateeId: c0.test.developerId, ...r } });
     const c = await tx.contract.findUniqueOrThrow({ where: { id: contractId } });
     const wasWorking = c.status === "working";
@@ -297,6 +306,7 @@ export async function devRate(dev: { id: string; name: string; email: string }, 
   const now = new Date();
   await db.$transaction(async (tx) => {
     await lockTest(tx, testId);
+    await assertRatingAccounts(tx, dev.id, c0.testerId);
     await tx.rating.create({ data: { testId, contractId, side: "developer", raterId: dev.id, rateeId: c0.testerId, ...r, revealedAt: now } });
     await tx.rating.updateMany({ where: { contractId, side: "tester", revealedAt: null }, data: { revealedAt: now } });
   }).catch(ratedOnce(`You already rated ${displayName(c0.tester)}.`));

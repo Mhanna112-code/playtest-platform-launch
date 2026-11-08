@@ -1,3 +1,4 @@
+import { developerNeedsRows } from "@/lib/server/dashboardNeeds";
 import { RejoinTag } from "@/components/RejoinTag";
 import { withLineLinks } from "@/components/LineLinks";
 import { NameLink } from "@/components/Cut";
@@ -446,7 +447,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   ) : null;
   if (restricted) {
     // (Owner, Nov 4, §172; replaces batch 17 §14) No Rate here: a test the team paused hides Rate as a suspension does.
-    const restrictedNeeds = bankRows.length + bookedAhead.length + excerptReqs.length + disputesWaiting.length;
+    const restrictedNeeds = (await developerNeedsRows(u.id,[t.id],now))[0]?.n??0;
     const restrictedPeople = needsPeople(t.contracts.flatMap((c) => {
       const calls = bookedAhead.filter((x) => x.contractId === c.id);
       return [
@@ -505,7 +506,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   // (Batch 30 §2) Updated versions sent after a piece was paid, below its cap while Pay more is open: each its own Needs you row with the piece's Pay more box.
   const updates = restricted || !payMore.open ? [] : t.contracts.filter((c) => testerPayable(c.tester)).flatMap((c) => c.submissions.filter((x) => updateWaiting(x) && (rooms.get(x.id)?.room ?? 0) > 0).map((x) => ({ c, s: x })))
     .sort((a, b) => a.s.paidUpdateAt!.getTime() - b.s.paidUpdateAt!.getTime());
-  const needsCount = bankRows.length + updates.length + pieces.length + apps.length + needsRequests.length + disputesWaiting.length + excerptReqs.length + rateNeeds.length;
+  const needsCount = (await developerNeedsRows(u.id,[t.id],now))[0]?.n??0;
   // (Owner, Nov 4, §181) "the parts should have big drop down with their name then part and pay/pay more as own dropdowns": in the person's drop-down each part is a
   // drop-down of its own (closed; the plain part name: "Written answers", "Recording", "Live call on <date>"), holding what it held before (its sent / updated
   // line, its payments, the answers or recordings with their "Added · date" lines) and, last, its Pay (or Pay more, for an update sent after paying) as one more

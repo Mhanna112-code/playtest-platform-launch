@@ -1,3 +1,12 @@
+import { TodoTestRow } from "@/components/TodoTestRow";
+import { developerNeedsRows } from "@/lib/server/dashboardNeeds";
+import { ScopedPanelSearch } from "@/components/ScopedPanelSearch";
+
+
+
+import { FindTestCard } from "@/components/FindTestCard";
+import { SearchPanel } from "@/components/SearchPanel";
+import { PREVIOUS_TEST_FILTERS, previousTestGroup, developerTestGroups } from "@/lib/dashboardPanels";
 import { Cut, NameLink, TestName } from "@/components/Cut";
 import { withDateZone } from "@/lib/server/dateZone";
 import { fmtDateTimeIn } from "@/lib/format";
@@ -6,14 +15,14 @@ import { dashboardV } from "@/lib/server/pageFreshness";
 import { DashboardActionBox } from "./DashboardActionBox";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowRight, Award, CalendarClock, CheckCircle2, Clock, Compass, FileSignature, Hourglass, Inbox, KeyRound, LayoutGrid, ListTodo, MessagesSquare, PlusCircle, RotateCcw, Users, Wallet, XCircle, AppWindow, Banknote } from "lucide-react";
+import { ArrowRight, Award, CalendarClock, CheckCircle2, Clock, Compass, FileSignature, Hourglass, Inbox, KeyRound, LayoutGrid, ListTodo, MessagesSquare, PlusCircle, Users, Wallet, AppWindow, Banknote } from "lucide-react";
 import { db } from "@/lib/db";
 import { compact, compactMoney, displayName, fmtDate, fmtDateTime, money, num } from "@/lib/server/dateFormat";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { invitesV } from "@/lib/server/pulseV";
 import { RatingsToGive } from "./RatingsToGive";
-import { WholeLine } from "@/components/WholeLine";
-import { cutNamesIn, offerLine } from "@/lib/cutNames";
+
+
 import { BankToConfirm } from "./BankToConfirm";
 import { LiveTop } from "@/components/LiveTop";
 import { adminAway, requirePageUser } from "@/lib/server/page-auth";
@@ -23,12 +32,12 @@ import { ProfileForm } from "./profile/ProfileForm";
 import { NoThanks } from "./NoThanks";
 import { DeveloperTiles } from "@/components/ProfileTiles";
 import { StatTile } from "@/components/StatTile";
-import { CategoryBadges } from "@/components/Category";
-import { CategoryChips, CategoryTile, daysLeft, FeedbackBar, mainCategory, PartBadges, Seats, StatusPill } from "@/components/Ui";
-import { callCharge, callJoinable, canAskToRejoin, chargeAmount, termsLine, testerShare, testPaused, STOP_NOTE_KIND, stopReasonOf, chargeOpensAt, chargeOpensNote } from "@/lib/rules";
+
+import { CategoryChips, CategoryTile, FeedbackBar, mainCategory, PartBadges, Seats, StatusPill } from "@/components/Ui";
+import { callCharge, callJoinable, canAskToRejoin, chargeAmount, termsLine, testerShare, testPaused, chargeOpensAt, chargeOpensNote } from "@/lib/rules";
 import { ratingSummary } from "@/lib/server/ratings";
 import { unreadCount } from "@/lib/server/messages";
-import { asListing, findTests, profileSaved } from "@/lib/server/tests";
+import { asListing, profileSaved } from "@/lib/server/tests";
 import { RestrictedBox } from "@/components/RestrictedBox";
 import { ExcerptDecision } from "@/components/Excerpts";
 import { pendingForDeveloper } from "@/lib/server/excerpts";
@@ -41,29 +50,29 @@ import { JoinCall } from "@/components/JoinCall";
 import { ReasonQuote } from "@/components/ScrollText";
 import { DisputeSide } from "./tests/[id]/DisputeSide";
 import { disputesForSide } from "@/lib/server/disputes";
-import { DismissRemoved } from "./DismissRemoved";
+
 import { LIST_PANEL, ScrollList } from "@/components/ScrollList";
 import { Fold, ResizeBox } from "@/components/Panel";
-import { DevSearch, DevSearchHit, DevSearchList } from "./DevSearch";
+
 import { YourTestsSearch } from "./YourTestsSearch";
 import { TestsVisited } from "./TestsVisited";
-import { devSearchRows } from "@/lib/server/testerSearch";
+
 import { answerable, rejoinAskLine } from "@/lib/server/joining";
 import { pronouns } from "@/lib/format";
 import { chargebackSteps } from "@/lib/server/chargeback";
 import { PAUSE_CLOSE_DAYS, pauseReasons } from "@/lib/pause";
 import { HOLD_APPROVAL_AFTER, REVIEW_DAYS, joiningClosedLine, testerPayable } from "@/lib/rules";
-import { closeOutSoon, payClosesLine, testTitleOf } from "@/lib/rules";
-import { closedOut, pieceCloseOut } from "@/lib/server/closeOut";
+import { testTitleOf } from "@/lib/rules";
+import { closeOutOf, closedOut, pieceCloseOut } from "@/lib/server/closeOut";
 import { updateRoomLeft } from "@/lib/server/paidUpdates";
 import { lateSentLine, pieceDay, updateWaiting } from "@/lib/moneyLines";
 import { GetStarted } from "./GetStarted";
-import { keepAmounts } from "@/components/Amounts";
-import { HistorySearch } from "./HistorySearch";
+
+
 
 export const metadata = { title: "Home · Playtest" };
-import { callIsOver, callMinutesOf, callOverBadge } from "@/lib/callMeasure";
-import { fmtTime } from "@/lib/server/dateFormat";
+import { callMinutesOf } from "@/lib/callMeasure";
+
 export const dynamic = "force-dynamic";
 
 /** A card's one link, stretched over the whole card (the full app's CARD_LINK). */
@@ -202,6 +211,7 @@ async function DeveloperDashboard({ user, now, category, restricted }: { user: V
     include: { contracts: { include: { tester: true, submissions: { include: { review: true, dispute: true } }, calls: { include: { review: true, dispute: true } } } }, _count: { select: { accessKeys: true } } },
   });
   const testIds = allTests.map((t) => t.id);
+  const closedTests = new Map(await Promise.all(allTests.map(async t=>[t.id,closedOut(await closeOutOf(t.id,now),now)] as const)));
   // (Batch 17 §19) A piece whose Pay closed (its own closing date) has nothing left to pay: it leaves Needs review (and the count); in its last 7 days the test's row
   // says when Pay closes (the soonest such piece).
   const unpaidKeys: { submissionId?: string; callId?: string }[] = allTests.flatMap((t) => t.contracts.flatMap((c) => [...c.submissions.filter((x) => !x.review).map((x) => ({ submissionId: x.id })), ...c.calls.filter((y) => y.status === "booked" && callMinutesOf(y) != null && !y.review).map((y) => ({ callId: y.id }))]));
@@ -259,15 +269,7 @@ async function DeveloperDashboard({ user, now, category, restricted }: { user: V
   const toReview = items.filter((i) => i.key.startsWith("s-") || i.key.startsWith("c-")).length;
   // (Owner, Oct 27) Sent work and held calls waiting for Pay / Reject are in the "Needs review" box (one row per test); Needs you keeps the answers. Under a suspension or a hold
   // the pages these lead to are closed: neither box is shown.
-  const shown = restricted ? [] : items.filter((i) => !/^s-|^c-/.test(i.key));
-  const reviewRows = restricted ? [] : allTests
-    .map((t) => {
-      const mine = items.filter((i) => /^s-|^c-/.test(i.key) && i.href.startsWith(`/app/tests/${t.id}#`));
-      const closes = mine.map((i) => payCloses.get(i.key.slice(2)) ?? null).filter((d): d is Date => closeOutSoon(d, now)).sort((a, b) => a.getTime() - b.getTime())[0];
-      return { id: t.id, title: t.title, n: mine.length, at: mine.reduce((m, i) => (i.at > m ? i.at : m), new Date(0)), closes: closes ? payClosesLine(fmtDate(closes)) : "" };
-    })
-    .filter((r) => r.n > 0)
-    .sort((a, b) => b.at.getTime() - a.at.getTime());
+  const reviewRows = (await developerNeedsRows(userId,testIds,now)).filter(r=>r.n>0).sort((a,b)=>b.at.getTime()-a.at.getTime());
   const testersTotal = allTests.reduce((n, t) => n + t.contracts.filter((c) => c.status === "working").length, 0);
   const invitesBy = new Map(invites.map((i) => [i.testId, i._count._all]));
   const appsBy = new Map<string, number>();
@@ -290,46 +292,11 @@ async function DeveloperDashboard({ user, now, category, restricted }: { user: V
       {/* (Batch 17 section 17) Every rating the developer can give now (hidden while suspended or on a hold). */}
       <RatingsToGive user={user} side="developer" />
 
-      {/* (Owner, Oct 31, batch 35 §96) ONE Needs you: the per-test "N parts to pay" rows (what was "Needs review") first, then everything else, in one scroll box. */}
-      {shown.length + reviewRows.length > 0 && (
-        <section className="card space-y-3" id="needs-you">
-          <h2 className="flex items-center gap-2 text-lg font-semibold text-white">
-            <span className="h-2 w-2 rounded-full bg-amber-400" /> Needs you <span className="text-sm font-normal text-slate-400">{num(shown.length + reviewRows.length)}</span>
-          </h2>
-          {/* Newest first, every item in a plain scroll box (batch 16 section 14). */}
-          <ScrollList className="space-y-2" label="Needs you">
-            {reviewRows.map((r) => (
-              <li key={`review-${r.id}`} id="needs-review" data-needs-review={r.id}>
-                <Link href={`/app/tests/${r.id}#needs-you`} className="rounded-lg border border-white/10 flex items-center gap-3 p-3 no-underline transition-colors hover:bg-white/5 hover:no-underline">
-                  <p className="min-w-0 flex-1 text-slate-300 [overflow-wrap:anywhere]"><b><TestName text={r.title} /></b> · {plural(r.n, "part")} to pay{r.closes && <span className="text-slate-400" data-pay-closes=""> · {r.closes}</span>}</p>
-                  <span className="flex shrink-0 items-center gap-1 text-sm text-indigo-300">Review <ArrowRight className="h-4 w-4" /></span>
-                </Link>
-              </li>
-            ))}
-            {shown.map((r) => {
-              const inner = (
-                <>
-                  {/* (Owner, Nov 6, §326) No profile circle on these rows (it was the initial in a volt→sky circle): the words, the names' links and the action. */}
-                  {/* (Owner, Nov 3, long text) The words keep at least 12rem: with a long name the action drops onto its own line (right-aligned) instead of
-                      squeezing them into a narrow column. */}
-                  <p className="min-w-[min(100%,12rem)] flex-1 text-slate-300"><span className="font-medium text-white"><NameLink text={r.who} href={r.whoHref} /></span> {r.text}</p>
-                  {/* (Batch 35 §137) The row's link lies over the card; the names' own links sit above it. */}
-                  <Link href={r.href} className={`ml-auto flex shrink-0 items-center gap-1 whitespace-nowrap text-sm text-indigo-300 no-underline hover:no-underline ${CARD_LINK}`}>{r.cta} <ArrowRight className="h-4 w-4" /></Link>
-                </>
-              );
-              return (
-                <li key={r.key}>
-                  <div className="relative flex flex-wrap items-center gap-3 rounded-lg border border-white/10 p-3 transition-colors hover:bg-white/5" data-needs-row="">{inner}</div>
-                </li>
-              );
-            })}
-          </ScrollList>
-        </section>
-      )}
+      {reviewRows.length>0&&<SearchPanel id="needs-you" title="Needs you" placeholder="Search Needs you by test" items={reviewRows.map(r=>({key:r.id,search:r.title,node:<Link href={`/app/tests/${r.id}#needs-you`} className="flex items-center gap-3 rounded-lg border border-white/10 p-3 no-underline hover:bg-white/5"><span className="min-w-0 flex-1 font-bold"><TestName text={r.title}/></span><span>Review →</span></Link>}))}/>}
 
       <CallsBox calls={calls} seenAt={seenAt} restricted={restricted} />
 
-      <section className="space-y-3">
+      <section className="space-y-3" id="your-tests">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="flex items-center gap-2 text-lg font-semibold text-white"><LayoutGrid className="h-5 w-5 text-volt-300" /> Your tests</h2>
           {Object.keys(categoryCounts).length > 1 && <CategoryChips basePath="/app" params={{ category }} counts={categoryCounts} total={allTests.length} />}
@@ -356,7 +323,7 @@ async function DeveloperDashboard({ user, now, category, restricted }: { user: V
               // (Owner, Nov 3, batch 35 §168) A Next round's draft not named yet: "Untitled draft (round 2)".
               const title = <span className="text-lg font-semibold" {...(t.title.trim() ? {} : { "data-untitled-draft": "" })}><TestName text={testTitleOf(t)} /></span>;
               return {
-                key: t.id, title: testTitleOf(t), product: t.productName, node: (
+                key: t.id, title: testTitleOf(t), product: t.productName, states: developerTestGroups(t, paused, closedTests.get(t.id)??false), node: (
                 <>
                   {/* The whole card opens the test (its title's link stretches over it); a suspended developer's cards don't open. */}
                   <div className="card card-hover relative block h-full space-y-4" data-test-card={t.status === "stopped" ? "stopped" : paused ? "paused" : t.status}>
@@ -434,20 +401,14 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
     include: { test: { include: { developer: true } }, submissions: { include: { review: true } }, calls: { where: { status: "booked", startsAt: { gt: now, lte: new Date(now.getTime() + 7 * DAY) } } } },
   });
   const ids = contracts.map((c) => c.id);
-  const [offers, allOffers, devReqs, apps, paid, rating, invites, unreadList, recommended, ratedIds, payments] = await Promise.all([
-    db.termsOffer.findMany({ where: { contractId: { in: ids }, status: "open" } }),
-    db.termsOffer.findMany({ where: { contractId: { in: ids } }, orderBy: { createdAt: "asc" } }),
-    db.callRequest.findMany({ where: { contractId: { in: ids }, status: "pending", fromSide: "developer", startsAt: { gt: now } } }),
+  const [apps, paid, rating, invites, ratedIds, payments] = await Promise.all([
     db.application.findMany({ where: { testerId: userId, status: "pending" }, orderBy: { createdAt: "desc" } }),
     db.payment.aggregate({ where: { testerId: userId, kind: { not: "subscription" }, status: { in: ["charged", "not_set_up"] } }, _sum: { testerCents: true } }),
     ratingSummary(userId, "tester"), // (Owner, Nov 5, §276) the tester dashboard's Rating tile: ratings they got as a tester only
     db.invite.findMany({ where: { testerId: userId, status: "sent", test: { status: "open" } }, orderBy: { createdAt: "desc" }, include: { test: { include: { developer: true, _count: { select: { contracts: { where: { status: "working" } } } } } } } }),
-    Promise.all(contracts.map(async (c) => [c.id, await unreadCount(userId, c.testId, c.testerId)] as const)),
-    suspended ? Promise.resolve([] as Awaited<ReturnType<typeof findTests>>) : findTests(user),
     db.rating.findMany({ where: { contractId: { in: ids }, side: "tester" }, select: { contractId: true } }),
     db.payment.findMany({ where: { contractId: { in: ids } }, orderBy: { createdAt: "asc" } }),
   ]);
-  const unread = new Map(unreadList);
   const rated = new Set(ratedIds.map((r) => r.contractId));
   // (Batch 16 section 32) An invite re-sent on a new listing (an earlier one of theirs on that test was replaced).
   const replacedOn = new Set((await db.invite.findMany({ where: { testerId: userId, status: "replaced", testId: { in: invites.map((i) => i.testId) } }, select: { testId: true } })).map((r) => r.testId));
@@ -458,22 +419,13 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
   const waitingApps = apps.filter((a) => !invites.some((i) => i.testId === a.testId));
   const appTests = new Map((await db.test.findMany({ where: { id: { in: [...apps, ...inviteOnlyApps].map((a) => a.testId) } }, include: { developer: true } })).map((t) => [t.id, t]));
   const byId = new Map(contracts.map((c) => [c.id, c]));
-  const working = contracts.filter((c) => c.status === "working");
-  const history = contracts.filter((c) => c.status !== "working");
+  const working = contracts.filter((c) => c.status === "working" && previousTestGroup(c)===null);
   const pausedTest = (t: { adminPausedAt: Date | null; developer: { holdStartedAt: Date | null; devSuspendedAt: Date | null } }) => testPaused(t.developer, t);
   const byEnd = (a: (typeof contracts)[number], b: (typeof contracts)[number]) => (b.endedAt ?? b.joinedAt).getTime() - (a.endedAt ?? a.joinedAt).getTime();
   // (Owner, Oct 28) Tests the team's suspension removed the tester from: while suspended a read-only list; after reinstatement (no automatic re-invite) they sit at the top with
   // "You were removed from this test" and Ask to rejoin (only while the test is open, has a spot and isn't paused), until they ask or dismiss them. The developer can also invite
   // them again as usual (the invite shows under Invitations). Other left / removed tests (before the deadline, not stopped, not rated) are in "Tests you left".
-  const removed = history.filter((c) => c.endKind === "suspended" && !c.removedDismissedAt && !apps.some((a) => a.testId === c.testId && a.kind === "rejoin")).sort(byEnd);
-  const inRemoved = new Map((await db.contract.groupBy({ by: ["testId"], where: { testId: { in: removed.map((c) => c.testId) }, status: "working" }, _count: { _all: true } })).map((g) => [g.testId, g._count._all]));
-  const hasSpot = (c: (typeof contracts)[number]) => (inRemoved.get(c.testId) ?? 0) < c.test.spots && (!c.test.openUntil || c.test.openUntil > now);
   const askable = (c: (typeof contracts)[number]) => canAskToRejoin(c, rated.has(c.id)) && c.test.status !== "stopped" && !c.test.workEndedAt && !apps.some((a) => a.testId === c.testId && a.kind === "rejoin");
-  const left = history.filter((c) => c.endKind !== "suspended" && askable(c)).sort(byEnd);
-  const toSend = (c: (typeof contracts)[number]) => [
-    ...(c.writtenCents != null && !c.submissions.some((s) => s.kind === "written") ? [{ key: "written", name: "Written answers", cents: c.writtenCents }] : []),
-    ...(c.recordingCents != null && !c.submissions.some((s) => s.kind === "recording") ? [{ key: "recording", name: "Screen recording", cents: c.recordingCents }] : []),
-  ];
   // Sent and waiting for the developer's review.
   // (Batch 17 §19) Work unpaid when its Charge closed (its own closing date, for the tester) stays unpaid: it leaves "Waiting for review" and "Charge or cancel".
   const chargeCloses = new Map(await Promise.all(contracts.flatMap((c) => c.submissions.filter((s) => !s.review)).map(async (s) => [s.id, await pieceCloseOut({ submissionId: s.id }, "tester", now)] as const)));
@@ -486,9 +438,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
   const waitingCalls = measuredCalls.filter((x) => !callPayShut.get(x.id) && byId.has(x.contractId)).map((x) => ({ c: byId.get(x.contractId)!, x, minutes: callMinutesOf(x)!, cents: x.rateCents != null ? testerShare(callCharge(x.rateCents, callMinutesOf(x)!)) : null }));
   const pendingCents = waiting.reduce((n, { s }) => n + (s.agreedCents != null ? testerShare(s.agreedCents) : 0), 0) + waitingCalls.reduce((n, w) => n + (w.cents ?? 0), 0);
   // "To do": every part not sent yet (newest test first), each with a Send work button that opens the part. A test can be here and in Charge or cancel at once.
-  const todoParts = working.flatMap((c) => toSend(c).map((p) => ({ c, p })));
   // (Owner, Oct 31, batch 35 §84) Every open test you're in has Send work in To do: a test with every part sent gets one row of its own (opening its parts).
-  const allSent = suspended ? [] : working.filter((c) => toSend(c).length === 0);
   // "Charge or cancel": unreviewed parts where Charge has opened (7 days and the test's Open until), by test, newest first; hidden while suspended.
   const paidFor = (sid: string) => payments.filter((p) => p.submissionId === sid && (p.status === "charged" || p.status === "not_set_up")).reduce((a, p) => a + p.amountCents, 0);
   const chargeable = suspended ? [] : contracts
@@ -496,42 +446,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
     .filter((x) => x.parts.length > 0)
     .sort((a, b) => Math.max(...b.parts.map((s) => s.sentAt.getTime())) - Math.max(...a.parts.map((s) => s.sentAt.getTime())));
   // (Owner, Oct 28) A suspended tester's session pages are closed: nothing here links to them.
-  const answers = suspended ? [] : [
-    // (Batch 35 §118) Only a part still working has terms to answer: an ended part's offer is closed (an old row still "open" is never shown).
-    // (Owner, Nov 5, §238) Each line's developer name cut at 20 and a long diff at 40, with "…" and the arrow (WholeLine).
-    ...offers.flatMap((o) => { const c = byId.get(o.contractId); return c && c.status === "working" ? [{ key: `offer-${o.id}`, c, ...offerLine(displayName(c.test.developer), o.diff), href: `/app/sessions/${c.id}`, cta: "Switch or keep your terms" }] : []; }),
-    ...devReqs.flatMap((r) => { const c = byId.get(r.contractId); return c ? [{ key: `req-${r.id}`, c, ...cutNamesIn(`${displayName(c.test.developer)} asked for a live call`, [displayName(c.test.developer)]), href: `/app/sessions/${c.id}#req-${r.id}`, cta: "Answer in Live session →" }] : []; }), // (batch 16 section 35)
-  ];
   const upcoming = suspended ? [] : contracts.flatMap((c) => c.calls.map((x) => ({ c, x }))).sort((a, b) => a.x.startsAt.getTime() - b.x.startsAt.getTime());
-  const more = recommended.filter((t) => !t.contracts.some((c) => c.status === "working")).slice(0, 4);
-  const removedCard = (c: (typeof contracts)[number]) => {
-    const may = !suspended && c.test.status === "open" && !pausedTest(c.test) && hasSpot(c) && askable(c);
-    return (
-      <li key={c.id} className="card flex flex-wrap items-center gap-3 p-4" data-removed={c.id}>
-        <CategoryTile category={mainCategory(c.test.categories)} size="h-10 w-10" />
-        <div className="min-w-[12rem] flex-1">
-          {/* (Batch 16 section 28) The row opens the session page: while suspended, its limited view (parts, what was paid, Dispute, Charge, Let it go, Rate). */}
-          <p className="font-semibold text-white [overflow-wrap:anywhere]"><Link href={`/app/sessions/${c.id}`} data-removed-open={c.id}><TestName text={c.title} /></Link> {pausedTest(c.test) && <PausedTag />}</p>
-        </div>
-        {may && (
-          <Link href={`/app/find/${c.testId}`} className="btn-secondary px-3 py-1.5 text-sm no-underline hover:no-underline" data-rejoin={c.id}><RotateCcw className="h-4 w-4" /> Ask to rejoin</Link>
-        )}
-        {!suspended && <DismissRemoved contractId={c.id} />}
-      </li>
-    );
-  };
-  const leftCard = (c: (typeof contracts)[number]) => (
-    <li key={c.id}>
-      <Link href={`/app/find/${c.testId}`} className="card card-hover flex flex-wrap items-center gap-3 p-4 no-underline hover:no-underline" data-rejoin={c.id}>
-        <CategoryTile category={mainCategory(c.test.categories)} size="h-10 w-10" />
-        <div className="min-w-[12rem] flex-1">
-          <p className="font-semibold text-white [overflow-wrap:anywhere]"><TestName text={c.title} /> {pausedTest(c.test) && <PausedTag />}</p>
-          <p className="text-sm text-slate-400">{c.status === "left" ? `You left this test (${fmtDate(c.endedAt ?? c.joinedAt)}).` : `Your work ended (${fmtDate(c.endedAt ?? c.joinedAt)}).`} Your deadline is {fmtDate(c.dueAt)}.</p>
-        </div>
-        {!pausedTest(c.test) && <span className="btn-secondary px-3 py-1.5 text-sm"><RotateCcw className="h-4 w-4" /> Ask to rejoin</span>}
-      </Link>
-    </li>
-  );
   const sectionTitle = (icon: React.ReactNode, text: string, n?: number) => (
     <h2 className="flex items-center gap-2 text-lg font-semibold text-white">{icon} {text} {n != null && <span className="text-sm font-normal text-slate-400">{num(n)}</span>}</h2>
   );
@@ -542,72 +457,10 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
         <StatTile icon={Wallet} label="Earned" value={compactMoney(paid._sum.testerCents ?? 0)} hint="what you got for accepted work" tone="emerald" />
         <StatTile icon={Hourglass} label="Waiting for review" value={compactMoney(pendingCents)} hint={`${plural(waiting.length + waitingCalls.length, "part")}`} tone="amber" />
         <StatTile icon={Award} label="Rating" value={rating.n ? `${rating.avg.toFixed(1)} ★` : "-"} hint={rating.n ? `${plural(rating.n, "rating")}` : "no ratings yet"} tone="fuchsia" />
-        <StatTile icon={ListTodo} label="To do" value={compact(todoParts.length + answers.length)} hint={answers.length ? `${answers.length} waiting for your answer` : "parts to send"} tone="indigo" />
+        <StatTile icon={ListTodo} label="To do" value={compact(suspended?0:working.length)} hint="tests you are working on" tone="indigo" />
       </section>
 
-      {/* (Owner, Oct 28, batch 16 section 13) "Search by developer" over every test this tester has been in; typing replaces the sections below with the results. */}
-      {/* (Owner, Nov 5, §204) The box searches the developer's name or the test's name; To do (its `todo`) stays while it's typed in, only its matching tests' rows. */}
-      <DevSearch rows={devSearchRows(contracts, !suspended)} todo={
-      // (Owner, Nov 4) The tester dashboard's order: To do first, then Ratings to give, then Waiting for the developer; the rest below as before.
-      <section className="space-y-3" id="to-do">
-        {sectionTitle(<ListTodo className="h-5 w-5 text-indigo-300" />, "To do (all open tests)")}
-        {todoParts.length === 0 && answers.length === 0 && allSent.length === 0 ? (
-          <p className="card text-sm text-slate-400">{suspended ? "Nothing to do while your account is suspended." : "Nothing to finish. Pick up a new test below."}</p>
-        ) : (
-          <DevSearchList rows={[...answers.map((a) => a.c), ...todoParts.map((x) => x.c), ...allSent].map((c) => ({ title: c.title, developer: displayName(c.test.developer) }))}>
-          <ScrollList className="space-y-2" label="To do">
-            {answers.map((a) => (
-              <DevSearchHit key={a.key} title={a.c.title} developer={displayName(a.c.test.developer)}>
-              {/* (Owner, Nov 5, §238) The row opens through a link laid over the card (as Messages' rows, §124), so the line's "…" and arrow (WholeLine) and the
-                  test's name sit above it and work on their own; the rest of the card opens the row as before. */}
-              <li className="card card-hover relative flex flex-wrap items-center gap-3 border-sky-300/40 p-4 hover:z-10 focus-within:z-10" data-todo-answer={a.key}>
-                <Link href={a.href} aria-label={`${a.cta.replace(/ →$/, "")}: ${a.full ?? a.shown}`} className="absolute inset-0 rounded-2xl no-underline hover:no-underline" />
-                <CategoryTile category={mainCategory(a.c.test.categories)} size="h-10 w-10" />
-                <div className="min-w-[12rem] flex-1">
-                  <p className="flex min-w-0 items-center gap-1 font-semibold text-white"><span className="min-w-0 [overflow-wrap:anywhere]"><TestName text={a.c.title} href={a.href} /></span> {pausedTest(a.c.test) && <span className="shrink-0"><PausedTag /></span>}</p>
-                  <div className="text-sm text-slate-400 [overflow-wrap:anywhere] [&_[data-whole-line]]:relative [&_[data-whole-line]]:z-10 [&_button]:relative [&_button]:z-10" data-todo-answer-line=""><WholeLine shown={a.shown} full={a.full} /></div>
-                </div>
-                <span className="btn px-3 py-1.5 text-sm">{a.cta} <ArrowRight className="h-4 w-4" /></span>
-              </li>
-              </DevSearchHit>
-            ))}
-            {todoParts.map(({ c, p }) => {
-              const due = daysLeft(c.dueAt);
-              const messages = unread.get(c.id) ?? 0;
-              return (
-                <DevSearchHit key={`${c.id}-${p.key}`} title={c.title} developer={displayName(c.test.developer)}>
-                <li className="card flex flex-wrap items-center gap-3 p-4" data-todo-part={`${c.id}:${p.key}`}>
-                  <CategoryTile category={mainCategory(c.test.categories)} size="h-10 w-10" />
-                  <div className="min-w-[12rem] flex-1">
-                    <p className="flex min-w-0 items-center gap-1 font-semibold text-white"><span className="min-w-0 [overflow-wrap:anywhere]"><TestName text={c.title} href={`/app/sessions/${c.id}`} /> · {p.name}</span> {pausedTest(c.test) && <span className="shrink-0"><PausedTag /></span>}</p>
-                    <div className="mt-1 flex flex-wrap gap-2">
-                      <span className="badge"><CalendarClock className="h-3.5 w-3.5" /> Due {fmtDate(c.dueAt)}{due ? ` · ${due}` : ""}</span>
-                      {messages > 0 && <span className="badge border-fuchsia-300/40 text-fuchsia-200"><MessagesSquare className="h-3.5 w-3.5" /> {plural(messages, "unread message")}</span>}
-                    </div>
-                  </div>
-                  <span className="whitespace-nowrap text-sm font-semibold text-emerald-300">{p.cents === 0 ? "free" : money(testerShare(p.cents))}</span>
-                  <Link href={`/app/sessions/${c.id}#part-${p.key}`} className="btn px-3 py-1.5 text-sm no-underline hover:no-underline">Send work <ArrowRight className="h-4 w-4" /></Link>
-                </li>
-                </DevSearchHit>
-              );
-            })}
-            {allSent.map((c) => (
-              <DevSearchHit key={`${c.id}-sent`} title={c.title} developer={displayName(c.test.developer)}>
-              <li className="card flex flex-wrap items-center gap-3 p-4" data-todo-sent={c.id}>
-                <CategoryTile category={mainCategory(c.test.categories)} size="h-10 w-10" />
-                <div className="min-w-[12rem] flex-1">
-                  <p className="flex min-w-0 items-center gap-1 font-semibold text-white"><span className="min-w-0 [overflow-wrap:anywhere]"><TestName text={c.title} href={`/app/sessions/${c.id}`} /></span> {pausedTest(c.test) && <span className="shrink-0"><PausedTag /></span>}</p>
-                  <p className="text-sm text-slate-400">Every part sent</p>
-                </div>
-                <Link href={`/app/sessions/${c.id}#parts`} className="btn px-3 py-1.5 text-sm no-underline hover:no-underline">Send work <ArrowRight className="h-4 w-4" /></Link>
-              </li>
-              </DevSearchHit>
-            ))}
-          </ScrollList>
-          </DevSearchList>
-        )}
-      </section>
-      }>
+      <SearchPanel id="to-do" title="To do" placeholder="Search To do by developer or test" items={(suspended?[]:working).map(c=>({key:c.id,search:`${c.title} ${displayName(c.test.developer)}`,node:<TodoTestRow id={c.id} title={c.title} dueAt={c.dueAt} now={now} timeZone={user.timeZone}/>}))}/>
 
       {/* (Batch 17 section 17) Every rating the tester can give now (hidden while their tester side is suspended). */}
       {!suspended && <RatingsToGive user={user} side="tester" />}
@@ -615,9 +468,9 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
       {(waiting.length > 0 || waitingCalls.length > 0 || waitingApps.length > 0 || inviteOnlyApps.length > 0) && (
         <section className="space-y-3">
           {sectionTitle(<Hourglass className="h-5 w-5 text-amber-300" />, "Waiting for the developer")}
-          <ScrollList className="space-y-2" label="Waiting for the developer">
+          <ScopedPanelSearch label="Waiting for the developer"><ScrollList className="space-y-2" label="Waiting for the developer">
             {waitingApps.map((a) => (
-              <li key={a.id}>
+              <li key={a.id} data-panel-search={`${appTests.get(a.testId)?.title??""} ${appTests.get(a.testId)?displayName(appTests.get(a.testId)!.developer):""}`}>
                 <Link href={`/app/find/${a.testId}`} className="card card-hover flex flex-wrap items-center gap-3 p-4 no-underline hover:no-underline">
                   <p className="min-w-[12rem] flex-1 font-medium text-white [overflow-wrap:anywhere]" data-app-waiting-title=""><TestName text={appTests.get(a.testId)?.title ?? "A test"} /> {appTests.get(a.testId) && pausedTest(appTests.get(a.testId)!) && <PausedTag />}</p>
                   <span className="badge text-amber-300"><Clock className="h-3.5 w-3.5" /> {a.kind === "rejoin" ? "Ask to rejoin waiting" : "Application waiting"}</span>
@@ -625,7 +478,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
               </li>
             ))}
             {inviteOnlyApps.map((a) => (
-              <li key={a.id}>
+              <li key={a.id} data-panel-search={`${appTests.get(a.testId)?.title??""} ${appTests.get(a.testId)?displayName(appTests.get(a.testId)!.developer):""}`}>
                 <Link href={`/app/find/${a.testId}`} className="card card-hover flex flex-wrap items-center gap-3 p-4 no-underline hover:no-underline" data-invite-only="">
                   <p className="min-w-[12rem] flex-1 font-medium text-white [overflow-wrap:anywhere]" data-invite-only-title=""><TestName text={appTests.get(a.testId)?.title ?? "A test"} /></p>
                   <span className="badge border-slate-400/40 text-slate-300">Closed to new testers (invite only)</span>
@@ -646,7 +499,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
                 </>
               );
               return (
-                <li key={s.id}>
+                <li key={s.id} data-panel-search={`${c.title} ${displayName(c.test.developer)}`}>
                   {/* (Owner, Oct 28) Suspended: the session page is closed, so the row doesn't open. */}
                   {suspended ? <div className="card flex flex-wrap items-center gap-3 p-4" data-waiting-plain="">{inner}</div> : <Link href={`/app/sessions/${c.id}#parts`} className="card card-hover flex flex-wrap items-center gap-3 p-4 no-underline hover:no-underline">{inner}</Link>}
                 </li>
@@ -663,52 +516,42 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
                 </>
               );
               return (
-                <li key={x.id} data-waiting-call={x.id}>
+                <li key={x.id} data-panel-search={`${c.title} ${displayName(c.test.developer)}`} data-waiting-call={x.id}>
                   {suspended ? <div className="card flex flex-wrap items-center gap-3 p-4" data-waiting-plain="">{inner}</div> : <Link href={`/app/sessions/${c.id}#call-${x.id}`} className="card card-hover flex flex-wrap items-center gap-3 p-4 no-underline hover:no-underline">{inner}</Link>}
                 </li>
               );
             })}
-          </ScrollList>
+          </ScrollList></ScopedPanelSearch>
         </section>
       )}
 
-      {removed.length > 0 && (
-        <section className="space-y-3" id="suspended-tests">
-          {/* (Owner, Nov 3) The heading says it once: no "You were removed from this test." on each card; Dismiss all clears them together. */}
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            {sectionTitle(<RotateCcw className="h-5 w-5 text-rose-300" />, "Tests you were removed from", removed.length)}
-            {!suspended && removed.length > 1 && <DismissRemoved contractId={removed[0].id} all />}
-          </div>
-          <ScrollList className="space-y-2" label="Tests you were removed from">{removed.map((c) => removedCard(c))}</ScrollList>
-        </section>
-      )}
 
       {chargeable.length > 0 && (
         <section className="space-y-3" id="charge-or-cancel">
           {sectionTitle(<Banknote className="h-5 w-5 text-amber-300" />, "Charge or cancel", chargeable.length)}
           <p className="note">Parts the developer hasn&apos;t reviewed once {REVIEW_DAYS} days have passed since you sent them and your deadline has passed: charge for them, or let them go.</p>
-          <ScrollList className="space-y-2" label="Charge or cancel">
+          <ScopedPanelSearch label="Charge or cancel"><ScrollList className="space-y-2" label="Charge or cancel">
             {chargeable.map(({ c, parts }) => (
-              <li key={c.id}>
+              <li key={c.id} data-panel-search={`${c.title} ${displayName(c.test.developer)}`}>
                 <Link href={`/app/sessions/${c.id}#part-${parts[0].kind}`} className="card card-hover flex flex-wrap items-center gap-3 border-amber-400/30 p-4 no-underline hover:no-underline">
                   <p className="min-w-[12rem] flex-1 font-medium text-white [overflow-wrap:anywhere]"><TestName text={c.title} /> · {plural(parts.length, "part")} {pausedTest(c.test) && <PausedTag />}</p>
                   <span className="btn px-3 py-1.5 text-sm">Charge or let it go <ArrowRight className="h-4 w-4" /></span>
                 </Link>
               </li>
             ))}
-          </ScrollList>
+          </ScrollList></ScopedPanelSearch>
         </section>
       )}
 
       {upcoming.length > 0 && (
         <section className="space-y-3" id="upcoming-calls">
           <h2 className="flex items-center gap-2 text-lg font-semibold text-white"><CalendarClock className="h-5 w-5 text-amber-300" /> Upcoming calls <span className="text-sm font-normal text-slate-400">next 7 days</span></h2>
-          <div className="card p-3">
+          <ScopedPanelSearch label="Upcoming calls">          <div className="card p-3">
             {/* (Owner, Nov 3, batch 35 §152) In the draggable panel, like the developer's Calls box. */}
             <ResizeBox id="dash-upcoming-calls" label="Upcoming calls" defaultMax={LIST_PANEL.dashCalls}>
             <ul className="divide-y divide-white/5" data-upcoming-calls="">
               {upcoming.map(({ c, x }) => (
-                <li key={x.id} className="flex flex-wrap items-center gap-2 py-2 text-sm">
+                <li key={x.id} data-panel-search={`${c.title} ${displayName(c.test.developer)}`} className="flex flex-wrap items-center gap-2 py-2 text-sm">
                   {/* (Owner, Nov 3, long text) Only the names are cut with "…": the call's day, time and length always show (a line of their own when the names are long).
                       (Owner, Nov 5, §209; was §186's Call history "Booked (N)") It opens that call's own row in the session's Live session, with its Join call. */}
                   <Link href={`/app/sessions/${c.id}#call-${x.id}`} className="mr-auto flex min-w-0 max-w-full flex-wrap items-baseline gap-x-1 text-slate-200 no-underline hover:underline"><span className="min-w-0 max-w-full [overflow-wrap:anywhere]"><b className="text-white"><Cut text={displayName(c.test.developer)} /></b> · <TestName text={c.title} /></span> <span className="whitespace-nowrap">· {fmtDateTime(x.startsAt)} · {x.minutes} min <ArrowRight className="inline h-4 w-4 text-indigo-300" /></span></Link>
@@ -720,7 +563,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
               ))}
             </ul>
             </ResizeBox>
-          </div>
+          </div></ScopedPanelSearch>
         </section>
       )}
 
@@ -730,9 +573,9 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
       {!suspended && invites.length > 0 && (
         <section className="space-y-3" id="invitations">
           {sectionTitle(<Inbox className="h-5 w-5 text-emerald-300" />, "Invitations", invites.length)}
-          <ScrollList className="space-y-2" label="Invitations">
+          <ScopedPanelSearch label="Invitations"><ScrollList className="space-y-2" label="Invitations">
             {invites.map((i) => (
-              <li key={i.id} className="info flex flex-wrap items-center gap-2">
+              <li key={i.id} data-panel-search={`${i.test.title} ${displayName(i.test.developer)}`} className="info flex flex-wrap items-center gap-2">
                 {/* (Batch 35 §137) The names in the sentence link: the developer's profile, the test's page. */}
                 <span className="mr-auto min-w-0" title={`${displayName(i.test.developer)} invited you to “${i.test.title}”`}>
                   <NameLink text={displayName(i.test.developer)} href={i.test.developer.deletedAt ? null : `/app/developers/${i.test.developerId}`} /> invited you to “<NameLink text={i.test.title} kind="test" href={`/app/find/${i.testId}`} />”. {pausedTest(i.test) && <PausedTag />}
@@ -744,97 +587,14 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
                 <NoThanks inviteId={i.id} />
               </li>
             ))}
-          </ScrollList>
-        </section>
-      )}
-
-      {!suspended && left.length > 0 && (
-        <section className="space-y-3" id="rejoin">
-          {sectionTitle(<RotateCcw className="h-5 w-5 text-sky-300" />, "Tests you left", left.length)}
-          <ScrollList className="space-y-2" label="Tests you left">{left.map((c) => leftCard(c))}</ScrollList>
+          </ScrollList></ScopedPanelSearch>
         </section>
       )}
 
       {/* (Batch 17 §18) Join pages opened but never joined, with each test's state now (live on the dashboard's poll). */}
       {!suspended && <TestsVisited testerId={userId} />}
 
-      {!suspended && (
-        <section className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="flex items-center gap-2 text-lg font-semibold text-white"><Compass className="h-5 w-5 text-fuchsia-300" /> New tests for you</h2>
-            <Link href="/app/find" className="text-sm text-indigo-300 hover:underline">See all</Link>
-          </div>
-          {more.length === 0 ? (
-            // (Owner, Nov 3, batch 35 §144) The profile never hides tests (it only orders them), so the empty line doesn't send you to it.
-            <p className="card text-sm text-slate-400" data-new-tests-empty="">
-              No open tests to join right now. New ones show up here as soon as developers post them. <Link href="/app/find" className="text-indigo-300 hover:underline">See all tests</Link>
-            </p>
-          ) : (
-            <ul className="grid gap-3 md:grid-cols-2">
-              {more.map((t) => (
-                // (Owner, Nov 3, long text) min-w-0: a long title is cut with "…" inside the card instead of widening the grid past the screen.
-                <li key={t.id} className="min-w-0">
-                  <Link href={`/app/find/${t.id}`} className="card card-hover flex flex-wrap items-center gap-3 p-4 no-underline hover:no-underline">
-                    <CategoryTile category={mainCategory(t.categories)} size="h-10 w-10" />
-                    <div className="min-w-[12rem] flex-1">
-                      {t.productName && <p className="kicker [overflow-wrap:anywhere]"><Cut text={t.productName} kind="product" /></p>}
-                      <p className="font-semibold text-white [overflow-wrap:anywhere]"><TestName text={t.title} /></p>
-                      <div className="mt-1 flex flex-wrap gap-2"><PartBadges written={t.writtenCents != null} recording={t.recordingCents != null} live={t.liveRateCents != null} /><CategoryBadges categories={t.categories} /></div>
-                    </div>
-                    <div className="ml-auto max-w-full text-right">
-                      <p className="text-sm font-semibold text-emerald-300">{keepAmounts(pays(asListing(t)))}</p>
-                      <p className="text-xs text-slate-500">{plural(t.spots - t._count.contracts, "spot")} left</p>
-                    </div>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      )}
-
-      {(history.length > 0 || working.length > 0) && (
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-white">History</h2>
-          {/* (Owner, Oct 31, batch 35 §81) Every test: the ones you're still in first ("In progress"), then the ended ones; a search box filters by test or developer. */}
-          <HistorySearch />
-          <ScrollList className="space-y-2" label="History">
-            {working.map((c) => (
-              <li key={c.id} data-hist-search={`${c.title} ${displayName(c.test.developer)}`.toLowerCase()}>
-                <Link href={`/app/sessions/${c.id}`} className="card card-hover flex flex-wrap items-center gap-3 p-4 no-underline hover:no-underline" data-history-now={c.id}>
-                  <span className="min-w-[min(100%,12rem)] flex-1 font-medium text-white">
-                    <span className="block [overflow-wrap:anywhere]"><TestName text={c.title} /></span>
-                    <span className="block text-sm font-normal text-slate-400">by <Cut text={displayName(c.test.developer)} /> · joined {fmtDate(c.joinedAt)}</span>
-                  </span>
-                  <span className="badge border-emerald-400/40 text-emerald-200">In progress</span>
-                  <span className="flex items-center gap-1 text-sm text-indigo-300">Open <ArrowRight className="h-4 w-4" /></span>
-                </Link>
-              </li>
-            ))}
-            {/* (Owner, Oct 31, batch 35 §98) An ended test is one row like an In progress one: how it ended as a tag, and Open → its page (no fold with its history). */}
-            {history.sort(byEnd).map((c) => {
-              const tag = c.endKind === "rated" ? "Finished" : c.endKind === "stopped" ? "Stopped" : c.endKind === "closed" ? "Closed" : c.endKind === "suspended" ? "Removed" : c.endKind === "early" ? "Ended early" : c.status === "left" ? "You left" : "Ended";
-              const inner = (
-                <>
-                  <span className="min-w-[min(100%,12rem)] flex-1 font-medium text-white">
-                    <span className="block [overflow-wrap:anywhere]"><TestName text={c.title} /></span>
-                    <span className="block text-sm font-normal text-slate-400">by <Cut text={displayName(c.test.developer)} /> · {tag === "You left" ? "left" : "ended"} {fmtDate(c.endedAt ?? c.joinedAt)}</span>
-                  </span>
-                  <span className="badge border-white/20 text-slate-300" data-history-tag="">{tag}</span>
-                  {!suspended && <span className="flex items-center gap-1 text-sm text-indigo-300">Open <ArrowRight className="h-4 w-4" /></span>}
-                </>
-              );
-              return (
-                <li key={c.id} data-hist-search={`${c.title} ${displayName(c.test.developer)}`.toLowerCase()}>
-                  {suspended ? <div className="card flex flex-wrap items-center gap-3 p-4" data-history={c.id}>{inner}</div>
-                    : <Link href={`/app/sessions/${c.id}`} className="card card-hover flex flex-wrap items-center gap-3 p-4 no-underline hover:no-underline" data-history={c.id}>{inner}</Link>}
-                </li>
-              );
-            })}
-          </ScrollList>
-        </section>
-      )}
-      </DevSearch>
+      <SearchPanel id="previous-tests" title="Previous Tests" placeholder="Search previous tests by developer or test" filters={PREVIOUS_TEST_FILTERS} items={contracts.filter(c=>previousTestGroup(c)!==null).sort(byEnd).map(c=>({key:c.id,search:`${c.title} ${displayName(c.test.developer)}`,states:[previousTestGroup(c)!],node:<FindTestCard test={{...c.test,title:c.title}} href={`/app/sessions/${c.id}`} developerName={displayName(c.test.developer)} terms={pays(asListing(c.test))} state={previousTestGroup(c)!} footer={<div className="space-y-2"><p className="text-xs text-slate-400">{fmtDate(c.endedAt??c.joinedAt)}</p>{!suspended && askable(c) && !pausedTest(c.test) && <Link href={`/app/find/${c.testId}`} className="btn-secondary text-sm">Ask to rejoin</Link>}</div>}/>}))}/>
     </>
   );
 

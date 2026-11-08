@@ -1652,7 +1652,7 @@ async function closeOutReminders(now: Date, co: CloseOuts) {
     const key = `closesoon:${now.toISOString().slice(0, 10)}`;
     const had = await db.notification.findFirst({ where: { userId: devId, reminderKey: key }, select: { id: true, summarizedAt: true } });
     if (had && !had.summarizedAt) await db.notification.update({ where: { id: had.id }, data: { text: await renderFor(devId, line), readAt: null } });
-    else await notify(e.email, line, [line + "."], "/app#needs-review", { side: "developer", always: true, payment: true, group: "closeout", reminder: key }); // (batch 30 §6) where the pieces are: Needs review, marked
+    else await notify(e.email, line, [line + "."], "/app#needs-you", { side: "developer", always: true, payment: true, group: "closeout", reminder: key }); // (batch 30 §6) where the pieces are: Needs review, marked
   }
 }
 
@@ -1719,7 +1719,7 @@ async function payNowLines(now: Date, co: CloseOuts) {
   for (const [devId, list] of byDev) {
     if (!(await lineDue(devId, "paynow", now))) continue;
     const line = payNowLine(list);
-    await notify(emails.get(devId)!, line, [line + "."], "/app#needs-review", { side: "developer", always: true, payment: true, group: "unreviewed", reminder: "paynow" }); // (batch 30 §6) Needs review, marked
+    await notify(emails.get(devId)!, line, [line + "."], "/app#needs-you", { side: "developer", always: true, payment: true, group: "unreviewed", reminder: "paynow" }); // (batch 30 §6) Needs review, marked
   }
 }
 

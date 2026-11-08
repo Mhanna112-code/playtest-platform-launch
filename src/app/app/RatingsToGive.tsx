@@ -1,3 +1,4 @@
+import { ScopedPanelSearch } from "@/components/ScopedPanelSearch";
 import { withDateZone } from "@/lib/server/dateZone";
 import Link from "next/link";
 import { Star } from "lucide-react";
@@ -21,16 +22,16 @@ export async function RatingsToGive({ user, side }: { user: { timeZone?: string 
           <h2 className="flex items-center gap-2 text-lg font-semibold text-white">
             <Star className="h-5 w-5 text-amber-300" /> Ratings to give <span className="text-sm font-normal text-slate-400">{rows.length}</span>
           </h2>
-          <ScrollList className="space-y-2">
+          <ScopedPanelSearch label="Ratings to give"><ScrollList className="space-y-2">
             {rows.map((r) => (
               // (Owner, Nov 5, §238) The names cut at 20 with "…" and the arrow (WholeLine), no hover: the row opens through a link laid over it, and the
               // line's "…" and arrow sit above that link.
-              <li key={r.id} className="relative flex items-center gap-3 rounded-lg border border-white/10 p-3 transition-colors hover:bg-white/5" data-rate-row="">
+              <li key={r.id} data-panel-search={r.text} className="relative flex items-center gap-3 rounded-lg border border-white/10 p-3 transition-colors hover:bg-white/5" data-rate-row="">
                 <Link href={r.href} aria-label={r.text} className="absolute inset-0 rounded-lg no-underline hover:no-underline" />
                 <div className="min-w-0 flex-1 text-slate-200 [overflow-wrap:anywhere] [&_[data-whole-line]]:relative [&_[data-whole-line]]:z-10 [&_button]:relative [&_button]:z-10" data-rate-line="">{(() => { const x = cutNamesIn(r.text, r.names); return <WholeLine shown={x.shown} full={x.full} />; })()}</div>
               </li>
             ))}
-          </ScrollList>
+          </ScrollList></ScopedPanelSearch>
         </section>
       )}
     </>

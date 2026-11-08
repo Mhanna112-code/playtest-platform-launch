@@ -60,6 +60,8 @@ const SECTIONS: { title: string; points: (string | { id: string; text: string })
     title: "6. Feedback, ratings and confidentiality",
     points: [
       "Ratings (1 to 5 stars, and an optional note) go both ways. The tester rates first; the developer rates once the tester has rated and everything they sent is settled. The tester's rating shows once the developer rates or their 14 days to rate end.",
+      "Leaving a test does not close the tester's rating window. It ends at the test's close-out, generally 14 days after the last tester's deadline and no earlier than joining closes, adjusted for pauses and outages. Work awaiting review, a Charge still to decide or an open dispute can temporarily prevent rating. If the tester never rates, the developer can still get a 14-day rating window after close-out once the work is settled.",
+      "Once either account is deleted, neither side can submit a new rating for that session. Ratings already submitted keep their existing display rules.",
       "Developers may use the feedback they receive to improve their products. Testers keep no rights over how it's used, but their name isn't published without consent.",
       "Any confidentiality agreement a developer sets applies between the developer and the tester.",
       "If the developer adds, removes or changes the NDA after you join, you must acknowledge the change before continuing work on that test. You can still leave or rate the test without acknowledging it. Acknowledging an NDA change is separate from choosing Switch or Keep for changes to your agreed work.",
