@@ -43,7 +43,7 @@ export async function confirmAllState(devId: string, now = new Date()): Promise<
   await expireAllChecks(now, { developerId: devId }, true);
   const { waitingConfirmation } = await import("./confirm");
   const waiting = await waitingConfirmation(devId, undefined, now);
-  const items = await notTeamPaused(devId, waiting.filter(inAll));
+  const items = waiting.filter(inAll);
   const left = waiting.filter((p) => !inAll(p));
   const one = await openAll(devId);
   const n = one ? await db.payment.count({ where: { coveredById: one.id } }) : 0;
@@ -53,16 +53,6 @@ export async function confirmAllState(devId: string, now = new Date()): Promise<
     leftOut: items.length >= 2 && left.length ? T.leftOutLine(await Promise.all(left.map(leftName))) : null,
     open: one ? { id: one.id, cents: one.amountCents, n } : null,
   };
-}
-
-/**
- * (Owner, Nov 4, §172) A suspended developer's Confirm all is refused (every test is paused). The team's pause pauses ONE test: Confirm all leaves that test's
- * charges out (each one's own Confirm with your bank is refused until the lift: "The team paused this test: Confirm with your bank waits until the pause is lifted.").
- */
-async function notTeamPaused<P extends { contractId: string | null }>(devId: string, rows: P[]) {
-  if (!rows.length) return rows;
-  const paused = new Set(await (await import("./teamPause")).teamPausedContractIds(devId));
-  return paused.size ? rows.filter((p) => !p.contractId || !paused.has(p.contractId)) : rows;
 }
 
 /** A waiting payment Confirm all leaves out, named: "your plan's renewal $9.00", "what you owe $16.00". */
@@ -79,8 +69,6 @@ async function goneWhy(p: Payment | null) {
   if (p.status === "failed") return "not confirmed in time";
   if (p.status === "deferred") return "paused until your tests resume";
   if (p.status === "cancelled") return "cancelled";
-  // (Owner, Nov 4, §172) Left out while the team's pause of its test lasts.
-  if (p.status === "needs_confirmation" && (await (await import("./teamPause")).teamPausedTestOf(db, p.contractId))) return "the team paused its test";
   return "no longer waiting";
 }
 
@@ -136,11 +124,7 @@ async function claim(devId: string, rows: Payment[], body: Record<string, unknow
   try {
     return await db.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${devId} FOR UPDATE`;
-      // (Owner, Nov 3, §159) Pressed while suspended: refused like Pay (the suspension's own write waits for this lock, or landed first and is read here).
-      const [me] = await tx.$queryRaw<{ devSuspendedAt: Date | null }[]>`SELECT "suspendedAt" AS "devSuspendedAt" FROM "User" WHERE id = ${devId}`;
-      if (me?.devSuspendedAt) throw new HttpError(403, "suspended", (await import("./payments")).suspendedLine("Confirm all"));
-      // (Owner, Nov 4, §172) The team paused one of their tests since the list was read: that test's charges are left out (the press stops once on the new list).
-      if ((await notTeamPaused(devId, rows)).length !== rows.length) throw ROLLBACK;
+      // Pending confirmations keep their original deadlines through suspensions and pauses.
       await itemStops(tx, rows, body);
       if (await tx.payment.count({ where: { developerId: devId, kind: OWED_KIND, note: ALL_NOTE, status: { in: OWED_ACTIVE } } })) throw ROLLBACK;
       const total = sum(rows);
@@ -172,7 +156,7 @@ export async function confirmAllPress(dev: { id: string }, body: Seen & Record<s
   await once.resumeStaleOwed(dev.id);
   if (await openAll(dev.id)) throw new HttpError(409, "busy", T.ALL_BUSY);
   const now = new Date();
-  const waiting = await notTeamPaused(dev.id, (await confirm.waitingConfirmation(dev.id, undefined, now)).filter(inAll)); // (§172)
+  const waiting = (await confirm.waitingConfirmation(dev.id, undefined, now)).filter(inAll); // (§172)
   // (Owner, Nov 3, batch 35 §163) Nothing left to confirm is refused on the first press: a "what's waiting changed" stop could only be followed by this refusal.
   if (!waiting.length) throw new HttpError(409, "nothing", await nothingLeftLine(dev.id, body));
   await stopIfChanged(waiting, body, now, dev.id);
@@ -182,7 +166,7 @@ export async function confirmAllPress(dev: { id: string }, body: Seen & Record<s
   if (!one) {
     if (await openAll(dev.id)) throw new HttpError(409, "busy", T.ALL_BUSY);
     // Changed between the list and the claim (a single Confirm finished, a date passed): stops once on what's waiting now.
-    const fresh = await notTeamPaused(dev.id, (await confirm.waitingConfirmation(dev.id, undefined, new Date())).filter(inAll));
+    const fresh = (await confirm.waitingConfirmation(dev.id, undefined, new Date())).filter(inAll);
     if (!fresh.length) throw new HttpError(409, "nothing", await nothingLeftLine(dev.id, { ...body, seenIds: waiting.map((p) => p.id) })); // (§163) nothing left: refused, never a stop
     await stopIfChanged(fresh, { seenTotalCents: sum(waiting), seenIds: waiting.map((p) => p.id), tab: body.tab }, new Date(), dev.id);
     throw new HttpError(409, "stop_once", "Press again to go ahead.", { changes: [{ text: "What's waiting for your bank changed meanwhile.", at: new Date() }], totalCents: sum(fresh), ids: fresh.map((p) => p.id) });

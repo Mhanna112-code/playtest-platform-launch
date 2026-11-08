@@ -108,7 +108,7 @@ describe("§159: that tester leaving always stops a payment press on their parts
 });
 
 describe("§159: a suspended developer's payment presses are refused", () => {
-  it("Pay, Pay more, Confirm with your bank and Confirm all: “Your account is suspended: … waits until it is lifted.”", async () => {
+  it("Pay and Pay more refuse during suspension; existing single and bulk bank confirmation remain available", async () => {
     const w = await world();
     const st = bank();
     expect((await pay(w.dev.cookie, { kind: "submission", id: w.anaSub.id, amount: "10.00", tickedCents: 1000, seenAt: seen(), confirmed: true })).status).toBe(200);
@@ -121,11 +121,10 @@ describe("§159: a suspended developer's payment presses are refused", () => {
     expect(more.status).toBe(403);
     expect(more.body.error?.message).toMatch(/^Your account is suspended/);
     const c = await confirm(w.dev.cookie, { paymentId: one.id, start: true, seenAt: seen() });
-    expect([c.status, c.body.error?.message]).toEqual([403, "Your account is suspended: Confirm with your bank waits until it is lifted."]);
+    expect(c.status, JSON.stringify(c.body)).toBe(200);
     const a = await all(w.dev.cookie, { seenTotalCents: 1000, seenIds: [one.id] });
-    // One waiting charge: Confirm all isn't offered, but its route still refuses while suspended.
-    expect(a.status).toBe(403);
-    expect(a.body.error?.message).toBe("Your account is suspended: Confirm all waits until it is lifted.");
+    // One waiting charge: the bulk endpoint also remains available during suspension.
+    expect(a.status, JSON.stringify(a.body)).toBe(200);
   });
 
   it("Pay and the suspension at the same moment: either the Pay went first (paid once) or it's refused; never paid after the suspension landed", async () => {

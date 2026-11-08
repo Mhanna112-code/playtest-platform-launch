@@ -95,13 +95,13 @@ describe("§172: the developer's presses on a test the team paused are a suspend
     expect((await act(x.testId, "rate", x.dev.cookie, { contractId: x.sessionId, stars: 5, seenAt: seen() })).status).toBe(200);
   });
 
-  it("Confirm with your bank and Confirm all leave that test's waiting charges for the lift", async () => {
+  it("Confirm with your bank and Confirm all remain available during the pause", async () => {
     const x = await sentWork();
     const row = await db.payment.create({ data: { kind: "review", submissionId: x.sub.id, contractId: x.sessionId, developerId: x.dev.user.id, testerId: x.tester.user.id, amountCents: 1000, feeCents: 0, testerCents: 0, status: "needs_confirmation", actionPi: "pi_" + randomUUID(), actionBy: new Date(Date.now() + 2 * DAY) } });
     expect((await confirmAllState(x.dev.user.id)).ids).toEqual([row.id]);
     await pauseTest(await admin(), x.testId, "Checking");
-    await expect(confirmStart({ id: x.dev.user.id }, row.id, {})).rejects.toMatchObject({ code: "admin_paused", message: teamPausedWaits("Confirm with your bank") });
-    expect((await confirmAllState(x.dev.user.id)).ids).toEqual([]);
+    await expect(confirmStart({ id: x.dev.user.id }, row.id, {})).resolves.toMatchObject({ paymentId: row.id });
+    expect((await confirmAllState(x.dev.user.id)).ids).toEqual([row.id]);
     // §159 rule 4b: the tester's waiting charge itself is not cancelled by the pause.
     expect((await db.payment.findUniqueOrThrow({ where: { id: row.id } })).status).toBe("needs_confirmation");
     await unpauseTest(x.testId);

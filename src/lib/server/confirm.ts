@@ -430,14 +430,8 @@ export async function confirmStart(dev: { id: string }, paymentId: string, body:
   // dispute, the tester's Charge or Let it go, a Pay or Pay more in another tab, a call change... (Alerts apply) stops it once; the second press opens the bank's check.
   // (Owner, Oct 29, batch 26 section 9) EXACTLY Pay's check on that piece: the same devGate call under the same test lock, the same press (payPressOf: a retried
   // chargeback's row checks the piece of the payment the bank reversed), so whatever stops Pay on it stops Confirm, and the same Alerts types are ignored.
-  // (Owner, Nov 3, §159) Pressed while the developer is suspended: refused like Pay, under the developer's row lock (a check already open still finishes: §159 rule 4b).
-  // Pay what you owe's own payments and a renewal stay open (unchanged).
-  // (Owner, Nov 4, §172) The same on a test the team paused, for that test's waiting charges ("The team paused this test: Confirm with your bank waits until the
-  // pause is lifted."); a check already open still finishes, as under a suspension.
-  if (p.contractId && p.kind !== "owed" && p.kind !== "chargeback" && p.kind !== "subscription") {
-    await db.$transaction(async (tx) => (await import("./payments")).refuseSuspendedLocked(tx, dev.id, "Confirm with your bank"));
-    await (await import("./teamPause")).refuseTeamPaused(db, p.contractId, "Confirm with your bank");
-  }
+  // Existing bank confirmations remain available during a suspension or test pause.
+  // Their original three-day deadline and the usual stop-once checks still apply.
   if (p.contractId && seenOf(body.seenAt)) {
     const c = await db.contract.findUnique({ where: { id: p.contractId }, include: { tester: true } });
     if (c) {
@@ -447,8 +441,6 @@ export async function confirmStart(dev: { id: string }, paymentId: string, body:
       const piece = { submissionId: p.submissionId ?? orig?.submissionId ?? null, callId: p.callId ?? orig?.callId ?? null };
       await db.$transaction(async (tx) => {
         await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${c.testId} FOR UPDATE`;
-        if (p.kind !== "owed" && p.kind !== "chargeback") await (await import("./payments")).refuseSuspendedLocked(tx, dev.id, "Confirm with your bank");
-        if (p.kind !== "owed" && p.kind !== "chargeback") await (await import("./teamPause")).refuseTeamPausedTest(tx, c.testId, "Confirm with your bank"); // (§172) under the test's lock
         // (Owner, Nov 4, §171 item 7) The press-time gate stays as it was (`awayCharge`: §159's rules, not §171 A1/A2) while the owner decides the waiting-charge rules.
         // (Owner, Nov 4, §193) Plus a charge about the same tester on another part (never the line of the charge this press confirms).
         await devGate(tx, c.testId, body, { paidSoFarCents: await paidSoFar(c.id, tx), name: displayName(c.tester) }, [], undefined, { ...payPressOf(c.id, piece), awayCharge: true });
