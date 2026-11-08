@@ -131,7 +131,7 @@ describe("batch 19 section 4: timed jobs every 5 minutes, from the uptime check"
     const j = await joined(s.testId);
     const call = await bookCall(s.testId, s.dev.cookie, j.sessionId, j.tester.cookie);
     await db.call.update({ where: { id: call.id }, data: { startsAt: new Date(Date.now() + 14 * MIN), createdAt: new Date(Date.now() - 2 * DAY) } });
-    const count = async () => db.notification.count({ where: { userId: { in: [s.dev.user.id, j.tester.user.id] }, reminderKey: `call15:${call.id}` } });
+    const count = async () => db.notification.count({ where: { userId: { in: [s.dev.user.id, j.tester.user.id] }, reminderKey: `call24:${call.id}` } });
     return { ...s, ...j, call, count };
   }
 

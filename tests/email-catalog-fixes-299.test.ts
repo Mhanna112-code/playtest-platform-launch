@@ -16,7 +16,7 @@ import { act, bookCall, joined, listingBody, sact, seen, settle, setup } from ".
 import { json, makeUser, req } from "./helpers";
 
 // (Owner, Nov 6, §299) Four fixes from the email catalog: a payment line to a tester reaches her whatever the test's state (Pay more on a stopped test); the
-// 15-minute call reminder is emailed at once (notify's `now`), never in a later summary; the team lifting its pause (and moving a paused test's closing date)
+// 24-hour call reminder is emailed at once (notify's `now`), never in a later summary; the team lifting its pause (and moving a paused test's closing date)
 // reaches the developer like the pause (`always`, "Payments and holds"); Contact us and the team's chargeback emails go to every admin account's confirmed email
 // plus ADMIN_EMAILS, each once, never to a placeholder.
 
@@ -68,7 +68,7 @@ describe("§299 point 1: Pay more on a finished test reaches the tester", () => 
 
   it("the reach rule keeps dropping other lines about a counterpart on a stopped test, but never a payment line (notify and bell alike)", async () => {
     const w = await world();
-    expect((await act(w.testId, "stop", w.dev.cookie, { reason: "Done.", seenAt: seen(), confirmed: true })).status).toBe(200);
+    expect((await act(w.testId, "stop", w.dev.cookie, { reason: "Testing complete.", seenAt: seen(), confirmed: true })).status).toBe(200);
     await bell(w.anaId, "NOT A PAYMENT", `/app/sessions/${w.sessionId}`, w.devId, { side: "tester" });
     await bell(w.anaId, "A PAYMENT", `/app/sessions/${w.sessionId}`, w.devId, { side: "tester", payment: true, group: "tpaid" });
     const t = await texts(w.anaId);
@@ -81,7 +81,7 @@ describe("§299 point 1: Pay more on a finished test reaches the tester", () => 
   });
 });
 
-describe("§299 point 2: the 15-minute call reminder goes out at once", () => {
+describe("§299 point 2: the 24-hour call reminder goes out at once", () => {
   // (Owner, Nov 6, §324) Off included: the reminder is `always` now (emailed at once, still once).
   it("both are emailed immediately; the bell lines stay, already emailed, and the next summary doesn't repeat them; email Off: emailed at once too (§324)", async () => {
     const s = await setup();
@@ -91,7 +91,7 @@ describe("§299 point 2: the 15-minute call reminder goes out at once", () => {
     await db.user.update({ where: { id: j.tester.user.id }, data: { emailPref: "weekly" } });
     await remindCallsSoon();
     for (const [u, who] of [[j.tester.user, "Nora Lane"], [s.dev.user, "Ana Silva"]] as const) {
-      const ns = await db.notification.findMany({ where: { userId: u.id, reminderKey: `call15:${call.id}` } });
+      const ns = await db.notification.findMany({ where: { userId: u.id, reminderKey: `call24:${call.id}` } });
       expect(ns).toHaveLength(1);
       expect(ns[0].text).toMatch(new RegExp(`^Your call with ${who} on “Harbor Run” starts at `));
       expect(ns[0].summarizedAt).not.toBeNull();
@@ -108,7 +108,7 @@ describe("§299 point 2: the 15-minute call reminder goes out at once", () => {
     const c2 = await bookCall(w2.testId, w2.dev.cookie, w2.sessionId, w2.tester.cookie);
     await db.call.update({ where: { id: c2.id }, data: { startsAt: new Date(Date.now() + 14 * MIN), createdAt: new Date(Date.now() - 2 * 86_400_000) } });
     await remindCallsSoon();
-    const off = await db.notification.findMany({ where: { userId: w2.devId, reminderKey: `call15:${c2.id}` } });
+    const off = await db.notification.findMany({ where: { userId: w2.devId, reminderKey: `call24:${c2.id}` } });
     expect(off).toHaveLength(1);
     expect((await mails(w2.dev.user.email)).filter((m) => m.subject === off[0].text)).toHaveLength(1);
     await sendSummaries(new Date(), [w2.devId]);

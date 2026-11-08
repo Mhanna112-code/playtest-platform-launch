@@ -1290,7 +1290,7 @@ export const VERIFY_FIRST = "Verify your card first.";
 
 /**
  * (Owner, Oct 28, batch 19 section 4) The time-sensitive sweep: what page loads and polls trigger for calls and timers, run every 5 minutes by the uptime check's keyed
- * GET /api/health (UptimeRobot) and by the daily job: the 15-minute call reminders, calls ending at the $500, nobody-joined cancels and final call lengths, Charge
+ * GET /api/health (UptimeRobot) and by the daily job: the 24-hour call reminders, calls ending at the $500, nobody-joined cancels and final call lengths, Charge
  * opening (sent parts and listed calls, with their daily "pay it" and Charge reminders), the close-out reminders, the developer's review reminders and the rating
  * reminders. Each step records what it did, so a second run sends nothing twice; the caller holds the timers lock (withTimersLock), so two never run at once.
  */

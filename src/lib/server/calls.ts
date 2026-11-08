@@ -393,17 +393,14 @@ export async function sweepNobodyJoined(now = new Date()) {
   return due.length;
 }
 
-// ---------- (Owner, Oct 28, batch 18 section 12) The reminder 15 minutes before each booked call ----------
-export const CALL_REMINDER_MIN = 15;
-/** "Your call with Ana on “Harbor Run” starts at 3:00 PM." (the time token is written in each reader's zone). */
-export const callReminderLine = (who: string, test: string, startsAt: Date) => `Your call with ${who} on “${test}” starts at ${T(startsAt, "time")}.`;
-const reminderKey = (callId: string) => `call15:${callId}`;
+// One immediate reminder per person and booked call, beginning 24 hours before it starts.
+export const CALL_REMINDER_MIN = 24 * 60;
+/** The date and time are rendered in each reader's saved time zone. */
+export const callReminderLine = (who: string, test: string, startsAt: Date) => `Your call with ${who} on “${test}” starts at ${T(startsAt)}.`;
+const reminderKey = (callId: string) => `call24:${callId}`;
 
-/**
- * Bell and email (following each person's email setting) 15 minutes before a booked call, to both, the same line. Once per call and person; none for a call booked
- * less than 15 minutes ahead. Checked with the call sweep (every page load / poll, and the daily job). It opens the call's row, where "Check your call setup" is.
- * (Owner, Nov 6, §299) The email goes out at once (notify's `now`, §294), to both, so it arrives before the call; the bell line stays, written as already emailed,
- * so no later summary repeats it. Email Off: the bell line only (not `always`).
+/** Includes email Off. Short local bookings are reminded on the next sweep; cancelled or started calls are excluded.
+ * Older call15 reminders count as already sent, so deploying the new timing never repeats them.
  */
 export async function remindCallsSoon(now = new Date()) {
   const soon = new Date(now.getTime() + CALL_REMINDER_MIN * 60_000);
@@ -413,14 +410,13 @@ export async function remindCallsSoon(now = new Date()) {
   });
   let n = 0;
   for (const call of calls) {
-    if (call.createdAt.getTime() > call.startsAt.getTime() - CALL_REMINDER_MIN * 60_000) continue; // booked less than 15 minutes ahead
     const c = call.contract, dev = c.test.developer, tester = c.tester;
-    if (!(await db.notification.count({ where: { userId: tester.id, reminderKey: reminderKey(call.id) } }))) {
+    if (!(await db.notification.count({ where: { userId: tester.id, reminderKey: { in: [reminderKey(call.id), `call15:${call.id}`] } } }))) {
       const line = callReminderLine(displayName(dev), c.title, call.startsAt);
       await notify(tester.email, line, [line], `/app/sessions/${c.id}#call-${call.id}`, { about: dev.id, reminder: reminderKey(call.id), now: true, always: true /* (Owner, Nov 6, §324) emailed at once even with email Off */ });
       n++;
     }
-    if (!(await db.notification.count({ where: { userId: dev.id, reminderKey: reminderKey(call.id) } }))) {
+    if (!(await db.notification.count({ where: { userId: dev.id, reminderKey: { in: [reminderKey(call.id), `call15:${call.id}`] } } }))) {
       const line = callReminderLine(displayName(tester), c.title, call.startsAt);
       await notify(dev.email, line, [line], `/app/tests/${c.testId}#call-${call.id}`, { about: tester.id, reminder: reminderKey(call.id), now: true, always: true /* (Owner, Nov 6, §324) emailed at once even with email Off */ });
       n++;

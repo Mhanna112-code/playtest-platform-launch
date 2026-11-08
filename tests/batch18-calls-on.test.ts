@@ -33,26 +33,26 @@ describe("batch 18 section 9 (what stays after batch 21): the in-progress lines"
   });
 });
 
-describe("batch 18 section 12: the reminder 15 minutes before each call (batch 21: no Jitsi tip)", () => {
-  it("a reminder 15 minutes before, to both (the same line), once, stacked in the test's day; none for a call booked less than 15 minutes ahead", async () => {
+describe("batch 18 section 12: the reminder 24 hours before each call (batch 21: no Jitsi tip)", () => {
+  it("a reminder 24 hours before, to both (the same line), once, stacked in the test's day; including a call booked less than 24 hours ahead", async () => {
     const s = await setup();
     const j = await joined(s.testId);
     const call = await bookCall(s.testId, s.dev.cookie, j.sessionId, j.tester.cookie);
-    const startsAt = new Date(Date.now() + 14 * MIN);
+    const startsAt = new Date(Date.now() + 24 * 60 * MIN);
     await db.call.update({ where: { id: call.id }, data: { startsAt, createdAt: new Date(Date.now() - 2 * 86_400_000) } });
     await remindCallsSoon();
     await remindCallsSoon(); // once
-    const time = (tz: string | null) => fmtFor({ timeZone: tz }, startsAt, "time");
-    const tes = await db.notification.findMany({ where: { userId: j.tester.user.id, reminderKey: `call15:${call.id}` } });
+    const time = (tz: string | null) => fmtFor({ timeZone: tz }, startsAt, "datetime");
+    const tes = await db.notification.findMany({ where: { userId: j.tester.user.id, reminderKey: `call24:${call.id}` } });
     expect(tes.map((n) => n.text)).toEqual([`Your call with Nora Lane on “Harbor Run” starts at ${time(j.tester.user.timeZone)}.`]);
     expect(tes[0].link).toBe(`/app/sessions/${j.sessionId}#call-${call.id}`);
-    const dev = await db.notification.findMany({ where: { userId: s.dev.user.id, reminderKey: `call15:${call.id}` } });
+    const dev = await db.notification.findMany({ where: { userId: s.dev.user.id, reminderKey: `call24:${call.id}` } });
     expect(dev.map((n) => n.text)).toEqual([`Your call with Ana Silva on “Harbor Run” starts at ${time(s.dev.user.timeZone)}.`]);
     expect(bellKey(dev[0])).toBe(`${s.testId}|${dev[0].createdAt.toISOString().slice(0, 10)}`); // stacks in that test's day
-    // Booked 10 minutes ahead: no reminder.
+    // A short local booking is still reminded once.
     const late = await bookCall(s.testId, s.dev.cookie, j.sessionId, j.tester.cookie, 72);
     await db.call.update({ where: { id: late.id }, data: { startsAt: new Date(Date.now() + 10 * MIN), createdAt: new Date() } });
     await remindCallsSoon();
-    expect(await db.notification.count({ where: { reminderKey: `call15:${late.id}` } })).toBe(0);
+    expect(await db.notification.count({ where: { reminderKey: `call24:${late.id}` } })).toBe(2);
   });
 });
