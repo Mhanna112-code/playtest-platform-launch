@@ -177,8 +177,9 @@ describe("§183 adding recordings after a payment on the recording", () => {
 });
 
 describe("§183 the Terms", () => {
-  it("“Changes while you pay” says a payment on the part a tester is adding to stops her press once", () => {
+  it("“Changes while you pay” says a payment on the same part follows the tester’s Alerts", () => {
     const c = PAYMENT_RULES.find((r) => r.heading === "Changes while you pay")!;
-    expect(c.text).toContain("Developer payment updates, including payments on the same part, stop the tester's presses once only with their Alerts on.");
+    expect(c.text).toContain("Ordinary developer payments follow the tester’s Alerts, even on that part.");
+    expect(c.text).toContain("a team decision or the developer adding their side to the tester’s dispute forces a stop on applicable buttons.");
   });
 });

@@ -312,7 +312,8 @@ describe("§193 check (no change): an automatic call charge waits while the deve
 describe("§193 Terms", () => {
   it("Changes while you pay says a charge about a tester stops every press about them", () => {
     const text = PAYMENT_RULES.find((r) => r.heading === "Changes while you pay")!.text;
-    expect(text).toContain("a charge about that tester (their Charge, an automatic charge for one of their calls, or the charge of the team's decision on their dispute; your own payments aren't charges)");
-    expect(text).toContain("(End early, call requests and their answers), and so does a charge about that tester; presses about the whole test and about other testers follow your Alerts.");
+    expect(text).toContain("a charge for that tester forces a stop on the developer’s payment, End early, and call buttons for that tester, even with Alerts off.");
+    expect(text).toContain("Charges include the tester’s Charge, automatic call charges, and charges from team decisions.");
+    expect(text).toContain("Those events follow Alerts on whole-test buttons and buttons for other testers.");
   });
 });
