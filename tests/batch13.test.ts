@@ -166,14 +166,16 @@ describe("batch 13 section 4: Rate and suspensions", () => {
 
 describe("batch 13 sections 5 and 6: the NDA card, and an NDA added later", () => {
   it("the card's heading, bullets and box text", () => {
-    const f = src("app/app/tests/TestForm.tsx");
+    // (Owner, Nov 9, §336) The card is NdaCard now, shared with the NDA-only editor.
+    expect(src("app/app/tests/TestForm.tsx")).toContain("<NdaCard ");
+    expect(src("app/app/tests/TestForm.tsx")).not.toContain('{left("ndaText")}'); // (batch 34 §15) the NDA has no change limit
+    const f = src("app/app/tests/NdaCard.tsx");
     expect(f).toContain("<ShieldCheck");
     expect(f).toContain("Keep it confidential? (NDA, optional)");
     expect(f).toContain("An NDA stops testers sharing your build or what they saw. They must accept it before joining.");
     expect(f).toContain("you can always use the feedback you receive</strong> to improve your product.");
     expect(f).toContain("Testers can never show work from a test under an NDA as excerpts on their profile; without one, they can only with your permission.");
     expect(f).toContain('placeholder="Leave blank for no NDA. If filled, testers must accept it before joining."');
-    expect(f).not.toContain('{left("ndaText")}'); // (batch 34 §15) the NDA has no change limit
   });
 
   it("while the test has an NDA: requests refused, shown ones hidden; all back when it's removed (batch 18 section 7: a pending one can still be Allowed, straight into hidden)", async () => {
@@ -305,11 +307,11 @@ describe("batch 13 section 9: long text", () => {
     expect((await edit(s.testId, s.dev.cookie, { questions: ["Q".repeat(20_001)] })).body.error.message).toBe("Keep each question to 20,000 characters.");
     expect((await edit(s.testId, s.dev.cookie, { questions: ["Q".repeat(20_000)] })).status).toBe(200);
     const f = src("app/app/tests/TestForm.tsx");
-    expect(f).toContain("data-nda-count");
+    expect(src("app/app/tests/NdaCard.tsx")).toContain("data-nda-count"); // (§336) the NDA card is NdaCard
     expect(f).toContain("data-steps-count");
     // (Owner, Nov 3, batch 35 §141) Each question's count is in the shared list under the box (LineList, its CharacterCount); (§140) the NDA box stops at 1,000.
     expect(f).toContain('<LineList box="questions" text={f.questions} max={LIMITS.question}');
-    expect(f).toContain("maxLength={LIMITS.nda}");
+    expect(src("app/app/tests/NdaCard.tsx")).toContain("maxLength={LIMITS.nda}");
     expect(src("components/NdaBox.tsx")).toContain("<ValueText id={id}"); // (§231) the shared box for contract and listing texts, 12rem at first
     // (Owner, Nov 5, §267) The offer box no longer shows an NDA (it follows the listing): the join page and the session page keep the box.
     for (const p of ["app/app/find/[id]/JoinBox.tsx", "app/app/sessions/[id]/page.tsx"]) expect(src(p)).toContain("<NdaBox");

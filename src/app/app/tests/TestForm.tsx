@@ -20,7 +20,7 @@ import { signInKeeps } from "@/lib/keptText";
 import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
 import { LIMITS, changesLeftLine, counterOf, countersOf, countsOf, criticalLine, type CriticalCounts, type CriticalField } from "@/lib/limits";
 import { givenDeletedLine, keyGivenLine, keyNeedLine, keysAddedLine, keysRemovedLine, parseKeys } from "@/lib/keys";
-import { LISTING_MIN_CHARS, TITLE_MIN_CHARS, OPEN_UNTIL_PASSED, openUntilHasPassed, openUntilExtendLine, duplicateQuestion, duplicateQuestionLine, STEPS_FIELD, TITLE_FIELD, PART_PRICE_MISSING, PAY_RULES_LINK, PAY_RULES_TICK, PAYMENTS_TERMS_HREF, OPEN_UNTIL_MAX_LINE, openUntilCapHint, openUntilCapLine, DESCRIPTION_REQUIRED, HIGH_PART_CENTS, HIGH_PART_TICK, MATURE_WHY_MIN, MATURE_WHY_REQUIRED, MATURE_WHY_SHORT, NDA_TOO_LONG, OPEN_UNTIL_RANGE, QUESTION_TOO_LONG, daysBetween, partHighLine, partLowLine, rateHighLine, rateLowLine, openUntilLine, openUntilDay, MAX_SPOTS, SPOTS_MAX_LINE, spotsCap, spotsKeptLine, type Listing } from "@/lib/rules";
+import { LISTING_MIN_CHARS, TITLE_MIN_CHARS, OPEN_UNTIL_PASSED, openUntilHasPassed, openUntilExtendLine, duplicateQuestion, duplicateQuestionLine, STEPS_FIELD, TITLE_FIELD, PART_PRICE_MISSING, PAY_RULES_LINK, PAY_RULES_TICK, PAYMENTS_TERMS_HREF, OPEN_UNTIL_MAX_LINE, openUntilCapHint, openUntilCapLine, DESCRIPTION_REQUIRED, HIGH_PART_CENTS, HIGH_PART_TICK, MATURE_WHY_MIN, MATURE_WHY_REQUIRED, MATURE_WHY_SHORT, OPEN_UNTIL_RANGE, QUESTION_TOO_LONG, daysBetween, partHighLine, partLowLine, rateHighLine, rateLowLine, openUntilLine, openUntilDay, MAX_SPOTS, SPOTS_MAX_LINE, spotsCap, spotsKeptLine, type Listing } from "@/lib/rules";
 /** The browser's own date (YYYY-MM-DD) and zone. */
 const localToday = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 const browserZone = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone ?? ""; } catch { return ""; } };
@@ -31,7 +31,7 @@ import { KeyBoxes, freeBoxCheck, type KeysData } from "./KeyBoxes";
 import { savedHref } from "@/lib/savedNote";
 import { FieldNote, GroupNote, NoteItems, TheirsNote, WasNote, type NoteItem } from "@/components/FieldNote";
 import { CHANGED_ELSEWHERE, SAVED_ELSEWHERE, UPDATED_AT, mergeElsewhere, takesTheirs } from "@/lib/editMerge";
-import { ShieldCheck } from "lucide-react";
+import { NdaCard } from "./NdaCard";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { jumpTo } from "@/lib/markJump";
 import { lockedChangeLine, lockedChangeParts, shortValue, type LockedItem } from "@/lib/lockedChange";
@@ -871,20 +871,9 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
 
       <div className="panel">
         <h2>Optional</h2>
-        {/* (Owner, Oct 29, batch 13 section 5) The NDA in its own card, as in the full app; the Switch / Keep offer stays; (batch 34 §15) no change limit on the NDA. */}
-        <section className="space-y-3 rounded-xl border border-white/10 p-3" data-nda-card="">
-          <h3 className="flex items-center gap-2 font-semibold text-white"><ShieldCheck className="h-5 w-5 text-emerald-300" /> <label htmlFor="ndaText">Keep it confidential? (NDA, optional)</label>{draftMark("ndaText")}</h3>
-          <ul className="list-disc space-y-0.5 pl-5 text-sm text-slate-400">
-            <li>An NDA stops testers sharing your build or what they saw. They must accept it before joining.</li>
-            <li>With or without one, <strong className="text-slate-200">you can always use the feedback you receive</strong> to improve your product.</li>
-            <li>Testers can never show work from a test under an NDA as excerpts on their profile; without one, they can only with your permission.</li>
-          </ul>
-          {/* (Batch 13 section 9) 1,000 characters; an older, longer NDA stays as it is until a Save changes it. (Owner, Nov 3, §140) Typing stops at 1,000 (maxLength): an
-              older, longer NDA loads whole and can only be shortened. */}
-          <textarea id="ndaText" rows={4} maxLength={LIMITS.nda} className={"input" + (f.ndaText.length > LIMITS.nda && f.ndaText !== base.ndaText ? " field-bad" : "")} data-red-msg={f.ndaText.length > LIMITS.nda && f.ndaText !== base.ndaText ? NDA_TOO_LONG : undefined} value={f.ndaText} onChange={(e) => set({ ndaText: e.target.value })} placeholder="Leave blank for no NDA. If filled, testers must accept it before joining." />
-          <CharacterCount value={f.ndaText} max={LIMITS.nda} data-nda-count="" />
-          {note("ndaText")}
-        </section>
+        {/* (Owner, Oct 29, batch 13 section 5) The NDA in its own card; the Switch / Keep offer stays; (batch 34 §15) no change limit on the NDA. (Owner, Nov 9,
+            §336) The same card as the NDA-only editor (NdaCard). */}
+        <NdaCard value={f.ndaText} saved={base.ndaText} onChange={(v) => set({ ndaText: v })} mark={draftMark("ndaText")} note={note("ndaText")} />
         {edit ? (
           <KeyBoxes data={keysData} typed={keysText} onType={(t) => setKeysText(t)} onBlur={() => leave("keys")} openSpots={openN} line={keysBad ? keyLine : ""} warnings={fb.warnings} note={note("keys")} />
         ) : (

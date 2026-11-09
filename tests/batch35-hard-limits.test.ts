@@ -163,7 +163,7 @@ describe("§140 every limited box stops at its limit", () => {
     expect(wrong).toEqual([]);
   });
   it("the boxes that used to take more than their limit now stop there", () => {
-    expect(src("src/app/app/tests/TestForm.tsx")).toContain('<textarea id="ndaText" rows={4} maxLength={LIMITS.nda}');
+    expect(src("src/app/app/tests/NdaCard.tsx")).toContain('<textarea id="ndaText" rows={4} maxLength={LIMITS.nda}'); // (§336) Edit's and the NDA-only editor's card
     expect(src("src/app/admin/AdminButton.tsx")).toContain("rows={2} maxLength={LIMITS.reason}");
     expect(src("src/app/admin/DisputeDecision.tsx")).toContain("maxLength={LIMITS.reason}");
     expect(src("src/app/admin/TeamCloseBox.tsx")).toContain("maxLength={LIMITS.reason}");
