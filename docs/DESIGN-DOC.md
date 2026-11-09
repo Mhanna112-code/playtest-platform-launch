@@ -1181,7 +1181,7 @@ From Every page: the live box, long lists (each list is a plain scroll box), num
 - **Upcoming calls:** the next 7 days, each with Join call while the call can be joined (the same rule as the session page) and "Check your call setup" (Call page).
 
   [image: The tester dashboard's Upcoming calls, with Join while the call can be joined.]
-- **Invitations:** Accept (opens the join page) and No thanks. They follow the developer's side live:
+- **Invitations:** Open (opens the join page) and No thanks. They follow the developer's side live:
   - A new invite appears in place, with a top-box line, "Marc Hanna invited you to “ddddd”" (a re-sent one: "Marc Hanna updated “ddddd”: your invite was sent again on the new listing."), raising the pill.
   - A closed invite's card disappears, with a neutral line in the live box: "Your invite to “Harbor Run” was closed." Why it closed is never said there.
   - An invite sent again on a new listing updates its card in place: "Sent again on the new listing · <date>".

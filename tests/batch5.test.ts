@@ -190,15 +190,16 @@ describe("batch 5 item 3: a restricted account's signed-in pages go to the dashb
 });
 
 describe("batch 5 item 4: no automatic re-invite after a tester's suspension", () => {
-  it("the removed tests wait with 'You were removed from this test' and Ask to rejoin (open, a spot, not paused) until asked or dismissed; no Suspended label, no Rejoin", async () => {
+  it("Previous Tests shows removed tests without a rejoin button, and the developer can invite the tester again", async () => {
     expect(src("lib/server/restrictions.ts")).not.toContain("reinviteAfterSuspension");
     const dash = src("app/app/page.tsx");
     expect(dash).not.toContain("data-suspended-label");
     expect(dash).not.toContain('"Rejoin"');
-    // (Owner, Nov 3) The section's heading says it; the cards no longer repeat "You were removed from this test." (Dismiss all clears them).
     expect(dash).not.toContain("data-removed-label");
-    expect(dash).toContain('"Tests you were removed from"');
-    expect(dash).toContain("hasSpot(c) && askable(c)");
+    const previous = dash.split('<SearchPanel id="previous-tests"')[1]?.split("\n")[0];
+    expect(previous).toContain("previousTestGroup(c)");
+    expect(previous).toContain("<FindTestCard");
+    expect(previous).not.toMatch(/Ask to rejoin|<Link|<button/);
 
     const { dev, testId } = await setup({ spots: 1 });
     const ana = await joined(testId, "Ana Silva");

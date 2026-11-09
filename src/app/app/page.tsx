@@ -34,7 +34,7 @@ import { DeveloperTiles } from "@/components/ProfileTiles";
 import { StatTile } from "@/components/StatTile";
 
 import { CategoryChips, CategoryTile, FeedbackBar, mainCategory, PartBadges, Seats, StatusPill } from "@/components/Ui";
-import { callCharge, callJoinable, canAskToRejoin, chargeAmount, termsLine, testerShare, testPaused, chargeOpensAt, chargeOpensNote } from "@/lib/rules";
+import { callCharge, callJoinable, chargeAmount, termsLine, testerShare, testPaused, chargeOpensAt, chargeOpensNote } from "@/lib/rules";
 import { ratingSummary } from "@/lib/server/ratings";
 import { unreadCount } from "@/lib/server/messages";
 import { asListing, profileSaved } from "@/lib/server/tests";
@@ -401,15 +401,13 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
     include: { test: { include: { developer: true } }, submissions: { include: { review: true } }, calls: { where: { status: "booked", startsAt: { gt: now, lte: new Date(now.getTime() + 7 * DAY) } } } },
   });
   const ids = contracts.map((c) => c.id);
-  const [apps, paid, rating, invites, ratedIds, payments] = await Promise.all([
+  const [apps, paid, rating, invites, payments] = await Promise.all([
     db.application.findMany({ where: { testerId: userId, status: "pending" }, orderBy: { createdAt: "desc" } }),
     db.payment.aggregate({ where: { testerId: userId, kind: { not: "subscription" }, status: { in: ["charged", "not_set_up"] } }, _sum: { testerCents: true } }),
     ratingSummary(userId, "tester"), // (Owner, Nov 5, §276) the tester dashboard's Rating tile: ratings they got as a tester only
     db.invite.findMany({ where: { testerId: userId, status: "sent", test: { status: "open" } }, orderBy: { createdAt: "desc" }, include: { test: { include: { developer: true, _count: { select: { contracts: { where: { status: "working" } } } } } } } }),
-    db.rating.findMany({ where: { contractId: { in: ids }, side: "tester" }, select: { contractId: true } }),
     db.payment.findMany({ where: { contractId: { in: ids } }, orderBy: { createdAt: "asc" } }),
   ]);
-  const rated = new Set(ratedIds.map((r) => r.contractId));
   // (Batch 16 section 32) An invite re-sent on a new listing (an earlier one of theirs on that test was replaced).
   const replacedOn = new Set((await db.invite.findMany({ where: { testerId: userId, status: "replaced", testId: { in: invites.map((i) => i.testId) } }, select: { testId: true } })).map((r) => r.testId));
   const resentIds = new Set(invites.filter((i) => replacedOn.has(i.testId)).map((i) => i.id));
@@ -422,10 +420,6 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
   const working = contracts.filter((c) => c.status === "working" && previousTestGroup(c)===null);
   const pausedTest = (t: { adminPausedAt: Date | null; developer: { holdStartedAt: Date | null; devSuspendedAt: Date | null } }) => testPaused(t.developer, t);
   const byEnd = (a: (typeof contracts)[number], b: (typeof contracts)[number]) => (b.endedAt ?? b.joinedAt).getTime() - (a.endedAt ?? a.joinedAt).getTime();
-  // (Owner, Oct 28) Tests the team's suspension removed the tester from: while suspended a read-only list; after reinstatement (no automatic re-invite) they sit at the top with
-  // "You were removed from this test" and Ask to rejoin (only while the test is open, has a spot and isn't paused), until they ask or dismiss them. The developer can also invite
-  // them again as usual (the invite shows under Invitations). Other left / removed tests (before the deadline, not stopped, not rated) are in "Tests you left".
-  const askable = (c: (typeof contracts)[number]) => canAskToRejoin(c, rated.has(c.id)) && c.test.status !== "stopped" && !c.test.workEndedAt && !apps.some((a) => a.testId === c.testId && a.kind === "rejoin");
   // Sent and waiting for the developer's review.
   // (Batch 17 §19) Work unpaid when its Charge closed (its own closing date, for the tester) stays unpaid: it leaves "Waiting for review" and "Charge or cancel".
   const chargeCloses = new Map(await Promise.all(contracts.flatMap((c) => c.submissions.filter((s) => !s.review)).map(async (s) => [s.id, await pieceCloseOut({ submissionId: s.id }, "tester", now)] as const)));
@@ -583,7 +577,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
                 {/* (Batch 16 section 32) Re-sent on a new listing, or the test is full: said on the card. */}
                 {resentIds.has(i.id) && <span className="badge" data-invite-resent="">Sent again on the new listing · {fmtDate(i.createdAt)}</span>}
                 {i.test._count.contracts >= i.test.spots && <span className="badge" data-invite-full="">Full right now: your invite stays open</span>}
-                <Link href={`/app/find/${i.testId}`} className="btn px-3 py-1.5 text-sm no-underline hover:no-underline">Accept</Link>
+                <Link href={`/app/find/${i.testId}`} className="btn px-3 py-1.5 text-sm no-underline hover:no-underline">Open</Link>
                 <NoThanks inviteId={i.id} />
               </li>
             ))}
@@ -594,7 +588,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
       {/* (Batch 17 §18) Join pages opened but never joined, with each test's state now (live on the dashboard's poll). */}
       {!suspended && <TestsVisited testerId={userId} />}
 
-      <SearchPanel id="previous-tests" title="Previous Tests" placeholder="Search previous tests by developer or test" filters={PREVIOUS_TEST_FILTERS} items={contracts.filter(c=>previousTestGroup(c)!==null).sort(byEnd).map(c=>({key:c.id,search:`${c.title} ${displayName(c.test.developer)}`,states:[previousTestGroup(c)!],node:<FindTestCard test={{...c.test,title:c.title}} href={`/app/sessions/${c.id}`} developerName={displayName(c.test.developer)} terms={pays(asListing(c.test))} state={previousTestGroup(c)!} footer={<div className="space-y-2"><p className="text-xs text-slate-400">{fmtDate(c.endedAt??c.joinedAt)}</p>{!suspended && askable(c) && !pausedTest(c.test) && <Link href={`/app/find/${c.testId}`} className="btn-secondary text-sm">Ask to rejoin</Link>}</div>}/>}))}/>
+      <SearchPanel id="previous-tests" title="Previous Tests" placeholder="Search previous tests by developer or test" filters={PREVIOUS_TEST_FILTERS} items={contracts.filter(c=>previousTestGroup(c)!==null).sort(byEnd).map(c=>({key:c.id,search:`${c.title} ${displayName(c.test.developer)}`,states:[previousTestGroup(c)!],node:<FindTestCard test={{...c.test,title:c.title}} href={`/app/sessions/${c.id}`} developerName={displayName(c.test.developer)} terms={pays(asListing(c.test))} state={previousTestGroup(c)!} footer={<p className="text-xs text-slate-400">{fmtDate(c.endedAt??c.joinedAt)}</p>}/>}))}/>
     </>
   );
 
