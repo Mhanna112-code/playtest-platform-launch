@@ -73,11 +73,17 @@ describe("section 10: one rule for every form with field mistakes", () => {
     });
   }
   it("server lines land on their field: data-match on the boxes", () => {
-    expect(src("app/login/LoginForm.tsx")).toContain('data-match="your password|wrong email or password"');
+    expect(src("app/login/LoginForm.tsx")).toContain('data-match="^Enter your password$"');
     expect(src("app/signup/page.tsx")).toContain('data-match="terms of use"');
     expect(src("app/app/tests/[id]/PayBox.tsx")).toContain('data-match="^Tick “I understand"');
     expect(src("components/RateBox.tsx")).toContain('data-match="stars"');
     expect(src("app/app/sessions/[id]/SessionActions.tsx")).toContain("find={(m) => (m === ANSWER_ONE || isShortLine(m) ? document.getElementById(`a${missingAt ?? 0}`) : m === ANSWER_REQUIRED");
+  });
+  it("a rejected login pair does not mark either credential invalid and block a retry", () => {
+    const rules = Array.from(src("app/login/LoginForm.tsx").matchAll(/data-match="([^"]+)"/g), ([, pattern]) => new RegExp(pattern, "i"));
+    expect(rules.some((rule) => rule.test("Wrong email or password"))).toBe(false);
+    expect(rules.some((rule) => rule.test("Enter your password"))).toBe(true);
+    expect(rules.some((rule) => rule.test("Enter a valid email"))).toBe(true);
   });
   it("boxes that aren't forms are their own root; a component's own red line is data-red-msg", () => {
     for (const f of ["app/app/tests/[id]/PayBox.tsx", "app/app/sessions/[id]/ChoiceBox.tsx", "components/RateBox.tsx", "components/CancelMenu.tsx", "app/admin/DisputeDecision.tsx", "app/app/tests/[id]/InvitePanel.tsx"])

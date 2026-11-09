@@ -26,7 +26,8 @@ export function LoginForm({ reset, google, next = "/app", nextFor }: { reset: bo
       </div>
       <div>
         <label className="label req" htmlFor="password">Password</label>
-        <PasswordInput id="password" name="password" autoComplete="current-password" required data-required="" data-required-msg="Enter your password" data-match="your password|wrong email or password" />
+        {/* A rejected credential pair is a form error. A retry may change only the email. */}
+        <PasswordInput id="password" name="password" autoComplete="current-password" required data-required="" data-required-msg="Enter your password" data-match="^Enter your password$" />
         <Link href="/forgot" className="mt-1 inline-block text-xs text-indigo-300 hover:underline">Forgot your password?</Link>
       </div>
     </AuthForm>
