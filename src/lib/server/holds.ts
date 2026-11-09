@@ -236,13 +236,15 @@ export async function shiftAfterPause(tx: Prisma.TransactionClient, t: { id: str
   for (const c of await tx.contract.findMany({ where: { testId: t.id, status: "working", dueAt: { gt: start } } })) await tx.contract.update({ where: { id: c.id }, data: { dueAt: movedDue(c.dueAt, ms, tz) } });
   for (const x of await tx.submission.findMany({ where: { contract: { testId: t.id }, review: null, payBy: { not: null } } })) {
     const by = pauseShiftMs(x.updatedAt > start ? x.updatedAt : start, now, others); // only the part of the pause after it was sent
-    if (by > 0) await tx.submission.update({ where: { id: x.id }, data: { payBy: later(x.payBy, by), choiceBy: later(x.choiceBy, by) } });
+    // (Owner, Nov 9, §346) Like a deadline: a review date (Charge open) that had already passed when the pause began stays. Its close-out counts the whole pause
+    // after it (pieceCloseOut); moving it too counted the pause twice (a 48 h pause moved the close-out ~60 h).
+    if (by > 0) await tx.submission.update({ where: { id: x.id }, data: { payBy: x.payBy && x.payBy > start ? later(x.payBy, by) : x.payBy, choiceBy: later(x.choiceBy, by) } });
   }
   // (Batch 15 sections 15 and 40) A call's review clock moves the same way (only the part of the pause after its length was final).
   for (const x of await tx.call.findMany({ where: { contract: { testId: t.id }, review: null, payBy: { not: null }, status: "booked" } })) {
     const from = x.measuredAt && x.measuredAt > start ? x.measuredAt : start;
     const by = pauseShiftMs(from, now, others);
-    if (by > 0) await tx.call.update({ where: { id: x.id }, data: { payBy: later(x.payBy, by), choiceBy: later(x.choiceBy, by) } });
+    if (by > 0) await tx.call.update({ where: { id: x.id }, data: { payBy: x.payBy && x.payBy > start ? later(x.payBy, by) : x.payBy, choiceBy: later(x.choiceBy, by) } }); // (§346)
   }
   return ms;
 }

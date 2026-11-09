@@ -3,7 +3,8 @@ import { db } from "@/lib/db";
 import { displayName } from "@/lib/format";
 import { linesFor, notify } from "./notify";
 import { T, fmtIn, renderTimes } from "@/lib/tz";
-import { movedDue, nearestDayEnd } from "@/lib/rules";
+import { movedDue, nearestDayEnd, remergedDue } from "@/lib/rules";
+import { pauseSince } from "@/lib/pause";
 import { OUTAGES_GROUP } from "@/lib/bell";
 
 // (Owner, Oct 22, NEWEST+6; batch 15 section 10) Outages come from the uptime service's own alerts (POST /api/health/alert?key=...): a "down" is stored and the
@@ -245,9 +246,11 @@ export async function recordGap(start: Date, end: Date) {
   }
   if (claimed.count !== 1) return null; // merged meanwhile by another request
   if (applied) {
-    // Only the new parts move the clocks (the rest already did), with no second bell: the one sent is reworded to the merged times.
-    if (s < over.startAt) await applyOutage({ startAt: s, endAt: over.startAt, ms: over.startAt.getTime() - s.getTime() }, { quiet: true });
-    if (e > over.endAt) await applyOutage({ startAt: over.endAt, endAt: e, ms: e.getTime() - over.endAt.getTime() }, { quiet: true });
+    // Only the new parts move the clocks (the rest already did), with no second bell: the one sent is reworded to the merged times. (Owner, Nov 9, §346) Testers'
+    // deadlines are rounded up once for the whole outage (remergeDeadlines), never once more per part.
+    if (s < over.startAt) await applyOutage({ startAt: s, endAt: over.startAt, ms: over.startAt.getTime() - s.getTime() }, { quiet: true, deadlines: false });
+    if (e > over.endAt) await applyOutage({ startAt: over.endAt, endAt: e, ms: e.getTime() - over.endAt.getTime() }, { quiet: true, deadlines: false });
+    await remergeDeadlines(over, { startAt: s, ms });
     await rewordBells(over, { startAt: s, endAt: e, ms });
   }
   return db.outage.findUnique({ where: { id: over.id } });
@@ -300,17 +303,43 @@ export async function approveOutage(adminId: string, outageId: string, p: import
   return { ok: true };
 }
 
-async function applyOutage(o: { startAt: Date; endAt: Date; ms: number }, opts: { /** (batch 26) a merged outage's extra part: no second bell */ quiet?: boolean } = {}) {
+/**
+ * (Owner, Nov 9, §346) The tests paused since the outage began (or before), and still paused: an outage inside a pause moves nothing at recovery, because the pause's
+ * own lift moves every date by the whole paused time, which includes the outage (it was counted twice).
+ */
+async function pausedThrough(start: Date) {
+  const tests = await db.test.findMany({
+    where: { status: { in: ["open", "closed"] }, OR: [{ adminPausedAt: { not: null } }, { developer: { OR: [{ holdStartedAt: { not: null } }, { devSuspendedAt: { not: null } }] } }] },
+    include: { developer: { select: { holdStartedAt: true, holdReason: true, devSuspendedAt: true } } },
+  });
+  return tests.filter((t) => { const since = pauseSince(t.developer, t); return !!since && since.getTime() <= start.getTime(); }).map((t) => t.id);
+}
+
+/** (§346) A merged outage's deadlines: each one the first part moved is moved for the whole outage with one rounding up; one only the earlier start now covers, once. */
+async function remergeDeadlines(was: { startAt: Date; ms: number }, now: { startAt: Date; ms: number }) {
+  const paused = new Set(await pausedThrough(now.startAt));
+  const rows = await db.contract.findMany({ where: { status: "working", dueAt: { gt: now.startAt } }, select: { id: true, testId: true, dueAt: true, test: { select: { developer: { select: { timeZone: true } } } } } });
+  for (const c of rows) {
+    if (paused.has(c.testId)) continue;
+    const tz = c.test.developer.timeZone;
+    const due = c.dueAt > was.startAt ? remergedDue(c.dueAt, was.ms, now.ms, tz) : movedDue(c.dueAt, now.ms, tz);
+    if (due.getTime() !== c.dueAt.getTime()) await db.contract.update({ where: { id: c.id }, data: { dueAt: due } });
+  }
+}
+
+async function applyOutage(o: { startAt: Date; endAt: Date; ms: number }, opts: { /** (batch 26) a merged outage's extra part: no second bell */ quiet?: boolean; /** (§346) false: a merged part; remergeDeadlines does them */ deadlines?: boolean } = {}) {
   const start = o.startAt, end = o.endAt, ms = o.ms;
   const L = ms;
+  // (§346) Tests paused through the outage: their dates wait for the pause's lift, which counts this time too.
+  const paused = await pausedThrough(start);
   await db.$transaction(async (tx) => {
     // Review clocks / Charge points and their reminders.
-    await tx.$executeRaw`UPDATE "Submission" s SET "payBy" = "payBy" + ${L} * interval '1 millisecond' WHERE "payBy" > (${start}::timestamptz AT TIME ZONE 'UTC') AND NOT EXISTS (SELECT 1 FROM "Review" r WHERE r."submissionId" = s.id)`;
-    await tx.$executeRaw`UPDATE "Submission" SET "choiceBy" = "choiceBy" + ${L} * interval '1 millisecond' WHERE "choiceBy" > (${start}::timestamptz AT TIME ZONE 'UTC')`;
+    await tx.$executeRaw`UPDATE "Submission" s SET "payBy" = "payBy" + ${L} * interval '1 millisecond' WHERE "payBy" > (${start}::timestamptz AT TIME ZONE 'UTC') AND NOT EXISTS (SELECT 1 FROM "Review" r WHERE r."submissionId" = s.id) AND NOT EXISTS (SELECT 1 FROM "Contract" k WHERE k.id = s."contractId" AND k."testId" = ANY(${paused}::text[]))`;
+    await tx.$executeRaw`UPDATE "Submission" s SET "choiceBy" = "choiceBy" + ${L} * interval '1 millisecond' WHERE "choiceBy" > (${start}::timestamptz AT TIME ZONE 'UTC') AND NOT EXISTS (SELECT 1 FROM "Contract" k WHERE k.id = s."contractId" AND k."testId" = ANY(${paused}::text[]))`;
     await tx.$executeRaw`UPDATE "Submission" SET "remindedAt" = "remindedAt" + ${L} * interval '1 millisecond' WHERE "remindedAt" IS NOT NULL`;
     await tx.$executeRaw`UPDATE "Submission" SET "devRemindedAt" = "devRemindedAt" + ${L} * interval '1 millisecond' WHERE "devRemindedAt" IS NOT NULL`;
     // (Batch 28 §21) A call's review date (when a listed call is charged automatically) moves too.
-    await tx.$executeRaw`UPDATE "Call" c SET "payBy" = "payBy" + ${L} * interval '1 millisecond' WHERE "payBy" > (${start}::timestamptz AT TIME ZONE 'UTC') AND NOT EXISTS (SELECT 1 FROM "Review" r WHERE r."callId" = c.id)`;
+    await tx.$executeRaw`UPDATE "Call" c SET "payBy" = "payBy" + ${L} * interval '1 millisecond' WHERE "payBy" > (${start}::timestamptz AT TIME ZONE 'UTC') AND NOT EXISTS (SELECT 1 FROM "Review" r WHERE r."callId" = c.id) AND NOT EXISTS (SELECT 1 FROM "Contract" k WHERE k.id = c."contractId" AND k."testId" = ANY(${paused}::text[]))`;
     // Pay-by dates (3-day cut-off, which starts a hold) and daily retries.
     await tx.$executeRaw`UPDATE "Payment" SET "owedUntil" = "owedUntil" + ${L} * interval '1 millisecond' WHERE status = 'failed' AND "settledAt" IS NULL AND "owedUntil" > (${start}::timestamptz AT TIME ZONE 'UTC')`;
     await tx.$executeRaw`UPDATE "Payment" SET "retriedAt" = "retriedAt" + ${L} * interval '1 millisecond' WHERE status = 'failed' AND "settledAt" IS NULL AND "retriedAt" IS NOT NULL`;
@@ -322,9 +351,11 @@ async function applyOutage(o: { startAt: Date; endAt: Date; ms: number }, opts: 
     await tx.$executeRaw`UPDATE "User" SET "holdStartedAt" = "holdStartedAt" + ${L} * interval '1 millisecond' WHERE "holdStartedAt" IS NOT NULL`;
     // Tester deadlines and Open until. (Owner, Nov 3, batch 35 §154) A moved deadline is rounded UP to the end of its day (11:59 PM in the developer's zone, where it
     // was counted), and Open until stays the end of a day (the nearest one, as for a pause lift), never an odd time like 7:22 AM.
-    for (const c of await tx.contract.findMany({ where: { status: "working", dueAt: { gt: start } }, select: { id: true, dueAt: true, test: { select: { developer: { select: { timeZone: true } } } } } }))
-      await tx.contract.update({ where: { id: c.id }, data: { dueAt: movedDue(c.dueAt, L, c.test.developer.timeZone) } });
-    for (const t of await tx.test.findMany({ where: { openUntil: { gt: start } }, select: { id: true, openUntil: true, developer: { select: { timeZone: true } } } }))
+    if (opts.deadlines !== false)
+      for (const c of await tx.contract.findMany({ where: { status: "working", dueAt: { gt: start }, testId: { notIn: paused } }, select: { id: true, dueAt: true, test: { select: { developer: { select: { timeZone: true } } } } } }))
+        await tx.contract.update({ where: { id: c.id }, data: { dueAt: movedDue(c.dueAt, L, c.test.developer.timeZone) } });
+    // (§346) Not on a test paused through the outage (its lift moves Open until).
+    for (const t of await tx.test.findMany({ where: { openUntil: { gt: start }, id: { notIn: paused } }, select: { id: true, openUntil: true, developer: { select: { timeZone: true } } } }))
       await tx.test.update({ where: { id: t.id }, data: { openUntil: nearestDayEnd(new Date(t.openUntil!.getTime() + L), t.developer.timeZone) } });
     // Rating windows (14 days from the tester's rating).
     await tx.$executeRaw`UPDATE "Rating" SET "createdAt" = "createdAt" + ${L} * interval '1 millisecond' WHERE side = 'tester' AND "revealedAt" IS NULL AND "createdAt" + interval '14 days' > (${start}::timestamptz AT TIME ZONE 'UTC')`;

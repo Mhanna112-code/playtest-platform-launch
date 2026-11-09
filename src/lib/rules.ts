@@ -396,6 +396,18 @@ export function dayEndAtOrAfter(d: Date, tz?: string | null) {
 }
 /** (§154) A deadline moved later by a pause or an outage (`ms`, the time given back): rounded up to the end of the day it lands on. */
 export const movedDue = (due: Date, ms: number, tz?: string | null) => dayEndAtOrAfter(new Date(due.getTime() + ms), tz);
+/**
+ * (Owner, Nov 9, §346) One rounding per interruption: a deadline that a first part of an outage (`first` ms) already moved and rounded up to `moved`, moved for
+ * the whole outage (`total` ms, the merged one) from the deadline it had before it, rounded up ONCE. Deadlines are ends of days, so the one before is the last end of
+ * a day before `moved - first`. Never earlier than `moved`.
+ */
+export function remergedDue(moved: Date, first: number, total: number, tz?: string | null) {
+  const x = new Date(moved.getTime() - first);
+  const sameDay = endOfDayIn(dayIn(x, tz), tz);
+  const before = sameDay.getTime() - x.getTime() < 1000 ? sameDay : endOfDayIn(plusDays(dayIn(x, tz), -1), tz);
+  const next = movedDue(before, total, tz);
+  return next.getTime() < moved.getTime() ? moved : next;
+}
 /** (§154) A deadline moved later by whole days (Edit moving Open until later): the end of the day `days` calendar days after its own day (clock changes never shift it off 11:59 PM). */
 export const dueAfterDays = (due: Date, days: number, tz?: string | null) => endOfDayIn(plusDays(dayIn(due, tz), days), tz);
 /**
