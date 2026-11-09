@@ -443,7 +443,7 @@ export async function confirmStart(dev: { id: string }, paymentId: string, body:
         await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${c.testId} FOR UPDATE`;
         // (Owner, Nov 4, §171 item 7) The press-time gate stays as it was (`awayCharge`: §159's rules, not §171 A1/A2) while the owner decides the waiting-charge rules.
         // (Owner, Nov 4, §193) Plus a charge about the same tester on another part (never the line of the charge this press confirms).
-        await devGate(tx, c.testId, body, { paidSoFarCents: await paidSoFar(c.id, tx), name: displayName(c.tester) }, [], undefined, { ...payPressOf(c.id, piece), awayCharge: true });
+        await devGate(tx, c.testId, body, { paidSoFarCents: await paidSoFar(c.id, tx), name: displayName(c.tester) }, [], undefined, { ...payPressOf(c.id, piece), awayCharge: true, skipTeamPause: true });
       }).catch((e) => {
         // (Owner, Nov 4, §177) Pressed away from the test's own page (the dashboard's "Your bank wants you to confirm"): each stop line names the test.
         if (e instanceof HttpError && e.code === "stop_once" && awayFromTest(body.page, c.testId) && Array.isArray(e.data?.changes)) e.data.changes = (e.data.changes as { text: string }[]).map((l) => ({ ...l, text: onTestLine(c.title, l.text) }));

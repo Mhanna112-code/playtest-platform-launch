@@ -6,12 +6,8 @@ import { HttpError } from "./http";
 import { seenOf } from "./live";
 
 /**
- * (Owner, Oct 28, batch 17 section 12) "Stops" = the developer's Stop, the team's Stop, the test closing (7 days paused, or Close now) and End early for that tester,
- * all treated alike. The next Charge / Let it go (tester), Pay / Pay more (developer) or Rate (both) on a page opened BEFORE the stop stops once with the stop as the
- * change; the second press (its stop box shown after the stop) goes ahead. Dispute, the developer's side of a dispute and excerpts never stop for it.
- * (Owner, Nov 5, §271) That exemption is for STOPS only: a pause (the team's, the developer's payment or chargeback hold, a developer suspension) or the team's
- * lift of its pause since the page loaded stops EVERY press on the test once, both sides, whatever the Alerts (testerPauseMoments / devPauseMoments below);
- * the one exception is the team's Decide dispute.
+ * State-change retries for developer actions, the remaining tester work-end actions,
+ * and tester profile Block and Report. Eligibility checks belong to each action.
  */
 
 /** When the page was loaded, as this press knows it: the stop box's time on a second press, else the page's render. null = an old client that sent no page time (no stop). */
@@ -55,11 +51,11 @@ export async function devStopSince(testId: string, contractId: string | null, lo
  * (Owner, Oct 29, batch 29 section 11) A pause the developer's page opened before it hasn't shown: the team's pause of this test, or the developer's hold or suspension
  * (whichever began first after the page loaded and still holds). Like a stop, it stops the next press once ("The team paused this test at 3:10 PM."); the second goes ahead.
  */
-export async function devPauseSince(testId: string, loaded: Date | null, now = new Date()): Promise<TestEventLike | null> {
+export async function devPauseSince(testId: string, loaded: Date | null, now = new Date(), skipTeamPause = false): Promise<TestEventLike | null> {
   if (!loaded) return null;
   const t = await db.test.findUnique({ where: { id: testId }, select: { adminPausedAt: true, developer: { select: { timeZone: true, holdStartedAt: true, devSuspendedAt: true } } } });
   if (!t) return null;
-  const causes = ([["team", t.adminPausedAt], ["hold", t.developer.holdStartedAt], ["suspended", t.developer.devSuspendedAt]] as const)
+  const causes = ([["team", skipTeamPause ? null : t.adminPausedAt], ["hold", t.developer.holdStartedAt], ["suspended", t.developer.devSuspendedAt]] as const)
     .filter((x): x is readonly ["team" | "hold" | "suspended", Date] => !!x[1] && x[1] > loaded)
     .sort((a, b) => a[1].getTime() - b[1].getTime());
   if (!causes.length) return null;
@@ -121,11 +117,7 @@ export async function testerPauseSince(contractId: string, loaded: Date | null, 
   return { kind: "stop", text: pauseMomentLine("tester", "team", at, (d) => fmtTimeIn(d, tz), (d) => fmtDateTimeIn(d, tz), now), createdAt: at };
 }
 
-/**
- * (Owner, Nov 5, §271) A pause since the page loaded stops every tester press on the test ONCE, whatever her Alerts: "This test was paused at 3:10 PM." (never
- * why), and a lift of the team's pause the same way ("This test resumed at 3:10 PM.", with the pause it ended when that came after the load too). Oldest first.
- * testerGate adds these to every press that goes through it; the presses outside it (Join call, Block, Report, an excerpt request, a message) use pauseStopOnce.
- */
+/** Pause and lift lines for tester profile actions. */
 export async function testerPauseMoments(contractId: string, loaded: Date | null, now = new Date()): Promise<TestEventLike[]> {
   if (!loaded) return [];
   const pause = await testerPauseSince(contractId, loaded, now);

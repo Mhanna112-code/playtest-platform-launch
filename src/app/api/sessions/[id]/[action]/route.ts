@@ -74,20 +74,12 @@ async function pausedRefusal(userId: string, contractId: string, action: string)
   if (SEND_ACTIONS.has(action) || !PAUSE_DEFAULTS.draftsEditable) throw new HttpError(409, "paused", PAUSED_SEND);
 }
 
-/**
- * (Owner, Oct 29, batch 29 section 11; replaces batch 16 section 25's "goes through on the first press") On a stopped, closed or paused test (any cause) and after the
- * tester's work ended, every press still allowed follows the same stop-once rules as on a running test. The stop, close, early end or pause itself is a change like any
- * other: a press on a page opened before it stops once naming it ("Nora Lane stopped this test at 3:10 PM.", "This test was paused at 3:10 PM."); the second goes ahead.
- * Rate checks the same in its own gate (its short list: no pause); Leave and Block never stop; chat and the excerpt presses keep their own rules.
- * (Owner, Nov 5, §271) The pause (and the team's lift of it) moved into testerGate: every tester press stops once for it there, Alerts Off too; this keeps the stop.
- */
-const MOMENT_ACTIONS = new Set(["choose", "dispute", "cancel-call", "cancel-set", "request-time", "answer-request", "terms"]);
+/** The remaining session actions that check for an unseen end of work. */
+const MOMENT_ACTIONS = new Set(["dispute", "cancel-call", "cancel-set", "request-time", "answer-request", "terms"]);
 async function stateMoment(contractId: string, action: string, body: Record<string, unknown>) {
   if (!MOMENT_ACTIONS.has(action)) return;
   const loaded = loadedOf(body);
   const stop = await testerStopSince(contractId, loaded);
-  // (Owner, Nov 5, §271) A pause and the team's lift of it (§207) are no longer said here: testerGate says them for every press that goes through it (after the
-  // press's own refusals, so a press refused while paused shows only its refusal, never a stop first). Only the stop is this route's.
   // (Owner, Nov 5, §250) A moment a stop box on this page already listed is seen: the press follows its usual gate.
   const found = notListed(stop ? [stop] : [], body);
   if (!found.length) return;
@@ -97,7 +89,7 @@ async function stateMoment(contractId: string, action: string, body: Record<stri
   let extra: Record<string, unknown> = {};
   if (c) {
     try {
-      await testerGate(c.testerId, contractId, c.testId, body, undefined, { skipTerms: action === "terms", ...(action === "choose" ? { owedPiece: String(body.callId ?? body.submissionId ?? "") || undefined } : {}) });
+      await testerGate(c.testerId, contractId, c.testId, body, undefined, { skipTerms: action === "terms" });
     } catch (e) {
       if (e instanceof HttpError && e.code === "stop_once" && Array.isArray(e.data?.changes)) {
         more = e.data.changes as typeof more;
@@ -141,8 +133,6 @@ export async function POST(req: Request, { params }: Ctx) {
     // (Owner, Nov 5, §267; Nov 6, §302: every NDA change) An NDA change not yet acknowledged blocks every press here but Rate and Leave (§268), the
     // Acknowledge button and the pill.
     if (!NDA_FREE_SET.has(action)) await ndaBlockFirst(id);
-    // (Batch 17 section 12; batch 29 section 11) A press on a page opened before the test stopped, closed, paused or this tester's work ended: it stops once with that
-    // as the change (the second press goes ahead).
     await stateMoment(id, action, body);
     const res0 = await run(u, id, action, body);
     const data = await res0.clone().json().catch(() => null);

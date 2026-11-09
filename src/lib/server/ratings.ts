@@ -10,7 +10,7 @@ import { finishedAndRatedLine, ratedYouLine, ratingClosedLine, RATE_CHARGE_FIRST
 import { cancelCallsAhead, lockTest, ownContract, ownTest, recordEvent, spotOpened } from "./tests";
 import { seenOf, unanswered, tabOf, testerPaymentChanges } from "./live";
 import { FINISHED_PART_REASON, payMoreLine, TESTER_CALL_KINDS, testerChanges, testerGate } from "./testerGate";
-import { devPauseMoments, devStopSince, loadedOf, stopBox, testerStopSince } from "./stopMoment";
+import { devPauseMoments, devStopSince, loadedOf, stopBox } from "./stopMoment";
 import { closeOutOf, testerRatingClosesAt, closedOut, devPauseSpans, mergeSpans, teamPauseSpans, windowEnd, type Span } from "./closeOut";
 import { closeOffersOfEnded } from "./offerClose";
 import { RATE_TEAM_PAUSED, teamPausedNow } from "@/lib/restricted";
@@ -219,16 +219,14 @@ function readRating(body: Record<string, unknown>) {
   return { stars, comment };
 }
 
-/** (Batch 35 §93) Tester Rate has every shared tester stop, with one box for the state moment and all other changes.
+/** Tester Rate checks the shared tester notices.
  * §90: the latest shown time counts for terms and calls too, even when the original load/render markers are older.
  */
 async function testerRateGate(testerId: string, contractId: string, testId: string, body: Record<string, unknown>) {
   const since = body.confirmed === true ? seenOf(body.boxAt) : seenOf(body.seenAt) ?? seenOf(body.pageSeenAt);
   if (!since) return;
-  const moment = await testerStopSince(contractId, since);
   // (Owner, Nov 5, §268; replaces §232's open-terms stop) New terms follow the ordinary rule for Rate (`ordinaryTerms`): Alerts on and not yet shown only.
-  // (Owner, Nov 5, §271) The pause and the team's lift (§207) come from the gate itself, as for every tester press.
-  await testerGate(testerId, contractId, testId, { ...body, seenAt: since.toISOString(), pageSeenAt: since.toISOString(), loadedAt: since.toISOString() }, undefined, { ordinaryTerms: true, moments: moment ? [moment] : [] });
+  await testerGate(testerId, contractId, testId, { ...body, seenAt: since.toISOString(), pageSeenAt: since.toISOString(), loadedAt: since.toISOString() }, undefined, { ordinaryTerms: true });
 }
 /** (Batch 17 §§12, 14) The developer's Rate keeps its narrow list: this tester's dispute decided or the work stopping. */
 async function devRateGate(testId: string, contractId: string, body: Record<string, unknown>, devId = "") {

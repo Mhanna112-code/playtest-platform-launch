@@ -4,6 +4,7 @@ import {db} from "@/lib/db";
 import {joined,setup} from "./fixtures";
 import {testerRatingClosesAt,closeOutOf,pieceCloseOut,disputesClosed} from "@/lib/server/closeOut";
 import {testerRateState,ratingReminders} from "@/lib/server/ratings";
+import {sendSummaries} from "@/lib/server/notify";
 import {DEADLINE_MOVEMENT_TERMS,PAYMENT_RULES} from "@/lib/termsOfUse";
 const DAY=86400000;
 async function sample(daysAgo=30){
@@ -52,9 +53,13 @@ it("Terms explain Charge before edit rules, name buttons and remove the version-
 
 it("a very late team decision still restores remaining rating time and its final reminder",async()=>{
  const s=await sample(500);
+ await db.user.update({where:{id:s.tester.user.id},data:{emailPref:"off"}});
  await db.dispute.create({data:{contractId:s.sessionId,submissionId:s.sub.id,testerId:s.tester.user.id,reason:"Long-running sample dispute",createdAt:s.at(10),status:"decided",decidedAt:s.at(498),decidedCents:500}});
  expect((await testerRatingClosesAt(s.sessionId,s.at(500)))?.getTime()).toBe(s.at(502).getTime());
  expect((await testerRateState(s.sessionId,s.at(500))).kind).toBe("open");
  await ratingReminders(s.at(500));
- expect((await db.notification.findFirstOrThrow({where:{userId:s.tester.user.id,text:{startsWith:"Reminder: rate "}}})).mustEmail).toBe(true);
+ const notice=await db.notification.findFirstOrThrow({where:{userId:s.tester.user.id,text:{startsWith:"Reminder: rate "}}});
+ expect(notice.mustEmail).toBe(true);
+ await sendSummaries(s.at(500),[s.tester.user.id]);
+ expect(await db.outboxEmail.count({where:{to:s.tester.user.email,text:{contains:notice.text}}})).toBe(1);
 });

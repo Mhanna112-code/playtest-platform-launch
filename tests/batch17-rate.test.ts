@@ -17,7 +17,6 @@ import { CALL_CANCELLED_BY_STOP, LIMITED_CHOICE_REFUSAL, LIMITED_VIEW_LINE, RATE
 
 const DAY = 86_400_000;
 const pay = (cookie: string, body: Record<string, unknown>) => reviewPOST(req("/api/review", { cookie, body: { payKey: randomUUID(), seenAt: seen(), confirmed: true, ...body } })).then(json);
-const AT = /at \d{1,2}:\d{2}\W(AM|PM)\.$/;
 async function admin() {
   const a = await makeUser({ email: `admin-${randomUUID()}@playtest.test` });
   return db.user.update({ where: { id: a.user.id }, data: { isAdmin: true } });
@@ -56,7 +55,7 @@ describe("section 1: Rate is disabled while something is open, with one line (te
     expect(await testerRateState(x.sessionId)).toMatchObject({ kind: "disabled", line: RATE_CHARGE_FIRST });
     expect((await sact(x.sessionId, "rate", x.tester.cookie, { stars: 5 })).body.error.message).toBe(RATE_CHARGE_FIRST);
     // The developer pays under the listing; the tester disputes: Rate waits for the team.
-    expect((await pay(x.dev.cookie, { kind: "submission", id: x.sub.id, amount: "4.00", tickedCents: 400, reason: "Short" })).status).toBe(200);
+    expect((await pay(x.dev.cookie, { kind: "submission", id: x.sub.id, amount: "4.00", tickedCents: 400, reason: "The answers were short." })).status).toBe(200);
     expect((await sact(x.sessionId, "dispute", x.tester.cookie, { kind: "submission", id: x.sub.id, reason: "I answered all", confirmed: true })).status).toBe(200);
     expect(await testerRateState(x.sessionId)).toMatchObject({ kind: "disabled", line: RATE_MY_DISPUTE });
     expect((await sact(x.sessionId, "rate", x.tester.cookie, { stars: 5 })).body.error.message).toBe(RATE_MY_DISPUTE);
@@ -84,7 +83,7 @@ describe("section 16: the developer rates only after the tester rated and everyt
     expect((await sact(x.sessionId, "rate", x.tester.cookie, { stars: 2 })).status).toBe(200);
     expect((await devRateStates([x.sessionId])).get(x.sessionId)).toMatchObject({ kind: "hidden", line: "You can rate Ana Silva once she's rated you and everything she sent is settled." });
     expect(await db.notification.count({ where: { userId: x.dev.user.id, text: { contains: "You can rate her for 14 days" } } })).toBe(0);
-    expect((await pay(x.dev.cookie, { kind: "submission", id: x.sub.id, amount: "4.00", tickedCents: 400, reason: "Short" })).status).toBe(200);
+    expect((await pay(x.dev.cookie, { kind: "submission", id: x.sub.id, amount: "4.00", tickedCents: 400, reason: "The answers were short." })).status).toBe(200);
     const s = (await devRateStates([x.sessionId])).get(x.sessionId)!;
     expect(s.kind).toBe("open");
     expect(Math.round((s.endsAt!.getTime() - s.opensAt!.getTime()) / DAY)).toBe(14);
@@ -145,7 +144,7 @@ describe("section 2: no rating during a suspension; the developer's window pause
     // The developer pays under the listing; (batch 29 section 11) the dispute from an old page stops once for the payment, then goes through.
     const old = seen();
     await settle();
-    expect((await pay(x.dev.cookie, { kind: "submission", id: sub.id, amount: "4.00", tickedCents: 400, reason: "Short" })).status).toBe(200);
+    expect((await pay(x.dev.cookie, { kind: "submission", id: sub.id, amount: "4.00", tickedCents: 400, reason: "The answers were short." })).status).toBe(200);
     expect((await sact(x.sessionId, "dispute", x.tester.cookie, { kind: "submission", id: sub.id, reason: "I answered all", seenAt: old, pageSeenAt: old })).body.error.code).toBe("stop_once");
     expect((await sact(x.sessionId, "dispute", x.tester.cookie, { kind: "submission", id: sub.id, reason: "I answered all", seenAt: old, pageSeenAt: old, confirmed: true, boxAt: seen() })).status).toBe(200);
     const page = await import("node:fs").then((fs) => fs.readFileSync("src/app/app/sessions/[id]/page.tsx", "utf8"));
@@ -154,55 +153,47 @@ describe("section 2: no rating during a suspension; the developer's window pause
 });
 
 describe("section 12: a stop while a page is open", () => {
-  it("the developer's Stop: Charge stops once with it, the second press goes; Cancel call refused; Dispute and a page opened after go straight through", async () => {
+  it("the developer's Stop: Let it go goes through on the old page and Cancel call is refused", async () => {
     const x = await sent();
     const sub = await chargeOpen(x.testId, x.sessionId);
     const old = seen();
     await settle();
     expect((await act(x.testId, "stop", x.dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true })).status).toBe(200);
     const r = await sact(x.sessionId, "choose", x.tester.cookie, { submissionId: sub.id, choice: "letgo", seenAt: old, pageSeenAt: old });
-    expect(r.body.error.code).toBe("stop_once");
-    expect(r.body.error.changes.map((l: { text: string }) => l.text)).toEqual([expect.stringMatching(/^Nora Lane stopped this test at /)]);
-    expect(r.body.error.changes[0].text).toMatch(AT);
-    await settle();
-    expect((await sact(x.sessionId, "choose", x.tester.cookie, { submissionId: sub.id, choice: "letgo", seenAt: old, pageSeenAt: old, confirmed: true, boxAt: seen() })).status).toBe(200);
+    expect(r.status, JSON.stringify(r.body)).toBe(200);
     expect((await sact(x.sessionId, "cancel-call", x.tester.cookie, { callId: "x", seenAt: old })).body.error.message).toBe(CALL_CANCELLED_BY_STOP);
   });
 
   it("a page opened after the stop: Charge goes straight through", async () => {
     const x = await sent();
     const sub = await chargeOpen(x.testId, x.sessionId);
-    expect((await act(x.testId, "stop", x.dev.cookie, { reason: "Done.", seenAt: seen(), confirmed: true })).status).toBe(200);
+    expect((await act(x.testId, "stop", x.dev.cookie, { reason: "We have enough feedback.", seenAt: seen(), confirmed: true })).status).toBe(200);
     await settle();
     expect((await sact(x.sessionId, "choose", x.tester.cookie, { submissionId: sub.id, choice: "letgo", seenAt: seen(), pageSeenAt: seen() })).status).toBe(200);
   });
 
-  it("the team's Stop: testers read only 'This test was stopped at …'; the developer's Pay reads 'The team stopped this test at …'", async () => {
+  it("the team's Stop still stops the developer's Pay once", async () => {
     const x = await sent();
-    const sub = await chargeOpen(x.testId, x.sessionId);
     const old = seen();
     await settle();
     await adminStopTest(x.testId, "Against the rules", (await admin()).id);
-    const t = await sact(x.sessionId, "choose", x.tester.cookie, { submissionId: sub.id, choice: "letgo", seenAt: old, pageSeenAt: old });
-    expect(t.body.error.changes[0].text).toMatch(/^This test was stopped at /);
-    expect(t.body.error.changes[0].text).not.toMatch(/team|rules/);
-    const d = await pay(x.dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000, seenAt: old, pageSeenAt: old, confirmed: false });
+    const d = await pay(x.dev.cookie, { kind: "submission", id: x.sub.id, amount: "10.00", tickedCents: 1000, seenAt: old, pageSeenAt: old, confirmed: false });
     expect(d.body.error.code).toBe("stop_once");
     expect(d.body.error.changes[0].text).toMatch(/^The team stopped this test at /);
     await settle();
-    expect((await pay(x.dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000, seenAt: old, pageSeenAt: old, confirmed: true, boxAt: seen() })).status).toBe(200);
+    expect((await pay(x.dev.cookie, { kind: "submission", id: x.sub.id, amount: "10.00", tickedCents: 1000, seenAt: old, pageSeenAt: old, confirmed: true, boxAt: seen() })).status).toBe(200);
   });
 
   it("the developer's own Stop on their Pay: 'You stopped this test at …'", async () => {
     const x = await sent();
     const old = seen();
     await settle();
-    expect((await act(x.testId, "stop", x.dev.cookie, { reason: "Done.", seenAt: seen(), confirmed: true })).status).toBe(200);
+    expect((await act(x.testId, "stop", x.dev.cookie, { reason: "We have enough feedback.", seenAt: seen(), confirmed: true })).status).toBe(200);
     const d = await pay(x.dev.cookie, { kind: "submission", id: x.sub.id, amount: "10.00", tickedCents: 1000, seenAt: old, pageSeenAt: old, confirmed: false });
     expect(d.body.error.changes[0].text).toMatch(/^You stopped this test at /);
   });
 
-  it("End early: the tester's Rate reads 'Nora Lane ended your work early at …'; the developer's Pay 'You ended Ana Silva's work early at …'", async () => {
+  it("End early still stops developer Pay, and does not stop tester Rate", async () => {
     const x = await sent();
     const old = seen();
     await settle();
@@ -211,11 +202,12 @@ describe("section 12: a stop while a page is open", () => {
     expect(d.body.error.changes[0].text).toMatch(/^You ended Ana Silva's work early at /);
     await settle();
     expect((await pay(x.dev.cookie, { kind: "submission", id: x.sub.id, amount: "10.00", tickedCents: 1000, seenAt: old, pageSeenAt: old, confirmed: true, boxAt: seen() })).status).toBe(200);
+    await db.user.update({ where: { id: x.tester.user.id }, data: { testerAlertsOff: true } });
     const r = await sact(x.sessionId, "rate", x.tester.cookie, { stars: 5, seenAt: old, pageSeenAt: old });
-    expect(r.body.error.changes.map((l: { text: string }) => l.text)).toEqual(expect.arrayContaining([expect.stringMatching(/^Nora Lane ended your work early at /)]));
+    expect(r.status, JSON.stringify(r.body)).toBe(200);
   });
 
-  it("the test closing: 'This test closed at …'", async () => {
+  it("the test closing does not stop an eligible Let it go", async () => {
     const x = await sent();
     const sub = await chargeOpen(x.testId, x.sessionId);
     const a = await admin();
@@ -224,7 +216,7 @@ describe("section 12: a stop while a page is open", () => {
     await settle();
     await closePausedTest(x.testId, "admin", new Date(), a.id);
     const r = await sact(x.sessionId, "choose", x.tester.cookie, { submissionId: sub.id, choice: "letgo", seenAt: old, pageSeenAt: old });
-    expect(r.body.error.changes[0].text).toMatch(/^This test closed at /);
+    expect(r.status, JSON.stringify(r.body)).toBe(200);
   });
 });
 

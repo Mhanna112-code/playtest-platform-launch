@@ -184,7 +184,7 @@ describe("§22 closing soon (developer) and the tester's one daily Charge line",
     expect(soon[0].text).toMatch(/^Closing soon: 2 pieces close by [A-Z][a-z]{2} \d{1,2} \(/);
     expect(soon[0].text).toContain("Ana's written answers on “Harbor Run”");
     expect(soon[0].text).toContain("Ben's written answers on “Sky Lab”");
-    expect(soon[0]).toMatchObject({ link: "/app#needs-review", mustEmail: true, payment: true, groupKey: "closeout" });
+    expect(soon[0]).toMatchObject({ link: "/app#needs-you", mustEmail: true, payment: true, groupKey: "closeout" });
     expect((await db.submission.findUniqueOrThrow({ where: { id: a.sub.id } })).devMarks.some((x) => /^co:\d+:3$/.test(x))).toBe(true); // (§313b) keyed by the closing date
     // The old per-piece lines are gone.
     expect((await lines(dev.user.id)).some((l) => /^Pay Ana Silva's work on/.test(l.text))).toBe(false);
@@ -192,7 +192,7 @@ describe("§22 closing soon (developer) and the tester's one daily Charge line",
     const now = (await lines(dev.user.id)).filter((l) => l.text.startsWith("Pay now:"));
     expect(now).toHaveLength(1);
     expect(now[0].text).toMatch(/^Pay now: 2 pieces on 2 tests: their testers can charge or let them go \(the first closes [A-Z][a-z]{2} \d{1,2}\)$/);
-    expect(now[0]).toMatchObject({ link: "/app#needs-review", mustEmail: true, payment: true });
+    expect(now[0]).toMatchObject({ link: "/app#needs-you", mustEmail: true, payment: true });
     expect((await lines(dev.user.id)).some((l) => /reviewed by/.test(l.text))).toBe(false);
     // Email Off: the money lines went out in the end-of-day email.
     const mail = await db.outboxEmail.findFirstOrThrow({ where: { to: dev.user.email } });
@@ -203,6 +203,7 @@ describe("§22 closing soon (developer) and the tester's one daily Charge line",
   it("the tester: one piece gives its line daily until settled; two tests give one line; nothing open gives none", async () => {
     const one = await setup();
     const a = await sent(one.testId);
+    await db.user.update({ where: { id: a.tester.user.id }, data: { emailPref: "off" } });
     await chargeable(one.testId, a.sub.id);
     await cron();
     await cron();
@@ -210,6 +211,7 @@ describe("§22 closing soon (developer) and the tester's one daily Charge line",
     expect(await mine()).toHaveLength(1);
     expect((await mine())[0]).toMatchObject({ link: "/app#charge-or-cancel", mustEmail: true, groupKey: "charge" });
     expect((await mine())[0].text).toMatch(/^Charge or let go: your written answers on “Harbor Run” \(\$10\.00, by [A-Z][a-z]{2} \d{1,2}\)$/);
+    expect(await db.outboxEmail.count({ where: { to: a.tester.user.email, text: { contains: (await mine())[0].text } } })).toBe(1);
     expect((await lines(a.tester.user.id)).some((l) => /didn't review your/.test(l.text))).toBe(false);
     // The next day: again. Settled (let go): none after that.
     await db.notification.updateMany({ where: { userId: a.tester.user.id, reminderKey: "chargeday" }, data: { createdAt: ago(1) } });

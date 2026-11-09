@@ -5,7 +5,7 @@ import { notify } from "./notify";
 import { CHAT_NOT_SENT } from "@/lib/rules";
 import { clientMessageId } from "./pressKeys";
 import { TEAM_PAUSED_LINE, teamPausedNow } from "@/lib/restricted";
-import { devPauseMoments, loadedOf, pauseStopOnce, testerPauseMoments } from "./stopMoment";
+import { devPauseMoments, loadedOf, pauseStopOnce } from "./stopMoment";
 
 // Per-test chat between the developer and one tester (owner rule): open to testers in the test, invited testers
 // (open invite), applicants (pending) and past participants; never after a block. Bell: "Nora Lane · Harbor Run:
@@ -99,7 +99,7 @@ export async function sendChat(user: { id: string; name: string; email: string }
   const counts = await Promise.all([db.message.count({ where: recent }), db.directMessage.count({ where: recent })]);
   if (counts[0] + counts[1] >= CHAT_PER_MINUTE) throw new HttpError(429, "too_fast", CHAT_TOO_FAST);
   if (body.length > CHAT_MAX) throw new HttpError(400, "too_long", `Keep a message to ${CHAT_MAX.toLocaleString("en-US")} characters.`);
-  if (page) pauseStopOnce(iAmDev ? await devPauseMoments(testId, loadedOf(page)) : await testerPauseMoments(a.contract.id, loadedOf(page)), page);
+  if (page && iAmDev) pauseStopOnce(await devPauseMoments(testId, loadedOf(page)), page);
   const m = await db.message.create({ data: { testId, testerId, contractId: a.contract.id, senderId: user.id, body, clientId } }).catch(async (e) => {
     // Two presses of the same message at once: the first one wins.
     const again = clientId ? await db.message.findFirst({ where: { senderId: user.id, clientId } }) : null;

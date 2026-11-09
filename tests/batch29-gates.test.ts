@@ -81,17 +81,11 @@ describe("batch 29 section 11: stopped, closed and paused tests keep the stop-on
     expect(r.status, JSON.stringify(r.body)).toBe(200);
   });
 
-  it("on a paused test a payment elsewhere stops Charge once; the pause itself stops a page opened before it", async () => {
+  it("on a paused test an ordinary payment elsewhere can still stop Charge once", async () => {
     const w = await chargeOpen({ recordingCents: "5.00" });
-    // The team pauses the test after the page loaded: Charge stops once naming the pause (never why), then goes ahead.
-    const before = await loadedNow();
     const admin = await makeUser({ name: "Team Admin" });
     await pauseTest(admin.user.id, w.testId, "Checking reports");
     await later();
-    const p = await sact(w.sessionId, "choose", w.tester.cookie, { submissionId: w.sub.id, choice: "letgo", seenAt: before, pageSeenAt: before });
-    expect(p.body.error?.code).toBe("stop_once");
-    expect(texts(p)).toHaveLength(1);
-    expect(texts(p)[0]).toMatch(/^This test was paused at .+\.$/);
     // A page opened while paused: a payment on her other work since then stops Charge once (no "first press goes through" any more).
     const loaded = await loadedNow();
     const rec = await db.submission.create({ data: { contractId: w.sessionId, kind: "recording", agreedCents: 500, answers: [], payBy: new Date(Date.now() + 86_400_000) } });

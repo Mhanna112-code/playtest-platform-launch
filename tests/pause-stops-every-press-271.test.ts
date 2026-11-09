@@ -52,8 +52,8 @@ async function chargeOpen() {
   return { ...s, ...j, sub };
 }
 
-describe("§271 tester side: every press stops once for a pause, Alerts Off too (never why)", () => {
-  it("Charge: the team's pause since the page loaded stops it once with Alerts Off; the second press goes ahead", async () => {
+describe("tester session actions after a pause or lift", () => {
+  it("Let it go goes through on the first press during a team pause", async () => {
     const w = await chargeOpen();
     await alertsOff(w.tester.user.id);
     const loaded = await loadedNow();
@@ -61,15 +61,10 @@ describe("§271 tester side: every press stops once for a pause, Alerts Off too 
     await later();
     const body = { submissionId: w.sub.id, choice: "letgo", seenAt: loaded };
     const first = (await sact(w.sessionId, "choose", w.tester.cookie, body)) as Res;
-    expect(first.body.error?.code, JSON.stringify(first.body)).toBe("stop_once");
-    expect(texts(first)).toEqual([expect.stringMatching(/^This test was paused at .+\.$/)]);
-    expect(first.body.error!.changes![0].forced).toBe(true);
-    expect(texts(first).join(" ")).not.toMatch(/team|hold|suspended/i);
-    const second = (await sact(w.sessionId, "choose", w.tester.cookie, { ...body, ...again(first) })) as Res;
-    expect(second.status, JSON.stringify(second.body)).toBe(200);
+    expect(first.status, JSON.stringify(first.body)).toBe(200);
   });
 
-  it("Send: while paused only the paused refusal (never a stop first); after the team's lift it stops once naming both, with Alerts Off; then it goes", async () => {
+  it("Send is refused while paused and goes through on the first press after the lift", async () => {
     const { testId } = await setup();
     const a = await joined(testId);
     await alertsOff(a.tester.user.id);
@@ -82,13 +77,10 @@ describe("§271 tester side: every press stops once for a pause, Alerts Off too 
     await unpauseTest(testId);
     await later();
     const first = (await sact(a.sessionId, "written", a.tester.cookie, body)) as Res;
-    expect(first.body.error?.code, JSON.stringify(first.body)).toBe("stop_once");
-    expect(texts(first)).toEqual([expect.stringMatching(/^This test was paused at /), expect.stringMatching(/^This test resumed at /)]);
-    const second = (await sact(a.sessionId, "written", a.tester.cookie, { ...body, ...again(first) })) as Res;
-    expect(second.status, JSON.stringify(second.body)).toBe(200);
+    expect(first.status, JSON.stringify(first.body)).toBe(200);
   });
 
-  it("a call press (Cancel call): the developer's suspension since the page loaded stops it once with Alerts Off (she reads \"paused\"); Request a time is only refused", async () => {
+  it("Cancel call goes through during a developer suspension while Request a time is refused", async () => {
     const s = await setup();
     const a = await joined(s.testId);
     const call = await bookCall(s.testId, s.dev.cookie, a.sessionId, a.tester.cookie, 72);
@@ -101,14 +93,10 @@ describe("§271 tester side: every press stops once for a pause, Alerts Off too 
     expect(asked.body.error?.code, JSON.stringify(asked.body)).toBe("paused");
     const body = { callId: call.id, reason: "Something came up.", seenAt: loaded };
     const first = (await sact(a.sessionId, "cancel-call", a.tester.cookie, body)) as Res;
-    expect(first.body.error?.code, JSON.stringify(first.body)).toBe("stop_once");
-    expect(texts(first)).toEqual([expect.stringMatching(/^This test was paused at .+\.$/)]);
-    expect(texts(first).join(" ")).not.toMatch(/suspended|hold/i);
-    const second = (await sact(a.sessionId, "cancel-call", a.tester.cookie, { ...body, ...again(first) })) as Res;
-    expect(second.status, JSON.stringify(second.body)).toBe(200);
+    expect(first.status, JSON.stringify(first.body)).toBe(200);
   });
 
-  it("lift too: a page drawn while paused stops Charge once with \"This test resumed at …\" alone", async () => {
+  it("Let it go goes through from a page drawn before the lift", async () => {
     const w = await chargeOpen();
     await alertsOff(w.tester.user.id);
     await pauseTest((await admin()).user.id, w.testId, "Checking");
@@ -117,11 +105,10 @@ describe("§271 tester side: every press stops once for a pause, Alerts Off too 
     await later();
     const body = { submissionId: w.sub.id, choice: "letgo", seenAt: loaded };
     const first = (await sact(w.sessionId, "choose", w.tester.cookie, body)) as Res;
-    expect(texts(first), JSON.stringify(first.body)).toEqual([expect.stringMatching(/^This test resumed at .+\.$/)]);
-    expect((await sact(w.sessionId, "choose", w.tester.cookie, { ...body, ...again(first) })).status).toBe(200);
+    expect(first.status, JSON.stringify(first.body)).toBe(200);
   });
 
-  it("presses outside the gates: a message stops once after a lift; Join call's own refusal still comes first", async () => {
+  it("a message sends after the lift and Join call still checks its own rules", async () => {
     const s = await setup();
     const a = await joined(s.testId);
     const call = await bookCall(s.testId, s.dev.cookie, a.sessionId, a.tester.cookie, 72);
@@ -130,8 +117,7 @@ describe("§271 tester side: every press stops once for a pause, Alerts Off too 
     await unpauseTest(s.testId);
     await later();
     const msg = (await sact(a.sessionId, "message", a.tester.cookie, { body: "Hello", clientId: randomUUID(), seenAt: loaded })) as Res;
-    expect(texts(msg), JSON.stringify(msg.body)).toEqual([expect.stringMatching(/^This test resumed at /)]);
-    expect((await sact(a.sessionId, "message", a.tester.cookie, { body: "Hello", clientId: randomUUID(), seenAt: loaded, ...again(msg) })).status).toBe(200);
+    expect(msg.status, JSON.stringify(msg.body)).toBe(200);
     // Join call: the call isn't due yet, so it's refused as before (the refusal alone); the stop is checked after the refusals.
     const j = (await joinPOST(req(`/api/calls/${call.id}/join`, { cookie: a.tester.cookie, body: { seenAt: loaded } }), { params: Promise.resolve({ id: call.id }) }).then(json)) as Res;
     expect(j.body.error?.code, JSON.stringify(j.body)).not.toBe("stop_once");
@@ -215,21 +201,13 @@ describe("§271 the team's Decide dispute never stops for a pause or hold", () =
 });
 
 describe("§271 shown once per page, across buttons (§250's shownIds)", () => {
-  it("tester: Cancel call's box listed the pause; Leave on the same page then never stops for it", async () => {
+  it("tester: Leave needs no retry after a developer suspension", async () => {
     const s = await setup();
     const a = await joined(s.testId);
-    const call = await bookCall(s.testId, s.dev.cookie, a.sessionId, a.tester.cookie, 72);
     const loaded = await loadedNow();
     await suspendDev(s.dev.user.id);
     await later();
-    const box = (await sact(a.sessionId, "cancel-call", a.tester.cookie, { callId: call.id, reason: "Something came up.", seenAt: loaded })) as Res;
-    expect(texts(box), JSON.stringify(box.body)).toEqual([expect.stringMatching(/^This test was paused at /)]);
-    // Another button that didn't send the box's line: it stops for it too.
-    const unseen = (await sact(a.sessionId, "leave", a.tester.cookie, { seenAt: loaded })) as Res;
-    expect(texts(unseen)).toEqual(texts(box));
-    expect(sids(unseen)).toEqual(sids(box));
-    // The page sends what its boxes listed: Leave goes ahead.
-    const left = (await sact(a.sessionId, "leave", a.tester.cookie, { seenAt: loaded, shownIds: sids(box) })) as Res;
+    const left = (await sact(a.sessionId, "leave", a.tester.cookie, { seenAt: loaded })) as Res;
     expect(left.status, JSON.stringify(left.body)).toBe(200);
   });
 

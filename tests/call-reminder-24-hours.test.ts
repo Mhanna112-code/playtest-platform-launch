@@ -1,20 +1,31 @@
 import { expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { remindCallsSoon } from "@/lib/server/calls";
+import { sendSummaries } from "@/lib/server/notify";
 import { bookCall, joined, setup } from "./fixtures";
 
 it("reminds at exactly 24 hours, never before, after cancellation or after a legacy reminder", async () => {
   const s = await setup();
   const j = await joined(s.testId);
+  const users = [s.dev.user, j.tester.user];
+  await db.user.updateMany({ where: { id: { in: users.map((u) => u.id) } }, data: { emailPref: "off" } });
   const call = await bookCall(s.testId, s.dev.cookie, j.sessionId, j.tester.cookie);
   const now = new Date();
   await db.call.update({ where: { id: call.id }, data: { startsAt: new Date(+now + 86_400_001) } });
   const count = () => db.notification.count({ where: { reminderKey: `call24:${call.id}` } });
+  const mail = () => db.outboxEmail.findMany({ where: { to: { in: users.map((u) => u.email) }, subject: { startsWith: "Your call with " }, text: { contains: `#call-${call.id}` } } });
   await remindCallsSoon(now);
   expect(await count()).toBe(0);
+  expect(await mail()).toHaveLength(0);
   await db.call.update({ where: { id: call.id }, data: { startsAt: new Date(+now + 86_400_000) } });
   await remindCallsSoon(now);
   expect(await count()).toBe(2);
+  expect((await mail()).map((m) => m.to).sort()).toEqual(users.map((u) => u.email).sort());
+  await sendSummaries(now, users.map((u) => u.id));
+  const summary = await db.outboxEmail.findFirstOrThrow({ where: { to: { in: users.map((u) => u.email) }, subject: { startsWith: "Your Playtest account updates" }, text: { contains: `#call-${call.id}` } } });
+  expect(summary.text).toContain("Booked: a call");
+  expect(summary.text).not.toContain("starts at");
+  expect(await mail()).toHaveLength(2);
   await db.notification.updateMany({ where: { reminderKey: `call24:${call.id}` }, data: { reminderKey: `call15:${call.id}` } });
   await remindCallsSoon(now);
   expect(await count()).toBe(0);
@@ -22,4 +33,5 @@ it("reminds at exactly 24 hours, never before, after cancellation or after a leg
   await db.call.update({ where: { id: call.id }, data: { status: "cancelled" } });
   await remindCallsSoon(now);
   expect(await count()).toBe(0);
+  expect(await mail()).toHaveLength(2);
 });

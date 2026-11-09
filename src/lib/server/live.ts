@@ -47,6 +47,8 @@ export type Press = {
    * (not §171 A1/A2) while the owner decides the waiting-charge rules. Their open windows still get A3 and B4.
    */
   awayCharge?: boolean;
+  /** An existing individual bank confirmation needs no retry for a new team pause. */
+  skipTeamPause?: boolean;
   /** (Owner, Nov 4, §193) With `awayCharge`: the parts (submission or call ids) this press confirms. Confirm all: every covered part; a charge line on one never forces. */
   confirms?: readonly string[];
 };

@@ -760,10 +760,11 @@ export async function devGate(tx: Tx, testId: string, body: Record<string, unkno
   // (Batch 30, Oct 29 addition) The stop is listed WITH every other change since the page last showed them (it no longer replaces them), oldest first.
   const moments: TestEventLike[] = [];
   if (press.stopCheck !== undefined) {
-    const stop = (await devStopSince(testId, press.stopCheck || null, loadedOf(body))) ?? (await devPauseSince(testId, loadedOf(body)));
+    const loaded = loadedOf(body);
+    const stop = (await devStopSince(testId, press.stopCheck || null, loaded)) ?? (await devPauseSince(testId, loaded, undefined, press.skipTeamPause));
     if (stop) moments.push(stop);
     // (Owner, Nov 5, §207) The team lifting its pause is named like the pause: "The team lifted its pause on this test at 3:10 AM.".
-    moments.push(...(await devLiftSince(testId, loadedOf(body))));
+    moments.push(...(await devLiftSince(testId, loaded)));
   }
   // (Owner, Oct 29, batch 29 section 11; replaces batch 16 section 25's "goes through on the first press") On a stopped, closed or paused test (any cause), and while the
   // developer is held or suspended, every press still allowed follows the SAME stop-once rules as on a running test. The stop, close or pause itself is a change like any

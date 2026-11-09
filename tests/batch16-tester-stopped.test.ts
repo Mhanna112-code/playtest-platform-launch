@@ -102,7 +102,7 @@ describe("after a stop: what's gone is refused and names the press; what still w
     expect(r.body.error?.code, JSON.stringify(r.body)).not.toBe("stop_once");
   });
 
-  it("Charge / Let it go after an early end: from a page opened before it, it stops once with the early end (batch 17 section 12), then goes through", async () => {
+  it("Let it go goes through on the first press from a page opened before End early", async () => {
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
     await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"], seenAt: seen(), confirmed: true });
@@ -114,9 +114,7 @@ describe("after a stop: what's gone is refused and names the press; what still w
     await settle();
     expect((await act(testId, "end-early", dev.cookie, { seenAt: seen(), confirmed: true, contractIds: [sessionId], reason: "We have enough" })).status).toBe(200);
     const r = await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "letgo", seenAt: opened });
-    expect(r.body.error.changes.map((x: { text: string }) => x.text), JSON.stringify(r.body)).toEqual([expect.stringMatching(/^Nora Lane ended your work early at /)]);
-    await settle();
-    expect((await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "letgo", seenAt: opened, confirmed: true, boxAt: seen() })).status).toBe(200);
+    expect(r.status, JSON.stringify(r.body)).toBe(200);
     // A page opened after it: straight through.
     const sub2 = await db.submission.create({ data: { contractId: sessionId, kind: "recording", agreedCents: 1000, sentAt: new Date(), updatedAt: new Date(), payBy: new Date(Date.now() - 86_400_000), choiceOfferedAt: new Date(), choiceBy: new Date(Date.now() + 7 * 86_400_000) } });
     expect((await sact(sessionId, "choose", tester.cookie, { submissionId: sub2.id, choice: "letgo", seenAt: seen() })).status).toBe(200);

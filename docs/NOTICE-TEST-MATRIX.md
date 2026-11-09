@@ -21,8 +21,6 @@ A **Stop once** row shows the change line inside the blue box. Its standard open
 | T09 | Switch / Keep | Stop once | A new offer replaced the offer shown on the page. | `{developer} changed the terms again: {terms diff}` then `Press again to decide on these newest terms.` |
 | T10 | Dispute / Charge / applicable session press | Bare refusal | An NDA acknowledgement is pending and the pressed action requires it. | `Acknowledge the NDA change first.` This can occur on a past session after a restricted NDA edit. |
 | T11 | Charge / Let it go | Refusal | The tester's own side is suspended. | `You can do this once your account is active again.` |
-| T12 | Charge / Let it go / Rate | Stop once | The applicable action is still eligible and the unseen change ended this tester's work. | `{developer} ended your work early at {time}.` / `{developer} stopped this test at {time}.` / `This test was stopped at {time}.` / `This test closed at {time}.` |
-| T13 | Rate or another eligible session action | Stop once | The team lifts the pause after the page's relevant timestamp and the page has not accounted for it. | `This test resumed at {time}.` A pause that also occurred after the timestamp can add `This test was paused at {time}.` |
 | T14 | Applicable session action | Stop once | The developer adds their side to this tester's dispute. | `{developer} added {possessive pronoun} side to your dispute about your {part}` |
 | T15 | Applicable session action | Stop once | The team decides this tester's dispute. | `The team decided your dispute with {developer} about your {part}: the pay was raised to {amount}` or `The team decided your dispute with {developer} about your {part}: the pay stays at {amount}` |
 | T16 | Dispute | Refusal | This piece already has a dispute. | `You already disputed this payment. A part can be disputed once.` |
@@ -44,7 +42,6 @@ A **Stop once** row shows the change line inside the blue box. Its standard open
 | D07 | Pay / Pay more | Stop once | The tester left and this payment is still available. | `{tester} left the test` |
 | D08 | Pay more | Refusal | Either side blocked the other. | `This payment isn't available.` |
 | D09 | Pay | Refusal | A payment on the same piece is already at the bank. | `A payment for this part is being confirmed. Wait for it to finish before paying again.` |
-| D10 | Confirm with your bank | Stop once | The team pauses after the page drew, while an existing confirmation is still eligible. | `The team paused this test at {time}.` |
 | D11 | Confirm with your bank | Bare refusal | The pending bank check was cancelled underneath the open tab. | `Cancelled: nothing was charged.` |
 | D12 | Confirm with your bank | Refusal | The bank declines confirmation or no eligible check exists for this payment. | `Your bank didn't confirm the payment, so nothing was charged.` or `There's nothing to confirm here.` |
 | D13 | Confirm all | Stop once | Items or total changed after the page drew. | `Also waiting for your bank now: {payment}`, applicable removed-item reasons, then `Confirm all now covers {count} {payment or payments}: {total}.` Late-race variant `What's waiting for your bank changed meanwhile.` |
@@ -173,4 +170,4 @@ These are the additional rows from the expanded matrix. Use the original row IDs
 | B22 | Pay / Pay more | Refusal | The relevant payment window closed. | `Pay closed on {date}.` / `Pay more closed on {date}.` |
 | B23 | Pay | Refusal | The same amount is owed after an unsuccessful attempt. | `This {amount} is owed: pay it with “Pay what you owe” in Payments.` |
 
-The matrix retains T12, T13, and D10 as reference rows. They are outside the selected manual run. A refreshed tab may remove the stale conditions needed for a stop-once test, so record whether the page updated before pressing. The [source index](REFUSAL-NOTICE-INDEX.md) covers additional validation, authentication, and technical response branches. Browser and provider variants still need their own verification.
+T12, T13, and D10 were retired after those retries were removed. A refreshed tab may remove the stale conditions needed for a stop-once test, so record whether the page updated before pressing. The [source index](REFUSAL-NOTICE-INDEX.md) covers additional validation, authentication, and technical response branches. Browser and provider variants still need their own verification.

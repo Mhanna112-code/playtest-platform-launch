@@ -30,10 +30,15 @@ async function world(kind: string) {
 }
 
 describe("existing bank confirmations during pauses and suspensions", () => {
-  it.each(["pause", "suspension"])("%s: single Confirm stops once then finishes without reopening the test", async (kind) => {
+  it.each(["pause", "suspension"])("%s: single Confirm finishes without reopening the test", async (kind) => {
     const w = await world(kind), p = w.items[0];
-    await expect(confirmStart(w.dev.user, p.id, { seenAt: w.loaded })).rejects.toMatchObject({ code: "stop_once" });
-    await expect(confirmStart(w.dev.user, p.id, { seenAt: w.loaded, confirmed: true, boxAt: seen() })).resolves.toMatchObject({ paymentId: p.id });
+    const body = { seenAt: w.loaded };
+    if (kind === "pause") {
+      await expect(confirmStart(w.dev.user, p.id, body)).resolves.toMatchObject({ paymentId: p.id });
+    } else {
+      await expect(confirmStart(w.dev.user, p.id, body)).rejects.toMatchObject({ code: "stop_once" });
+      await expect(confirmStart(w.dev.user, p.id, { ...body, confirmed: true, boxAt: seen() })).resolves.toMatchObject({ paymentId: p.id });
+    }
     expect((await db.payment.findUniqueOrThrow({ where: { id: p.id } })).actionBy).toEqual(p.actionBy);
     await confirmFinish(w.dev.user, p.id, { simulate: "succeeded" });
     expect((await db.payment.findUniqueOrThrow({ where: { id: p.id } })).status).toBe("charged");
@@ -63,7 +68,7 @@ describe("existing bank confirmations during pauses and suspensions", () => {
     await unpauseTest(w.testId);
     expect((await db.payment.findUniqueOrThrow({ where: { id: p.id } })).actionBy).toEqual(p.actionBy);
     await db.test.update({ where: { id: w.testId }, data: { adminPausedAt: new Date() } });
-    await expireActions(new Date(+p.actionBy! + 1000), { developerId: w.dev.user.id });
+    await expireActions(new Date(+p.actionBy! + 1000), { submissionId: p.submissionId! });
     expect((await db.payment.findUniqueOrThrow({ where: { id: p.id } })).status).toBe("failed");
     await expect(confirmStart(w.dev.user, p.id)).rejects.toBeDefined();
   });

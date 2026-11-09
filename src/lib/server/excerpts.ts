@@ -94,9 +94,6 @@ export async function requestExcerpt(tester: { id: string; name: string; email: 
   // (Owner, Nov 4, §196) Trimmed in a delete-only box: a part left out of the middle reads " … ". Each "…"-separated piece must be in the answer, in order; the
   // 10 to 500 above counts the stored text, ellipses included. Anything added is refused with the same line.
   if (!fromAnswer(pick.text, text)) throw new HttpError(400, "not_from_answer", "Trim the excerpt from your answer: it can only leave words out, not add any.");
-  // (Owner, Nov 5, §271) A pause of this test since the page loaded (or the team's lift of it) stops the request once, whatever her Alerts ("This test was paused at …").
-  const m = await import("./stopMoment");
-  m.pauseStopOnce(await m.testerPauseMoments(sub.contractId, m.loadedOf(body)), body);
   const hideProduct = false; // (batch 18 section 7) always "From <test>"
   const x = await db.$transaction(async (tx) => {
     // One tester's requests one at a time: the count and the one-per-part rule hold under two quick presses.

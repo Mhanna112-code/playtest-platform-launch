@@ -31,6 +31,8 @@ describe("reason E: your own actions in another tab", () => {
     const pageLoaded = seen();
     await later();
     expect((await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"], seenAt: pageLoaded, tab: "tab-1" })).status).toBe(200);
+    expect((await live(tester.cookie, `session:${sessionId}`, pageLoaded, "tab-2")).body.changes.map((c: { text: string }) => c.text)).toContain("You sent your written answers in another tab");
+    expect((await live(tester.cookie, `session:${sessionId}`, pageLoaded, "tab-1")).body.changes.map((c: { text: string }) => c.text)).not.toContain("You sent your written answers in another tab");
     // Tab 1 itself: not stopped by its own press.
     const own = await sact(sessionId, "request-time", tester.cookie, { startsAt: atHours(50), seenAt: pageLoaded, tab: "tab-1" });
     expect(own.status).toBe(200);
@@ -52,6 +54,8 @@ describe("reason E: your own actions in another tab", () => {
     await later();
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
     await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000, tab: "tab-2" });
+    expect((await live(dev.cookie, `test:${testId}`, pageLoaded, "tab-1")).body.changes.map((c: { text: string }) => c.text)).toContain("You paid Ana Silva $10.00 for the written answers in another tab");
+    expect((await live(dev.cookie, `test:${testId}`, pageLoaded, "tab-2")).body.changes.map((c: { text: string }) => c.text)).not.toContain("You paid Ana Silva $10.00 for the written answers in another tab");
     // (Batch 16 section 21) A Pay in another tab is a big change: it stops every press here once (Stop included), as "You … in another tab".
     const r = await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: pageLoaded, tab: "tab-1" });
     expect(texts(r)).toEqual(["You paid Ana Silva $10.00 for the written answers in another tab"]);
@@ -338,8 +342,7 @@ describe("payments and disputes, only for this test", () => {
     expect((await live(ana.tester.cookie, `session:${ana.sessionId}`, pageLoaded)).body.changes.map((c: { text: string }) => c.text)).toEqual([delayed]);
     // (Batch 15 section 25) Leave no longer stops; the tester's gate itself (every other tester button) stops once with the line.
     const gate = await (await import("@/lib/server/testerGate")).testerGate(ana.tester.user.id, ana.sessionId, (await db.contract.findUniqueOrThrow({ where: { id: ana.sessionId } })).testId, { seenAt: pageLoaded }).then(() => null, (e: { data?: { changes?: { text: string }[] } }) => e.data?.changes?.map((c) => c.text));
-    // (Owner, Nov 5, §271) The hold the decline started is a pause since the page loaded: it stops the press too, as "paused" only.
-    expect(gate).toEqual([delayed, expect.stringMatching(/^This test was paused at .+\.$/)]);
+    expect(gate).toEqual([delayed]);
     for (const t of [delayed, ...bells.map((n) => n.text)]) expect(t).not.toMatch(/fail|declin|card|hold/i);
     // It goes through ("Pay what you owe"): exactly one more notification, the normal paid line; the top box says paid.
     decline = false;

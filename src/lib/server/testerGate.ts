@@ -11,7 +11,6 @@ import { notListed, shownIdsOf, wasListed } from "./shownLines";
 import { LISTING_SAVED, parseSaved } from "@/lib/listingPanel";
 import { questionChangeTexts } from "@/lib/questionHistory";
 import { NDA_NOTICE, ndaChangedLine } from "@/lib/ndaNotice";
-import { loadedOf, testerPauseMoments } from "./stopMoment";
 import { unanswered, answersIt, asLines, listingSaveLines, ownChanges, type Answers, seenOf, tabOf, testerPaymentChanges, withRenamed } from "./live";
 
 // The tester's ONE set of stop-once reasons (owner rule, NEWEST+3), used by every tester button on the session page:
@@ -172,7 +171,7 @@ const KINDS = ["terms", "paid", "rejected", "cancelled", "booked", "requested", 
 export const TESTER_CALL_KINDS = new Set(["requested", "booked", "cancelled"]);
 
 /** The one tester gate: the first press stops (the box shows under that button); the second goes ahead. */
-export async function testerGate(testerId: string, contractId: string, testId: string, body: Record<string, unknown>, tail = "Press again to go ahead.", opts: { skipTerms?: boolean; keep?: (e: TestEventLike) => boolean; piece?: string; /** (Batch 35 §79) what the press answers */ answers?: Answers; /** (§93) Stop/pause moments: always stop, in the same box as the shared lines. */ moments?: TestEventLike[];
+export async function testerGate(testerId: string, contractId: string, testId: string, body: Record<string, unknown>, tail = "Press again to go ahead.", opts: { skipTerms?: boolean; keep?: (e: TestEventLike) => boolean; piece?: string; /** (Batch 35 §79) what the press answers */ answers?: Answers;
   /** (§159 rule 4) Charge / Let it go on this piece (submission or call id): a developer payment on it, or the team's decision on any of the tester's disputes. */ owedPiece?: string;
   /** (Owner, Nov 4, §183) Send / Add to this answer / a recording's add on this sent part (its submission id): developer payments follow Alerts, including the $0 answer to an update. */ sendPiece?: string;
   /** (Owner, Nov 5, §268; replaces §232's open-terms stop) Rate and Leave: new terms (and an NDA change) follow the ordinary rule: they stop once only with Alerts
@@ -193,11 +192,6 @@ export async function testerGate(testerId: string, contractId: string, testId: s
   if (body.confirmed === true && !boxAt) { if (stale.length) throw await staleStop(); return; }
   const seenAt = body.confirmed === true ? boxAt : seenOf(body.seenAt);
   if (!seenAt) { if (stale.length) throw await staleStop(); return; }
-  // (Owner, Nov 5, §271) A pause since the page loaded (the team's, the developer's hold or suspension: she reads only "This test was paused at 3:10 PM.") and the
-  // team's lift of it ("This test resumed at 3:10 PM.") stop EVERY press that comes through here once, whatever her Alerts, like a stop moment. Counted from the
-  // page's load (or the stop box's time on a second press, loadedOf); one a stop box on this page already listed (any button's, `shownIds`) never stops again.
-  // A press refused while paused (Send, Request a time, Accept, Join call, Rate on a team pause) gets only its refusal: those refusals come before this gate.
-  const pauses = await testerPauseMoments(contractId, loadedOf(body));
   // New terms count from the page's own render (pageSeenAt), or from the box's time on a second press; everything else from `seenAt`.
   const termsFrom = body.confirmed === true || opts.ordinaryTerms ? seenAt : seenOf(body.pageSeenAt) ?? seenAt;
   const loadedAt = body.confirmed === true ? null : seenOf(body.loadedAt);
@@ -230,7 +224,7 @@ export async function testerGate(testerId: string, contractId: string, testId: s
   const termsShown = off && opts.ordinaryTerms ? [] : terms;
   // (Batch 35 §79) Never the line about the very thing this press answers (Accept on the developer's call request that just arrived).
   // (Owner, Nov 5, §250) Nor a line a stop box on this page already LISTED (any button's box: `shownIds`), forced lines and stop / pause moments included.
-  const list = [...withRenamed(notListed((await unanswered(testerId, testId, [...termsShown, ...rest, ...(opts.moments ?? []).filter((e) => e.createdAt > seenAt), ...pauses])).filter((e) => !answersIt(e, opts.answers)), body), body), ...stale].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  const list = [...withRenamed(notListed((await unanswered(testerId, testId, [...termsShown, ...rest])).filter((e) => !answersIt(e, opts.answers)), body), body), ...stale].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
   // (Batch 17 section 13) `alertsOff`: the box drops "Turn off alerts" and "You can turn these stops off below" when Alerts is already Off.
   // (Owner, Nov 3, §160) Each line says whether the tester's Alerts could have switched it off (`forced`): new terms, their own other-tab
   // actions, a stop or pause, and dispute changes always stop.

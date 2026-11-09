@@ -26,9 +26,13 @@ const away = (id: string) => awayAction(id, { status: "requires_action", stripeP
 describe("§320 the daily reminder for charges waiting for the developer's bank", () => {
   it("day 0 the line; days 1 and 2 once each; one key; stops once confirmed", async () => {
     const w = await world();
+    await db.user.update({ where: { id: w.s.dev.user.id }, data: { emailPref: "off" } });
     const p = await away((await w.row()).id);
     expect(await w.lines()).toHaveLength(1);
     expect(renderTimes((await w.lines())[0].text, "UTC")).toMatch(/^Your bank wants you to confirm a \$10\.00 payment on “Harbor Run” by [A-Z][a-z]{2} \d{1,2}$/);
+    expect(await db.outboxEmail.count({ where: { to: w.s.dev.user.email } })).toBe(0);
+    await sendSummaries(new Date(), [w.s.dev.user.id]);
+    expect(await db.outboxEmail.count({ where: { to: w.s.dev.user.email, text: { contains: (await w.lines())[0].text } } })).toBe(1);
     await bankWaitingReminders(); // the same day: not again
     expect(await w.lines()).toHaveLength(1);
     for (const d of [1, 2]) {

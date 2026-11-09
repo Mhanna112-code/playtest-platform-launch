@@ -105,7 +105,7 @@ describe("§207 2: the team lifting its pause is named like the pause", () => {
     expect((await act(testId, "end-early", dev.cookie, { contractIds: [b.sessionId], reason: "We have enough", seenAt: after })).status).toBe(200);
   });
 
-  it("tester (the same gap): a press from a page drawn while paused stops once with \"This test resumed at …\" (never why); the next goes ahead", async () => {
+  it("tester: Request a time works on the first press after a pause is lifted", async () => {
     const { testId } = await setup();
     const a = await joined(testId, "Ana Silva");
     await pauseTest(await admin(), testId, "Checking");
@@ -116,14 +116,10 @@ describe("§207 2: the team lifting its pause is named like the pause", () => {
     await settle();
     const body = { seenAt: loaded, pageSeenAt: loaded, times: [atHours(72)] };
     const r = await sact(a.sessionId, "request-time", a.tester.cookie, body);
-    expect(r.body.error?.code, JSON.stringify(r.body)).toBe("stop_once");
-    expect(texts(r)).toEqual([expect.stringMatching(/^This test resumed at .+\.$/)]);
-    expect(texts(r).join(" ")).not.toMatch(/team|hold|suspended/i);
-    const again = await sact(a.sessionId, "request-time", a.tester.cookie, { ...body, confirmed: true, boxAt: r.body.error!.now });
-    expect(again.status, JSON.stringify(again.body)).toBe(200);
+    expect(r.status, JSON.stringify(r.body)).toBe(200);
   });
 
-  it("tester: from before the pause too, both are named (\"This test was paused at …\", then \"This test resumed at …\")", async () => {
+  it("tester: a page drawn before the pause can request a time on the first press after the lift", async () => {
     const { testId } = await setup();
     const a = await joined(testId, "Ana Silva");
     const loaded = seen();
@@ -133,7 +129,7 @@ describe("§207 2: the team lifting its pause is named like the pause", () => {
     await unpauseTest(testId);
     await settle();
     const r = await sact(a.sessionId, "request-time", a.tester.cookie, { seenAt: loaded, pageSeenAt: loaded, times: [atHours(72)] });
-    expect(texts(r)).toEqual([expect.stringMatching(/^This test was paused at /), expect.stringMatching(/^This test resumed at /)]);
+    expect(r.status, JSON.stringify(r.body)).toBe(200);
   });
 });
 

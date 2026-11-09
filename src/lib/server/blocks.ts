@@ -148,10 +148,10 @@ export async function joinCall(user: { id: string }, callId: string, body: Recor
   }
   // (Batch 27 section 1) The tester's Join call waits while new terms are open: Switch or Keep first.
   if (side === "tester") await answerTermsFirst(c.id);
-  // (Owner, Nov 5, §271) A pause since the page loaded (a pause still on refuses Join above, so it shows only that), or the team's lift of it, stops Join once
-  // whatever the Alerts, in each side's words (the tester's "This test resumed at 3:10 PM."); the second press opens the room.
-  const m = await import("./stopMoment");
-  m.pauseStopOnce(side === "tester" ? await m.testerPauseMoments(c.id, m.loadedOf(body)) : await m.devPauseMoments(c.testId, m.loadedOf(body)), body);
+  if (side === "developer") {
+    const m = await import("./stopMoment");
+    m.pauseStopOnce(await m.devPauseMoments(c.testId, m.loadedOf(body)), body);
+  }
   // (Batch 21) The room itself records who came in (its first poll); a press alone isn't being in the call.
   return { url: `/app/calls/${call.id}` };
 }

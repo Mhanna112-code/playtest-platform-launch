@@ -132,7 +132,7 @@ describe("batch 35 §93: tester Rate uses every shared tester stop", () => {
     expect((await rate(x, loaded, { confirmed: true, boxAt: second.body.error.now })).status).toBe(200);
   });
 
-  it("an unseen pause shares the box with a listing edit, and still stops with Alerts Off", async () => {
+  it("an unseen pause and an ignored listing edit do not stop tester Rate", async () => {
     const x = await ready(); const loaded = seen(); await settle();
     await edit(x, { description: "Different course" });
     await db.user.update({ where: { id: x.tester.user.id }, data: { testerAlertsOff: true } });
@@ -140,9 +140,7 @@ describe("batch 35 §93: tester Rate uses every shared tester stop", () => {
     const { pauseTest } = await import("@/lib/server/restrictions");
     await pauseTest(a.user.id, x.testId, "Checking the test");
     const first = await rate(x, loaded);
-    expect(first.body.error?.code).toBe("stop_once");
-    expect(texts(first)).toEqual([expect.stringMatching(/^This test was paused at/)]);
-    expect((await rate(x, loaded, { confirmed: true, boxAt: first.body.error.now })).status).toBe(200);
+    expect(first.status, JSON.stringify(first.body)).toBe(200);
   });
 
   it("close-out keeps the existing Rating closed refusal before the stop gate", async () => {

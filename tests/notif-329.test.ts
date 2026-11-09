@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { POST as reviewPOST } from "@/app/api/review/route";
 import { ratingReminders } from "@/lib/server/ratings";
+import { sendSummaries } from "@/lib/server/notify";
 import { json, req } from "./helpers";
 import { joined, sact, seen, settle, setup } from "./fixtures";
 
@@ -35,9 +36,13 @@ describe("§329 the developer's last rating reminder is always emailed", () => {
     expect(e).toBeTruthy();
     expect(e.mustEmail).toBe(false);
     const late = await devRateOpen(12);
+    await db.user.updateMany({ where: { id: { in: [early.dev.user.id, late.dev.user.id] } }, data: { emailPref: "off" } });
     await ratingReminders();
     const [l] = await reminders(late.dev.user.id);
     expect(l).toBeTruthy();
     expect(l.mustEmail).toBe(true);
+    await sendSummaries(new Date(), [early.dev.user.id, late.dev.user.id]);
+    expect(await db.outboxEmail.count({ where: { to: late.dev.user.email, text: { contains: l.text } } })).toBe(1);
+    expect(await db.outboxEmail.count({ where: { to: early.dev.user.email, text: { contains: e.text } } })).toBe(0);
   });
 });
