@@ -1399,7 +1399,8 @@ async function runDailyLocked(now: Date) {
     const testersIn = await db.contract.count({ where: { testId: i.testId, status: "working" } });
     if (i.test.status !== "open" || testersIn >= i.test.spots || (i.test.openUntil && i.test.openUntil < now)) continue; // expired
     if (i.test.adminPausedAt || i.test.developer.holdStartedAt || i.test.developer.devSuspendedAt) continue; // paused: the reminders wait
-    await bell(i.testerId, `Reminder: ${displayName(i.test.developer)} invited you to “${i.test.title}”.`, `/app/find/${i.testId}`, undefined, { group: "invites", reminder: `invite:${i.id}` });
+    const deadline = i.test.openUntil ? ` Join by ${T(i.test.openUntil, "date")}.` : "";
+    await bell(i.testerId, `Reminder: ${displayName(i.test.developer)} invited you to “${i.test.title}”.${deadline}`, `/app/find/${i.testId}`, undefined, { group: "invites", reminder: `invite:${i.id}` });
     await db.invite.update({ where: { id: i.id }, data: { remindedAt: now } });
   }
   // 8. (NEXT-UI 7) Forever sets of calls: the next ones are booked as each passes (4 ahead); ended sets are marked.
@@ -1520,8 +1521,9 @@ export async function reviewReminders(now: Date, co: CloseOuts = closeOutMemo(no
   for (const s of upcoming) {
     const reviewDate = chargeOpensAt(s, s.contract.test, s.contract, now);
     // (Owner, Nov 6, §311g) The marks are keyed by the review date: an extended deadline, a pause or an outage re-arms the ones still ahead (never a repeat).
-    const due = reviewDate ? reviewMarkDue(s.updatedAt, reviewDate, now, s.devMarks) : null;
-    if (!due || (!due.send && !due.record.length) || (await co.payClosed({ submissionId: s.id }))) continue; // (batch 17 §19) Pay closed: no reminders
+    if (!reviewDate) continue;
+    const due = reviewMarkDue(s.updatedAt, reviewDate, now, s.devMarks);
+    if ((!due.send && !due.record.length) || (await co.payClosed({ submissionId: s.id }))) continue; // (batch 17 §19) Pay closed: no reminders
     const m = due.send;
     // The mark is recorded with every earlier one, so a missed mark is never sent late.
     if (due.record.length) await db.submission.update({ where: { id: s.id }, data: { devMarks: { push: due.record } } });
@@ -1531,7 +1533,7 @@ export async function reviewReminders(now: Date, co: CloseOuts = closeOutMemo(no
     const when = m.label === "tomorrow" ? "by tomorrow" : m.label.replace("in ", "within ");
     // (Batch 30 §3) Late listed work counts down the same way, but the tester can't charge for it.
     const after = s.agreedCents == null ? " (it isn't listed: any amount, $0 included)" : s.late ? LATE_REMINDER_TAIL : s.contract.tester.deletedAt ? "" : ` (after that ${name} can charge or let it go)`;
-    await bell(s.contract.test.developerId, `“${s.contract.title}”: review ${name}'s ${part} ${when}${after}.`, `/app/tests/${s.contract.testId}#piece-${s.id}`, undefined, { group: "unreviewed", reminder: `unreviewed:${s.id}`, always: true });
+    await bell(s.contract.test.developerId, `“${s.contract.title}”: review ${name}'s ${part} ${when} (${T(reviewDate, "date")})${after}.`, `/app/tests/${s.contract.testId}#piece-${s.id}`, undefined, { group: "unreviewed", reminder: `unreviewed:${s.id}`, always: true });
   }
   // 5b. (Owner, Oct 29, batch 28 §21) Listed calls: "pay it within 3 days / by tomorrow" before the automatic charge (7 days after the call, moved by pauses and outages).
   // (Owner, Nov 6, §311e) Unlisted calls the same, counted to their pay date (7 days after the call), ending "(it isn't listed: pay any amount, or it closes with
@@ -1549,7 +1551,7 @@ export async function reviewReminders(now: Date, co: CloseOuts = closeOutMemo(no
     if (m.label !== "tomorrow" && m.label !== "in 3 days") continue; // only the 3-day and 1-day marks
     const when = m.label === "tomorrow" ? "by tomorrow" : "within 3 days";
     const tail = x.rateCents == null ? UNLISTED_CALL_TAIL : "";
-    await bell(x.contract.test.developerId, `“${x.contract.title}”: pay ${displayName(x.contract.tester)}'s call on ${T(x.startsAt)} ${when}${tail}.`, `/app/tests/${x.contract.testId}#call-${x.id}`, undefined, { group: "unreviewed", reminder: `unreviewed:${x.id}`, always: true });
+    await bell(x.contract.test.developerId, `“${x.contract.title}”: pay ${displayName(x.contract.tester)}'s call on ${T(x.startsAt)} ${when} (${T(chargeAt, "date")})${tail}.`, `/app/tests/${x.contract.testId}#call-${x.id}`, undefined, { group: "unreviewed", reminder: `unreviewed:${x.id}`, always: true });
   }
 }
 

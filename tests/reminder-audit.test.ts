@@ -6,6 +6,7 @@ import { joined, sact, setup } from "./fixtures";
 import { makeUser } from "./helpers";
 import { pauseTest, unpauseTest, suspendAccount, reinstateAccount } from "@/lib/server/restrictions";
 import { liftHoldIfClear, startHold } from "@/lib/server/holds";
+import { fmtIn } from "@/lib/tz";
 
 const DAY = 86_400_000;
 
@@ -18,8 +19,8 @@ async function waiting() {
   await db.contract.update({ where: { id: j.sessionId }, data: { dueAt: at } });
   const sub = await db.submission.findFirstOrThrow({ where: { contractId: j.sessionId } });
   await db.submission.update({ where: { id: sub.id }, data: { updatedAt: new Date(+now - 6 * DAY), payBy: at, stintDueAt: at, devMarks: [] } });
-  await db.user.update({ where: { id: w.dev.user.id }, data: { emailPref: "off" } });
-  return { ...w, ...j, sub, now };
+  await db.user.update({ where: { id: w.dev.user.id }, data: { emailPref: "off", timeZone: "America/Chicago" } });
+  return { ...w, ...j, sub, now, at };
 }
 
 describe("reminder audit: selected local rehearsals", () => {
@@ -32,7 +33,7 @@ describe("reminder audit: selected local rehearsals", () => {
     const lines = await query(a.dev.user.id);
     expect(lines).toHaveLength(1);
     expect(lines[0]).toMatchObject({ mustEmail: true, summarizedAt: null });
-    expect(lines[0].text).toContain("review Reminder Tester's written answers by tomorrow");
+    expect(lines[0].text).toContain(`review Reminder Tester's written answers by tomorrow (${fmtIn("America/Chicago", a.at, "date")})`);
     await reviewReminders(a.now, undefined, [a.sessionId]);
     expect(await query(a.dev.user.id)).toHaveLength(1);
     await sendSummaries(a.now, [a.dev.user.id]);

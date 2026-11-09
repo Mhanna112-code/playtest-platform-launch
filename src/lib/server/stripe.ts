@@ -547,8 +547,8 @@ export async function cardExpiryReminders(now = new Date()) {
     const mark = days === 30 ? "month" : days === 7 ? "week" : "day";
     const reminder = `card-expiry:${year}-${month}:${mark}`;
     if (await db.notification.findFirst({ where: { userId: user.id, reminderKey: reminder }, select: { id: true } })) continue;
-    const monthName = new Intl.DateTimeFormat("en", { month: "long", timeZone: "UTC" }).format(new Date(Date.UTC(year, month - 1, 1)));
-    const line = `Your card ending ${pm.card?.last4 ?? "????"} expires at the end of ${monthName}: update it in Payments.`;
+    const expiryDate = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" }).format(end);
+    const line = `Your card ending ${pm.card?.last4 ?? "????"} expires on ${expiryDate}: update it in Payments.`;
     const { bell } = await import("./notify");
     await bell(user.id, line, "/app/payments", undefined, { side: "developer", payment: true, reminder });
     sent++;

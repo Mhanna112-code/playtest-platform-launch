@@ -377,7 +377,9 @@ describe("D) testers", () => {
     await db.contract.update({ where: { id: sessionId }, data: { ratePromptedAt: new Date(Date.now() - 4 * DAY) } });
     await db.test.update({ where: { id: testId }, data: { stoppedAt: new Date(Date.now() - 4 * DAY) } });
     await ratingReminders(new Date());
-    expect((await lines(tester.user.id)).some((l) => l.reminderKey === `rate:${sessionId}`)).toBe(true);
+    const first = await db.notification.findFirstOrThrow({ where: { userId: tester.user.id, reminderKey: `rate:${sessionId}` } });
+    expect(first.text).toMatch(/^Reminder: rate .+ on “.+”: rating closes on /);
+    expect(first.mustEmail).toBe(false);
     await db.notification.deleteMany({ where: { userId: tester.user.id, text: { startsWith: "Reminder: rate" } } });
     const closes = (await (await import("@/lib/server/closeOut")).closeOutOf(testId))!;
     // The last one before the close-out: it names the date and ignores email Off.

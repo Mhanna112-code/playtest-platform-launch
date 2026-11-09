@@ -95,7 +95,10 @@ describe("notification schedule", { timeout: 120_000 }, () => {
     await cron();
     const n = () => db.notification.count({ where: { userId: t.user.id, text: { startsWith: "Reminder: Nora Lane invited you" } } });
     expect(await n()).toBe(1);
-    expect((await db.notification.findFirstOrThrow({ where: { userId: t.user.id, text: { startsWith: "Reminder: Nora Lane invited you" } } })).groupKey).toBe("invites");
+    const inviteReminder = await db.notification.findFirstOrThrow({ where: { userId: t.user.id, text: { startsWith: "Reminder: Nora Lane invited you" } } });
+    const openUntil = (await db.test.findUniqueOrThrow({ where: { id: testId } })).openUntil!;
+    const date = openUntil.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: t.user.timeZone || "UTC" });
+    expect(inviteReminder).toMatchObject({ groupKey: "invites", text: `Reminder: Nora Lane invited you to “Harbor Run”. Join by ${date}.` });
     await db.invite.update({ where: { id: inv.id }, data: { remindedAt: new Date(Date.now() - DAY) } });
     await cron();
     expect(await n()).toBe(2); // the next day: again

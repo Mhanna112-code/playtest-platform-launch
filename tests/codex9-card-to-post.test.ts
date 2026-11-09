@@ -59,11 +59,11 @@ describe("Batch 34 §6: a card before posting, expiry warnings, Get started", ()
     await sendSummaries(expireAt);
     const rows = await db.notification.findMany({ where: { userId: user.user.id, reminderKey: { startsWith: "card-expiry:" } } });
     expect(rows).toHaveLength(3);
-    expect(rows.map((r) => r.text)).toEqual(Array(3).fill("Your card ending 4242 expires at the end of February: update it in Payments."));
+    expect(rows.map((r) => r.text)).toEqual(Array(3).fill("Your card ending 4242 expires on Feb 28: update it in Payments."));
     expect(rows.every((r) => r.payment && r.link === "/app/payments")).toBe(true);
     const mails = await db.outboxEmail.findMany({ where: { to: user.user.email } });
     expect(mails).toHaveLength(3);
-    expect(mails.every((m) => m.text.includes("Your card ending 4242 expires at the end of February: update it in Payments."))).toBe(true);
+    expect(mails.every((m) => m.text.includes("Your card ending 4242 expires on Feb 28: update it in Payments."))).toBe(true);
     expect(await db.user.findUniqueOrThrow({ where: { id: user.user.id } })).toMatchObject({ cardExpMonth: 2, cardExpYear: 2027 });
   });
 

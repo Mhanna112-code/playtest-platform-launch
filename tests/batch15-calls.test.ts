@@ -220,13 +220,14 @@ describe("Charge for a listed call, the reminders for unlisted ones (§311e), ra
     const mine = async () => (await db.notification.findMany({ where: { userId: a.dev.user.id, reminderKey: `unreviewed:${ca.id}` }, orderBy: { createdAt: "asc" } })).map((l) => l.text);
     await runDaily(new Date(payBy.getTime() - 2.5 * DAY));
     await runDaily(new Date(payBy.getTime() - 2.4 * DAY)); // the same mark: not again
-    expect(await mine()).toEqual([expect.stringMatching(/^“Harbor Run”: pay .+'s call on .+ within 3 days \(it isn't listed: pay any amount, or it closes with nothing paid\)\.$/)]);
+    const date = payBy.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: a.dev.user.timeZone || "UTC" });
+    expect(await mine()).toEqual([expect.stringContaining(`within 3 days (${date}) (it isn't listed: pay any amount, or it closes with nothing paid).`)]);
     await runDaily(new Date(payBy.getTime() - 12 * 3_600_000));
     await runDaily(new Date(payBy.getTime() + 2 * DAY));
     await runDaily(new Date(payBy.getTime() + 9 * DAY));
     const all = await mine();
     expect(all).toHaveLength(2);
-    expect(all[1]).toMatch(/ by tomorrow \(it isn't listed: pay any amount, or it closes with nothing paid\)\.$/);
+    expect(all[1]).toContain(`by tomorrow (${date}) (it isn't listed: pay any amount, or it closes with nothing paid).`);
     expect(await db.review.findUniqueOrThrow({ where: { callId: ca.id } })).toMatchObject({ amountCents: 0, auto: true, reason: R.UNLISTED_CALL_CLOSED });
     expect(await db.notification.count({ where: { userId: a.dev.user.id, text: { endsWith: "closed with nothing paid (it wasn't listed)" } } })).toBe(1);
     expect(await db.notification.count({ where: { userId: a.dev.user.id, text: { startsWith: "Pay your calls" } } })).toBe(0);

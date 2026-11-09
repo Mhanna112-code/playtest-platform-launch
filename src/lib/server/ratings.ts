@@ -318,7 +318,7 @@ export async function devRate(dev: { id: string; name: string; email: string }, 
  * (Owner, Oct 26-27; batch 29 §21) Rating prompts and their reminders every 3 days, whatever the test's state (running, paused, stopped or closed), stacked in the day's
  * "Ratings to give" entry across tests. Tester (owner, Nov 7, §331; was 2 weeks only): every 3 days from when their Rate opened until they rate or the test's
  * close-out (their Rate "closed"), skipped while their Rate is disabled (new work in its review window, a Charge to settle, an open dispute) or their tester side is
- * suspended; when it opens again the next one comes once 3 days have passed since the last. The LAST one before the close-out ignores email Off and names the date. Developer (batch 17 section 16): from when their Rate opened, until they
+ * suspended; when it opens again the next one comes once 3 days have passed since the last. Reminders name the close-out once it is known. The LAST one ignores email Off. Developer (batch 17 section 16): from when their Rate opened, until they
  * rate or their 14 days end, paused while they can't rate.
  */
 export async function ratingReminders(now = new Date()) {
@@ -335,10 +335,10 @@ export async function ratingReminders(now = new Date()) {
     if (rated.has(c.id) || c.tester.testerSuspendedAt) continue;
     if (now.getTime() - (await sinceLast(c.testerId, c.testId, c.ratePromptedAt!)).getTime() < every) continue;
     if ((await rateBlocker(c.id, "tester", now)) !== "") continue; // disabled, or (§331) closed at the close-out: no reminder
-    // (Owner, Nov 7, §331) The last one before the close-out (the next 3-day slot would fall after it) ignores email Off and names the date.
+    // (Owner, Nov 7, §331) The last one before the close-out (the next 3-day slot would fall after it) ignores email Off.
     const closes = await testerRatingClosesAt(c.id, now);
     const last = !!closes && now.getTime() + every >= closes.getTime();
-    await bell(c.testerId, `Reminder: rate ${displayName(c.test.developer)} on “${c.title}”${last ? `: rating closes on ${T(closes!, "date")}` : ""}`, RATINGS_HREF, undefined, { side: "tester", ...RATINGS, testId: c.testId, reminder: `rate:${c.id}`, ...(last ? { always: true } : {}) });
+    await bell(c.testerId, `Reminder: rate ${displayName(c.test.developer)} on “${c.title}”${closes ? `: rating closes on ${T(closes, "date")}` : ""}`, RATINGS_HREF, undefined, { side: "tester", ...RATINGS, testId: c.testId, reminder: `rate:${c.id}`, ...(last ? { always: true } : {}) });
     n++;
   }
   // Developer: once their Rate opened (the tester rated and everything is settled, or (section 19) a never-rated tester at the close-out); every 3 days until they
