@@ -94,6 +94,7 @@ describe("live panels, the one Call requests panel, and the server's re-check (s
     expect(needs).toContain("jumpTo(id)");
     const dash = src("app/app/page.tsx");
     expect(dash).toContain("href: `/app/tests/${x.t.id}#req-${r.id}`");
-    expect(dash).toContain("href: `/app/sessions/${c.id}#req-${r.id}`");
+    // (Codex eb8ca7cd) The tester dashboard's To do is one row per working test (Send work); its request rows went (they're on the session page).
+    expect(dash).not.toContain("href: `/app/sessions/${c.id}#req-${r.id}`");
   });
 });

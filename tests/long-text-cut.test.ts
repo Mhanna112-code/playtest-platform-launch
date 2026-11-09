@@ -93,16 +93,16 @@ describe("<Cut>", () => {
 describe("names listed on pages use <Cut>", () => {
   it("the dashboards, the test page, Find, Messages, the bell, the call header and the admin lines", () => {
     const page = src("app/app/page.tsx");
-    expect(page).toContain('<span className="font-medium text-white"><NameLink text={r.who} href={r.whoHref} /></span>'); // (batch 35 §137) a link to their profile
-    expect(page).toContain('<b><TestName text={r.title} /></b>'); // (§245) whole and green
-    expect(page).toContain('<p className="kicker"><Cut text={t.productName} kind="product" /></p>');
+    // (Codex eb8ca7cd, docs/NOV7-DASHBOARD-CHANGES.md) Needs you shows only each test's name; the product kicker is FindTestCard's.
+    expect(page).toContain("<TodoTestRow ");
+    expect(src("components/FindTestCard.tsx")).toContain('<p className="kicker"><Cut text={t.productName} kind="product"/></p>');
     const test = src("app/app/tests/[id]/page.tsx");
-    expect(test).toContain('<h3 className="mr-auto min-w-0 max-w-[calc(100%-1.25rem)] font-semibold text-white" data-tester-fold-name=""><NameLink fit text={name} href={personHref} /></h3>'); // (batch 35 §140) the name folds the row; (§166) it is the green profile link
-    expect(src("app/app/find/page.tsx")).toContain("by <Cut text={displayName(t.developer)} />");
-    expect(src("app/app/messages/page.tsx")).toContain('<TestName text={r.title} />');
+    expect(test).toContain('<h3 className="mr-auto min-w-0 max-w-[calc(100%-1.25rem)] font-semibold text-white" data-tester-fold-name=""><NameLink fit text={name} href={personHref} /><span hidden className="text-xs font-normal text-slate-400" data-previous-name-match="" /></h3>'); // (Codex 4d424d8f: the heading also holds the hidden “previously …” note for the name search) (batch 35 §140) the name folds the row; (§166) it is the green profile link
+    expect(src("components/FindTestCard.tsx")).toContain("by <span className=\"relative z-10\"><NameLink text={developerName}"); // (Codex eb8ca7cd) Find's cards are FindTestCard; NameLink cuts the name
+    expect(src("app/app/messages/page.tsx")).toContain("<TestName text={r.title} href={r.testHref}/>"); // (Codex eb8ca7cd: the test title has its own link)
     expect(src("components/PersonHover.tsx")).toContain("<NameLink text={p.name} href={p.href}"); // (§166) NameLink cuts it too
     expect(src("app/app/CallsBox.tsx")).toContain('<b className="text-white"><Cut text={c.who} /></b> · <TestName text={c.test} />');
-    expect(src("app/app/calls/[id]/page.tsx")).toContain('“<Cut text={call.contract.title} kind="test" />”');
+    expect(src("app/app/calls/[id]/page.tsx")).toContain('“<Cut text={call.contract.test.title} kind="test" />”'); // (Owner, Nov 9, §342) the test's current title
     expect(src("app/admin/AdminRich.tsx")).toContain('<Cut key={m.index} text={m[0]} kind="email" />'); // (§245) only emails are cut there
     // Left alone: a page's own heading, the bell's and emails' words, and the payment sentences (already cut by pieceName).
     expect(src("app/app/tests/[id]/TopPanel.tsx")).toContain('<h1 className="text-3xl font-bold tracking-tight text-white">{p.title}</h1>');

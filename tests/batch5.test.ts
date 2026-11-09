@@ -161,13 +161,15 @@ describe("batch 5 item 3: a restricted account's signed-in pages go to the dashb
   it("every closed page sends them away itself before rendering; the header keeps only the open links; the bell list lands closed lines on the dashboard", () => {
     for (const [f, p] of [["app/app/developers/[id]/page.tsx", "/app/developers"], ["app/app/testers/[id]/page.tsx", "/app/testers"], ["app/app/find/page.tsx", "/app/find"], ["app/app/find/[id]/page.tsx", "/app/find"], ["app/app/messages/page.tsx", "/app/messages"], ["app/app/profile/page.tsx", "/app/profile"]])
       expect(src(f), f).toContain(`requireOpenPage("${p}")`);
-    // (Batch 16 section 28) The session page decides itself: only the limited view of a test a suspended tester was removed from.
-    expect(src("app/app/sessions/[id]/page.tsx")).toContain('if (u.testerSuspendedAt && !limited) redirect("/app");');
+    // (Codex 6aa704d9) A suspended tester opens every session they had in its limited view (no redirect).
+    expect(src("app/app/sessions/[id]/page.tsx")).not.toContain('if (u.testerSuspendedAt && !limited) redirect("/app");');
+    expect(src("app/app/sessions/[id]/page.tsx")).toContain("const limited = limitedTesterSession(u, c);");
     for (const f of ["app/app/chat/[id]/page.tsx", "app/app/calls/[id]/page.tsx"]) {
       expect(src(f), f).toContain("requireOpenPage(");
       expect(src(f), f).toContain("leaveIfClosed(u,");
     }
-    for (const f of ["app/app/tests/[id]/edit/page.tsx", "app/app/tests/new/page.tsx"]) expect(src(f), f).toContain("requireOpenDevPage()");
+    expect(src("app/app/tests/new/page.tsx")).toContain("requireOpenDevPage()");
+    expect(src("app/app/tests/[id]/edit/page.tsx")).toContain("requireOpenPage(`/app/tests/${id}/edit`)"); // (Codex 2033b106: Edit's NDA-only view stays open)
     expect(src("app/app/tests/[id]/page.tsx")).toContain("requireOpenPage(`/app/tests/${id}`)");
     const layout = src("app/app/layout.tsx");
     expect(layout).toContain("const off = restrictedOn(u, side);");
@@ -179,10 +181,12 @@ describe("batch 5 item 3: a restricted account's signed-in pages go to the dashb
     const dash = src("app/app/page.tsx");
     expect(dash).toContain("<Seats total={t.spots} plain={restricted}");
     expect(src("components/Ui.tsx")).toContain("data-plain-seat");
-    expect(dash).toContain('data-waiting-plain=""');
-    // (Owner §98 dashboard rows) Suspended rows stay plain; active rows link directly to their parts.
-    expect(dash).toContain('data-waiting-plain="">{inner}</div> : <Link href={`/app/sessions/${c.id}#parts`}');
-    expect(dash).toContain("const answers = suspended ? [] :");
+    // (Codex eb8ca7cd) A suspended tester's To do, Charge or cancel and Upcoming calls are empty (nothing links to the closed session pages); Waiting rows link to
+    // their parts.
+    expect(dash).toContain("items={(suspended?[]:working).map(");
+    expect(dash).toContain("const chargeable = suspended ? [] : contracts");
+    expect(dash).toContain("{<Link href={`/app/sessions/${c.id}#parts`}");
+    expect(dash).toContain("const upcoming = suspended ? [] :"); // (Codex eb8ca7cd: the answers rows went with the old To do)
     const box = src("components/RestrictedBox.tsx");
     expect(box).toContain("Your account is paused. You were removed from all the tests you were in.");
     expect(box).toContain("Pay for work already accepted still reaches your Stripe account.");

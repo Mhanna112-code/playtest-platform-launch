@@ -347,7 +347,9 @@ describe("D) testers", () => {
     expect((await sact(sid, "dismiss-removed", t.cookie, {})).status).toBe(200);
     expect((await db.contract.findUniqueOrThrow({ where: { id: sid } })).removedDismissedAt).not.toBeNull();
     const dash = src("app/app/page.tsx");
-    for (const w of ["Tests you were removed from", "Tests you left", "Send work", "Charge or cancel", "Needs review", "data-paused-tag"]) expect(dash, w).toContain(w);
+    // (Codex eb8ca7cd) "Tests you were removed from" and "Tests you left" are Previous Tests now, with its Removed From / Closed / Left ticks.
+    for (const w of ["PREVIOUS_TEST_FILTERS", "Send work", "Charge or cancel", "Needs review", "data-paused-tag"]) expect(dash, w).toContain(w);
+    expect(src("lib/dashboardPanels.ts")).toContain('export const PREVIOUS_TEST_FILTERS = ["Removed From", "Closed", "Left"];');
   });
   it("(owner, Nov 3) Dismiss all clears every 'Tests you were removed from' card of this tester at once, and nobody else's", async () => {
     const a = await admin();

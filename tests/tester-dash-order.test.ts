@@ -9,15 +9,16 @@ describe("the tester dashboard's order", () => {
     expect(i, s).toBeGreaterThan(-1);
     return i;
   };
-  it("To do, Ratings to give, Waiting for the developer, then removed tests, Charge or cancel and Upcoming calls", () => {
+  // (Codex cb4d9f15) Charge or cancel moved above To do; (Codex eb8ca7cd) the removed tests are in Previous Tests, last.
+  it("Charge or cancel, To do, Ratings to give, Waiting for the developer, Upcoming calls, Invitations, then Previous Tests", () => {
     const order = [
+      'id="charge-or-cancel"',
       'id="to-do"',
       '<RatingsToGive user={user} side="tester" />',
       '"Waiting for the developer"',
-      'id="suspended-tests"',
-      'id="charge-or-cancel"',
       'id="upcoming-calls"',
       'id="invitations"',
+      'id="previous-tests"',
     ].map(at);
     expect(order).toEqual([...order].sort((a, b) => a - b));
   });

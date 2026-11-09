@@ -19,7 +19,9 @@ describe("plain scroll boxes on the dashboards and the developer profile (sectio
     const page = src("app/app/page.tsx");
     // The developer dashboard: disputes, excerpt requests, Needs review, Needs you, Your tests; the tester dashboard: removed, Charge or cancel, To do,
     // waiting, upcoming calls, invitations, Tests you left, History.
-    expect((page.match(/<ScrollList/g) ?? []).length).toBeGreaterThanOrEqual(8); // (§204) Your tests' cards box is in YourTestsSearch.tsx. (§152) upcoming calls (and CallsBox) moved to the draggable panel: tests/batch35-list-panels.test.ts // §106: two action lists now share DashboardActionBox.
+    // (Codex eb8ca7cd, docs/NOV7-DASHBOARD-CHANGES.md) the dashboards' test lists are SearchPanels (each a ScrollList inside) plus these ScrollLists.
+    expect(src("components/SearchPanel.tsx")).toContain('<ResizeBox id={id+"-list"}'); // its list is in the draggable panel
+    expect((page.match(/<ScrollList/g) ?? []).length + (page.match(/<SearchPanel /g) ?? []).length).toBeGreaterThanOrEqual(6);
     expect(src("app/app/DashboardActionBox.tsx")).toContain("<ScrollList");
     expect((page.match(/<DashboardActionBox/g) ?? []).length).toBe(2);
     expect(src("app/app/YourTestsSearch.tsx")).toContain('<ScrollList size="cards" className="grid gap-4 md:grid-cols-2">'); // (§204) with its search box above

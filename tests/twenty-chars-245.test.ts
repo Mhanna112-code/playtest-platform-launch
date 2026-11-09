@@ -166,7 +166,7 @@ describe("§245 no '…' and nothing to expand for a name or a test title", () =
     expect(render(h(Cut, { text: "Underwater Harbor Run Deluxe", kind: "product", fit: true }))).not.toContain("truncate");
     // The product kickers (Find, the dashboards, Tests visited): whole, never cut; no green link (a product isn't a page). The Listing panel never cut it (§231's box).
     for (const f of ["src/app/app/page.tsx", "src/app/app/TestsVisited.tsx"]) expect(src(f), f).not.toContain('className="kicker truncate"');
-    expect(src("src/app/app/find/page.tsx")).toContain('<p className="kicker"><Cut text={t.productName} kind="product" /></p>');
+    expect(src("src/components/FindTestCard.tsx")).toContain('<p className="kicker"><Cut text={t.productName} kind="product"/></p>'); // (Codex eb8ca7cd, docs/NOV7-DASHBOARD-CHANGES.md)
   });
 });
 
@@ -181,12 +181,14 @@ describe("§245 test names show green", () => {
   it("the dashboards, Needs you, Find, Messages, calls, payments, the bell, the admin lines and the profiles use it; page headings stay", () => {
     const dash = src("src/app/app/page.tsx");
     expect(dash).not.toContain('kind="test" />'.replace("kind", "<Cut text={c.title} kind"));
-    expect(dash).toContain("<b><TestName text={r.title} /></b> · {plural(r.n, \"part\")} to pay"); // Needs you
-    expect(dash).toContain("<TestName text={a.c.title} href={a.href} />"); // To do
-    expect(dash).toContain("<TestName text={c.title} href={`/app/sessions/${c.id}`} /> · {p.name}");
+    // (Codex eb8ca7cd, docs/NOV7-DASHBOARD-CHANGES.md) Needs you: the test's name and Review; To do: TodoTestRow (its name green, linking to the session).
+    expect(dash).toContain("<TestName text={r.title}/>");
+    expect(src("src/components/TodoTestRow.tsx")).toContain("<TestName text={title} href={`/app/sessions/${id}`}/>");
     expect(dash).toContain('<NameLink text={x.testTitle} kind="test" href={`/app/tests/${x.testId}`} />'); // already a green link
     expect(dash).not.toContain('className="text-white no-underline hover:underline" />');
-    for (const f of ["src/app/app/find/page.tsx", "src/app/app/messages/page.tsx", "src/app/app/CallsBox.tsx", "src/app/app/DevSearch.tsx", "src/app/app/TestsVisited.tsx", "src/app/app/developers/[id]/page.tsx", "src/app/app/notifications/BellList.tsx", "src/app/app/payments/page.tsx", "src/app/admin/MineLine.tsx", "src/components/ExcerptList.tsx"]) {
+    // (Codex eb8ca7cd) Find's and Tests visited's cards are FindTestCard, which draws TestName.
+    expect(src("src/components/FindTestCard.tsx")).toContain("<TestName text=");
+    for (const f of ["src/app/app/messages/page.tsx", "src/app/app/CallsBox.tsx", "src/app/app/DevSearch.tsx", "src/app/app/developers/[id]/page.tsx", "src/app/app/notifications/BellList.tsx", "src/app/app/payments/page.tsx", "src/app/admin/MineLine.tsx", "src/components/ExcerptList.tsx"]) {
       expect(src(f), f).toContain("<TestName text=");
       expect(src(f), f).not.toContain('<Cut text={c.title} kind="test" />');
     }

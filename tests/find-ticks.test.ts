@@ -152,7 +152,7 @@ describe("the empty states", () => {
   });
   it("the dashboard's New tests for you: no mention of devices or languages, a link to all tests", () => {
     const dash = src("app/app/page.tsx");
-    expect(dash).toContain('No open tests to join right now. New ones show up here as soon as developers post them. <Link href="/app/find" className="text-indigo-300 hover:underline">See all tests</Link>');
+    expect(dash).not.toContain("New tests for you"); // (Codex eb8ca7cd, docs/NOV7-DASHBOARD-CHANGES.md) the panel was removed (Find tests lists them)
     expect(dash).not.toContain("No new matches right now");
     expect(dash).not.toContain("Add more devices or languages");
   });

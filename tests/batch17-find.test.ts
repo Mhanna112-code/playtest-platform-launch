@@ -208,12 +208,12 @@ describe("Find tests: the search box, for testers and admins (section 8)", () =>
     expect(page).toContain("if (!u.isTester && !admin) redirect(\"/app/profile\");");
     expect(page).toContain("<StateTicks params={params} ticked={ticked} />");
     // (Owner, Nov 6, §279) An admin never has a joined card (mine is null for admins): the card opens the test's page.
-    expect(page).toContain("href={mine ? `/app/sessions/${mine.id}` : `/app/find/${t.id}`}");
+    expect(page).toContain("href={mine?`/app/sessions/${mine.id}`:`/app/find/${t.id}`}"); // (Codex eb8ca7cd, docs/NOV7-DASHBOARD-CHANGES.md) the card is FindTestCard
     expect(page).toContain("const mine = admin || ");
     const listing = src("app/app/find/[id]/page.tsx");
     expect(listing).toContain('if (!t || (t.status === "draft" && !isAdmin(u))) notFound();');
     expect(listing).toContain("{isAdmin(u) && <AdminTestBoxes testId={t.id} adminId={u.id} />}");
-    expect(listing).toContain("t.developerId === u.id || isAdmin(u) || !u.isTester || closed || blocked || ratedHere ? null : (");
+    expect(listing).toContain("t.developerId === u.id || isAdmin(u) || !u.isTester || closed || blocked || ratedHere || (!!mine && !canRejoin && !invite) ? null : ("); // (Codex 6aa704d9: rejoin after unblocking)
   });
 });
 

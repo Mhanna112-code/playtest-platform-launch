@@ -109,28 +109,23 @@ describe("§204 the tester's Search by developer or test", () => {
     expect(noTodoMatchLine("zed")).toBe("No tests in To do match “zed”.");
   });
 
-  it("the one box (no second box): its placeholder and label; To do passed in as `todo`, each row wrapped to be filtered", () => {
-    const box = src("app/app/DevSearch.tsx");
-    expect(box).toContain("placeholder={DEV_SEARCH_LABEL}");
-    expect(box).toContain('<label htmlFor="devSearch" className="sr-only">{DEV_SEARCH_LABEL}</label>');
-    expect(box).toMatch(/<\/section>\s*\{todo\}\s*\{!typed && children\}/);
+  // (Codex eb8ca7cd, docs/NOV7-DASHBOARD-CHANGES.md) The one "Search by developer or test" box went: each dashboard test panel searches only itself; To do is one
+  // row per working test (TodoTestRow: its name and Send work).
+  it("no one box over the dashboard: To do has its own search, one row per working test", () => {
     const dash = src("app/app/page.tsx");
-    expect((dash.match(/<DevSearch /g) ?? []).length).toBe(1);
-    const todo = dash.slice(dash.indexOf('id="to-do"'), dash.indexOf("</DevSearchList>"));
-    expect((todo.match(/<DevSearchHit /g) ?? []).length).toBe(3); // answers, unsent parts, every part sent
-    expect(todo).toContain("<DevSearchList rows=");
+    expect(dash).not.toContain("<DevSearch ");
+    expect(dash).toContain('<SearchPanel id="to-do" title="To do" placeholder="Search To do by developer or test"');
+    expect(dash).toContain("node:<TodoTestRow id={c.id} title={c.test.title}");
   });
 
-  it("the dashboard: one search box, the To do rows under it with their tests", async () => {
+  it("the dashboard: To do's own search box, the tester's working test in it", async () => {
     const { testId } = await setup({ title: "Harbor Run" });
     const tester = await makeUser({ tester: true, name: "Ana Silva" });
     const t = await db.test.findUniqueOrThrow({ where: { id: testId } });
     expect((await act(testId, "join", tester.cookie, { listingVersion: t.listingVersion })).status).toBe(200);
     const out = await dashboard(tester.user.id);
-    expect((out.match(/type="search"/g) ?? []).length).toBe(2); // this box and History's own
-    expect(out).toContain(`placeholder="${DEV_SEARCH_LABEL}"`);
-    expect(out.indexOf('id="devSearch"')).toBeLessThan(out.indexOf('id="to-do"'));
-    expect(out).toMatch(/data-todo-part="[^"]+:written"/);
-    expect(out).not.toContain("data-todo-search-none");
+    expect(out).toContain('placeholder="Search To do by developer or test"');
+    expect(out).not.toContain(`placeholder="${DEV_SEARCH_LABEL}"`);
+    expect(out).toMatch(/data-todo-test="[^"]+"/);
   });
 });

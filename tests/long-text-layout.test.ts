@@ -31,9 +31,8 @@ describe("amounts stay whole", () => {
     // (§245) Through bellWords, which keeps amounts whole (keepAmounts) and draws the line's test name green.
     expect(bell).toContain("bellWords(short ?? l.text, l.test)");
     expect(bell).toContain("return keepAmounts(text);");
-    expect(bell.match(/ : bellWords\(l\.text, l\.test\)\}/g)?.length).toBe(1); // (§270) a line naming no one
-    expect(src("app/app/find/page.tsx")).toContain("{keepAmounts(termsLine(asListing(t), true))}");
-    expect(src("app/app/page.tsx")).toContain("{keepAmounts(pays(asListing(t)))}");
+    expect(bell).toContain(": bellWords(short ?? l.text, l.test)"); // (§270) a line naming no one (Codex eb8ca7cd: expanded bell lines keep their destination on the other words)
+    expect(src("components/FindTestCard.tsx")).toContain("{keepAmounts(terms)}"); // (Codex eb8ca7cd, docs/NOV7-DASHBOARD-CHANGES.md) Find's and the dashboard's cards are FindTestCard
   });
 
   it("totals and amounts in rows never split", () => {
@@ -41,7 +40,7 @@ describe("amounts stay whole", () => {
     expect(pay.match(/<div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">/g)?.length).toBe(3); // the two paid lists and the team's read-only What you owe
     expect(pay.match(/<span className="whitespace-nowrap text-sm text-slate-400"[^>]*>Total \{money\(/g)?.length).toBe(3);
     expect(pay).toContain('· <span className="whitespace-nowrap">{money(p.amountCents)}</span>');
-    expect(src("app/app/find/page.tsx")).toContain('<p className="whitespace-nowrap text-lg font-bold text-emerald-300">{fromText(t)}</p>');
+    expect(src("components/FindTestCard.tsx")).toContain('<p className="whitespace-nowrap text-lg font-bold text-emerald-300">{pay}</p>'); // (Codex eb8ca7cd, docs/NOV7-DASHBOARD-CHANGES.md)
     expect(src("app/app/sessions/[id]/ChoiceBox.tsx")).toContain('<span className="whitespace-nowrap">{money(cents)}</span>');
   });
 });
@@ -53,9 +52,8 @@ describe("buttons drop below instead of squeezing; nothing reaches past the scre
   });
 
   it("the words beside a button keep 12rem, so the button wraps below them on a phone", () => {
-    expect(src("app/app/page.tsx")).toContain('<p className="min-w-[min(100%,12rem)] flex-1 text-slate-300">');
-    // (Batch 35 §137) The action is now the row's link, laid over the card, with the same layout classes.
-    expect(src("app/app/page.tsx")).toContain('<Link href={r.href} className={`ml-auto flex shrink-0 items-center gap-1 whitespace-nowrap text-sm text-indigo-300 no-underline hover:no-underline ${CARD_LINK}`}>{r.cta}');
+    // (Codex eb8ca7cd, docs/NOV7-DASHBOARD-CHANGES.md) Needs you's per-person rows went (one row per test: its name and Review); the remaining rows keep 12rem beside their badge.
+    expect(src("app/app/page.tsx")).toContain('<p className="min-w-[12rem] flex-1 font-medium text-white [overflow-wrap:anywhere]">');
     expect(src("components/RateBox.tsx")).toContain('<span className="min-w-[min(100%,12rem)] flex-1"><input className="input w-full" maxLength={500}');
     expect(src("app/app/calls/[id]/CallRoom.tsx")).toContain('<span className="min-w-[min(100%,12rem)] flex-1 text-sm text-slate-300" role="status" data-call-status="">');
     expect(src("components/PayoutBanner.tsx")).toContain('<p className="min-w-[min(100%,12rem)] flex-1"><b>{PAYOUT_LINE}</b>');
@@ -72,7 +70,7 @@ describe("buttons drop below instead of squeezing; nothing reaches past the scre
 
   it("cards and rows may shrink below their longest title, and long names wrap (or, in §187's rows, are cut to fit) inside them", () => {
     expect(src("app/app/find/page.tsx")).toContain('<li key={t.id} className="min-w-0">');
-    expect(src("app/app/page.tsx")).toContain('<li key={t.id} className="min-w-0">');
+    // (Codex eb8ca7cd, docs/NOV7-DASHBOARD-CHANGES.md) the dashboard's test cards are drawn by YourTestsSearch / SearchPanel.
     expect(src("app/app/messages/page.tsx")).toContain('<p className="flex min-w-0 flex-wrap items-baseline gap-x-1 font-medium text-white">');
     // (Owner, Nov 4, §187 item 3) Needs you's person row no longer wraps the name: the whole name, cut with "…" only when the row is full. Every box from the
     // row down to the name may shrink (min-w-0) and the name never grows past it (max-w-full, truncate), so it still never reaches past the screen.

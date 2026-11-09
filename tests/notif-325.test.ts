@@ -21,10 +21,9 @@ describe("§325 no closing signature", () => {
 describe("§326 Needs you rows have no profile circle", () => {
   it("the row keeps its words (12rem at least), the names' links and the action; no initial circle", () => {
     const dash = src("app/app/page.tsx");
-    const rows = dash.slice(dash.indexOf("{shown.map((r) => {"), dash.indexOf("</ScrollList>", dash.indexOf("{shown.map((r) => {")));
+    // (Codex eb8ca7cd, docs/NOV7-DASHBOARD-CHANGES.md) Needs you is one row per test: its name and Review (no people, so no circle).
+    const rows = dash.slice(dash.indexOf('<SearchPanel id="needs-you"'), dash.indexOf("/>}", dash.indexOf('<SearchPanel id="needs-you"')));
     expect(rows).not.toContain("rounded-full bg-gradient-to-br from-volt-300 to-sky-300");
-    expect(rows).toContain('<p className="min-w-[min(100%,12rem)] flex-1 text-slate-300">');
-    expect(rows).toContain("<NameLink text={r.who} href={r.whoHref} />");
-    expect(rows).toContain("{r.cta} <ArrowRight");
+    expect(rows).toContain('<span className="min-w-0 flex-1 font-bold"><TestName text={r.title}/></span><span>Review →</span>');
   });
 });

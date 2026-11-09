@@ -65,19 +65,15 @@ describe("Search by developer (section 13)", () => {
     expect(testStatusWord({ status: "ended", endKind: "early" })).toBe("Ended");
   });
 
-  it("the dashboard: the box at the top over ALL the tester's contracts, full width on phones; typing replaces the sections, clearing brings them back; results in the plain scroll box (section 14)", () => {
+  // (Codex eb8ca7cd, docs/NOV7-DASHBOARD-CHANGES.md, owner-approved) The one "Search by developer or test" box over the whole dashboard was replaced: each test panel
+  // (To do, Previous Tests, …) searches only itself, its search box outside the panel's scroll.
+  it("the dashboard: each test panel has its own search over ALL the tester's contracts (Codex eb8ca7cd replaced the one box)", () => {
     const page = src("app/app/page.tsx");
-    expect(page).toContain("<DevSearch rows={devSearchRows(contracts, !suspended)} todo={"); // (§204) To do stays, filtered
-    expect(page.indexOf("<DevSearch")).toBeLessThan(page.indexOf('id="suspended-tests"'));
-    expect(page.indexOf("</DevSearch>")).toBeGreaterThan(page.indexOf("History</h2>"));
+    expect(page).not.toContain("<DevSearch");
+    expect(page).toContain('<SearchPanel id="to-do" title="To do" placeholder="Search To do by developer or test"');
+    expect(page).toContain('<SearchPanel id="previous-tests" title="Previous Tests" placeholder="Search previous tests by developer or test" filters={PREVIOUS_TEST_FILTERS}');
     // The dashboard's contracts query is every contract of the tester (no take / no status filter).
     expect(page).toMatch(/const contracts = await db\.contract\.findMany\(\{\s*where: \{ testerId: userId \},\s*orderBy: \{ joinedAt: "desc" \},/);
-    const box = src("app/app/DevSearch.tsx");
-    expect(box).toContain("placeholder={DEV_SEARCH_LABEL}"); // (§204) "Search by developer or test"
-    expect(box).toContain('className="flex w-full items-center gap-2 sm:max-w-sm"');
-    expect(box).toContain("{!typed && children}");
-    expect(box).toContain('<ScrollList className="space-y-2" label="Tests found">');
-    expect(box).not.toContain("LongList");
   });
 });
 

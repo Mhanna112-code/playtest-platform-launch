@@ -131,9 +131,10 @@ describe("batch 30 §4: the developer's Rate has no call-change rule", () => {
 describe("batch 30 §6: leftovers from the batch 29 design doc check", () => {
   it("Pay now and Closing soon open the dashboard at Needs review (marked by HashJump)", () => {
     const h = src("lib/server/holds.ts");
-    expect(h).not.toContain('"/app#needs-you"');
-    expect(h.match(/"\/app#needs-review", \{ side: "developer", always: true, payment: true, group: "(closeout|unreviewed)"/g)).toHaveLength(2);
-    expect(src("app/app/page.tsx")).toContain('id="needs-review"');
+    // (Codex eb8ca7cd, docs/NOV7-DASHBOARD-CHANGES.md) "new payment reminders target Needs you" (Needs review was folded into it).
+    expect(h).not.toContain('"/app#needs-review"');
+    expect(h.match(/"\/app#needs-you", \{ side: "developer", always: true, payment: true, group: "(closeout|unreviewed)"/g)).toHaveLength(2);
+    expect(src("app/app/page.tsx")).toContain('<SearchPanel id="needs-you"'); // (Codex eb8ca7cd) Needs review is part of Needs you
     expect(src("app/app/layout.tsx")).toContain("<HashJump />");
   });
 

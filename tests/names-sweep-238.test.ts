@@ -57,28 +57,19 @@ describe("§238 offerLine (the To do row's new terms)", () => {
 });
 
 describe("§238 the tester dashboard", () => {
-  it("To do: the offer row and the live-call row cut the developer's name (… and the arrow), the row opening through a link laid over the card", async () => {
+  // (Codex eb8ca7cd, docs/NOV7-DASHBOARD-CHANGES.md) To do is one row per working test (its name, deadline and Send work): no offer or live-call rows (their
+  // actions stay on the session page). The row's name is the green link to the session.
+  it("To do: one row per working test, its name the green link to the session (no offer or live-call rows)", async () => {
     const s = await setup();
     const j = await joined(s.testId, "Ana Silva", "she");
     const v = (await db.test.findUniqueOrThrow({ where: { id: s.testId } })).version;
     expect((await act(s.testId, "edit", s.dev.cookie, { version: v, fields: { writtenCents: "12.00" }, seenAt: seen(), confirmed: true })).status).toBe(200);
     await settle();
-    const offer = await db.termsOffer.findFirstOrThrow({ where: { contractId: j.sessionId, status: "open" } });
-    await db.termsOffer.update({ where: { id: offer.id }, data: { diff: DIFF } });
-    await db.user.update({ where: { id: s.dev.user.id }, data: { name: DEV } });
     const html = await dashboard(j.tester.user);
-    const row = block(html, `data-todo-answer="offer-${offer.id}"`);
-    // The row's own link lies over the card (no <a> around the line's buttons); the test's name is its own link above it.
-    expect(row).toMatch(/<a [^>]*class="absolute inset-0[^"]*"/);
+    expect(html).not.toContain("data-todo-answer=");
+    const row = block(html, `data-todo-test="${j.sessionId}"`);
     expect(row).toContain('data-name-link="test"');
-    const line = block(row, 'data-todo-answer-line=""', "div");
-    expect(line).toContain(`<span>${cutTo(DEV).slice(0, -1)}</span><button`);
-    expect(line).toContain(`title="${DEV}`); // (§244) the hover shows the whole line
-    expect(line).not.toContain(`>${DIFF}`);
-    expect(line.match(/data-name-toggle=""/g)).toHaveLength(2);
-    expect(line).toContain('data-whole-toggle=""');
-    expect(line).toContain("title="); // (§244) the hover shows the whole line too
-    expect(src("app/app/page.tsx")).toContain("...cutNamesIn(`${displayName(c.test.developer)} asked for a live call`, [displayName(c.test.developer)])");
+    expect(row).toContain(`href="/app/sessions/${j.sessionId}"`);
   });
 
   it("Waiting for the developer: the application and invite-only cards show the test's name whole and green (§245, TestName), with no truncate or title hover", () => {

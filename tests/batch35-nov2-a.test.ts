@@ -99,9 +99,12 @@ describe("batch 35 §118 (1): a part that ended closes its new-terms offer", () 
     expect((await db.termsOffer.findUniqueOrThrow({ where: { id: x.offer.id } })).status).toBe("closed");
   });
 
-  it("a working tester's offer still shows Switch or keep", async () => {
+  // (Codex eb8ca7cd, docs/NOV7-DASHBOARD-CHANGES.md) To do is one row per working test with no Switch/Keep: the offer is answered on the session page.
+  it("a working tester's offer: the test stays in To do (Switch or keep is on its session page)", async () => {
     const x = await offered();
-    expect(await dashboard(x.tester.user)).toContain("Switch or keep your terms");
+    const html = await dashboard(x.tester.user);
+    expect(html).toContain(`data-todo-test="${x.sessionId}"`);
+    expect(html).not.toContain("Switch or keep your terms");
   });
 
   it("every place a contract ends closes its offers", () => {

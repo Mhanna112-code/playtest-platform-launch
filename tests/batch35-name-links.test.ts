@@ -41,12 +41,12 @@ describe("the sentences that name someone link them", () => {
     expect(page).toContain("<NameLink fit text={d.name} href={d.testerHref} /></b> disputed what you paid for");
   });
 
-  it("Needs you rows: the row's own link lies over the card, so the names' links sit above it", () => {
+  // (Codex eb8ca7cd, docs/NOV7-DASHBOARD-CHANGES.md) The developer dashboard's Needs you shows just each test's name and Review (its per-person rows went).
+  it("Needs you: one row per test, its name and Review, opening the test's Needs you", () => {
     const dash = src("app/app/page.tsx");
-    expect(dash).toContain("<NameLink text={r.who} href={r.whoHref} />");
-    expect(dash).toContain("${CARD_LINK}`}>{r.cta} <ArrowRight");
-    expect(dash).toContain('<div className="relative flex flex-wrap items-center gap-3 rounded-lg border border-white/10 p-3 transition-colors hover:bg-white/5" data-needs-row="">');
-    expect(dash).toContain('<NameLink text={t.title} kind="test" href={`/app/tests/${t.id}`} />');
+    expect(dash).toContain('<SearchPanel id="needs-you" title="Needs you" placeholder="Search Needs you by test"');
+    expect(dash).toContain("<Link href={`/app/tests/${r.id}#needs-you`}");
+    expect(dash).toContain("<span>Review →</span>");
     // (Owner, Nov 4, §181) Needs you's call requests are one line in the person's drop-down (the name is the drop-down's); the box's person drop-down names them.
     expect(src("components/CallRequestsPanel.tsx")).toContain("<NameLink fit text={p.name} href={p.href} />");
   });
@@ -60,7 +60,7 @@ describe("the sentences that name someone link them", () => {
     const session = src("app/app/sessions/[id]/page.tsx");
     expect(session).toContain("const devHref = devGone ? null : `/app/developers/${c.test.developerId}`;");
     // (§236) The Terms history lines name the developer through NameLine (its whole name linked), so one fewer NameLink here.
-    expect(session.match(/<NameLink text=\{dev\} href=\{devHref\} \/>/g)!.length).toBeGreaterThanOrEqual(6);
+    expect(session.match(/<NameLink text=\{dev\} href=\{devHref\} \/>/g)!.length).toBeGreaterThanOrEqual(5); // (Codex 6aa704d9 rebuilt the old session views: one fewer)
     expect(session).toContain("<NameLine shown={x.shown} full={x.full} name={dev} href={devHref} />");
   });
 
