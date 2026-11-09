@@ -311,6 +311,21 @@ describe("§171 item 7: Confirm with your bank on a charge made while away keeps
     const p = await peek(w.dev.cookie, { paymentId: w.items[0].id, pi: w.items[0].actionPi, since: loaded });
     expect(p.body.changes).toEqual(["Ana Silva charged $10.00 for her recording", "Ana Silva disputed the pay for her written answers"]);
   });
+
+  it("(Owner, Nov 9, §340) that tester leaving follows the Testers leaving tick: off, it goes straight through; on, it stops once (not forced)", async () => {
+    for (const ignored of [["leaving"], []]) {
+      const w = await waitingWorld(ignored);
+      const loaded = seen();
+      await settle();
+      await logEvent(w.testId, "left", "Ana Silva left the test", w.ana.sessionId);
+      const r = await confirmPOST(req("/api/payments/confirm", { cookie: w.dev.cookie, headers: { "x-tab": TAB }, body: { paymentId: w.items[0].id, start: true, seenAt: loaded } })).then(json) as Res;
+      if (ignored.length) expect(r.status, JSON.stringify(r.body)).toBe(200);
+      else {
+        expect(r.body.error?.code, JSON.stringify(r.body)).toBe("stop_once");
+        expect(lines(r).map((c) => [c.text, !!c.forced])).toEqual([["Ana Silva left the test", false]]);
+      }
+    }
+  });
 });
 
 describe("§171 B4: a single Confirm window whose check isn't the live one any more says it was cancelled", () => {

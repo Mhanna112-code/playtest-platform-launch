@@ -242,6 +242,11 @@ describe("§193: an automatic call charge and the team's decision charge do the 
     const dispute = { kind: "dispute", text: "Ana Silva disputed the pay for her written answers", createdAt: at, contractId: "c-ana" };
     expect(alwaysStops(dispute, away)).toBe(true);
     expect(alwaysStops({ ...dispute, contractId: "c-ben" }, away)).toBe(false);
+    // (Owner, Nov 9, §340) That tester leaving no longer forces Confirm with your bank / Confirm all: it follows the "Testers leaving" tick. Pay still forces it.
+    const left = { kind: "left", text: "Ana Silva left the test", createdAt: at, contractId: "c-ana" };
+    expect(alwaysStops(left, away)).toBe(false);
+    expect(alwaysStops(left, { ...away, confirms: ["k1"] })).toBe(false);
+    expect(alwaysStops(left, { ...away, awayCharge: undefined })).toBe(true);
   });
 });
 

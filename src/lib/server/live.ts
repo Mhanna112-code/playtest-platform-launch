@@ -44,7 +44,8 @@ export type Press = {
   wholeTester?: boolean;
   /**
    * (Owner, Nov 4, §171 item 7) "Confirm with your bank" on a charge made while away, and Confirm all's items: their press-time gate keeps §159's always-stop rules
-   * (not §171 A1/A2) while the owner decides the waiting-charge rules. Their open windows still get A3 and B4.
+   * (not §171 A1/A2) while the owner decides the waiting-charge rules. Their open windows still get A3 and B4. Forced: the team's decision about that tester,
+   * their dispute and their other charges; (Owner, Nov 9, §340) that tester leaving follows the "Testers leaving" Alerts tick.
    */
   awayCharge?: boolean;
   /** An existing individual bank confirmation needs no retry for a new team pause. */
@@ -277,13 +278,14 @@ const onPart = (c: TestEventLike, press?: Press) => {
  */
 export function alwaysStops(c: TestEventLike & { contractId?: string | null }, press?: Press) {
   if (press?.awayCharge) {
-    // (§171 item 7) As before §171: the team's decision about that tester, that tester leaving, work sent on the very part.
+    // (§171 item 7) As before §171: the team's decision about that tester. (Owner, Nov 9, §340) That tester leaving no longer forces it: it follows the
+    // developer's "Testers leaving" Alerts tick, as any other leave does.
     const pc = payContractOf(press);
     // (Owner, Nov 4, §193) And a charge about that same tester, except a charge on a part this press itself confirms (`confirms`: the waiting charge's own line,
     // which the box already shows as its row; Confirm all: every part it covers): stopping for it could only show the press what it is paying.
     const ownCharge = !!c.piece && (onPart(c, press) || !!press.confirms?.includes(c.piece));
     // (Owner, Nov 5) A dispute by that tester forces it too, like the team's decision and a charge (it followed the Disputes tick before).
-    return !!pc && ((c.kind === "dispute" || isTeamDecision(c) || c.kind === "left" || (!!c.charge && !ownCharge)) && c.contractId === pc);
+    return !!pc && ((c.kind === "dispute" || isTeamDecision(c) || (!!c.charge && !ownCharge)) && c.contractId === pc);
   }
   // (Owner, Nov 4, §193) A charge about the tester (their Charge on any part, an automatic call charge, the team's dispute-decision charge) stops every press about
   // that tester once, exactly like a dispute (§171 A2). Presses about the whole test and about other testers follow the Payments tick.
