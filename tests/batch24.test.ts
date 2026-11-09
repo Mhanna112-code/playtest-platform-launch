@@ -174,7 +174,7 @@ describe("batch 24 section 1: Your bank wants you to confirm, at the top of the 
     const p = await waiting(x.dev.user.id, x.tester.user.id, { status: "failed", submissionId: x.sub.id, contractId: x.sessionId, owedUntil: new Date(Date.now() - DAY) });
     const rows = await bankToConfirm(x.dev.user.id);
     expect(rows.map((r) => r.id)).toEqual([p.id]);
-    expect(rows[0].href).toBe(bankHref(x.testId, p.id)); // the test's paused view carries the same button
+    expect(rows[0].href).toBe("/app/payments#owed"); // (Owner, Nov 9, §332) during a hold the box's rows open Pay what you owe (was the test's paused view)
     // (Owner, Nov 4, §175) under each tester's name; (§180 / §181) now each person's "Confirm with your bank" block inside their Needs you drop-down, in the
     // active view and the restricted one alike.
     const testPage = src("app/app/tests/[id]/page.tsx");

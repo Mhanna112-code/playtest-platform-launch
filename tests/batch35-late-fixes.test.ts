@@ -271,12 +271,17 @@ describe("batch 35 §24: the question checks only while the written part is on",
 });
 
 describe("batch 35 §24: turning the written part back on checks its questions", () => {
-  it("duplicates kept while it was off are refused when it's ticked again", async () => {
+  // (Owner, Nov 9, §349) Questions typed while the part is off are no longer saved (an unticked part's hidden fields are neither saved nor announced), so nothing
+  // duplicated is kept; ticking it again with duplicates in the same Save is refused.
+  it("questions typed while it was off aren't kept; duplicates typed when it's ticked again are refused", async () => {
     const { dev, testId } = await setup();
     const v = async () => (await db.test.findUniqueOrThrow({ where: { id: testId } })).version;
-    expect((await act(testId, "edit", dev.cookie, { version: await v(), fields: { writtenCents: null, questions: ["How did it go?", "How did it go?"] }, confirmed: true })).status).toBe(200);
-    const on = await act(testId, "edit", dev.cookie, { version: await v(), fields: { writtenCents: "10.00" }, confirmed: true });
-    expect(on.status).toBe(400);
+    const saved = (await db.test.findUniqueOrThrow({ where: { id: testId } })).questions;
+    expect((await act(testId, "edit", dev.cookie, { version: await v(), fields: { writtenCents: null, questions: ["How did it go?", "How did it go?"] }, confirmed: true, payRulesOk: true })).status).toBe(200);
+    expect((await db.test.findUniqueOrThrow({ where: { id: testId } })).questions).toEqual(saved);
+    const dup = await act(testId, "edit", dev.cookie, { version: await v(), fields: { writtenCents: "10.00", questions: ["How did it go?", "How did it go?"] }, confirmed: true, payRulesOk: true });
+    expect(dup.status).toBe(400);
+    expect((await act(testId, "edit", dev.cookie, { version: await v(), fields: { writtenCents: "10.00" }, confirmed: true, payRulesOk: true })).status).toBe(200);
   });
 });
 

@@ -28,6 +28,6 @@ describe("categories", () => {
     expect(cleared.status).toBe(400);
     expect(cleared.body.error.message).toBe("Tick at least one category.");
     expect((await act(testId, "edit", d2.cookie, { version: v, fields: { categories: ["AI", "Business"] }, confirmed: true })).status).toBe(200);
-    expect((await db.test.findUniqueOrThrow({ where: { id: testId } })).categories).toEqual(["AI", "Business"]);
+    expect((await db.test.findUniqueOrThrow({ where: { id: testId } })).categories).toEqual(["Business", "AI"]); // (Owner, Nov 9, §345) saved in the list's order
   });
 });

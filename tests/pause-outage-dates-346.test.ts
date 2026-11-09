@@ -24,7 +24,8 @@ async function sent() {
 describe("§346 (1) a 48 h pause on a piece whose Charge is open moves its close-out by exactly 48 h", () => {
   it("the review date (already passed) stays; the close-out counts the pause once", async () => {
     const f = await sent();
-    const now = new Date(), S = new Date(now.getTime() - 48 * H);
+    // A clock far from every outage other test files record (outages are global: one overlapping this pause would be counted once with it).
+    const now = new Date(Date.UTC(2400, 0, 1) + Math.floor(Math.random() * 1000) * D), S = new Date(now.getTime() - 48 * H);
     // Work over: deadlines and Open until passed; Charge opened 12 h before the pause began.
     await db.contract.update({ where: { id: f.sessionId }, data: { dueAt: new Date(now.getTime() - 4 * D) } });
     await db.test.update({ where: { id: f.testId }, data: { openUntil: new Date(now.getTime() - 4 * D) } });

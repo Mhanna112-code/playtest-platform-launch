@@ -312,7 +312,7 @@ describe("batch 17 §11: a charge made while away is confirmed on the test page"
     fakeStripe({ mode: "away-action" });
     await legacyAwayOwed(dev.user.id);
     const n = await db.notification.findFirstOrThrow({ where: { userId: dev.user.id, text: { startsWith: "Your bank wants you to confirm a $8.00 payment by " } } });
-    expect(n.link).toBe("/app#bank-to-confirm"); // (batch 29 §32)
+    expect(n.link).toBe("/app/payments#owed"); // (Owner, Nov 9, §332) during a hold the bank line opens Pay what you owe (was the dashboard's box, batch 29 §32)
     // (Batch 35 §117) What's owed is ONE payment (it can span tests): confirmed on Payments, its row naming each payment it covers; the debt is locked on the box.
     const one = await db.payment.findFirstOrThrow({ where: { developerId: dev.user.id, kind: "owed" } });
     expect(await bankWaitingOnTest(dev.user.id, testId)).toEqual([]);
@@ -325,7 +325,7 @@ describe("batch 17 §11: a charge made while away is confirmed on the test page"
     await (await import("@/lib/server/confirm")).awayAction(sub.id, { status: "requires_action", stripePaymentIntentId: "pi_" + randomUUID(), clientSecret: "" });
     // (Batch 29 §32) The same day: the day's one line now covers both (updated in place), still opening the dashboard's box.
     expect(await db.notification.count({ where: { userId: dev.user.id, text: { startsWith: "Your bank wants you to confirm" } } })).toBe(1);
-    expect(await db.notification.count({ where: { userId: dev.user.id, link: "/app#bank-to-confirm", text: { startsWith: "Your bank wants you to confirm 2 payments ($15.00 in all): ", contains: "; the first by " } } })).toBe(1); // (§321) the payments are named before "the first by"
+    expect(await db.notification.count({ where: { userId: dev.user.id, link: "/app/payments#owed" /* (§332) still the hold */, text: { startsWith: "Your bank wants you to confirm 2 payments ($15.00 in all): ", contains: "; the first by " } } })).toBe(1); // (§321) the payments are named before "the first by"
     const items = await confirmItems(dev.user.id);
     expect(items.find((i) => i.id === sub.id)).toMatchObject({ href: null });
     const list = renderToStaticMarkup(createElement(ConfirmList, { items: items.filter((i) => i.id === sub.id) }));

@@ -18,8 +18,9 @@ it("ticking written answers, changing questions, then unticking saves without a 
   expect(result.status, JSON.stringify(result.body)).toBe(200);
   const saved = await db.test.findUniqueOrThrow({ where: { id: testId } });
   expect(saved.writtenCents).toBeNull();
+  // (Owner, Nov 9, §349, audit E5 / E5b; replaces f35e7b90's saving of them) The unticked part's hidden fields are kept as they were: neither saved nor announced.
   expect(saved.writtenRequired).toBe(true);
-  expect(saved.questions).toEqual(["What would you improve in the navigation?"]);
+  expect(saved.questions).toEqual(t.questions);
 });
 
 it("round-trips all hidden Required flags without changing their saved values", async () => {
