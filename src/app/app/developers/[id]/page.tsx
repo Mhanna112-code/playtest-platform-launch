@@ -24,6 +24,7 @@ import { openTestsV, profileOpenTests } from "@/lib/server/profileOpenTests";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { otherSideNotice } from "@/components/OtherSideNotice";
 import { BIO_BOX_MAX, ValueText } from "@/components/QA";
+import { PronounTag } from "@/components/PronounTag";
 
 
 export const metadata = { title: "Developer · Playtest" };
@@ -66,7 +67,8 @@ export default async function DeveloperProfilePage({ params }: { params: Promise
         <div className="flex flex-wrap items-center gap-4">
           <span className="flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-sky-300 to-indigo-400 text-xl font-semibold text-ink-950">{name.charAt(0).toUpperCase()}</span>
           <div className="min-w-[min(100%,12rem)] flex-1">
-            <h1 className="text-2xl font-bold text-white">{name}</h1>
+            {/* (Owner, Nov 9, §335) Their pronouns after the name, when set. */}
+            <h1 className="text-2xl font-bold text-white">{name} <PronounTag pronoun={p.pronoun} className="text-base" /></h1>
             <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-slate-400">
               <span className="flex items-center gap-1"><CalendarDays className="h-4 w-4" /> Posting tests since {fmtDate(p.createdAt)}</span>
             </p>

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { NameLink } from "@/components/Cut";
+import { PronounTag } from "@/components/PronounTag";
 import { FileText, Radio, Video } from "lucide-react";
 import { CategoryIcon, CATEGORY_STYLE } from "@/components/Category";
 import { ChatWithButton } from "@/components/ChatWithButton";
@@ -55,7 +56,7 @@ export function StatusPill({ status, full = false }: { status: string; full?: bo
  * One circle per spot: a tester's initial (linking to their profile), or a dashed empty seat. `plain` (owner, Oct 28: a restricted account's dashboard): the initial
  * with the name on hover as plain text, no hover card, so no profile link, Chat with, Report or Block.
  */
-export function Seats({ total, people, plain = false }: { total: number; people: { id: string; name: string; contractId?: string }[]; plain?: boolean }) {
+export function Seats({ total, people, plain = false }: { total: number; people: { id: string; name: string; contractId?: string; /** (§335) */ pronoun?: string | null }[]; plain?: boolean }) {
   const shown = Math.min(total, 12);
   return (
     <div className="relative flex flex-wrap items-center gap-1.5">
@@ -79,6 +80,7 @@ export function Seats({ total, people, plain = false }: { total: number; people:
             <span role="tooltip" data-tester-card={p.id}
               className="hidden absolute left-0 top-full z-40 mt-2 w-64 max-w-[calc(100vw-2rem)] rounded-2xl border border-white/15 bg-slate-900 p-4 text-sm shadow-2xl before:absolute before:inset-x-0 before:-top-2 before:h-2 before:content-[''] group-focus-within:block group-hover:block" data-hover-card="">
               <span className="block font-semibold text-white" data-card-name=""><NameLink text={p.name} href={`/app/testers/${p.id}`} whole /></span>
+              <PronounTag pronoun={p.pronoun} className="block text-xs" />
               {p.contractId && <span className="mt-3 block border-t border-white/10 pt-2"><ChatWithButton contractId={p.contractId} name={p.name} /></span>}
             </span>
           </span>

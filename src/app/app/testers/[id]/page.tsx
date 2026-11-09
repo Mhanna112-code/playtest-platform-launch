@@ -24,6 +24,7 @@ import { TesterTests } from "@/components/TesterTests";
 import { testerTestsFor } from "@/lib/server/testerTests";
 import { otherSideNotice } from "@/components/OtherSideNotice";
 import { BIO_BOX_MAX, ValueText } from "@/components/QA";
+import { PronounTag } from "@/components/PronounTag";
 
 export const metadata = { title: "Tester · Playtest" };
 export const dynamic = "force-dynamic";
@@ -64,7 +65,8 @@ export default async function TesterProfilePage({ params }: { params: Promise<{ 
       <section className="card flex flex-wrap items-center gap-4">
         <span className="flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-volt-300 to-sky-300 text-xl font-semibold text-ink-950">{name.charAt(0).toUpperCase()}</span>
         <div className="min-w-[min(100%,12rem)] flex-1 space-y-2">
-          <h1 className="text-2xl font-bold text-white">{name}</h1>
+          {/* (Owner, Nov 9, §335) Their pronouns after the name, when set. */}
+          <h1 className="text-2xl font-bold text-white">{name} <PronounTag pronoun={p.pronoun} className="text-base" /></h1>
           <p className="flex flex-wrap items-center gap-2 text-sm text-slate-400"><CalendarDays className="h-4 w-4" /> Tester since {fmtDate(p.createdAt)}</p>
           {mine && <p className="text-xs text-slate-500">This is how developers see your profile.</p>}
         </div>

@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { Users } from "lucide-react";
 import { fmtDateIn, pronouns } from "@/lib/format";
 import { PlusMore } from "@/components/PlusMore";
+import { PronounTag } from "@/components/PronounTag";
 import { LongList } from "@/components/LongList";
 import { AllTesters, AvatarButton } from "./TesterFilter";
 import { TesterListSearch } from "./TesterSearch";
@@ -27,6 +28,7 @@ function TesterAvatar({ seat }: { seat: Seat }) {
       <span role="tooltip"
         className="hidden absolute left-0 top-full z-40 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-2xl border border-white/15 bg-slate-900 p-4 text-sm shadow-2xl before:absolute before:inset-x-0 before:-top-2 before:h-2 before:content-[''] group-focus-within:block group-hover:block" data-hover-card="">
         <span className="block font-semibold text-white" data-card-name=""><NameLink text={seat.name} href={`/app/testers/${seat.testerId}`} whole /></span>
+        <PronounTag pronoun={seat.pronoun} className="block text-xs" />
         {/* Devices and languages: 3, then "+N more". */}
         {seat.summary.map((l, i) => <span key={l} className="block text-slate-300">{i === 0 && l.includes(", ") ? <PlusMore items={l.split(", ")} /> : l}</span>)}
         {seat.chat && <span className="mt-3 block border-t border-white/10 pt-2">{seat.chat}</span>}

@@ -421,7 +421,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
         <div className="flex flex-wrap items-start gap-4">
           <div className="min-w-[12rem] flex-1">
             <p className="text-sm text-slate-400">by{" "}
-              <PersonHover name={dev} href={`/app/developers/${c.test.developerId}`} summary={[devRating || "No ratings yet"]} chat={!meOff ? <ChatWithButton contractId={c.id} name={dev} /> : undefined} />
+              <PersonHover name={dev} href={`/app/developers/${c.test.developerId}`} pronoun={c.test.developer.pronoun} summary={[devRating || "No ratings yet"]} chat={!meOff ? <ChatWithButton contractId={c.id} name={dev} /> : undefined} />
               {" "}· joined {fmtDate(c.joinedAt)}</p>
             <div className="mt-1 flex flex-wrap gap-2">
               {c.test.status === "stopped" && <span className="badge border-sky-300/40 text-sky-200"><span className="h-2 w-2 rounded-sm bg-sky-300" /> Stopped</span>}

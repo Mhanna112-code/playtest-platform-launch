@@ -84,6 +84,8 @@ export function pronouns(p: string | null | undefined) {
 export type Pronouns = ReturnType<typeof pronouns>;
 /** (Batch 35 §162) The pronoun choice, the same on the profile and at sign-up: unset reads "they". */
 export const PRONOUN_OPTIONS: [value: string, label: string][] = [["", "Not set (others read “they”)"], ["she", "she / her"], ["he", "he / him"], ["they", "they / them"]];
+/** (Owner, Nov 9, §335) A set pronoun as the profile's choice reads it ("she / her"); "" when none is set (nothing is shown). */
+export const pronounLabel = (p: string | null | undefined) => (p ? PRONOUN_OPTIONS.find(([v]) => v === p)?.[1] ?? "" : "");
 
 export const fmtDateTime = (d: Date | string) =>
   new Date(d).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
