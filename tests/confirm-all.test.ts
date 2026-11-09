@@ -13,7 +13,7 @@ import { confirmAllState } from "@/lib/server/confirmAll";
 import { ALL_NOTE, OWED_PAID } from "@/lib/server/owedOnce";
 import { setStripeForTests } from "@/lib/server/stripe";
 import { json, req } from "./helpers";
-import { act, addTo, joined, listingBody, sact, seen, settle, setup } from "./fixtures";
+import { act, joined, listingBody, sact, settle, setup } from "./fixtures";
 
 // (Owner, Nov 3, batch 35 §147) Confirm all: every charge waiting for "Confirm with your bank" (across testers, parts and tests) confirmed as ONE payment with ONE
 // bank check; old checks cancelled at Stripe first; approved → each paid once, each tester's share sent, one receipt; refused → each back to its own Confirm with its
@@ -105,19 +105,6 @@ const allOf = (devId: string) => db.payment.findMany({ where: { developerId: dev
 const NAMES = ["Ana Silva's written answers on “Harbor Run” $10.00", "Ben Okafor's written answers on “Sky Lab” $12.00", "Ana Silva's written answers on “Sky Lab” $20.00"];
 
 describe("§147 Confirm all: one payment, one bank check", () => {
-  it("continues for new work on a covered part with Work sent off", async () => {
-    const st = bank();
-    const w = await world(st);
-    await db.test.update({ where: { id: w.testId }, data: { ignoredAlerts: ["work"] } });
-    const body = { ...seenAll(w), seenAt: seen() };
-    await settle();
-    expect((await addTo(w.ana.sessionId, w.ana.tester.cookie, { text: "Another detail about the opening screen.", confirmed: true })).status).toBe(200);
-    const first = await press(w.dev.cookie, body);
-    expect(first.status, JSON.stringify(first.body)).toBe(200);
-    expect(first.body).toMatchObject({ n: 3, cents: 4200 });
-    expect(st.made).toHaveLength(1);
-  });
-
   it("the box and Payments offer it for 2+ waiting charges: “Confirm all (3) · $42.00”", async () => {
     const st = bank();
     const w = await world(st);

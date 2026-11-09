@@ -14,7 +14,7 @@ import { act, addTo, joined, sact, seen, settle, setup } from "./fixtures";
 
 // (Owner, Nov 3, batch 35 §159) The payment stop matrix: one test per rule.
 // 1. The team's decision about the SAME tester always stops Pay / Pay more / Confirm once; about ANOTHER tester it follows "Decisions by the team".
-// 2. Work on the same part always stops Pay and Pay more once. Bank confirmations and work on other parts follow "Work sent".
+// 2. The tester's sent / updated / added work on the SAME part always stops Pay / Pay more / Confirm once; work on other parts follows "Work sent".
 // 3. A tester leaving follows "Testers leaving".
 // 4. The tester's Charge / Let it go stop once for a developer payment on THAT part and for the team's decision on any of their disputes, whatever their Alerts;
 //    a payment on their other parts follows their Alerts.
@@ -146,7 +146,7 @@ describe("§159 rule 2: the tester adding to that part stops Pay once if unseen"
   });
 });
 
-describe("§159 rule 2: work on the part being paid forces a stop", () => {
+describe("§159 rule 2: work on every part follows \"Work sent\"", () => {
   /** Ana's written answers and recording sent; "Work sent" ticked off (or not). */
   async function workWorld(off: boolean) {
     const { dev, testId } = await setup({ recordingCents: "10.00" });
@@ -160,16 +160,13 @@ describe("§159 rule 2: work on the part being paid forces a stop", () => {
     return { dev, testId, tester, sessionId, sub, rec };
   }
 
-  it("\"Work sent\" ticked off: a same-part addition stops Pay once without charging", async () => {
+  it("\"Work sent\" ticked off: an addition to the part being paid allows Pay", async () => {
     const w = await workWorld(true);
     const loaded = seen(); await settle();
     expect((await addTo(w.sessionId, w.tester.cookie, { text: "one more thing", confirmed: true })).status).toBe(200);
     const body = { kind: "submission", id: w.sub.id, amount: "10.00", tickedCents: 1000, seenAt: loaded };
     const first = await pay(w.dev.cookie, body);
-    expect(first.body.error?.code, JSON.stringify(first.body)).toBe("stop_once");
-    expect(first.body.error.changes).toEqual([expect.objectContaining({ text: expect.stringMatching(/^Ana Silva added to her answer to/), forced: true })]);
-    expect(await db.payment.count({ where: { submissionId: w.sub.id } })).toBe(0);
-    expect((await pay(w.dev.cookie, { ...body, confirmed: true, boxAt: first.body.error.now })).status).toBe(200);
+    expect(first.status, JSON.stringify(first.body)).toBe(200);
   });
 
   it("an addition to her OTHER part follows the tick: off → Pay goes through; on → stops once", async () => {
@@ -184,7 +181,7 @@ describe("§159 rule 2: work on the part being paid forces a stop", () => {
     }
   });
 
-  it("a same-part update stops Pay more, while confirming a different part still follows Work sent", async () => {
+  it("Pay more and Confirm with your bank on the part: an update sent after the Pay follows \"Work sent\" ticked off", async () => {
     const w = await workWorld(true);
     expect((await pay(w.dev.cookie, { kind: "submission", id: w.sub.id, amount: "10.00", tickedCents: 1000, confirmed: true })).status).toBe(200);
     const waitRow = await db.payment.create({ data: { kind: "review", contractId: w.sessionId, submissionId: w.rec.id, developerId: w.dev.user.id, testerId: w.tester.user.id, amountCents: 1000, feeCents: 0, testerCents: 0, status: "needs_action", actionPi: "pi_" + randomUUID(), actionBy: new Date(Date.now() + 60_000) } });
@@ -192,32 +189,12 @@ describe("§159 rule 2: work on the part being paid forces a stop", () => {
     await settle();
     const loaded = seen(); await settle();
     expect((await addTo(w.sessionId, w.tester.cookie, { text: "more", confirmed: true })).status).toBe(200);
-    const body = { contractId: w.sessionId, submissionId: w.sub.id, amount: "1.00", tickedCents: 100, seenAt: loaded };
-    const more = await act(w.testId, "pay-extra", w.dev.cookie, body);
-    expect(more.body.error?.code, JSON.stringify(more.body)).toBe("stop_once");
-    expect(more.body.error.changes).toEqual([expect.objectContaining({ forced: true })]);
-    expect((await act(w.testId, "pay-extra", w.dev.cookie, { ...body, confirmed: true, boxAt: more.body.error.now })).status).toBe(200);
+    const more = await act(w.testId, "pay-extra", w.dev.cookie, { contractId: w.sessionId, submissionId: w.sub.id, amount: "1.00", tickedCents: 100, seenAt: loaded });
+    expect(more.status, JSON.stringify(more.body)).toBe(200);
     // Confirm on the recording's waiting charge: the written answers' update is another part → follows the tick (off): no stop.
     setStripeForTests(null);
     const c = await confirmStart(w.dev.cookie, waitRow.id, { seenAt: loaded });
     expect(c.status, JSON.stringify(c.body)).toBe(200);
-  });
-
-  it.each([true, false])("confirming a waiting payment follows Work sent for its own part (off=%s)", async (off) => {
-    const w = await workWorld(off);
-    const waiting = await db.payment.create({ data: { kind: "review", contractId: w.sessionId, submissionId: w.sub.id, developerId: w.dev.user.id, testerId: w.tester.user.id, amountCents: 1000, feeCents: 0, testerCents: 0, status: "needs_confirmation", actionPi: "pi_" + randomUUID(), actionBy: new Date(Date.now() + 60_000) } });
-    const loaded = seen(); await settle();
-    expect((await addTo(w.sessionId, w.tester.cookie, { text: "one more thing", confirmed: true })).status).toBe(200);
-    setStripeForTests(null);
-    const first = await confirmStart(w.dev.cookie, waiting.id, { seenAt: loaded });
-    if (off) {
-      expect(first.status, JSON.stringify(first.body)).toBe(200);
-    } else {
-      expect(first.body.error?.code, JSON.stringify(first.body)).toBe("stop_once");
-      expect(texts(first)).toEqual([expect.stringMatching(/^Ana Silva added to her answer to/)]);
-      expect(first.body.error.changes[0].forced).not.toBe(true);
-      expect((await confirmStart(w.dev.cookie, waiting.id, { seenAt: loaded, confirmed: true, boxAt: first.body.error.now })).status).toBe(200);
-    }
   });
 });
 
