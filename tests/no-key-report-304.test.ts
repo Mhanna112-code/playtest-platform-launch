@@ -80,10 +80,12 @@ describe("§304: a key with the old broken status shows as normal", () => {
     expect(refused.body.error.errors[0]).toBe("K1 is in use by Ana Silva, so it can't be added.");
     // An old "fixed" mark never makes a top-box line or a stop.
     expect((await testerChanges(b.tester.user.id, b.sessionId, testId, loaded)).some((e) => e.kind === "keyfixed")).toBe(false);
-    // Coming back, she gets the same key (no "does it work again?" question, nothing retired).
+    // (Owner, Nov 9, §344) Coming back, she gets the next FREE key (K3): her old key was unassigned when she left (not returned to Free); no "does it work
+    // again?" question, nothing retired.
     await db.contract.update({ where: { id: a.sessionId }, data: { status: "left" } });
-    expect(await assignKeyAtJoin(db, testId, a.sessionId)).toBe("K1");
-    expect((await db.accessKey.findFirstOrThrow({ where: { testId, value: "K1" } })).status).toBe("inuse");
+    expect(await assignKeyAtJoin(db, testId, a.sessionId)).toBe("K3");
+    expect((await db.accessKey.findFirstOrThrow({ where: { testId, value: "K3" } })).status).toBe("inuse");
+    expect((await db.accessKey.findFirstOrThrow({ where: { testId, value: "K1" } })).status).toBe("unassigned");
     expect(await db.accessKey.count({ where: { testId, status: "retired" } })).toBe(0);
     // Typed back into Free after its tester left: a plain reuse warning.
     expect(reusedKeyLine("K1", "Ana Silva")).toBe("K1: reused, previously given to Ana Silva.");

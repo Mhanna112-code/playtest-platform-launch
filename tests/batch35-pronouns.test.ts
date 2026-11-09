@@ -192,7 +192,7 @@ describe("batch 35 §162: lines about a person use their recorded pronoun (she /
     expect(whyInvited("he")).toBe("already invited, waiting for him to join");
     expect(WHY_INVITED).toBe("already invited, waiting for them to join");
     expect(whyApplied("rejoin", "she")).toBe("asked to rejoin: answer her in Needs you →");
-    expect(sameTesterLimitLine("Ben", "he")).toBe("Ben: you've invited him to this test 3 times today. You can invite him again tomorrow.");
+    expect(sameTesterLimitLine("Ben", "he")).toBe("Ben: you've invited him to this test 2 times today. You can invite him again tomorrow."); // (Owner, Nov 9, §344) 2 a day is intended
     expect(requestGoneLine({ status: "closed", closedReason: FINISHED_PART_REASON }, "she")).toBe("Closed: the tester finished her part");
     expect(requestGoneLine({ status: "closed", closedReason: FINISHED_PART_REASON })).toBe("Closed: the tester finished their part");
     expect(devRateLabel(3000, 3000, 2400, "he")).toBe("His terms: $30/h (the listing is now $24/h)");
