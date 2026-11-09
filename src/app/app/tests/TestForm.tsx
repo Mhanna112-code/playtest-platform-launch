@@ -565,6 +565,7 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
         // (Batch 15 section 32) The developer's time zone goes with the press: "today" and the 3 to 30 days are counted in it.
         const r = await api<{ id: string }>(draft ? `/api/tests/${draft.id}/post-draft` : "/api/tests", { ...toApi(f), accessKeys: keysText, confirmHigh: confirmHigh(), payRulesOk: payTick, timeZone: browserZone(), agreeTerms });
         await keep.clear();
+        leaving.current = true;
         window.location.href = `/app/tests/${r.id}`;
         return;
       }
@@ -630,7 +631,7 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
         if (err instanceof ApiError && err.data.criticalCounts) setCritCounts(countsOf(err.data.criticalCounts));
       }
     } finally {
-      // (Batch 34 §9) Leaving after a Save: the button stays "Saving…" until Edit shows again with "Saved." (a Back return frees it).
+      // Keep the form disabled while navigation after a successful Save or Post is pending.
       if (!leaving.current) setBusy(false);
     }
   }
