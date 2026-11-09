@@ -617,7 +617,7 @@ describe("§171 C: the Terms of Use", () => {
     const c = PAYMENT_RULES.find((r) => r.heading === "Changes while you pay")!;
     expect(c.text).toContain("Work sent or added and ordinary payments follow Alerts, even on the same part.");
     expect(c.text).toContain("Call reports and final lengths follow Call changes alerts.");
-    expect(c.text).toContain("The tester leaving or being removed and the developer’s own actions in another tab also stop payment buttons.");
+    expect(c.text).toContain("The tester leaving or being removed and the developer’s own actions in another tab also stop Pay and Pay more; for Confirm with your bank and Confirm all, the tester leaving follows your Testers leaving Alerts."); // (§343, §340)
     expect(c.text).toContain("An open bank check shows changes about that tester regardless of Alerts.");
     expect(PAYMENT_RULES.find((r) => r.heading === "Bank checks, declines, holds")!.text).toContain("From an account's 2nd chargeback");
     expect(TERMS_VERSION).toBe(2);

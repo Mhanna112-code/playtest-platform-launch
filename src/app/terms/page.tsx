@@ -24,7 +24,8 @@ const SECTIONS: { title: string; points: (string | { id: string; text: string })
       "A test states its terms up front: the parts you ask for (written answers, a screen recording, a live call), the price of each, your questions, the devices and languages it needs, Open until (the last day to join; every tester gets the same number of days from when they join), how many testers (spots), and who can join (anyone who matches, people you approve, or invite only).",
       "A live call's hourly rate is at least $10 an hour (or free); each call request picks its own length (10 to 180 minutes). Each part can be marked Required or Not required: it is a label, it blocks nothing.",
       `Posting a test is free; what developers pay is in section 5. Every test takes at most ${MAX_SPOTS} testers. A tester can be in up to ${MAX_ACTIVE_TESTS} tests at once.`,
-      "Tests can be stopped for good by the developer; the work already sent still waits to be paid, and calls ahead are cancelled.",
+      // (Owner, Nov 9, §343) The Terms state the current rules in place (no new version): a closed test has no Edit.
+      "Tests can be stopped for good by the developer; the work already sent still waits to be paid, and calls ahead are cancelled. A closed test can't be edited.",
     ],
   },
   {
@@ -34,8 +35,9 @@ const SECTIONS: { title: string; points: (string | { id: string; text: string })
       "Send the parts you choose. Honest, critical feedback counts, and so does saying where and why you stopped early.",
       "Each answer to a question, and each new addition to an answer, needs at least 50 characters of text. Earlier answers, formatting marks and attached files do not count toward an addition's minimum.",
       "Don't share builds, keys or confidential details.",
-      "You can leave a test at any time: what you sent is still reviewed and paid. You can ask to rejoin after leaving or being ended early, or be invited back, subject to the remaining-time and joining rules. A past block does not prevent asking once both parties have unblocked; an active block prevents joining. Rejoining is unavailable after rating or permanent closure.",
-      "Requests, applications and offers can be withdrawn until the other side answers.",
+      "You can leave a test at any time: what you sent is still reviewed and paid. You can ask to rejoin after leaving or being ended early, or be invited back, subject to the remaining-time and joining rules. A past block does not prevent asking once both parties have unblocked; an active block prevents joining. Rejoining is unavailable after rating or permanent closure. Coming back gives you the time that was left on your deadline, on the listing as it is then (its NDA included); work you sent before leaving keeps the dates it had.",
+      // (§343) Call requests and applications are withdrawn; the developer's invitations are cancelled (Cancel invite). There is no withdrawing an offer.
+      "Requests, applications and invitations can be withdrawn or cancelled until the other side answers.",
     ],
   },
   {
@@ -68,6 +70,8 @@ const SECTIONS: { title: string; points: (string | { id: string; text: string })
     points: [
       "Ratings (1 to 5 stars, and an optional note) go both ways. The tester rates first; the developer rates once the tester has rated and everything they sent is settled. The tester's rating shows once the developer rates or their 14 days to rate end.",
       "Leaving a test does not close the tester's rating window. It ends at the test's close-out, generally 14 days after the last tester's deadline and no earlier than joining closes, adjusted for pauses and outages. Work awaiting review, a Charge still to decide or an open dispute can temporarily prevent rating. The tester's remaining rating countdown pauses while their dispute is open, so waiting for a team decision does not consume that remaining time. If the tester never rates, the developer can still get a 14-day rating window after close-out once the work is settled.",
+      // (§343, §288) Rating finishes the tester's part.
+      "Rating finishes your part on the test: after it you can't open a dispute or rejoin.",
       "Once either account is deleted, neither side can submit a new rating for that session. Ratings already submitted keep their existing display rules.",
       "Developers may use the feedback they receive to improve their products. Testers keep no rights over how it's used, but their name isn't published without consent.",
       "Any confidentiality agreement a developer sets applies between the developer and the tester.",
@@ -79,6 +83,10 @@ const SECTIONS: { title: string; points: (string | { id: string; text: string })
     points: [
       // (Owner, Nov 2, batch 35 §132) When a call can be booked.
       CALL_WINDOW_TERMS,
+      // (§343) The limits (§185, §292), the cancel reason (§293) and a pause's cancellations (§172).
+      "Between a developer and a tester on a test there can be at most 3 calls booked or requested at once, and each can send the other at most 3 call requests a day; a time the other person already has booked can't be requested.",
+      "Either side can cancel a call up to its start; within 24 hours of it you must say why (the other side reads it).",
+      "When a test is paused, calls starting within 3 days are cancelled with no fault on either side; later calls are cancelled 3 days before they start if the pause still lasts.",
       "Calls run in the app's own call room, on the call page: video and sound travel between the two browsers, directly or through a relay when needed to connect them. Only the developer and tester of that call can be in it, from 10 minutes before the start until the call ends. When the two browsers were connected is recorded (it measures the length); the team can read it when handling a report. Nothing in the call is recorded.",
       "Screen recordings are only seen by the developer and tester of that session, and by the team when handling a dispute or report.",
     ],
@@ -87,6 +95,8 @@ const SECTIONS: { title: string; points: (string | { id: string; text: string })
     title: "9. The service and changes to these terms",
     points: [
       "The platform is provided as is. We aren't responsible for the products being tested, for builds, or for agreements between users beyond what these terms describe.",
+      // (§343) A recorded outage moves running deadlines and payment dates later (section 4); a call inside it is missed.
+      "If we have an outage, a call that fell inside it is missed, with nothing charged; you can request a new time.",
       EMAIL_TIMING_TERMS,
       // (Owner, Oct 31, batch 35 §90)
       "Pages update on their own about every 20 seconds. When a blue \"new update\" pill appears, check the update (tap the pill) before you press anything: once the page has shown an update, a press counts as made with it in view.",

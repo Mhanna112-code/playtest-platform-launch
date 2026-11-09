@@ -387,7 +387,7 @@ describe("§132 the Terms of Use say when a call can be booked", () => {
     const { default: TermsPage } = await import("@/app/terms/page");
     const page = TermsPage() as React.ReactElement<{ children: React.ReactNode }>;
     const html = unescape(render(h(React.Fragment, null, page.props.children)));
-    const calls = html.slice(html.indexOf("7. Calls and recordings"), html.indexOf("8. The service"));
+    const calls = html.slice(html.indexOf("8. Calls and recordings"), html.indexOf("9. The service")) // (§343) the sections as numbered now;
     expect(calls).toContain(CALL_WINDOW_TERMS);
     expect(html).not.toMatch(/booked (any time|after (a|the|their|the tester's) deadline)/i);
   });
