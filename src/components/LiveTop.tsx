@@ -1,6 +1,5 @@
 "use client";
 import { withLineLinks } from "@/components/LineLinks";
-import { splitLinks } from "@/lib/lineLinks";
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/client";
 import type { Change } from "@/components/ChangesBox";
@@ -17,6 +16,19 @@ const time = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: 
 const key = (c: Change) => `${c.at}|${c.text}`;
 /** (Owner, Nov 6, §284) An ignored line's words that open its row: still the line's grey, underlined on hover. */
 const IGNORED_REST = "text-inherit no-underline hover:underline";
+
+export function LiveNoticeText({ line: l, testId }: { line: Change; testId?: string }) {
+  const rest = l.link ? `${testId ? `/app/tests/${testId}` : ""}#${l.link}` : undefined;
+  return withLineLinks(l.text, l.links, {
+    draw: (text) => text,
+    rest,
+    restClass: l.ignored ? IGNORED_REST : undefined,
+    onRest: testId || !l.link ? undefined : (e) => {
+      e.preventDefault();
+      jumpToFirst(l.link!);
+    },
+  });
+}
 
 /**
  * The live top notice (owner, NEWEST+3): one box at the top of the page listing every change since the page was opened
@@ -177,7 +189,7 @@ export function LiveTop({ scope, seenAt, seeIt, contractLink }: { scope: string;
             <b>{l.timed ? "Updated:" : `Updated · ${time(l.at)}:`}</b> {/* (Owner, Nov 5, §270) Each person and test it names is its own green link; a line about a row keeps its other words opening that row, beside them. */}
             {/* (Owner, Nov 6, §284) Every line about something with a place on the page opens it (jumps and marks; a request whose row has left: its Call requests box),
                 ignored (greyed) lines too: those keep their grey and their title, the rest of the words linked in the line's own colour. */}
-            {l.link ? (l.links?.length && splitLinks(l.text, l.links).some((p) => p.link) ? withLineLinks(l.text, l.links, { draw: (t) => t, rest: `#${l.link}`, restClass: l.ignored ? IGNORED_REST : undefined, onRest: (e) => { e.preventDefault(); jumpToFirst(l.link!); } }) : <a href={`#${l.link}`} className={l.ignored ? IGNORED_REST : undefined} data-line-rest="" onClick={(e) => { e.preventDefault(); jumpToFirst(l.link!); }}>{l.text}</a>) : withLineLinks(l.text, l.links, { draw: (t) => t })}
+            <LiveNoticeText line={l} testId={typeof contractLink === "object" ? contractLink.testId : undefined} />
             {/* (Owner, Oct 27) A tester switched to or kept after new terms: "See their contract" scrolls to their row on the test page; on Edit it opens the test page at that row in a new tab. */}
             {l.kind === "terms" && l.contract && contractLink && (
               <>

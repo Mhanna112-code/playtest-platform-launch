@@ -12,6 +12,7 @@ import { BellList } from "@/app/app/notifications/BellList";
 import { BankToConfirmBox } from "@/app/app/BankToConfirm";
 import { WhatLine } from "@/components/WholeLine";
 import { ChangesBox } from "@/components/ChangesBox";
+import { LiveNoticeText } from "@/components/LiveTop";
 import { BankNotice } from "@/components/BankCheck";
 import { Err } from "@/components/Err";
 import { OwedBox } from "@/components/OwedBox";
@@ -33,6 +34,14 @@ const ANA: LineLink = { text: "Ana Silva", href: "/app/testers/u-ana", kind: "pe
 const HARBOR: LineLink = { text: "Harbor Run", href: "/app/tests/t1", kind: "test" };
 const NORA: LineLink = { text: "Nora Lane", href: "/app/developers/u-nora", kind: "person" };
 const DAY = 86_400_000;
+
+it("opens live notice rows on the test page from Edit and in place on the test page", () => {
+  const line = { text: "Ana Silva requested a call", at: new Date().toISOString(), link: "request-r1", links: [ANA] };
+  const edit = html(h(LiveNoticeText, { line, testId: "t1" }));
+  expect(edit).toContain('href="/app/tests/t1#request-r1"');
+  expect(edit).toContain('href="/app/testers/u-ana"');
+  expect(html(h(LiveNoticeText, { line }))).toContain('href="#request-r1"');
+});
 
 describe("§270 the generalized link builder", () => {
   it("a person opens their profile, a test the reader's page for it; a deleted account and the reader ('You') stay plain", () => {
