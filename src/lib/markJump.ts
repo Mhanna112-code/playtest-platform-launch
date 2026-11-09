@@ -19,6 +19,8 @@ export function jumpTo(id: string) {
   if (el instanceof HTMLDetailsElement && !el.open) el.open = true;
   // (Batch 35 §139) A link straight to a part (or to its Pay / Pay more) opens the folds under it: its answers or recordings and its Pay box.
   el.querySelectorAll?.<HTMLDetailsElement>("details[data-jump-open]").forEach((d) => { d.open = true; });
+  // (Owner, Nov 9, §356) A disputed part's payments: its "Payments (N)" opens too (the decided dispute is listed there).
+  if (el.dataset?.jumpOpenAll !== undefined) el.querySelectorAll<HTMLDetailsElement>("details").forEach((d) => { d.open = true; });
   el.scrollIntoView({ block: "center", behavior: "smooth" });
   el.setAttribute("data-marked", "");
   setTimeout(() => el.removeAttribute("data-marked"), 4000);

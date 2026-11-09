@@ -26,11 +26,16 @@ export const testerPartRow = (p: { kind?: string | null; callId?: string | null 
 /** (§284) The developer's test page: a sent part's line on its tester's row ("part-<submission>"), or a call's row. "" when neither. */
 export const devPartRow = (p: { submissionId?: string | null; callId?: string | null }) => (p.submissionId ? `part-${p.submissionId}` : p.callId ? callRow(p.callId) : "");
 
+/** (Owner, Nov 9, §356) A disputed part's payments in the developer's Testers list (where a decided dispute shows under Payments). */
+export const disputePart = (disputeId: string) => `dispute-part-${disputeId}`;
+const DISPUTE_ROW = "item-dispute-";
+
 /**
  * (§284) Where a line's link lands, first found wins: a request's row while it is still shown, otherwise the Call requests box; the new-terms box once the offer
  * is decided: the contract card; (§302) the NDA notice once acknowledged: the NDA line.
  */
-export const lineFallbacks = (id: string): string[] => (id.startsWith("req-") ? [id, ...REQUEST_BOXES] : id === TERMS_OFFER_BOX ? [id, "scope"] : id === NDA_NOTICE_BOX ? [id, NDA_INFO] : [id]);
+// (§356) "{tester} disputed …" (bell and email, old lines too): Needs you's dispute row while it is open there; once decided, that tester's part.
+export const lineFallbacks = (id: string): string[] => (id.startsWith(DISPUTE_ROW) ? [id, disputePart(id.slice(DISPUTE_ROW.length))] : id.startsWith("req-") ? [id, ...REQUEST_BOXES] : id === TERMS_OFFER_BOX ? [id, "scope"] : id === NDA_NOTICE_BOX ? [id, NDA_INFO] : [id]);
 
 /**
  * (§284) A person's own action in another tab ("You withdrew a call request for … in another tab"): the place it touched, from what the log kept (`k`: "req:<id>",

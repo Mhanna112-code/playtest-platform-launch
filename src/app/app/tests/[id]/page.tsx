@@ -51,6 +51,7 @@ import { closedOut, payMoreClosesAt, pieceCloseOut } from "@/lib/server/closeOut
 import { BankWaiting } from "@/components/BankWaiting";
 import { HoldFold } from "@/components/HoldFold";
 import type { ReactNode } from "react";
+import { disputePart } from "@/lib/lineAnchors";
 import { bankWaitingOnTest } from "@/lib/server/confirm";
 import { ListingPanel } from "./ListingPanel";
 import { ListingSeeIt, SeeItTarget } from "@/components/ListingInfo";
@@ -90,6 +91,12 @@ import { otherSideNotice } from "@/components/OtherSideNotice";
 export const metadata = { title: "Test · Playtest" };
 export const dynamic = "force-dynamic";
 
+/** (Owner, Nov 9, §356) A disputed part's payments and decision note, the place a "{tester} disputed …" line falls back to (lineFallbacks). */
+function DisputedPart({ dispute, children }: { dispute: { id: string } | null; children: ReactNode }) {
+  if (!dispute) return <>{children}</>;
+  // The jump target's classes (MARKABLE, written out: markJump is a client module).
+  return <div id={disputePart(dispute.id)} className="space-y-2 scroll-mt-24 rounded-xl transition-shadow data-[marked]:ring-2 data-[marked]:ring-sky-300" data-jump-open-all="" data-disputed-part={dispute.id}>{children}</div>;
+}
 function DecisionNote({ dispute }: { dispute: { id: string; status: string; decidedCents: number | null; decisionNote: string } | null }) {
   if (dispute?.status !== "decided" || !dispute.decisionNote.trim()) return null;
   return <LabeledReason data={{ "data-team-decided": "" }} line={teamDecidedLabel(money(dispute.decidedCents))} label="The team's decision" id={`decision-note-${dispute.id}`} text={dispute.decisionNote} />;
@@ -804,8 +811,9 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                       <Fold id={`row-part-${r.sub.id}`} className="space-y-2" summaryClassName="flex flex-wrap items-center gap-2 !text-sm !font-normal" summary={line}>
                       <div className="space-y-2">
                       {/* (Owner, Nov 6, §301) Right under the heading, above the content: the part's payments (§225) in "Payments (N)", closed at first. */}
-                      <PartPayments id={r.sub.id} lines={partPays.get(r.sub.id)} />
-                      <DecisionNote dispute={r.sub.dispute} />
+                      {/* (Owner, Nov 9, §356) A "{tester} disputed …" line lands here once Needs you no longer shows the dispute. */}
+                      <DisputedPart dispute={r.sub.dispute}><PartPayments id={r.sub.id} lines={partPays.get(r.sub.id)} />
+                      <DecisionNote dispute={r.sub.dispute} /></DisputedPart>
                       {/* (Batch 35 §139; owner, Nov 3) Inside the part's drop-down: the answers or recordings in a small panel.
                           (Owner, Nov 5, §226) Only what was paid for: the part up to its last payment (newer additions wait in Needs you); before the first
                           payment, what was sent. */}
@@ -873,8 +881,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                             panel, then a separate "Pay more" drop-down ("Pay" before it was paid). */}
                         <div className="space-y-2">
                         {/* (Owner, Nov 3, batch 35 §152) This call's payments (a panel above 4). */}
-                        <PartPayments id={x.id} lines={partPays.get(x.id)} />
-                        <DecisionNote dispute={x.dispute} />
+                        <DisputedPart dispute={x.dispute}><PartPayments id={x.id} lines={partPays.get(x.id)} />
+                        <DecisionNote dispute={x.dispute} /></DisputedPart>
                         <div className={`space-y-1 ${PART_PANEL} empty:hidden`} data-part-panel="content">
                           {tookPlace(x) && <p className="text-xs text-slate-400" data-call-length="">{lengthOf(x)} · {x.rateCents == null ? NOT_LISTED : `In ${pronouns(c.tester.pronoun).poss} contract`}</p>}
                           {badge.reason && <ReasonQuote text={badge.reason} />}
