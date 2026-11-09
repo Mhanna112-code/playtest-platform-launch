@@ -32,7 +32,7 @@ export async function paidUpdateRoom(tx: Tx, submissionId: string, testId: strin
  * be paid (no other stop: the live box has its quiet line).
  */
 export async function notifyPaidUpdate(
-  c: { id: string; testId: string; title: string; test: { developer: { email: string } } },
+  c: { id: string; testId: string; title: string; test: { title: string; developer: { email: string } } },
   tester: { id: string; email: string; name: string; pronoun: string },
   submissionId: string,
   part: "written answers" | "recording",
@@ -44,10 +44,10 @@ export async function notifyPaidUpdate(
   const { notify } = await import("./notify");
   const name = displayName(tester), poss = pronouns(tester.pronoun).poss;
   if (room.atCap) {
-    await notify(c.test.developer.email, `${name} ${addedWhat(poss, part, n, question)} for “${c.title}”`, [`${updatedAtCapLive(name, poss, part, n, question)}.`], `/app/tests/${c.testId}#tester-${c.id}`, { about: tester.id });
+    await notify(c.test.developer.email, `${name} ${addedWhat(poss, part, n, question)} for “${c.test.title}”`, [`${updatedAtCapLive(name, poss, part, n, question)}.`], `/app/tests/${c.testId}#tester-${c.id}`, { about: tester.id });
     return;
   }
-  await notify(c.test.developer.email, `${name} ${addedWhat(poss, part, n, question)} for “${c.title}”`, [`${updateRowLine(name, room.paidCents, room.roomCents)}.`, "Pay more for it, or close it at $0, in Needs you."], `/app/tests/${c.testId}#update-${submissionId}`, { about: tester.id });
+  await notify(c.test.developer.email, `${name} ${addedWhat(poss, part, n, question)} for “${c.test.title}”`, [`${updateRowLine(name, room.paidCents, room.roomCents)}.`, "Pay more for it, or close it at $0, in Needs you."], `/app/tests/${c.testId}#update-${submissionId}`, { about: tester.id });
 }
 
 /** (Batch 30 §2) Whether a waiting update can still be paid more (below its cap, Pay more open): the dashboard's Needs review counts it then. */

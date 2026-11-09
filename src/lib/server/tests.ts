@@ -1465,7 +1465,7 @@ export async function tellSent(tx: Tx, p: { testId: string; contractId: string; 
 
 /** (Batch 35 §136) The bells for a send or an addition: "Work sent" to the tester; to the developer "Ana sent / added to …" (after a Pay, the update row's line). */
 export async function tellSentByBell(
-  c0: { id: string; testId: string; title: string; test: { developer: { email: string; name: string; deletedAt: Date | null } } },
+  c0: { id: string; testId: string; title: string; test: { title: string; developer: { email: string; name: string; deletedAt: Date | null } } },
   tester: U, sub: { id: string; late: boolean }, part: "written answers" | "recording", added: boolean, afterPaid: { atCap: boolean; paidCents: number; roomCents: number } | null, n = 1,
   /** (§167) the question added to */ question?: string,
 ) {

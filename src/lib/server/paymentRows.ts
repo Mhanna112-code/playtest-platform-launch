@@ -168,7 +168,7 @@ function devLine(ctx: Ctx, p: PayingRow, full: boolean, viaKnown?: Via) {
   // (Owner, Nov 2, §131) The developer's rows name the piece by pieceName (the tester's and the test's names cut at 10 characters on the page).
   // (Owner, Nov 7, §327) A call by its date and time, as every other call line ("bb's live call on “…” (Fri, Oct 30, 12:17 AM)"): it was missing here, so a single
   // (ungrouped) call row in What you've paid, the test page's Payments (N), the refund lines and the Stripe description named no call.
-  const piece = pieceName({ tester, part: ctx.partOf(o), test: c.title, when: callWhen(ctx, o), full });
+  const piece = pieceName({ tester, part: ctx.partOf(o), test: c.test.title, when: callWhen(ctx, o), full });
   const what = p.kind === "extra" ? `Pay more for ${piece}`
     : p.kind === "dispute" ? disputeDecisionName(piece).replace(/^the/, "The")
     // (Owner, Nov 2) Which payment it repaid, and the fee: "Repaid the reversed $39.00 Pay more for … ($39.00 + $15.00 chargeback fee)". (§133) Part of it:
@@ -188,7 +188,7 @@ function groupPiece(ctx: Ctx, o: PayingRow, full: boolean, whose?: string) {
   const c = o.contractId ? ctx.contracts.get(o.contractId) : undefined;
   if (!c) return null;
   const start = o.callId ? ctx.calls.get(o.callId) : undefined;
-  return pieceName({ tester: displayName(c.tester), part: ctx.partOf(o), test: c.title, when: start ? callAtFor(start, null) : null, full, whose });
+  return pieceName({ tester: displayName(c.tester), part: ctx.partOf(o), test: c.test.title, when: start ? callAtFor(start, null) : null, full, whose });
 }
 /** (§191) How a payment was charged: the developer's own Pay or Pay more, the team's decision, the tester's Charge, the automatic charge (7 days without a review). */
 function chargedHow(ctx: Ctx, o: PayingRow) {
@@ -326,7 +326,7 @@ export async function paidRows(ps: Row[], side: "developer" | "tester"): Promise
     const how = p.kind === "chargeback" ? "" : byTester ? "charged by you after 7 days without a review" : own && r?.auto ? "charged automatically after 7 days" : "";
     // (Owner, Nov 7, §327) A call with its date and time: "from Nora Lane for your live call on “Harbor Run” (Fri, Oct 30, 12:17 AM)".
     const when = callWhen(ctx, o);
-    const what = `from ${displayName(c.test.developer)} for your ${ctx.partOf(o)} on “${c.title}”${when ? ` (${when})` : ""}${p.kind === "extra" ? " (extra pay)" : p.kind === "dispute" ? " (dispute decision)" : ""}`;
+    const what = `from ${displayName(c.test.developer)} for your ${ctx.partOf(o)} on “${c.test.title}”${when ? ` (${when})` : ""}${p.kind === "extra" ? " (extra pay)" : p.kind === "dispute" ? " (dispute decision)" : ""}`;
     out.set(p.id, { what, full: what, how, testId: c.testId, reversed: false, links: [...linksIn(what, pool), ...(o.callId||o.submissionId?[{ text: `your ${ctx.partOf(o)}`, kind: "part" as const, href: `/app/sessions/${c.id}#payment-${o.callId??o.submissionId}` }]:[])] });
   }
   return out;
@@ -396,7 +396,7 @@ function itemLine(ctx: Ctx, p: PayingRow) {
   if (p.chargeback === "open") {
     const o = { ...p, amountCents: p.paidCents ?? p.amountCents };
     const c = o.contractId ? ctx.contracts.get(o.contractId) : undefined;
-    const piece = c ? pieceName({ tester: displayName(c.tester), part: ctx.partOf(o), test: c.title, when: callWhen(ctx, o), full: true }) : null; // (§327)
+    const piece = c ? pieceName({ tester: displayName(c.tester), part: ctx.partOf(o), test: c.test.title, when: callWhen(ctx, o), full: true }) : null; // (§327)
     return `${repaidReversedLine(o, repaidWord(o.kind), piece, o.kind === "owed" ? oneName(ctx, o, true) : null) ?? plainLabel("chargeback")} ${money(reversedOf(o) + CHARGEBACK_FEE_CENTS)}`; // (§193b) a one payment names its items
   }
   return `${devLine(ctx, p, true)?.what ?? plainLabel(p.kind)} ${money(p.amountCents)}`;

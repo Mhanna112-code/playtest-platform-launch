@@ -64,7 +64,7 @@ export async function tellBankWaiting(devId: string, now = new Date()) {
   const dev = await db.user.findUniqueOrThrow({ where: { id: devId } });
   const waiting = await waitingConfirmation(devId, undefined, now);
   if (!waiting.length) return;
-  const titles = new Map((await db.contract.findMany({ where: { id: { in: waiting.map((w) => w.contractId).filter((x): x is string => !!x) } }, select: { id: true, title: true } })).map((c) => [c.id, c.title]));
+  const titles = new Map((await db.contract.findMany({ where: { id: { in: waiting.map((w) => w.contractId).filter((x): x is string => !!x) } }, select: { id: true, test: { select: { title: true } } } })).map((c) => [c.id, c.test.title])); // (§339) the test's current title
   const line = bankWaitingAllLine(waiting.map((w) => ({ cents: w.amountCents, title: w.contractId ? titles.get(w.contractId) ?? null : null, by: w.actionBy! })));
   // (Owner, Nov 6, §320) One key for every copy ("bankwait"), so a Weekly or Monthly email shows only the newest; "today" is the reader's own day of the last line.
   const today = await bankLineToday(devId, dev.timeZone, now);
@@ -131,7 +131,7 @@ type Waiting = Awaited<ReturnType<typeof waitingConfirmation>>[number];
  */
 async function piecesNamed(waiting: Waiting[], day: (d: Date) => string) {
   const ids = [...new Set(waiting.map((p) => p.contractId).filter((x): x is string => !!x))];
-  const contracts = ids.length ? await db.contract.findMany({ where: { id: { in: ids } }, select: { id: true, testId: true, title: true, tester: true } }) : [];
+  const contracts = ids.length ? await db.contract.findMany({ where: { id: { in: ids } }, select: { id: true, testId: true, tester: true, test: { select: { title: true } } } }) : []; // (§339) named by the test's current title
   const pieceOf = await pieceIdsOf(waiting);
   const subIds = waiting.map((p) => pieceOf(p).submissionId).filter((x): x is string => !!x);
   const callIds = waiting.map((p) => pieceOf(p).callId).filter((x): x is string => !!x);
@@ -146,7 +146,7 @@ async function piecesNamed(waiting: Waiting[], day: (d: Date) => string) {
     const at = pieceOf(p);
     const sub = at.submissionId ? subs.find((x) => x.id === at.submissionId) : undefined;
     const call = at.callId ? calls.find((x) => x.id === at.callId) : undefined;
-    const named = (full: boolean, whose?: string, test: string | null = c.title) => (sub ? pieceWords.part(name, sub.kind, test, full, whose) : call ? pieceWords.call(name, day(call.startsAt), test, full, whose) : pieceWords.work(name, test, full, whose));
+    const named = (full: boolean, whose?: string, test: string | null = c.test.title) => (sub ? pieceWords.part(name, sub.kind, test, full, whose) : call ? pieceWords.call(name, day(call.startsAt), test, full, whose) : pieceWords.work(name, test, full, whose));
     // `full`: the names uncut, the line's hover on the page (§131). (Owner, Nov 4, §175) `theirs` / `theirsFull`: the same with the tester's pronoun in place of
     // their name ("her written answers on “Harbor Run”"), for a line under a heading that names them.
     // (Owner, Nov 4, §180) Those lines are shown only on the test's own page, so they name no test: "her live call (Tue, Oct 27, 3:25 PM)".
@@ -204,7 +204,7 @@ export async function confirmItems(devId: string) {
         : p.kind === "chargeback" ? (piece ? `A payment your bank had reversed (${piece})` : "A payment your bank had reversed")
         : piece ? `A payment for ${piece}` : "A payment";
       const list = p.kind === "owed" && cov.get(p.id)?.length ? ` (${cov.get(p.id)!.join(", ")})` : "";
-      return { what, amount: money(p.amountCents), list, on: n.c && !piece ? ` on “${n.c.title}”` : "", by: `confirm by ${fmtDateTimeIn(p.actionBy!, tz)}` };
+      return { what, amount: money(p.amountCents), list, on: n.c && !piece ? ` on “${n.c.test.title}”` : "", by: `confirm by ${fmtDateTimeIn(p.actionBy!, tz)}` };
     };
     const line = (piece: string | null, cov: Map<string, string[]>) => { const x = parts(piece, cov); return `${x.what} ${x.amount}${x.list}${x.on} · ${x.by}`; };
     // (Owner, Nov 5, batch 35 §246) For the row: the "what" (cut at 50 (§251) with its arrow), then its amount and "confirm by", always shown outside the cut.
@@ -250,7 +250,7 @@ export async function bankToConfirm(devId: string, now = new Date()): Promise<Ba
           : piece;
         // (§131) The piece names its test; "what you owe" on a test keeps "on “Harbor Run”" before it.
         const namesTest = what !== null && !!piece && what.includes(piece);
-        return bankTopLead(p.amountCents, namesTest ? null : c?.title ?? null, what);
+        return bankTopLead(p.amountCents, namesTest ? null : c?.test.title ?? null, what);
       };
       const by = confirmByText(p.actionBy!, now, tz);
       return { id: p.id, lead: lead(n.piece, covers), full: lead(n.full, coversFull), by: by.text, soon: by.soon, href: c ? bankHref(c.testId, p.id) : `/app/payments#${bankAnchor(p.id)}`, at: p.actionBy!.getTime(), tests: links.get(p.id) ?? [], links: lineLinks(pool, lead(n.full, coversFull), c?.testId), cents: p.amountCents };
@@ -433,7 +433,7 @@ export async function confirmStart(dev: { id: string }, paymentId: string, body:
   // Existing bank confirmations remain available during a suspension or test pause.
   // Their original three-day deadline and the usual stop-once checks still apply.
   if (p.contractId && seenOf(body.seenAt)) {
-    const c = await db.contract.findUnique({ where: { id: p.contractId }, include: { tester: true } });
+    const c = await db.contract.findUnique({ where: { id: p.contractId }, include: { tester: true, test: { select: { title: true } } } });
     if (c) {
       const { devGate } = await import("./tests");
       const { paidSoFar } = await import("./payments");
@@ -446,7 +446,7 @@ export async function confirmStart(dev: { id: string }, paymentId: string, body:
         await devGate(tx, c.testId, body, { paidSoFarCents: await paidSoFar(c.id, tx), name: displayName(c.tester) }, [], undefined, { ...payPressOf(c.id, piece), awayCharge: true, skipTeamPause: true });
       }).catch((e) => {
         // (Owner, Nov 4, §177) Pressed away from the test's own page (the dashboard's "Your bank wants you to confirm"): each stop line names the test.
-        if (e instanceof HttpError && e.code === "stop_once" && awayFromTest(body.page, c.testId) && Array.isArray(e.data?.changes)) e.data.changes = (e.data.changes as { text: string }[]).map((l) => ({ ...l, text: onTestLine(c.title, l.text) }));
+        if (e instanceof HttpError && e.code === "stop_once" && awayFromTest(body.page, c.testId) && Array.isArray(e.data?.changes)) e.data.changes = (e.data.changes as { text: string }[]).map((l) => ({ ...l, text: onTestLine(c.test.title, l.text) }));
         throw e;
       });
     }

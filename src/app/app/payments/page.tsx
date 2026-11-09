@@ -188,7 +188,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
             <LongList as="div" shown={5} tall="max-h-[28rem]" className="space-y-3">
             {sent.filter((c) => c.submissions.length + c.calls.filter((x) => x.review).length > 0).map((c) => (
               <div key={c.id} className="space-y-1">
-                <p className="text-sm font-medium text-slate-200"><TestName text={c.title} href={`/app/sessions/${c.id}`} /> <span className="font-normal text-slate-500">· <Cut text={c.test.developer.name || c.test.developer.email} kind={c.test.developer.name ? "person" : "email"} /></span></p>
+                <p className="text-sm font-medium text-slate-200"><TestName text={c.test.title} href={`/app/sessions/${c.id}`} /> <span className="font-normal text-slate-500">· <Cut text={c.test.developer.name || c.test.developer.email} kind={c.test.developer.name ? "person" : "email"} /></span></p>
                 <ul className="divide-y divide-white/5 text-sm">
                   {[
                     ...c.submissions.map((x) => ({ id: x.id, at: x.sentAt, what: x.kind === "recording" ? "Screen recording" : "Written answers", review: x.review, dispute: x.dispute })),

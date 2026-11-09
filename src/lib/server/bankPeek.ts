@@ -85,7 +85,7 @@ const after = (lines: Line[], since: Date) => [...new Set(lines.filter((l) => ne
  * ticks and the team's-decision rule apply as for Pay. Seen at the press: only what came after it.
  */
 async function pieceChanges(p: Payment, since: Date, tab: string, page: unknown) {
-  const c = await db.contract.findUnique({ where: { id: p.contractId! }, select: { id: true, testId: true, title: true } });
+  const c = await db.contract.findUnique({ where: { id: p.contractId! }, select: { id: true, testId: true, test: { select: { title: true } } } }); // (§339) the test's current title
   if (!c) return [];
   const orig = p.kind === "chargeback" && p.repaysId && !p.submissionId && !p.callId ? await db.payment.findUnique({ where: { id: p.repaysId }, select: { submissionId: true, callId: true } }) : null;
   const piece = { submissionId: p.submissionId ?? orig?.submissionId ?? null, callId: p.callId ?? orig?.callId ?? null };
@@ -99,7 +99,7 @@ async function pieceChanges(p: Payment, since: Date, tab: string, page: unknown)
     // (Owner, Nov 4, §177) A window open anywhere but this test's own page (the dashboard, Payments, Confirm all) names the test on each line: "On “Harbor Run”:
     // Nina Park disputed the pay for her live call on Tue, Oct 27, 8:00 AM". On the test's own page the page is the test.
     const lines = after((e.data?.changes as Line[] | undefined) ?? [], since);
-    return awayFromTest(page, c.testId) ? lines.map((l) => onTestLine(c.title, l)) : lines;
+    return awayFromTest(page, c.testId) ? lines.map((l) => onTestLine(c.test.title, l)) : lines;
   }
 }
 
@@ -116,15 +116,15 @@ async function pieceChanges(p: Payment, since: Date, tab: string, page: unknown)
  * recording on “Harbor Run” added $5.00 meanwhile", "Your Pay more for … added $5.00 meanwhile".
  */
 async function meanwhileHead(p: { kind: string; amountCents: number; contractId: string | null; submissionId: string | null; callId: string | null }) {
-  const c = p.contractId ? await db.contract.findUnique({ where: { id: p.contractId }, select: { title: true, tester: true } }) : null;
+  const c = p.contractId ? await db.contract.findUnique({ where: { id: p.contractId }, select: { tester: true, test: { select: { title: true } } } }) : null; // (§339)
   const amount = money(p.amountCents);
   if (!c) return `${p.kind === "dispute" ? "The team's dispute decision added" : "A tester charged"} ${amount} meanwhile`;
   const name = displayName(c.tester);
-  const piece = async () => `${name}'s ${(await partAway(p, "", c.title)).trimStart()}`;
+  const piece = async () => `${name}'s ${(await partAway(p, "", c.test.title)).trimStart()}`;
   if (p.kind === "dispute") return `The team's dispute decision on ${await piece()} added ${amount} meanwhile`;
   if (p.kind === "extra") return `Your Pay more for ${await piece()} added ${amount} meanwhile`;
   if (p.callId && (await db.review.findUnique({ where: { callId: p.callId }, select: { auto: true } }))?.auto) return `The automatic charge for ${await piece()} added ${amount} meanwhile`;
-  return `${name} charged ${amount} for ${await partAway(p, pronouns(c.tester.pronoun).poss, c.title)} meanwhile`;
+  return `${name} charged ${amount} for ${await partAway(p, pronouns(c.tester.pronoun).poss, c.test.title)} meanwhile`;
 }
 export const owedTail = (reservation: boolean, charge: boolean) =>
   reservation ? "it isn't in this reservation; it's charged right after the team approves lifting your hold"
