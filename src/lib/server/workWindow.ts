@@ -40,7 +40,7 @@ export async function finishWorkIfDue(testId: string, now = new Date()) {
     if (!at || at > now) return null;
     const ids = t.contracts.map((c) => c.id);
     // (Owner, Nov 6, §286) The testers whose work this ends: their top box reads "This test ended", so their bell does too (below).
-    const ending = await tx.contract.findMany({ where: { testId, status: "working" }, select: { id: true, title: true, testerId: true, tester: { select: { email: true } } } });
+    const ending = await tx.contract.findMany({ where: { testId, status: "working" }, select: { id: true, title: true, testerId: true, tester: { select: { email: true } }, test: { select: { title: true } } } });
     await tx.contract.updateMany({ where: { testId, status: "working" }, data: { status: "ended", endKind: "closed", endedAt: at, endReason: "The test ended." } });
     await (await import("./accessKeys")).releaseInactiveKeys(tx, testId);
     const cancelled = await cancelCallsAhead(tx, ids, "The test ended.", at);
@@ -55,7 +55,7 @@ export async function finishWorkIfDue(testId: string, now = new Date()) {
   if (!result) return false;
   // (§286) In the words of the same closure's other bells (a pause running out, pauseClosure): "“Harbor Run” ended", in the day's "Tests stopped or ended" stack.
   const { notify } = await import("./notify");
-  for (const c of result.ending) await notify(c.tester.email, `“${c.title}” ended`, [`“${c.title}” ended. Work you already sent is still reviewed and paid. Calls ahead are cancelled.`], `/app/sessions/${c.id}`, { recipientId: c.testerId, group: "tstopped" });
+  for (const c of result.ending) await notify(c.tester.email, `“${c.test.title}” ended`, [`“${c.test.title}” ended. Work you already sent is still reviewed and paid. Calls ahead are cancelled.`], `/app/sessions/${c.id}`, { recipientId: c.testerId, group: "tstopped" });
   await (await import("./calls")).endCallsAtWorkDeadline(testId, result.at, now);
   await tellCancelled(result.cancelled, "closed");
   return true;

@@ -822,12 +822,12 @@ export async function devGateIfSeen(testId: string, body: Record<string, unknown
 
 /** Calls ahead are cancelled (no charge) when a tester's work ends. Their offered times open again for others. */
 export async function cancelCallsAhead(tx: Tx, contractIds: string[], note: string, after = new Date()) {
-  const ahead = await tx.call.findMany({ where: { contractId: { in: contractIds }, status: "booked", startsAt: { gt: after } }, include: { contract: { include: { tester: true } } } });
+  const ahead = await tx.call.findMany({ where: { contractId: { in: contractIds }, status: "booked", startsAt: { gt: after } }, include: { contract: { include: { tester: true, test: { select: { title: true } } } } } });
   for (const c of ahead) {
     await tx.call.update({ where: { id: c.id }, data: { status: "cancelled", cancelledBy: "system", cancelledAt: new Date(), cancelNote: note } });
     await tx.callSlot.update({ where: { id: c.slotId }, data: { status: "removed" } });
   }
-  return ahead.map((c) => ({ email: c.contract.tester.email, startsAt: c.startsAt, contractId: c.contractId, title: c.contract.title, callId: c.id }));
+  return ahead.map((c) => ({ email: c.contract.tester.email, startsAt: c.startsAt, contractId: c.contractId, title: c.contract.test.title, callId: c.id }));
 }
 
 /** Tell each tester their booked call was cancelled (never any fault). */
@@ -852,7 +852,7 @@ export async function stopTest(dev: U, testId: string, body: Record<string, unkn
     }
     // (Owner, Oct 29, batch 29 section 11; replaces batch 15 sections 23, 29 and 37) While the test is paused (any cause) Stop follows the same stop-once rules.
     await topPanelGate(tx, testId, body, {}, [], undefined, { acts: ["stop"], keys: ["test"] });
-    const cs = await tx.contract.findMany({ where: working(testId), include: { tester: true } });
+    const cs = await tx.contract.findMany({ where: working(testId), include: { tester: true, test: { select: { title: true } } } });
     // (Batch 17 §15) The reason is each ended contract's endReason, and an entry in each tester's contract changes (the marker that it's the developer's own reason).
     await tx.contract.updateMany({ where: working(testId), data: { status: "ended", endKind: "stopped", endedAt: new Date(), endReason: reason } });
     await (await import("./accessKeys")).releaseInactiveKeys(tx, testId);
@@ -872,7 +872,7 @@ export async function stopTest(dev: U, testId: string, body: Record<string, unkn
   await (await import("./invites")).tellInvitesClosed(invitesClosed); // (batch 30 §6)
   // (Batch 17 §15) The reason in full in the email, never in the bell line.
   for (const c of contracts)
-    await notify(c.tester.email, `“${c.title}” was stopped`, [`${displayName(dev)} stopped “${c.title}”: “${reason}”`, "Your work on it has ended. Work you already sent is still reviewed and paid. Calls ahead are cancelled."], `/app/sessions/${c.id}`, { group: "tstopped" });
+    await notify(c.tester.email, `“${c.test.title}” was stopped`, [`${displayName(dev)} stopped “${c.test.title}”: “${reason}”`, "Your work on it has ended. Work you already sent is still reviewed and paid. Calls ahead are cancelled."], `/app/sessions/${c.id}`, { group: "tstopped" });
   return { stopped: true, testers: contracts.length };
 }
 
@@ -904,7 +904,7 @@ export async function endEarly(dev: U, testId: string, body: Record<string, unkn
     // (Owner, Nov 5, §278) Ticked testers whose part ended otherwise (left, rated, removed, ended…): a refusal line each.
     const gone: { id: string; name: string; why: string }[] = [];
     for (const id of ids) {
-      const c = await tx.contract.findUnique({ where: { id }, include: { tester: true } });
+      const c = await tx.contract.findUnique({ where: { id }, include: { tester: true, test: { select: { title: true } } } });
       if (!c || c.testId !== testId) throw new HttpError(404, "not_found", "Choose a tester.");
       const name = displayName(c.tester);
       if (c.status === "left") { gone.push({ id, name, why: `${name} already left the test.` }); continue; }
@@ -938,7 +938,7 @@ export async function endEarly(dev: U, testId: string, body: Record<string, unkn
   });
   await tellCancelled(cancelled, "ended");
   for (const c of ended)
-    await notify(c.tester.email, `Your work on “${c.title}” was ended early`, [`${displayName(dev)} ended your work on “${c.title}”: “${reason}”`, "Work you already sent is still reviewed and paid. Calls ahead are cancelled."], `/app/sessions/${c.id}`, { about: dev.id, group: "tstopped" });
+    await notify(c.tester.email, `Your work on “${c.test.title}” was ended early`, [`${displayName(dev)} ended your work on “${c.test.title}”: “${reason}”`, "Work you already sent is still reviewed and paid. Calls ahead are cancelled."], `/app/sessions/${c.id}`, { about: dev.id, group: "tstopped" });
   await spotOpened(testId);
   // (§278) With refusal lines for ticked testers already out: the done line they show beside.
   return { ended: true, count: ended.length, endedIds: ended.map((c) => c.id), ...(goneLines.length ? { gone: goneLines, done: `You ended ${andList(ended.map((c) => displayName(c.tester)))}'s work early.` } : {}) };
@@ -1063,7 +1063,7 @@ export async function joinTest(tester: U, testId: string, body: Record<string, u
   // (Owner, Nov 2) The tester's own press needs a saved profile (a developer accepting their application or ask doesn't: they pressed with one).
   if (!options.applicationId && !profileSaved(profile)) throw new HttpError(409, "profile_first", PROFILE_FIRST);
   const seen = Number(body.listingVersion);
-  const { contract, dev, filled } = await db.$transaction(async (tx) => {
+  const { contract, dev, filled, title } = await db.$transaction(async (tx) => {
     const t = await lockTest(tx, testId);
     // (Owner, Nov 3, races) Join's "changed since your page loaded" check, again under the lock: an Edit that saved after the first check (before this lock) stops
     // the press once naming it, instead of joining on a listing the page never showed.
@@ -1133,11 +1133,11 @@ export async function joinTest(tester: U, testId: string, body: Record<string, u
     const filled = (await tx.contract.count({ where: working(testId) })) >= t.spots
       ? await closeOnFull(tx, testId, tester.id)
       : null;
-    return { contract, dev, filled };
+    return { contract, dev, filled, title: t.title };
   });
   if (filled) await tellFull(filled);
   // (Owner, Oct 27) The developer who accepted an application made it happen themselves: no second "joined" line for it (the "applied" line was the notice).
-  if (body.acceptedByDeveloper !== true) await notify(dev.email, `${displayName(tester)} joined “${contract.title}”`, [`${displayName(tester)} joined your test “${contract.title}”.`, `${pronouns(tester.pronoun).Poss} deal: ${termsLine(contract)}.`], `/app/tests/${testId}#tester-${contract.id}`, { about: tester.id, testId }); // (Owner, Nov 6, §308) a plain per-test line: the test's own "Harbor Run · N updates" stack
+  if (body.acceptedByDeveloper !== true) await notify(dev.email, `${displayName(tester)} joined “${title}”`, [`${displayName(tester)} joined your test “${title}”.`, `${pronouns(tester.pronoun).Poss} deal: ${termsLine(contract)}.`], `/app/tests/${testId}#tester-${contract.id}`, { about: tester.id, testId }); // (Owner, Nov 6, §308) a plain per-test line: the test's own "Harbor Run · N updates" stack
   return contract;
 }
 
@@ -1174,7 +1174,7 @@ export async function leaveTest(tester: U, contractId: string, body: Record<stri
   await testerGate(tester.id, contractId, c0.testId, body, undefined, { ordinaryTerms: true });
   const c = await db.$transaction(async (tx) => {
     await lockTest(tx, c0.testId);
-    const c = await tx.contract.findUniqueOrThrow({ where: { id: contractId } });
+    const c = await tx.contract.findUniqueOrThrow({ where: { id: contractId }, include: { test: { select: { title: true } } } });
     refused(c);
     await tx.contract.update({ where: { id: c.id }, data: { status: "left", endedAt: new Date() } });
     await (await import("./accessKeys")).releaseTesterKeys(tx, c.id);
@@ -1184,7 +1184,7 @@ export async function leaveTest(tester: U, contractId: string, body: Record<stri
     await recordEvent(tx, c.testId, "left", `${displayName(tester)} left the test`, true, {}, c.id, "", testerRow(c.id)); // (Owner, Nov 6, §284) the place the line opens
     return c;
   });
-  await notify(c0.test.developer.email, `${displayName(tester)} left “${c.title}”`, [`${displayName(tester)} left your test “${c.title}”. Work ${pronouns(tester.pronoun).subj} already sent still waits for your review.`], `/app/tests/${c.testId}#tester-${c.id}`, { about: tester.id, testId: c.testId }); // (Owner, Nov 6, §308) a plain per-test line: the test's own "Harbor Run · N updates" stack
+  await notify(c0.test.developer.email, `${displayName(tester)} left “${c.test.title}”`, [`${displayName(tester)} left your test “${c.test.title}”. Work ${pronouns(tester.pronoun).subj} already sent still waits for your review.`], `/app/tests/${c.testId}#tester-${c.id}`, { about: tester.id, testId: c.testId }); // (Owner, Nov 6, §308) a plain per-test line: the test's own "Harbor Run · N updates" stack
   await spotOpened(c.testId);
   return { left: true };
 }
@@ -1482,9 +1482,9 @@ export async function tellSentByBell(
   // (Owner, Nov 6, §295) An addition doesn't read as a second send: "You added to your answer to “…” on “Harbor Run”" (Anything else: "You added to your notes on
   // …"). (Owner, Nov 6, §312d) A first send rings nothing for the tester any more (it was "Work sent: your written answers for …"); the addition's line is asked
   // about: removing it is this one line.
-  if (added) await notify(tester.email, youAddedLine(c0.title, part, n, question), [`What you added ${part === "recording" ? `to your ${part}` : addedToWhat("your", question)} was sent to ${dev}.`], `/app/sessions/${c0.id}#${anchor}`);
+  if (added) await notify(tester.email, youAddedLine(c0.test.title, part, n, question), [`What you added ${part === "recording" ? `to your ${part}` : addedToWhat("your", question)} was sent to ${dev}.`], `/app/sessions/${c0.id}#${anchor}`);
   if (afterPaid) return notifyPaidUpdate(c0, tester, sub.id, part, afterPaid, n, question);
-  const title = added ? `${name} ${addedWhat(poss, part, n, question)} for “${c0.title}”` : `${name} sent ${part === "recording" ? "a recording" : part} for “${c0.title}”`;
+  const title = added ? `${name} ${addedWhat(poss, part, n, question)} for “${c0.test.title}”` : `${name} sent ${part === "recording" ? "a recording" : part} for “${c0.test.title}”`;
   const what = added ? addedWhat(poss, part, n, question) : `sent ${poss} ${part === "recording" ? "screen recording" : part}`;
   await notify(c0.test.developer.email, title, [`${name} ${what}${sub.late ? " (late)" : ""}. ${part === "recording" ? "Watch it" : "Review them"} and choose what to pay.`], `/app/tests/${c0.testId}#piece-${sub.id}`, { about: tester.id });
 }

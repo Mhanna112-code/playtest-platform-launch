@@ -460,9 +460,9 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
           <p className="note">Parts the developer hasn&apos;t reviewed once {REVIEW_DAYS} days have passed since you sent them and your deadline has passed: charge for them, or let them go.</p>
           <ScopedPanelSearch label="Charge or cancel"><ScrollList className="space-y-2" label="Charge or cancel">
             {chargeable.map(({ c, parts }) => (
-              <li key={c.id} data-panel-search={`${c.title} ${displayName(c.test.developer)}`}>
+              <li key={c.id} data-panel-search={`${c.test.title} ${displayName(c.test.developer)}`}>
                 <Link href={`/app/sessions/${c.id}#part-${parts[0].kind}`} className="card card-hover flex flex-wrap items-center gap-3 border-amber-400/30 p-4 no-underline hover:no-underline">
-                  <p className="min-w-[12rem] flex-1 font-medium text-white [overflow-wrap:anywhere]"><TestName text={c.title} /> · {plural(parts.length, "part")} {pausedTest(c.test) && <PausedTag />}</p>
+                  <p className="min-w-[12rem] flex-1 font-medium text-white [overflow-wrap:anywhere]"><TestName text={c.test.title} /> · {plural(parts.length, "part")} {pausedTest(c.test) && <PausedTag />}</p>
                   <span className="btn px-3 py-1.5 text-sm">Charge or let it go <ArrowRight className="h-4 w-4" /></span>
                 </Link>
               </li>
@@ -471,7 +471,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
         </section>
       )}
 
-      <SearchPanel id="to-do" title="To do" placeholder="Search To do by developer or test" items={(suspended?[]:working).map(c=>({key:c.id,search:`${c.title} ${displayName(c.test.developer)}`,node:<TodoTestRow id={c.id} title={c.title} dueAt={c.dueAt} now={now} timeZone={user.timeZone}/>}))}/>
+      <SearchPanel id="to-do" title="To do" placeholder="Search To do by developer or test" items={(suspended?[]:working).map(c=>({key:c.id,search:`${c.test.title} ${displayName(c.test.developer)}`,node:<TodoTestRow id={c.id} title={c.test.title} dueAt={c.dueAt} now={now} timeZone={user.timeZone}/>}))}/>
 
       {/* (Batch 17 section 17) Every rating the tester can give now (hidden while their tester side is suspended). */}
       {!suspended && <RatingsToGive user={user} side="tester" />}
@@ -503,14 +503,14 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
               const opens = listed && !s.late ? chargeOpensAt(s, c.test, c, now) : null;
               const inner = (
                 <>
-                  <p className="min-w-[12rem] flex-1 font-medium text-white [overflow-wrap:anywhere]"><TestName text={c.title} /> {pausedTest(c.test) && <PausedTag />}</p>
+                  <p className="min-w-[12rem] flex-1 font-medium text-white [overflow-wrap:anywhere]"><TestName text={c.test.title} /> {pausedTest(c.test) && <PausedTag />}</p>
                   <span className="badge text-amber-300"><Clock className="h-3.5 w-3.5" /> {s.kind === "recording" ? "Screen recording" : "Written answers"} sent: waiting for review</span>
                   {opens && opens > now && <p className="basis-full text-xs text-slate-400" data-charge-opens="">{chargeOpensNote(displayName(c.test.developer), pieceDay(opens, user.timeZone))}</p>}
                   {listed && s.late && <p className="basis-full text-xs text-slate-400" data-sent-late="">{lateSentLine(fmtDate(c.dueAt), displayName(c.test.developer))}</p>}
                 </>
               );
               return (
-                <li key={s.id} data-panel-search={`${c.title} ${displayName(c.test.developer)}`}>
+                <li key={s.id} data-panel-search={`${c.test.title} ${displayName(c.test.developer)}`}>
                   {/* (Owner, Oct 28) Suspended: the session page is closed, so the row doesn't open. */}
                   {<Link href={`/app/sessions/${c.id}#parts`} className="card card-hover flex flex-wrap items-center gap-3 p-4 no-underline hover:no-underline">{inner}</Link>}
                 </li>
@@ -521,13 +521,13 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
             {waitingCalls.map(({ c, x, minutes, cents }) => {
               const inner = (
                 <>
-                  <p className="min-w-[12rem] flex-1 font-medium text-white [overflow-wrap:anywhere]"><TestName text={c.title} /> {pausedTest(c.test) && <PausedTag />}</p>
+                  <p className="min-w-[12rem] flex-1 font-medium text-white [overflow-wrap:anywhere]"><TestName text={c.test.title} /> {pausedTest(c.test) && <PausedTag />}</p>
                   <span className="badge text-amber-300" data-waiting-call-line=""><Clock className="h-3.5 w-3.5" /> Live call on {pieceDay(x.startsAt, user.timeZone)} · {minutes} min: waiting for review</span>
                   {cents != null && <span className="text-sm text-slate-300" data-waiting-call-amount="">{money(cents)}</span>}
                 </>
               );
               return (
-                <li key={x.id} data-panel-search={`${c.title} ${displayName(c.test.developer)}`} data-waiting-call={x.id}>
+                <li key={x.id} data-panel-search={`${c.test.title} ${displayName(c.test.developer)}`} data-waiting-call={x.id}>
                   {<Link href={`/app/sessions/${c.id}#call-${x.id}`} className="card card-hover flex flex-wrap items-center gap-3 p-4 no-underline hover:no-underline">{inner}</Link>}
                 </li>
               );
@@ -545,10 +545,10 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
             <ResizeBox id="dash-upcoming-calls" label="Upcoming calls" defaultMax={LIST_PANEL.dashCalls}>
             <ul className="divide-y divide-white/5" data-upcoming-calls="">
               {upcoming.map(({ c, x }) => (
-                <li key={x.id} data-panel-search={`${c.title} ${displayName(c.test.developer)}`} className="flex flex-wrap items-center gap-2 py-2 text-sm">
+                <li key={x.id} data-panel-search={`${c.test.title} ${displayName(c.test.developer)}`} className="flex flex-wrap items-center gap-2 py-2 text-sm">
                   {/* (Owner, Nov 3, long text) Only the names are cut with "…": the call's day, time and length always show (a line of their own when the names are long).
                       (Owner, Nov 5, §209; was §186's Call history "Booked (N)") It opens that call's own row in the session's Live session, with its Join call. */}
-                  <Link href={`/app/sessions/${c.id}#call-${x.id}`} className="mr-auto flex min-w-0 max-w-full flex-wrap items-baseline gap-x-1 text-slate-200 no-underline hover:underline"><span className="min-w-0 max-w-full [overflow-wrap:anywhere]"><b className="text-white"><Cut text={displayName(c.test.developer)} /></b> · <TestName text={c.title} /></span> <span className="whitespace-nowrap">· {fmtDateTime(x.startsAt)} · {x.minutes} min <ArrowRight className="inline h-4 w-4 text-indigo-300" /></span></Link>
+                  <Link href={`/app/sessions/${c.id}#call-${x.id}`} className="mr-auto flex min-w-0 max-w-full flex-wrap items-baseline gap-x-1 text-slate-200 no-underline hover:underline"><span className="min-w-0 max-w-full [overflow-wrap:anywhere]"><b className="text-white"><Cut text={displayName(c.test.developer)} /></b> · <TestName text={c.test.title} /></span> <span className="whitespace-nowrap">· {fmtDateTime(x.startsAt)} · {x.minutes} min <ArrowRight className="inline h-4 w-4 text-indigo-300" /></span></Link>
                   {/* (Batch 15 sections 35 and 38) Join wherever a call is listed, from 10 minutes before to 30 minutes after its booked end. */}
                   {callJoinable(x, now) && !testPaused(c.test.developer, c.test) && <JoinCall callId={x.id} />}
                   {/* (Batch 18 section 13; batch 21) The camera and microphone check, once per upcoming call. */}
@@ -588,7 +588,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
       {/* (Batch 17 §18) Join pages opened but never joined, with each test's state now (live on the dashboard's poll). */}
       {!suspended && <TestsVisited testerId={userId} />}
 
-      <SearchPanel id="previous-tests" title="Previous Tests" placeholder="Search previous tests by developer or test" filters={PREVIOUS_TEST_FILTERS} items={contracts.filter(c=>previousTestGroup(c)!==null).sort(byEnd).map(c=>({key:c.id,search:`${c.title} ${displayName(c.test.developer)}`,states:[previousTestGroup(c)!],node:<FindTestCard test={{...c.test,title:c.title}} href={`/app/sessions/${c.id}`} developerName={displayName(c.test.developer)} terms={pays(asListing(c.test))} state={previousTestGroup(c)!} footer={<p className="text-xs text-slate-400">{fmtDate(c.endedAt??c.joinedAt)}</p>}/>}))}/>
+      <SearchPanel id="previous-tests" title="Previous Tests" placeholder="Search previous tests by developer or test" filters={PREVIOUS_TEST_FILTERS} items={contracts.filter(c=>previousTestGroup(c)!==null).sort(byEnd).map(c=>({key:c.id,search:`${c.test.title} ${displayName(c.test.developer)}`,states:[previousTestGroup(c)!],node:<FindTestCard test={{...c.test,title:c.test.title}} href={`/app/sessions/${c.id}`} developerName={displayName(c.test.developer)} terms={pays(asListing(c.test))} state={previousTestGroup(c)!} footer={<p className="text-xs text-slate-400">{fmtDate(c.endedAt??c.joinedAt)}</p>}/>}))}/>
     </>
   );
 

@@ -43,10 +43,10 @@ export async function failedLine(req: Request, what?: string, piece?: { kind: st
       const t = await db.test.findUnique({ where: { id: path[2] }, select: { title: true, round: true } });
       title = t ? testTitleOf(t) : "";
     } else if (path[1] === "sessions" && path[2]) {
-      title = (await db.contract.findUnique({ where: { id: path[2] }, select: { title: true } }))?.title ?? "";
+      title = (await db.contract.findUnique({ where: { id: path[2] }, select: { test: { select: { title: true } } } }))?.test.title ?? ""; // (§342) the current title
     } else if (path[1] === "review" && piece) {
       const contractId = piece.kind === "call" ? (await db.call.findUnique({ where: { id: piece.id }, select: { contractId: true } }))?.contractId : (await db.submission.findUnique({ where: { id: piece.id }, select: { contractId: true } }))?.contractId;
-      title = contractId ? (await db.contract.findUnique({ where: { id: contractId }, select: { title: true } }))?.title ?? "" : "";
+      title = contractId ? (await db.contract.findUnique({ where: { id: contractId }, select: { test: { select: { title: true } } } }))?.test.title ?? "" : "";
     }
   } catch {
     // the name is a nicety

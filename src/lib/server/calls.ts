@@ -28,7 +28,7 @@ export async function devCancelCall(dev: U, testId: string, body: Record<string,
   const reason = readText(body.reason, LIMITS.reason, "reason"); // (batch 15 section 20) refused over 1,000, never cut
   const call = await db.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${testId} FOR UPDATE`;
-    const c = await tx.call.findUnique({ where: { id: callId }, include: { contract: { include: { tester: true } } } });
+    const c = await tx.call.findUnique({ where: { id: callId }, include: { contract: { include: { tester: true, test: { select: { title: true } } } } } });
     if (!c || c.contract.testId !== testId) throw new HttpError(404, "not_found", "That call doesn't exist.");
     const name = displayName(c.contract.tester);
     // (Owner, Nov 4, §185; replaces batch 16 section 21's stop first) A Cancel on a call already cancelled (by the tester, in another tab, by a stop) from an old
@@ -45,8 +45,8 @@ export async function devCancelCall(dev: U, testId: string, body: Record<string,
   });
   // (Batch 15 section 20) The reason is on the page, never in the bell line. (Owner, Nov 6, §299) The longer text below is emailed only to an address with no
   // account: an account's email (its summary) lists the bell line.
-  const line = cancelLine(displayName(dev), call.startsAt, "", call.contract.title); // (Owner, Nov 6, §312a) names the test
-  await notify(call.contract.tester.email, line, [cancelLine(displayName(dev), call.startsAt, reason, call.contract.title)], `/app/sessions/${call.contractId}#call-${call.id}`, { about: dev.id });
+  const line = cancelLine(displayName(dev), call.startsAt, "", call.contract.test.title); // (Owner, Nov 6, §312a) names the test
+  await notify(call.contract.tester.email, line, [cancelLine(displayName(dev), call.startsAt, reason, call.contract.test.title)], `/app/sessions/${call.contractId}#call-${call.id}`, { about: dev.id });
   return { cancelled: true };
 }
 
@@ -412,12 +412,12 @@ export async function remindCallsSoon(now = new Date()) {
   for (const call of calls) {
     const c = call.contract, dev = c.test.developer, tester = c.tester;
     if (!(await db.notification.count({ where: { userId: tester.id, reminderKey: { in: [reminderKey(call.id), `call15:${call.id}`] } } }))) {
-      const line = callReminderLine(displayName(dev), c.title, call.startsAt);
+      const line = callReminderLine(displayName(dev), c.test.title, call.startsAt);
       await notify(tester.email, line, [line], `/app/sessions/${c.id}#call-${call.id}`, { about: dev.id, reminder: reminderKey(call.id), now: true, always: true /* (Owner, Nov 6, §324) emailed at once even with email Off */ });
       n++;
     }
     if (!(await db.notification.count({ where: { userId: dev.id, reminderKey: { in: [reminderKey(call.id), `call15:${call.id}`] } } }))) {
-      const line = callReminderLine(displayName(tester), c.title, call.startsAt);
+      const line = callReminderLine(displayName(tester), c.test.title, call.startsAt);
       await notify(dev.email, line, [line], `/app/tests/${c.testId}#call-${call.id}`, { about: tester.id, reminder: reminderKey(call.id), now: true, always: true /* (Owner, Nov 6, §324) emailed at once even with email Off */ });
       n++;
     }

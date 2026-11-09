@@ -2,7 +2,7 @@ import { db } from "@/lib/db";
 import { displayName } from "@/lib/format";
 import { testStatusWord, type DevSearchRow } from "@/lib/devSearch";
 
-type ContractLike = { id: string; title: string; status: string; endKind: string; joinedAt: Date; test: { developer: { name?: string | null; email: string; deletedAt?: Date | null } } };
+type ContractLike = { id: string; title: string; status: string; endKind: string; joinedAt: Date; test: { title: string; developer: { name?: string | null; email: string; deletedAt?: Date | null } } };
 
 /**
  * (Owner, Oct 28, batch 16 section 13) Every test the tester has been in, any status, as rows for "Search by developer" (deleted developers read
@@ -11,7 +11,7 @@ type ContractLike = { id: string; title: string; status: string; endKind: string
  */
 export function devSearchRows(contracts: ContractLike[], linked = true): DevSearchRow[] {
   return contracts
-    .map((c) => ({ id: c.id, title: c.title, developer: displayName(c.test.developer), status: testStatusWord(c), joinedAt: c.joinedAt.toISOString(), href: linked ? `/app/sessions/${c.id}` : null }))
+    .map((c) => ({ id: c.id, title: c.test.title, developer: displayName(c.test.developer), status: testStatusWord(c), joinedAt: c.joinedAt.toISOString(), href: linked ? `/app/sessions/${c.id}` : null }))
     .sort((a, b) => b.joinedAt.localeCompare(a.joinedAt));
 }
 

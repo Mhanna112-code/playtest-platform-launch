@@ -467,7 +467,7 @@ export async function testerPaymentChanges(testerId: string, contractId: string,
     db.payment.findMany({ where: { testerId, developerId: me.test.developerId, kind: { notIn: ["chargeback", "owed"] }, contractId: onlyHere ? contractId : { not: null }, OR: [{ status: "failed", owedUntil: { not: null }, createdAt: { gt: since } }, { status: { in: ["deferred", "owed"] }, createdAt: { gt: since } }, { settledAt: { gt: since } }] }, orderBy: { createdAt: "asc" }, take: 50 }),
     db.dispute.findMany({ where: { contractId, decidedAt: { gt: since } }, include: { submission: { select: { kind: true } }, call: { select: { startsAt: true } } } }),
   ]);
-  const titles = new Map((await db.contract.findMany({ where: { id: { in: pays.map((p) => p.contractId!) } }, select: { id: true, title: true } })).map((c) => [c.id, c.title]));
+  const titles = new Map((await db.contract.findMany({ where: { id: { in: pays.map((p) => p.contractId!) } }, select: { id: true, test: { select: { title: true } } } })).map((c) => [c.id, c.test.title])); // (§342) the test's current title
   const kinds = await subKinds(pays.map((p) => p.submissionId));
   const starts = await callStarts(pays.map((p) => p.callId));
   const out: TestEventLike[] = [];

@@ -40,7 +40,7 @@ export async function cancelCallsNearPause(devId: string, now = new Date(), test
     if (!done.count) continue;
     await db.callSlot.update({ where: { id: c.slotId }, data: { status: "removed" } }).catch(() => null);
     n++;
-    const line = callCancelledLine(c.startsAt, "paused", c.contract.title); // (Owner, Nov 6, §312a) names the test
+    const line = callCancelledLine(c.startsAt, "paused", c.contract.test.title); // (Owner, Nov 6, §312a) names the test
     await notify(c.contract.tester.email, line, [line], `/app/sessions/${c.contractId}#call-${c.id}`, { about: c.contract.test.developerId });
     const devLine = callCancelledLine(c.startsAt, "paused", c.contract.test.title).replace("Your call", `Your call with ${displayName(c.contract.tester)}`);
     await notify(c.contract.test.developer.email, devLine, [devLine], `/app/tests/${c.contract.testId}#call-${c.id}`);
@@ -87,7 +87,7 @@ async function removeTester(u: { id: string; name: string; email: string; pronou
       return list;
     });
     await tellCancelled(cancelled, "ended");
-    await notify(c.test.developer.email, `${who} left “${c.title}”`, [`${who} left your test “${c.title}”. Work ${pronouns(u.pronoun).subj} already sent still waits for your review.`], `/app/tests/${c.testId}#tester-${c.id}`, { about: u.id, testId: c.testId }); // (Owner, Nov 6, §308) a plain per-test line: the test's own "Harbor Run · N updates" stack
+    await notify(c.test.developer.email, `${who} left “${c.test.title}”`, [`${who} left your test “${c.test.title}”. Work ${pronouns(u.pronoun).subj} already sent still waits for your review.`], `/app/tests/${c.testId}#tester-${c.id}`, { about: u.id, testId: c.testId }); // (Owner, Nov 6, §308) a plain per-test line: the test's own "Harbor Run · N updates" stack
     await spotOpened(c.testId);
   }
   await db.application.updateMany({ where: { testerId: u.id, status: "pending" }, data: { status: "withdrawn", decidedAt: new Date() } });
@@ -254,8 +254,8 @@ export async function reinstateAccount(userId: string, asked?: unknown, adminId:
     const running = await db.$transaction((tx) => resumeTests(tx, userId, start!, now, [u.holdStartedAt]));
     if (!u.holdStartedAt) await chargeDeferred(userId);
     await (await import("./subscription")).resumeBilling(userId, now);
-    const testers = await db.contract.findMany({ where: { status: "working", testId: { in: running } }, include: { tester: true } });
-    for (const c of testers) await notify(c.tester.email, `“${c.title}” is running again`, [`“${c.title}” is running again. Your deadline moved on by the pause.`], `/app/sessions/${c.id}`, { about: userId, group: "paused", always: true });
+    const testers = await db.contract.findMany({ where: { status: "working", testId: { in: running } }, include: { tester: true, test: { select: { title: true } } } });
+    for (const c of testers) await notify(c.tester.email, `“${c.test.title}” is running again`, [`“${c.test.title}” is running again. Your deadline moved on by the pause.`], `/app/sessions/${c.id}`, { about: userId, group: "paused", always: true });
   }
   // (Owner, Oct 28) No automatic re-invite: the tests they were removed from wait on their dashboard with "You were removed from this test" and Ask to rejoin
   // (while the test is open, has a spot and isn't paused) until they ask or dismiss; the developer can also invite them again as usual.
@@ -296,7 +296,7 @@ export async function deleteAccount(userId: string, by: "self" | "admin", reason
   if (u.isDeveloper) {
     const tests = await db.test.findMany({ where: { developerId: userId, status: { not: "stopped" } } });
     for (const t of tests) {
-      const cs = await db.contract.findMany({ where: { testId: t.id, status: "working" }, include: { tester: true } });
+      const cs = await db.contract.findMany({ where: { testId: t.id, status: "working" }, include: { tester: true, test: { select: { title: true } } } });
       let invitesClosed: string[] = [];
       const cancelled = await db.$transaction(async (tx) => {
         invitesClosed = await (await import("./invites")).openInviteIds({ testId: t.id }, tx);
@@ -312,7 +312,7 @@ export async function deleteAccount(userId: string, by: "self" | "admin", reason
       });
       await tellCancelled(cancelled, "stopped");
       await (await import("./invites")).tellInvitesClosed(invitesClosed); // (batch 30 §6)
-      for (const c of cs) await notify(c.tester.email, `“${c.title}” was stopped`, [`“${c.title}” was stopped. Work you already sent is still reviewed and paid. Calls ahead are cancelled.`], `/app/sessions/${c.id}`, { group: "tstopped" });
+      for (const c of cs) await notify(c.tester.email, `“${c.test.title}” was stopped`, [`“${c.test.title}” was stopped. Work you already sent is still reviewed and paid. Calls ahead are cancelled.`], `/app/sessions/${c.id}`, { group: "tstopped" });
     }
   }
   // (Owner, Nov 3) Testers' Charges and team decisions that were waiting for a hold (or a suspension) to end are charged to the saved card now: a deleted
@@ -489,8 +489,8 @@ export async function unpauseTest(testId: string, adminId: string | null = null,
   const devNow = await db.user.findUniqueOrThrow({ where: { id: dev.id }, select: { holdStartedAt: true, devSuspendedAt: true } });
   if (!devNow.holdStartedAt && !devNow.devSuspendedAt) {
     await chargeDeferred(dev.id).catch((e) => console.error("[team pause] waiting charges:", (e as Error).message));
-    for (const c of await db.contract.findMany({ where: { testId, status: "working" }, include: { tester: true } }))
-      await notify(c.tester.email, `“${c.title}” is running again`, [`“${c.title}” is running again. Your deadline moved on by the pause.`], `/app/sessions/${c.id}`, { about: dev.id, group: "paused", always: true });
+    for (const c of await db.contract.findMany({ where: { testId, status: "working" }, include: { tester: true, test: { select: { title: true } } } }))
+      await notify(c.tester.email, `“${c.test.title}” is running again`, [`“${c.test.title}” is running again. Your deadline moved on by the pause.`], `/app/sessions/${c.id}`, { about: dev.id, group: "paused", always: true });
   }
   // (Owner, Nov 6, §299) The lift reaches the developer like the pause: `always` (with email Off too, in the end-of-day email). (Owner, Nov 6, §311b) In the
   // "The team decided" stack (admindecision; was "Payments and holds" with the pause). Running again only when nothing else pauses the test: while the developer's own hold or suspension still pauses it, the lift says what still does
@@ -507,14 +507,14 @@ export async function adminStopTest(testId: string, note: string, adminId: strin
   if (t.status === "stopped") throw await stoppedRefusal(t, presserOf(adminId, seen)); // (batch 34 §1) who and when
   const from = checkFrom(seen);
   if (from && adminId) stopIfChanged("Stop (close)", await testChangesSince(testId, adminId, from, seen?.tab));
-  let cs: Awaited<ReturnType<typeof db.contract.findMany<{ include: { tester: true } }>>> = [];
+  let cs: Awaited<ReturnType<typeof db.contract.findMany<{ include: { tester: true; test: { select: { title: true } } } }>>> = [];
   let invitesClosed: string[] = [];
   const cancelled = await db.$transaction(async (tx) => {
     // (Batch 15 section 35) The same test lock as the developer's Stop: a developer Stop and an admin Stop at once can't both run; the second is refused.
     await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${testId} FOR UPDATE`;
     const now = await tx.test.findUniqueOrThrow({ where: { id: testId } });
     if (now.status === "stopped") throw await stoppedRefusal(now, presserOf(adminId, seen));
-    cs = await tx.contract.findMany({ where: { testId, status: "working" }, include: { tester: true } });
+    cs = await tx.contract.findMany({ where: { testId, status: "working" }, include: { tester: true, test: { select: { title: true } } } });
     invitesClosed = await (await import("./invites")).openInviteIds({ testId }, tx);
     await tx.contract.updateMany({ where: { testId, status: "working" }, data: { status: "ended", endKind: "stopped", endedAt: new Date(), endReason: "The test was stopped." } });
     await (await import("./accessKeys")).releaseInactiveKeys(tx, testId);
@@ -530,7 +530,7 @@ export async function adminStopTest(testId: string, note: string, adminId: strin
   });
   await tellCancelled(cancelled, "stopped");
   await (await import("./invites")).tellInvitesClosed(invitesClosed); // (batch 30 §6) never who
-  for (const c of cs) await notify(c.tester.email, `“${c.title}” was stopped`, [`“${c.title}” was stopped. Work you already sent is still reviewed and paid. Calls ahead are cancelled.`], `/app/sessions/${c.id}`, { group: "tstopped" });
+  for (const c of cs) await notify(c.tester.email, `“${c.test.title}” was stopped`, [`“${c.test.title}” was stopped. Work you already sent is still reviewed and paid. Calls ahead are cancelled.`], `/app/sessions/${c.id}`, { group: "tstopped" });
   await notify(t.developer.email, `The team stopped “${t.title}”`, [`The team stopped “${t.title}”${note ? `: ${note}` : "."}`, "What testers sent still waits for you to pay. Contact us in Settings if you think this is a mistake."], `/app/tests/${testId}`, { always: true, group: "payhold" }); // (batch 29 §33) in the day's "Payments and holds" entry with the hold lines
   return { ok: true };
 }

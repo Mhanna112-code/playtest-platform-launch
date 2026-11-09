@@ -40,19 +40,19 @@ export async function teamSections(adminIds: string[], now = new Date()) {
   const url = (p: string) => `${appUrl()}${p}`;
   // What is the same for every admin is worked out once.
   // (Batch 29 §34) Reports and disputes since each admin's own last email (a Monthly one reaches back up to ~a month).
-  const noShows = await db.call.findMany({ where: { noShowBy: { not: null }, noShowAt: { gt: new Date(now.getTime() - 32 * DAY) } }, include: { contract: true }, orderBy: { noShowAt: "asc" }, take: 200 });
+  const noShows = await db.call.findMany({ where: { noShowBy: { not: null }, noShowAt: { gt: new Date(now.getTime() - 32 * DAY) } }, include: { contract: { include: { test: { select: { title: true } } } } }, orderBy: { noShowAt: "asc" }, take: 200 });
   const openDisputes = await db.dispute.findMany({ where: { status: "open", createdAt: { gt: new Date(now.getTime() - 32 * DAY) } }, orderBy: { createdAt: "desc" }, take: 100 });
   const cs = new Map((await db.contract.findMany({ where: { id: { in: openDisputes.map((d) => d.contractId) } }, include: { tester: true, test: { include: { developer: true } } } })).map((c) => [c.id, c]));
   const flagged = await reportedOver3([...cs.values()].flatMap((c) => [c.testerId, c.test.developerId]));
   const disputeLine = (d: (typeof openDisputes)[number]) => {
     const c = cs.get(d.contractId);
-    return `New dispute: ${c ? `${labelled(displayName(c.tester), flagged.has(c.testerId))} vs ${labelled(displayName(c.test.developer), flagged.has(c.test.developerId))} on “${c.title}”` : ""}: “${d.reason}” ${url(`/admin?dispute=${d.id}#dispute-${d.id}`)}`;
+    return `New dispute: ${c ? `${labelled(displayName(c.tester), flagged.has(c.testerId))} vs ${labelled(displayName(c.test.developer), flagged.has(c.test.developerId))} on “${c.test.title}”` : ""}: “${d.reason}” ${url(`/admin?dispute=${d.id}#dispute-${d.id}`)}`;
   };
   const shared: string[] = [];
   const lifts = (await adminPage("lifts", adminIds[0], null)) as { rows: { id: string; head: string; owed: string; paid: string }[] };
   for (const l of lifts.rows) shared.push(`Hold lift waiting for your Approve: ${l.head} · ${l.owed} · ${l.paid} ${url(`/admin#lift-${l.id}`)}`);
   for (const c of await chargebackHolds()) if (c.steps.cardVerified && c.steps.owedPaid && !c.steps.approved) shared.push(`Chargeback hold waiting for your Approve: ${c.dev.email} ${url("/admin#chargebacks")}`);
-  const noShowLine = (c: (typeof noShows)[number]) => `Call report on “${c.contract.title}” by the ${c.noShowBy}: “${c.noShowNote}” ${url("/admin#no-shows")}`;
+  const noShowLine = (c: (typeof noShows)[number]) => `Call report on “${c.contract.test.title}” by the ${c.noShowBy}: “${c.noShowNote}” ${url("/admin#no-shows")}`;
 
   // (Batch 10) The per-admin lists are read in a few queries for all admins at once (the daily job's run time no longer grows with each admin's own queries).
   const ids = adminIds;

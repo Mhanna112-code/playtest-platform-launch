@@ -180,7 +180,7 @@ export async function maybePromptRating(contractId: string) {
   await maybeOpenDevRating(c.id);
   if (c.tester.deletedAt || c.ratePromptedAt || (await rateBlocker(c.id, "tester"))) return;
   await db.contract.update({ where: { id: c.id }, data: { ratePromptedAt: new Date() } });
-  await notify(c.tester.email, `Rate ${displayName(c.test.developer)} on “${c.title}”`, [`You can now rate ${displayName(c.test.developer)} for “${c.title}”.`], RATINGS_HREF, { side: "tester", ...RATINGS, testId: c.testId, reminder: `rate-open-tester:${c.id}` });
+  await notify(c.tester.email, `Rate ${displayName(c.test.developer)} on “${c.test.title}”`, [`You can now rate ${displayName(c.test.developer)} for “${c.test.title}”.`], RATINGS_HREF, { side: "tester", ...RATINGS, testId: c.testId, reminder: `rate-open-tester:${c.id}` });
 }
 
 /** (Batch 17 section 16) The developer's Rate for this tester just opened (they rated and everything they sent is settled): "<tester> finished <test>. You can rate them for 14 days.", once. */
@@ -191,7 +191,7 @@ export async function maybeOpenDevRating(contractId: string, now = new Date()) {
   const c = await db.contract.findUniqueOrThrow({ where: { id: contractId }, include: { tester: true, test: true } });
   if ((await db.user.findUnique({ where: { id: c.test.developerId }, select: { deletedAt: true } }))?.deletedAt) return false;
   if (await db.notification.findFirst({ where: { userId: c.test.developerId, reminderKey: key }, select: { id: true } })) return false;
-  await bell(c.test.developerId, `${displayName(c.tester)} finished ${c.title}. You can rate ${pronouns(c.tester.pronoun).obj} for ${WINDOW_DAYS} days.`, RATINGS_HREF, undefined, { side: "developer", ...RATINGS, testId: c.testId, reminder: key });
+  await bell(c.test.developerId, `${displayName(c.tester)} finished ${c.test.title}. You can rate ${pronouns(c.tester.pronoun).obj} for ${WINDOW_DAYS} days.`, RATINGS_HREF, undefined, { side: "developer", ...RATINGS, testId: c.testId, reminder: key });
   return true;
 }
 
@@ -336,7 +336,7 @@ export async function ratingReminders(now = new Date()) {
     // (Owner, Nov 7, §331) The last one before the close-out (the next 3-day slot would fall after it) ignores email Off.
     const closes = await testerRatingClosesAt(c.id, now);
     const last = !!closes && now.getTime() + every >= closes.getTime();
-    await bell(c.testerId, `Reminder: rate ${displayName(c.test.developer)} on “${c.title}”${closes ? `: rating closes on ${T(closes, "date")}` : ""}`, RATINGS_HREF, undefined, { side: "tester", ...RATINGS, testId: c.testId, reminder: `rate:${c.id}`, ...(last ? { always: true } : {}) });
+    await bell(c.testerId, `Reminder: rate ${displayName(c.test.developer)} on “${c.test.title}”${closes ? `: rating closes on ${T(closes, "date")}` : ""}`, RATINGS_HREF, undefined, { side: "tester", ...RATINGS, testId: c.testId, reminder: `rate:${c.id}`, ...(last ? { always: true } : {}) });
     n++;
   }
   // Developer: once their Rate opened (the tester rated and everything is settled, or (section 19) a never-rated tester at the close-out); every 3 days until they
@@ -356,7 +356,7 @@ export async function ratingReminders(now = new Date()) {
     // (Owner, Nov 7, §329) The LAST reminder before their 14 days end (the next 3-day slot would fall after the end) ignores email Off (`always`): it reaches the
     // end-of-day email. The others follow the email setting. (The line already names the end date.)
     const last = now.getTime() + every >= s.endsAt!.getTime();
-    await bell(c.test.developerId, `Reminder: rate ${displayName(c.tester)} for “${c.title}” (until ${T(s.endsAt!, "date")})`, RATINGS_HREF, undefined, { side: "developer", ...RATINGS, testId: c.testId, reminder: `rate-dev:${c.id}`, ...(last ? { always: true } : {}) });
+    await bell(c.test.developerId, `Reminder: rate ${displayName(c.tester)} for “${c.test.title}” (until ${T(s.endsAt!, "date")})`, RATINGS_HREF, undefined, { side: "developer", ...RATINGS, testId: c.testId, reminder: `rate-dev:${c.id}`, ...(last ? { always: true } : {}) });
     n++;
   }
   return n;
@@ -375,18 +375,18 @@ export async function ratingsToGive(user: { id: string; testerSuspendedAt: Date 
     const rated = new Set((await db.rating.findMany({ where: { contractId: { in: cs.map((c) => c.id) }, side: "tester" }, select: { contractId: true } })).map((r) => r.contractId));
     for (const c of cs.filter((x) => !rated.has(x.id))) {
       if ((await testerRateState(c.id, now)).kind !== "open") continue;
-      rows.push({ id: c.id, text: `Rate ${displayName(c.test.developer)} on “${c.title}”`, href: `/app/sessions/${c.id}#rate`, at: (c.endedAt ?? c.joinedAt).getTime(), names: [displayName(c.test.developer), c.title] });
+      rows.push({ id: c.id, text: `Rate ${displayName(c.test.developer)} on “${c.test.title}”`, href: `/app/sessions/${c.id}#rate`, at: (c.endedAt ?? c.joinedAt).getTime(), names: [displayName(c.test.developer), c.test.title] });
     }
   } else {
     if (user.devSuspendedAt || user.holdStartedAt) return rows;
-    const cs = await db.contract.findMany({ where: { test: { developerId: user.id } }, include: { tester: true }, orderBy: { joinedAt: "desc" }, take: 2000 });
+    const cs = await db.contract.findMany({ where: { test: { developerId: user.id } }, include: { tester: true, test: { select: { title: true } } }, orderBy: { joinedAt: "desc" }, take: 2000 });
     const mine = new Set((await db.rating.findMany({ where: { contractId: { in: cs.map((c) => c.id) }, side: "developer" }, select: { contractId: true } })).map((r) => r.contractId));
     const states = await devRateStates(cs.filter((c) => !mine.has(c.id)).map((c) => c.id), now);
     for (const c of cs) {
       const s = states.get(c.id);
       if (!s || s.kind !== "open" || !s.endsAt) continue;
       const days = Math.max(1, Math.ceil((s.endsAt.getTime() - now.getTime()) / DAY));
-      rows.push({ id: c.id, text: `Rate ${displayName(c.tester)} on “${c.title}” · ${days} day${days === 1 ? "" : "s"} left`, href: `/app/tests/${c.testId}#rate-${c.id}`, at: s.opensAt!.getTime(), names: [displayName(c.tester), c.title] });
+      rows.push({ id: c.id, text: `Rate ${displayName(c.tester)} on “${c.test.title}” · ${days} day${days === 1 ? "" : "s"} left`, href: `/app/tests/${c.testId}#rate-${c.id}`, at: s.opensAt!.getTime(), names: [displayName(c.tester), c.test.title] });
     }
   }
   return rows.sort((a, b) => b.at - a.at);

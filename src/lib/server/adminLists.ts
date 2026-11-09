@@ -181,7 +181,7 @@ export async function disputeRow(d: Awaited<ReturnType<typeof db.dispute.findMan
   const tester = c?.tester ?? null, devU = c?.test.developer ?? null;
   const chatPeople = [adminPersonLink(tester), adminPersonLink(devU)];
   const piece = call ? `live call (${fmtDateTime(call.startsAt)})` : sub?.kind === "recording" ? "recording" : "written answers";
-  const top: Rich = [testLink(c ? { id: c.testId, title: c.title } : null), " · ", personName(tester), `'s ${piece} · ${r?.rejected ? "rejected" : `paid ${money(paidForPiece)}`}`];
+  const top: Rich = [testLink(c ? { id: c.testId, title: c.test.title } : null), " · ", personName(tester), `'s ${piece} · ${r?.rejected ? "rejected" : `paid ${money(paidForPiece)}`}`];
   const people: Rich = [...person(tester, !!c && flagged.has(c.testerId)), " vs ", ...person(devU, !!c && flagged.has(c.test.developerId))];
   // (Batch 35 §43) Each typed reason in the small quoted box.
   const saidParts: Rich = [personName(tester), `'s reason:`, quoted(d.reason), ...(r?.reason ? [" · ", personName(devU), `'s note when ${r.rejected ? "rejecting" : "paying"}:`, quoted(r.reason)] : [])];
@@ -264,10 +264,10 @@ async function mine(adminId: string, cursor: string | null): Promise<Page<MineVM
   // (Owner, Nov 3, batch 35 §163) Each dispute this admin decided, with what the decision did (Decide's own result line): it stays visible here once its row has
   // left Open disputes. "Ana Silva (ana@…) · dispute decided by you: raised the pay to $10.00 ($3.00 more charged) · Nov 3, 3:10 PM"; it opens the dispute's row.
   for (const d of await db.dispute.findMany({ where: { decidedById: adminId, status: "decided", decidedAt: { not: null } }, orderBy: { decidedAt: "desc" }, take: 500 })) {
-    const c = await db.contract.findUnique({ where: { id: d.contractId }, include: { tester: true } });
+    const c = await db.contract.findUnique({ where: { id: d.contractId }, include: { tester: true, test: { select: { title: true } } } });
     if (!c) continue;
     const why = `dispute decided by you: ${await decidedResult(d)}`;
-    all.push({ id: `dispute-${d.id}`, testId: c.testId, href: `/admin?dispute=${d.id}#dispute-${d.id}`, date: d.decidedAt!, at: d.decidedAt!.toISOString(), title: c.title, dev: displayName(c.tester), why, when: fmtDateTime(d.decidedAt!), parts: [testLink({ id: c.testId, title: c.title }), " · ", ...person(c.tester), ` · ${why} · ${fmtDateTime(d.decidedAt!)}`] });
+    all.push({ id: `dispute-${d.id}`, testId: c.testId, href: `/admin?dispute=${d.id}#dispute-${d.id}`, date: d.decidedAt!, at: d.decidedAt!.toISOString(), title: c.test.title, dev: displayName(c.tester), why, when: fmtDateTime(d.decidedAt!), parts: [testLink({ id: c.testId, title: c.test.title }), " · ", ...person(c.tester), ` · ${why} · ${fmtDateTime(d.decidedAt!)}`] });
   }
   all.sort((a, b) => b.date.getTime() - a.date.getTime() || (a.id < b.id ? 1 : -1));
   // (Owner, Nov 5, §277) A name or test in the line's words (what a decision did: "raised Ana Silva's pay …") is a green link too: its test's names and people.
@@ -442,7 +442,7 @@ async function noShows(cursor: string | null): Promise<Page<TextVM>> {
       // (Batch 33 §1) Both people and the test as links.
       const tester = person(x.contract.tester, flagged.has(x.contract.testerId)), dev = person(x.contract.test.developer, flagged.has(x.contract.test.developerId));
       const [by, against] = x.noShowBy === "tester" ? [tester, dev] : [dev, tester];
-      const parts: Rich = [`${fmtDateTime(x.startsAt)} · `, testLink({ id: x.contract.testId, title: x.contract.title }), ` · reported by the ${x.noShowBy} (`, ...by, ") against ", ...against, `:`, quoted(x.noShowNote ?? "")]; // (batch 35 §43)
+      const parts: Rich = [`${fmtDateTime(x.startsAt)} · `, testLink({ id: x.contract.testId, title: x.contract.test.title }), ` · reported by the ${x.noShowBy} (`, ...by, ") against ", ...against, `:`, quoted(x.noShowNote ?? "")]; // (batch 35 §43)
       return { id: x.id, at: (x.noShowAt ?? x.startsAt).toISOString(), text: plainOf(parts), parts };
     }),
     next: list.length > PAGE && last ? cur(last.noShowAt ?? last.startsAt, last.id) : null,
@@ -701,7 +701,7 @@ async function partNames(pays: { submissionId: string | null; callId: string | n
 /** The tests behind these contracts, for the links. */
 async function testsOfContracts(ids: (string | null | undefined)[]) {
   const list = [...new Set(ids.filter((x): x is string => !!x))];
-  return new Map((await db.contract.findMany({ where: { id: { in: list } }, select: { id: true, testId: true, title: true } })).map((c) => [c.id, { id: c.testId, title: c.title }]));
+  return new Map((await db.contract.findMany({ where: { id: { in: list } }, select: { id: true, testId: true, test: { select: { title: true } } } })).map((c) => [c.id, { id: c.testId, title: c.test.title }])); // (§342)
 }
 const dayOnly = (d: Date) => fmtDate(d).replace(/, \d{4}$/, "");
 
@@ -755,7 +755,7 @@ async function userBox(kind: Kind, userId: string, cursor: string | null): Promi
       const c = cs.get(d.contractId);
       // (Batch 33 §1) The test and the other person as links.
       const other = c ? (c.testerId === userId ? c.test.developer : c.tester) : null;
-      rows.push(mk("dispute", d.id, d.createdAt, [testLink(c ? { id: c.testId, title: c.title } : null), ...(other ? [" with ", ...person(other)] : []), ` · ${d.status === "open" ? "open" : `decided ${money(d.decidedCents)} by ${await name(d.decidedById)}`}:`, quoted(d.reason)])); // (batch 35 §43)
+      rows.push(mk("dispute", d.id, d.createdAt, [testLink(c ? { id: c.testId, title: c.test.title } : null), ...(other ? [" with ", ...person(other)] : []), ` · ${d.status === "open" ? "open" : `decided ${money(d.decidedCents)} by ${await name(d.decidedById)}`}:`, quoted(d.reason)])); // (batch 35 §43)
     }
   } else if (kind === "u-chargebacks") {
     for (const p of await db.payment.findMany({ where: { developerId: userId, chargebackAt: { not: null } }, orderBy: { chargebackAt: "desc" }, take: 2000 })) rows.push(mk("cb", p.id, p.chargebackAt!, [`Chargeback ${cbAmount(p)}${await cbWhich(p)} (${p.chargeback})`, ...stripeIds(p)])); // (§193b) which payment
@@ -773,16 +773,16 @@ async function userBox(kind: Kind, userId: string, cursor: string | null): Promi
   } else if (kind === "u-tests") {
     // (Batch 33 §1) The test as the link (and, for a joined test, its developer).
     for (const t of await db.test.findMany({ where: { developerId: userId }, orderBy: { createdAt: "desc" }, take: 2000 })) rows.push(mk("posted", t.id, t.createdAt, ["Posted ", testLink(t), ` (${t.status})`]));
-    for (const c of await db.contract.findMany({ where: { testerId: userId }, orderBy: { joinedAt: "desc" }, take: 2000, include: { test: { include: { developer: true } } } })) rows.push(mk("joined", c.id, c.joinedAt, ["Joined ", testLink({ id: c.testId, title: c.title }), " by ", ...person(c.test.developer), ` (${c.status})`]));
+    for (const c of await db.contract.findMany({ where: { testerId: userId }, orderBy: { joinedAt: "desc" }, take: 2000, include: { test: { include: { developer: true } } } })) rows.push(mk("joined", c.id, c.joinedAt, ["Joined ", testLink({ id: c.testId, title: c.test.title }), " by ", ...person(c.test.developer), ` (${c.status})`]));
   } else if (kind === "u-reports") {
     const reports = await db.report.findMany({ where: { reportedId: userId }, orderBy: { createdAt: "desc" }, take: 2000 });
     const reporters = await whoById(reports.map((r) => r.reporterId));
     for (const r of reports) rows.push(mk("report", r.id, r.createdAt, ["Reported by ", ...person(reporters.get(r.reporterId)), ":", quoted(r.note)])); // (batch 35 §43)
     const calls = await db.call.findMany({ where: { noShowBy: { not: null }, OR: [{ noShowBy: "tester", contract: { test: { developerId: userId } } }, { noShowBy: "developer", contract: { testerId: userId } }] }, orderBy: { noShowAt: "desc" }, take: 2000, include: { contract: { include: { tester: true, test: { include: { developer: true } } } } } });
-    for (const c of calls) rows.push(mk("noshow", c.id, c.noShowAt ?? c.startsAt, ["Call report on ", testLink({ id: c.contract.testId, title: c.contract.title }), ` by the ${c.noShowBy} (`, ...person(c.noShowBy === "tester" ? c.contract.tester : c.contract.test.developer), "):", quoted(c.noShowNote ?? "")])); // (batch 35 §43)
+    for (const c of calls) rows.push(mk("noshow", c.id, c.noShowAt ?? c.startsAt, ["Call report on ", testLink({ id: c.contract.testId, title: c.contract.test.title }), ` by the ${c.noShowBy} (`, ...person(c.noShowBy === "tester" ? c.contract.tester : c.contract.test.developer), "):", quoted(c.noShowNote ?? "")])); // (batch 35 §43)
   } else if (kind === "u-parts") {
     const subs = await db.submission.findMany({ where: { contract: { testerId: userId } }, include: { contract: { include: { test: { include: { developer: true } } } }, review: true }, orderBy: { sentAt: "desc" }, take: 2000 });
-    for (const s of subs) rows.push(mk("part", s.id, s.sentAt, [testLink({ id: s.contract.testId, title: s.contract.title }), " by ", ...person(s.contract.test.developer), `: ${s.kind === "recording" ? "recording" : "written answers"} · ${s.review ? (s.review.rejected ? "rejected" : `paid ${money(s.review.amountCents)}`) : "waiting for review"}`]));
+    for (const s of subs) rows.push(mk("part", s.id, s.sentAt, [testLink({ id: s.contract.testId, title: s.contract.test.title }), " by ", ...person(s.contract.test.developer), `: ${s.kind === "recording" ? "recording" : "written answers"} · ${s.review ? (s.review.rejected ? "rejected" : `paid ${money(s.review.amountCents)}`) : "waiting for review"}`]));
   }
   sortDesc(rows);
   return slice(linkRows(rows, (await adminPool({ devIds: [userId], testerIds: [userId], userIds: [userId] })).all), (r) => r.date, cursor);

@@ -11,7 +11,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const call = await db.call.findUnique({ where: { id }, include: { contract: { include: { test: true } } } });
   if (!call || call.status !== "booked" || (call.contract.testerId !== u.id && call.contract.test.developerId !== u.id)) return new Response("Not found", { status: 404 });
   const url = `${(process.env.APP_URL ?? "http://localhost:3400").replace(/\/$/, "")}/app/calls/${call.id}`;
-  return new Response(callIcs({ id: call.id, startsAt: call.startsAt, minutes: call.minutes, title: call.contract.title, url }), {
+  return new Response(callIcs({ id: call.id, startsAt: call.startsAt, minutes: call.minutes, title: call.contract.test.title, url }), {
     headers: { "Content-Type": "text/calendar; charset=utf-8", "Content-Disposition": 'attachment; filename="live-call.ics"' },
   });
 }

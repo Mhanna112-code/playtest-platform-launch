@@ -66,7 +66,7 @@ export default async function ChatPage({ params }: { params: Promise<{ id: strin
         extra={dev ? { contractId: c.id } : {}}
         other={other}
         otherHover={otherHover}
-        title={c.title}
+        title={c.test.title}
         messages={messages.map((m) => ({ id: m.id, mine: m.senderId === u.id, who: m.senderId === u.id ? "You" : displayName(m.sender), body: m.body, at: m.createdAt.toISOString(), hover: m.senderId === otherUser.id ? otherHover : null }))}
       />
     </div>

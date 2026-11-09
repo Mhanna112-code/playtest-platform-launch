@@ -25,7 +25,7 @@ export async function closePausedTest(testId: string, by: "daily" | "admin", now
   if (t.status === "stopped") throw new HttpError(409, "stopped", "That test was already stopped.");
   if (!info) throw new HttpError(409, "not_paused", "That test isn't paused.");
   const reason = pauseClosedReason(info.causes, by);
-  const cs = await db.contract.findMany({ where: { testId, status: "working" }, include: { tester: true } });
+  const cs = await db.contract.findMany({ where: { testId, status: "working" }, include: { tester: true, test: { select: { title: true } } } });
   let invitesClosed: string[] = [];
   const cancelled = await db.$transaction(async (tx) => {
     // (Nov 2, §119) The same test lock as Stop: two Close nows (or a Close now and a Stop) at once can't both close it; the second reads who did it once settled.
@@ -46,7 +46,7 @@ export async function closePausedTest(testId: string, by: "daily" | "admin", now
   if (!cancelled) return { closed: false };
   await tellCancelled(cancelled, "closed");
   await (await import("./invites")).tellInvitesClosed(invitesClosed); // (batch 30 §6)
-  for (const c of cs) await notify(c.tester.email, `“${c.title}” ended`, [`“${c.title}” ended. Work you already sent is still reviewed and paid. Calls ahead are cancelled.`], `/app/sessions/${c.id}`, { group: "tstopped" });
+  for (const c of cs) await notify(c.tester.email, `“${c.test.title}” ended`, [`“${c.test.title}” ended. Work you already sent is still reviewed and paid. Calls ahead are cancelled.`], `/app/sessions/${c.id}`, { group: "tstopped" });
   // (A system explanation, never a typed reason: it stays in the line.)
   await notify(t.developer.email, `“${t.title}” was closed. ${reason}`, [`“${t.title}” was closed. ${reason}`, "What testers already sent still waits for you to pay. Contact us in Settings if you think this is a mistake."], `/app/tests/${testId}`, { always: true, group: "payhold" }); // (batch 29 §33) in the day's "Payments and holds" entry with the hold lines
   return { closed: true, testers: cs.length };

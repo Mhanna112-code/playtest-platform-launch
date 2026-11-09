@@ -736,7 +736,7 @@ export function devStopOnce(events: TestEventLike[], seenAt: Date, confirmed: bo
  * (Owner, Oct 29, batch 26 section 3) What a tester's stop line needs: the contract's end, and the test's `adminStoppedAt` (the team's Stop: the line never names the
  * developer, "This test was stopped at 3:10 PM."); `teamTime` is that time as the tester reads it (their zone; without it, "on <date>").
  */
-export type StopCtx = { endKind: string; endedAt: Date | null; test?: { adminStoppedAt?: Date | null } | null; teamTime?: string };
+export type StopCtx = { endKind: string; endedAt: Date | null; test?: { adminStoppedAt?: Date | null; /** (§342) its current title */ title?: string } | null; teamTime?: string };
 /** (Batch 26 section 3) Was this tester's work ended by the team's Stop (never named)? */
 export const teamStopped = (c: StopCtx) => c.endKind === "stopped" && !!c.test?.adminStoppedAt;
 /** "This test was stopped at 3:10 PM" (or "…on Oct 29, 2026" when no time was given). */
@@ -745,11 +745,11 @@ const teamStopHalf = (c: StopCtx, fmt: (d: Date) => string) => `This test was st
 /** The one line a tester reads (and every later press is refused with) once their work was ended by the developer. */
 export function endedLine(c: StopCtx & { status: string; title?: string }, devName: string, fmt: (d: Date) => string) {
   if (c.status !== "ended" || !c.endedAt) return "";
-  if (c.endKind === "blocked") return `Your session on ${c.title ?? "this test"} ended.`; // neutral: a block is never revealed
+  if (c.endKind === "blocked") return `Your session on ${c.test?.title ?? c.title ?? "this test"} ended.`; // neutral: a block is never revealed
   if (teamStopped(c)) return `${teamStopHalf(c, fmt)}. Work you sent is still reviewed.`;
   if (c.endKind === "stopped") return `${devName} stopped the test on ${fmt(c.endedAt)}. Work you sent is still reviewed.`;
   if (c.endKind === "closed") return `This test ended on ${fmt(c.endedAt)}. Work you sent is still reviewed.`; // neutral: a pause closure never says why
-  if (c.endKind === "rated") return `${devName} finished your part in ${c.title ?? "this test"}. Work you sent is still reviewed.`;
+  if (c.endKind === "rated") return `${devName} finished your part in ${c.test?.title ?? c.title ?? "this test"}. Work you sent is still reviewed.`;
   return `${devName} ended your session early on ${fmt(c.endedAt)}. Work you sent is still reviewed.`;
 }
 

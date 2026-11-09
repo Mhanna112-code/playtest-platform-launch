@@ -199,8 +199,8 @@ export const testerPausedLine = (title: string) => `“${title}” is paused`;
  */
 export async function tellTestersPaused(testIds: string[]) {
   if (!testIds.length) return;
-  for (const c of await db.contract.findMany({ where: { status: "working", testId: { in: testIds }, test: { status: { not: "stopped" } } }, include: { tester: true }, orderBy: { joinedAt: "asc" } })) {
-    const line = testerPausedLine(c.title);
+  for (const c of await db.contract.findMany({ where: { status: "working", testId: { in: testIds }, test: { status: { not: "stopped" } } }, include: { tester: true, test: { select: { title: true } } }, orderBy: { joinedAt: "asc" } })) {
+    const line = testerPausedLine(c.test.title);
     await notify(c.tester.email, line, [`${line}. Your deadline moves on by the pause once it runs again.`], `/app/sessions/${c.id}`, { recipientId: c.testerId, group: "paused", always: true });
   }
 }
@@ -466,8 +466,8 @@ export async function liftHoldIfClear(devId: string, opts: { /** (batch 24) the 
   if (opts.quietDev) {
     // (Batch 24, a batch 23 leftover) The team's Approve tells the developer in its own single notice.
   } else if (!dev.devSuspendedAt) await notify(dev.email, "Your tests are running again", ["Everything you owed is paid: your tests are running again, and every deadline moved on by the pause."], "/app", { side: "developer", always: true, payment: true, group: "payhold" });
-  const testers = await db.contract.findMany({ where: { status: "working", testId: { in: running } }, include: { tester: true } });
-  for (const c of testers) await notify(c.tester.email, `“${c.title}” is running again`, [`“${c.title}” is running again. Your deadline moved on by the pause.`], `/app/sessions/${c.id}`, { group: "paused", always: true });
+  const testers = await db.contract.findMany({ where: { status: "working", testId: { in: running } }, include: { tester: true, test: { select: { title: true } } } });
+  for (const c of testers) await notify(c.tester.email, `“${c.test.title}” is running again`, [`“${c.test.title}” is running again. Your deadline moved on by the pause.`], `/app/sessions/${c.id}`, { group: "paused", always: true });
   return true;
 }
 
@@ -1435,14 +1435,14 @@ async function runDailyLocked(now: Date) {
 export async function adminCases(now = new Date(), forDigest = false) {
   const [disputes, noShows, chargebacks, holds, payouts] = await Promise.all([
     db.dispute.findMany({ where: { status: "open" }, include: { submission: { include: { review: true } } } }),
-    db.call.findMany({ where: forDigest ? { noShowBy: { not: null }, noShowDigestedAt: null } : { noShowBy: { not: null }, noShowAt: { gt: new Date(now.getTime() - 14 * 86_400_000) } }, include: { contract: true } }),
+    db.call.findMany({ where: forDigest ? { noShowBy: { not: null }, noShowDigestedAt: null } : { noShowBy: { not: null }, noShowAt: { gt: new Date(now.getTime() - 14 * 86_400_000) } }, include: { contract: { include: { test: { select: { title: true } } } } } }),
     db.payment.findMany({ where: { chargeback: "open" } }),
     db.user.findMany({ where: { holdStartedAt: { not: null } } }),
     db.payment.findMany({ where: { OR: [{ transferStatus: "waiting" }, { status: "failed", settledAt: null, owedUntil: { not: null } }] } }),
   ]);
   return [
     ...disputes.map((d) => ({ kind: "dispute", text: `Dispute: “${d.reason}”`, link: "/admin#disputes" })),
-    ...noShows.map((c) => ({ kind: "no-show", text: `No-show report on “${c.contract.title}” (${fmtDateTime(c.startsAt)}), by the ${c.noShowBy}`, link: "/admin#no-shows" })),
+    ...noShows.map((c) => ({ kind: "no-show", text: `No-show report on “${c.contract.test.title}” (${fmtDateTime(c.startsAt)}), by the ${c.noShowBy}`, link: "/admin#no-shows" })),
     // (§133) What the bank reversed: "Open chargeback: $96.00 of a $444.67 payment" when it was part of the payment.
     ...chargebacks.map((p) => ({ kind: "chargeback", text: `Open chargeback: ${money(reversedOf(p))}${reversedPart(p) ? ` of a ${money(p.amountCents)} payment` : ""}`, link: "/admin#chargebacks" })),
     ...holds.map((u) => ({ kind: "hold", text: `${u.email} on a ${u.holdReason === "chargeback" ? "chargeback" : "payment"} hold since ${fmtDate(u.holdStartedAt!)}`, link: u.holdReason === "chargeback" ? "/admin#chargebacks" : `/app/developers/${u.id}` })),

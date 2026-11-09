@@ -112,7 +112,7 @@ export async function directListV(userId: string) {
 }
 
 export async function messagesListV(u: User) {
-  const contracts = await db.contract.findMany({ where: contractsOnSide(u.id, sideFor(u)), orderBy: { id: "asc" }, select: { testId: true, testerId: true, title: true, tester: { select: { name: true, email: true, deletedAt: true } }, test: { select: { developer: { select: { name: true, email: true, deletedAt: true } } } } } });
+  const contracts = await db.contract.findMany({ where: contractsOnSide(u.id, sideFor(u)), orderBy: { id: "asc" }, select: { testId: true, testerId: true, title: true, tester: { select: { name: true, email: true, deletedAt: true } }, test: { select: { title: true, developer: { select: { name: true, email: true, deletedAt: true } } } } } }); // (§342) a rename redraws the list
   const rows = await Promise.all(contracts.map(async (c) => [c, await db.message.findFirst({ where: { testId: c.testId, testerId: c.testerId }, orderBy: { createdAt: "desc" }, select: { id: true } }), await unreadCount(u.id, c.testId, c.testerId)]));
   return version([rows, await directListV(u.id)]);
 }

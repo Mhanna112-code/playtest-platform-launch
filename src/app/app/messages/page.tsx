@@ -40,7 +40,7 @@ export default async function MessagesPage() {
   }));
   const direct = await Promise.all((await directConversations(u.id)).map(async (c) => ({ ...c, hover: await personHoverFor(u.id, sideFor(u), c.other) })));
   const rows = [
-    ...convos.map(({ c, last, unread, hover }) => ({ hover, id: `test:${c.id}`, href: `/app/chat/${c.id}`, other: c.testerId === u.id ? displayName(c.test.developer) : displayName(c.tester), title: c.title, testHref: c.testerId===u.id?`/app/sessions/${c.id}`:`/app/tests/${c.testId}`, developer: displayName(c.test.developer), lastBody: last?.body, mine: last?.senderId === u.id, unread, at: last?.createdAt.getTime() ?? c.joinedAt.getTime() })),
+    ...convos.map(({ c, last, unread, hover }) => ({ hover, id: `test:${c.id}`, href: `/app/chat/${c.id}`, other: c.testerId === u.id ? displayName(c.test.developer) : displayName(c.tester), title: c.test.title, testHref: c.testerId===u.id?`/app/sessions/${c.id}`:`/app/tests/${c.testId}`, developer: displayName(c.test.developer), lastBody: last?.body, mine: last?.senderId === u.id, unread, at: last?.createdAt.getTime() ?? c.joinedAt.getTime() })),
     ...direct.map((c) => ({ hover: c.hover, id: `direct:${c.id}`, href: `/app/direct/${c.other.id}`, other: displayName(c.other), title: "Direct message", testHref: undefined, developer: displayName(c.other), lastBody: c.last?.body, mine: c.last?.senderId === u.id, unread: c.unread, at: c.last?.createdAt.getTime() ?? 0 })),
   ].sort((a, b) => b.at - a.at);
   return (

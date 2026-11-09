@@ -83,8 +83,8 @@ export async function blockUser(me: { id: string; email: string; name: string },
       await db.callSlot.update({ where: { id: call.slotId }, data: { status: "removed" } });
     }
     // Neutral lines for the blocked side (never "blocked").
-    if (c.testerId === otherId) await notify(c.tester.email, `Your session on ${c.title} ended.`, [`Your session on ${c.title} ended. Work you sent is still reviewed.`], `/app/sessions/${c.id}`);
-    else await notify(c.test.developer.email, `${displayName(c.tester)}'s session on ${c.title} ended.`, [`${displayName(c.tester)}'s session on ${c.title} ended.`], `/app/tests/${c.testId}#tester-${c.id}`);
+    if (c.testerId === otherId) await notify(c.tester.email, `Your session on ${c.test.title} ended.`, [`Your session on ${c.test.title} ended. Work you sent is still reviewed.`], `/app/sessions/${c.id}`);
+    else await notify(c.test.developer.email, `${displayName(c.tester)}'s session on ${c.test.title} ended.`, [`${displayName(c.tester)}'s session on ${c.test.title} ended.`], `/app/tests/${c.testId}#tester-${c.id}`);
   }
   await (await import("./requests")).closeRequests({ contractIds: ended.map((c) => c.id) }, "the session ended");
   await closeOffersOfEnded(db, ended.map((c) => c.id), now); // (batch 35 §118) the part ended: its offer closes

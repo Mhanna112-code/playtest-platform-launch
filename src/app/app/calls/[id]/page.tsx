@@ -52,7 +52,7 @@ export default async function CallPage({ params, searchParams }: { params: Promi
     <div className="mx-auto max-w-5xl space-y-4">
       <div>
         <h1 className="text-2xl font-bold tracking-tight text-white">Call with {otherName}</h1>
-        <p className="text-sm text-slate-400">{/* (Owner, Nov 2) the test opens in a new tab, so the call keeps going here */}<a href={amTester ? `/app/sessions/${call.contractId}` : `/app/tests/${call.contract.testId}`} target="_blank" rel="noreferrer" className="underline decoration-dotted hover:text-white" data-call-test-link="">“<Cut text={call.contract.title} kind="test" />”</a> · {fmtDateTime(call.startsAt)} · booked for {call.minutes} minutes (paid up to {Math.floor(call.minutes * 1.5)}) · the length is measured while you&apos;re both connected.</p>
+        <p className="text-sm text-slate-400">{/* (Owner, Nov 2) the test opens in a new tab, so the call keeps going here */}<a href={amTester ? `/app/sessions/${call.contractId}` : `/app/tests/${call.contract.testId}`} target="_blank" rel="noreferrer" className="underline decoration-dotted hover:text-white" data-call-test-link="">“<Cut text={call.contract.test.title} kind="test" />”</a> · {fmtDateTime(call.startsAt)} · booked for {call.minutes} minutes (paid up to {Math.floor(call.minutes * 1.5)}) · the length is measured while you&apos;re both connected.</p>
       </div>
       {relayOnly && <p className="info" data-relay-only="">{turnRelaySetUp() ? "Relay-only check: this call goes only through the TURN relay, as it would on a strict network. If it connects, the relay works." : "Relay-only check: no TURN relay is set up (CLOUDFLARE_TURN_KEY_ID and CLOUDFLARE_TURN_API_TOKEN, or TURN_URL), so this call can't connect this way."}</p>}
       <CallRoom

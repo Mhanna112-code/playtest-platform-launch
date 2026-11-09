@@ -33,7 +33,7 @@ export async function discoveryV(u: User, q = "", states: TestState[] = []) {
 }
 
 export async function messagesV(u: User) {
-  const contracts = await db.contract.findMany({ where: contractsOnSide(u.id, sideFor(u)), orderBy: [{ joinedAt: "desc" }, { id: "asc" }], take: 100, select: { id: true, title: true, testId: true, testerId: true, joinedAt: true, status: true, tester: { select: { name: true, email: true, deletedAt: true } }, test: { select: { developer: { select: { name: true, email: true, deletedAt: true } } } } } });
+  const contracts = await db.contract.findMany({ where: contractsOnSide(u.id, sideFor(u)), orderBy: [{ joinedAt: "desc" }, { id: "asc" }], take: 100, select: { id: true, title: true, testId: true, testerId: true, joinedAt: true, status: true, tester: { select: { name: true, email: true, deletedAt: true } }, test: { select: { title: true, developer: { select: { name: true, email: true, deletedAt: true } } } } } }); // (§342) a rename redraws
   const pairs = contracts.map((c) => ({ testId: c.testId, testerId: c.testerId }));
   const [messages, reads] = await Promise.all([
     pairs.length ? db.message.groupBy({ by: ["testId", "testerId"], where: { OR: pairs }, _count: { _all: true }, _max: { createdAt: true }, orderBy: [{ testId: "asc" }, { testerId: "asc" }] }) : [],

@@ -25,11 +25,11 @@ async function openPieces(scope: TeamCloseScope, now = new Date()): Promise<Piec
   const where = "developerId" in scope ? { test: { developerId: scope.developerId } } : { testId: scope.testId };
   const contracts = await db.contract.findMany({
     where: { ...where, tester: PAYABLE_TESTER },
-    include: { tester: true, submissions: { where: { review: null } }, calls: { where: { review: null, status: "booked", startsAt: { lte: now } } } },
+    include: { tester: true, test: { select: { title: true } }, submissions: { where: { review: null } }, calls: { where: { review: null, status: "booked", startsAt: { lte: now } } } },
   });
   const out: Piece[] = [];
   for (const c of contracts) {
-    const base = { contractId: c.id, testId: c.testId, title: c.title, tester: displayName(c.tester), testerId: c.testerId, testerEmail: c.tester.email };
+    const base = { contractId: c.id, testId: c.testId, title: c.test.title, tester: displayName(c.tester), testerId: c.testerId, testerEmail: c.tester.email };
     for (const s of c.submissions) {
       if (closedOut(await pieceCloseOut({ submissionId: s.id }, "developer", now), now)) continue; // already closed unpaid at its closing date
       out.push({ ...base, kind: "submission", id: s.id, part: s.kind === "recording" ? "recording" : "written answers", at: s.sentAt });
