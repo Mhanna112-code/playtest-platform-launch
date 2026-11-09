@@ -63,7 +63,9 @@ describe("§250 the developer's test page: a box's lines are seen for every butt
     expect((await db.test.findUniqueOrThrow({ where: { id: x.testId } })).status).toBe("stopped");
   });
 
-  it("an update the first box didn't list (left out by the Alerts) still stops the press it applies to", async () => {
+  // (Codex 343018a9/efc9b078, docs/NOV8-SAME-PART-ALERTS.md) Developer payment presses follow the Work sent alert even for work on that same part: §159 rule 2's
+  // forced stop went, so a sent line the Alerts left out stops neither Stop nor Pay.
+  it("an update the first box didn't list (left out by the Alerts) stays out of the payment press too", async () => {
     const x = await team();
     await db.test.update({ where: { id: x.testId }, data: { ignoredAlerts: ["work"] } });
     const loaded = seen(); await settle();
@@ -75,12 +77,11 @@ describe("§250 the developer's test page: a box's lines are seen for every butt
     expect(stop.body.error?.code).toBe("stop_once");
     expect(texts(stop).some((t) => t.startsWith("Ana Silva sent"))).toBe(false);
     expect(texts(stop).some((t) => t.startsWith("Ben Okafor left"))).toBe(true);
-    // Pay on Ana's written answers: work on that very part always stops (§159 rule 2): it was never listed, so it still stops; Ben's leaving (listed) doesn't.
+    // Pay on Ana's written answers: her sent line follows the Alerts (left out); Ben's leaving (listed) doesn't stop it either.
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: x.ana.sessionId } });
     const pay = (await reviewPOST(req("/api/review", { cookie: x.dev.cookie, body: { payKey: randomUUID(), kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000, seenAt: loaded, tab: TAB, shownIds: sids(stop) } })).then(json)) as Res;
-    expect(pay.body.error?.code, JSON.stringify(pay.body)).toBe("stop_once");
-    expect(texts(pay).some((t) => t.startsWith("Ana Silva sent"))).toBe(true);
-    expect(texts(pay).some((t) => t.startsWith("Ben Okafor left"))).toBe(false);
+    expect(pay.body.error, JSON.stringify(pay.body)).toBeUndefined();
+    expect(pay.status, JSON.stringify(pay.body)).toBe(200);
   });
 
   it("a newer update (after the box) stops as usual, alone", async () => {

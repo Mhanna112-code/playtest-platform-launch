@@ -58,11 +58,11 @@ describe("batch 35 §67: every own action in another tab stops every developer p
   });
 });
 
-describe("batch 35 §68: a tester's Dispute stops once for a payment on that piece, even with Alerts Off", () => {
-  it("Pay more on the piece after the page loaded: the Dispute stops once (Alerts Off), the confirmed press opens it", async () => {
+// (Codex 343018a9, docs/NOV8-SAME-PART-ALERTS.md: same-part payment stops follow the tester's Alerts; no longer forced with Alerts Off)
+describe("batch 35 §68: a tester's Dispute stops once for a payment on that piece (following Alerts)", () => {
+  it("Pay more on the piece after the page loaded: the Dispute stops once (Alerts On), the confirmed press opens it; with Alerts Off it goes at once", async () => {
     const w = await twoTesters();
     expect((await pay(w.dev.cookie, { kind: "submission", id: w.sub.id, amount: "10.00", tickedCents: 1000 })).status).toBe(200);
-    await db.user.update({ where: { id: w.x.tester.user.id }, data: { testerAlertsOff: true } });
     await later();
     const loaded = seen();
     await later();
@@ -71,7 +71,7 @@ describe("batch 35 §68: a tester's Dispute stops once for a payment on that pie
     const body = { kind: "submission", id: w.sub.id, reason: "I answered every question fully" };
     const r = await sact(w.x.sessionId, "dispute", w.x.tester.cookie, { ...body, seenAt: loaded, pageSeenAt: loaded });
     expect(texts(r), JSON.stringify(r.body)).toEqual([payMoreLine("Nora Lane", 500, "written answers")]);
-    expect(r.body.error.alertsOff).toBe(true);
+    expect(r.body.error.alertsOff).toBeFalsy();
     const box = r.body.error.changes.at(-1).at;
     expect((await sact(w.x.sessionId, "dispute", w.x.tester.cookie, { ...body, seenAt: loaded, boxAt: box, confirmed: true })).status).toBe(200);
   });

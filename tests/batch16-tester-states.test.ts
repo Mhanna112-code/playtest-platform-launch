@@ -88,7 +88,8 @@ describe("what still works follows the running test's stop-once rules (batch 29 
     expect(r2.status, JSON.stringify(r2.body)).toBe(200);
   }, 60_000);
 
-  it("Rate with nothing about the work since the page loaded: the stop itself stops it once (batch 17 section 12), then it goes through", async () => {
+  // (Codex c220ae22, docs/STOP-ONCE-NOTICES.md: the tester's Charge, Let it go and Rate skip the work-ending retry)
+  it("Rate with nothing about the work since the page loaded: the stop doesn't stop it; it goes through", async () => {
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
     await sact(sessionId, "written", tester.cookie, { answers: [ANSWER, "Smooth."], seenAt: seen(), confirmed: true });
@@ -100,9 +101,7 @@ describe("what still works follows the running test's stop-once rules (batch 29 
     await settle();
     expect((await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true })).status).toBe(200); // cancels the call: not news for Rate
     const r = await sact(sessionId, "rate", tester.cookie, { stars: 5, comment: "", seenAt: opened });
-    expect(r.body.error.changes.map((x: { text: string }) => x.text), JSON.stringify(r.body)).toEqual([expect.stringMatching(/^Nora Lane stopped this test at /)]);
-    await settle();
-    expect((await sact(sessionId, "rate", tester.cookie, { stars: 5, comment: "", seenAt: opened, confirmed: true, boxAt: seen() })).status).toBe(200);
+    expect(r.status, JSON.stringify(r.body)).toBe(200);
   });
 
   it("paused: Cancel call stops once for a payment since the page loaded (batch 29 section 11); Leave stops once too (batch 35 §59)", async () => {

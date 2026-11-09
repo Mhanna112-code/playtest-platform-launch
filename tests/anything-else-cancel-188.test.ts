@@ -183,13 +183,13 @@ describe("§188 A: Anything else, the tester's side", () => {
     expect((await addElse(j.sessionId, j.tester.cookie, "y".repeat(20_000))).status).toBe(200);
   });
 
-  it("stops once for the developer's payment on the written answers since her page loaded (forced, Alerts Off), then goes", async () => {
+  // (Codex 343018a9, docs/NOV8-SAME-PART-ALERTS.md: same-part payment stops follow the tester's Alerts; no longer forced with Alerts Off)
+  it("stops once for the developer's payment on the written answers since her page loaded (Alerts On), then goes", async () => {
     const s = await setup();
     const j = await joined(s.testId);
     await send(j.sessionId, j.tester.cookie);
     const sub = await written(j.sessionId);
     expect((await pay(s.dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 })).status).toBe(200);
-    await db.user.update({ where: { id: j.tester.user.id }, data: { testerAlertsOff: true } });
     await settle();
     const loaded = seen();
     await settle();
@@ -197,7 +197,8 @@ describe("§188 A: Anything else, the tester's side", () => {
     await settle();
     const first = await sact(j.sessionId, "written-add", j.tester.cookie, { text: "More about the cave.", question: ANYTHING_ELSE_KEY, seenAt: loaded, loadedAt: loaded });
     expect(first.body.error?.code, JSON.stringify(first.body)).toBe("stop_once");
-    expect(first.body.error.changes).toEqual([expect.objectContaining({ text: "Nora Lane paid you $2.00 more for your written answers", forced: true })]);
+    expect(first.body.error.changes).toEqual([expect.objectContaining({ text: "Nora Lane paid you $2.00 more for your written answers" })]);
+    expect(first.body.error.changes.every((l: { forced?: boolean }) => !l.forced)).toBe(true);
     await settle();
     const second = await sact(j.sessionId, "written-add", j.tester.cookie, { text: "More about the cave.", question: ANYTHING_ELSE_KEY, seenAt: loaded, boxAt: seen(), confirmed: true });
     expect(second.status, JSON.stringify(second.body)).toBe(200);
@@ -321,6 +322,8 @@ describe("§188 B: the Pay more box waiting for the developer's own check", () =
     expect((await bankToConfirm(o.dev.user.id)).map((p) => p.id)).not.toContain(o.paymentId);
     expect((await bankWaitingOnTest(o.dev.user.id, o.testId)).map((p) => p.id)).not.toContain(o.paymentId);
     // The test page's Needs you count is the Confirm rows' (bankWaitingOnTest) plus the other things waiting.
-    expect(src("app/app/tests/[id]/page.tsx")).toContain("const needsCount = bankRows.length +");
+    // (Codex eb8ca7cd) The count comes from developerNeedsRows, the dashboard's, which starts from the same bankWaitingOnTest rows.
+    expect(src("app/app/tests/[id]/page.tsx")).toContain("const needsCount = (await developerNeedsRows(u.id,[t.id],now))[0]?.n??0;");
+    expect(src("lib/server/dashboardNeeds.ts")).toContain("let count=banks.length+");
   });
 });

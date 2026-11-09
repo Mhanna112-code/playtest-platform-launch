@@ -106,7 +106,8 @@ describe("batch 35 §93: tester Rate uses every shared tester stop", () => {
     expect(r.status, JSON.stringify(r.body)).toBe(200);
   });
 
-  it("one box merges terms, listing, pay and the stop moment; boxAt clears all of them together", async () => {
+  // (Codex c220ae22, docs/STOP-ONCE-NOTICES.md: the tester's Charge, Let it go and Rate skip the work-ending retry): the stop moment is no longer in the box.
+  it("one box merges terms, listing and pay (not the stop moment); boxAt clears all of them together", async () => {
     const x = await ready(false); const loaded = seen(); await settle();
     await edit(x, { writtenCents: "12.00", description: "A new sailing route" });
     await settle(); expect((await pay(x.dev.cookie, x.sub.id)).status).toBe(200);
@@ -116,8 +117,8 @@ describe("batch 35 §93: tester Rate uses every shared tester stop", () => {
     const lines = first.body.error.changes as { text: string; at: string; kind?: string }[];
     expect(texts(first)).toContain("Nora Lane edited the listing");
     expect(texts(first)).toContain("Nora Lane paid $10.00 for your written answers");
-    expect(texts(first)).toContainEqual(expect.stringMatching(/^Nora Lane stopped this test/));
-    expect(lines.filter((e) => e.kind === "stop")).toHaveLength(1);
+    expect(texts(first)).not.toContainEqual(expect.stringMatching(/^Nora Lane stopped this test/));
+    expect(lines.filter((e) => e.kind === "stop")).toHaveLength(0);
     expect(lines.map((e) => new Date(e.at).getTime())).toEqual(lines.map((e) => new Date(e.at).getTime()).sort((a, b) => a - b));
     expect((await rate(x, loaded, { confirmed: true, boxAt: first.body.error.now })).status).toBe(200);
   });
