@@ -89,7 +89,7 @@ describe("every Post / Edit field mistake lands on its field (section 10)", () =
     const keys = src("app/app/tests/KeyBoxes.tsx");
     const has: Record<string, boolean> = {
       joinMode: form.includes('id="joinMode"'), openUntil: form.includes('text("openUntil"'), productName: form.includes('text("productName"'), title: form.includes('text("title"'),
-      description: form.includes('id="description"'), matureWhy: form.includes('id="matureWhy"'), ndaText: form.includes('id="ndaText"'), categories: form.includes('<fieldset id="categories" data-field-group=""'),
+      description: form.includes('id="description"'), matureWhy: form.includes('id="matureWhy"'), ndaText: src("app/app/tests/NdaCard.tsx").includes('id="ndaText"') && form.includes("<NdaCard "), /* (§336) the NDA card is NdaCard */ categories: form.includes('<fieldset id="categories" data-field-group=""'),
       parts: form.includes('<fieldset id="parts" data-field-group=""'), spots: form.includes('text("spots"'), highWritten: form.includes("id={`high-${part.key}`}"), highRecording: form.includes("id={`high-${part.key}`}"),
       writtenPrice: form.includes('price: "writtenPrice"') && form.includes("id={part.price}"), recordingPrice: form.includes('price: "recordingPrice"'), liveRate: form.includes('price: "liveRate"'),
       questions: form.includes('id="questions"'), keys: form.includes('id="accessKeys"') && keys.includes('id="keysFree"'),

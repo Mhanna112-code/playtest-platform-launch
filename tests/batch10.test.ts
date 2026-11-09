@@ -159,7 +159,7 @@ describe("batch 10 item 2: a paused test hides what doesn't work, with a banner 
     expect(src("app/app/sessions/[id]/RecordingUpload.tsx")).toContain("{canSend && sendable && fresh.length > 0 && ("); // (batch 35 §136) only what isn't sent yet
     // Testers' dashboard rows keep the "Paused" tag.
     // (Owner, Nov 5, batch 35 §245) The title (at most 20 characters) whole and green (TestName).
-    expect(src("app/app/page.tsx")).toContain("<TestName text={c.title} /> {pausedTest(c.test) && <PausedTag />}");
+    expect(src("app/app/page.tsx")).toContain("<TestName text={c.test.title} /> {pausedTest(c.test) && <PausedTag />}"); // (Owner, Nov 9, §342) the current title
   });
 
   it("the server refusals stay as a backstop", async () => {

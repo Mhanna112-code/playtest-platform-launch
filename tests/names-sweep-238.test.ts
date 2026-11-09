@@ -96,8 +96,8 @@ describe("§238 Ratings to give", () => {
     expect(rtg).toContain("const x = cutNamesIn(r.text, r.names); return <WholeLine shown={x.shown} full={x.full} />;");
     expect(rtg).not.toContain("title={r.text}");
     expect(rtg).toContain('className="absolute inset-0 rounded-lg');
-    expect(src("lib/server/ratings.ts")).toContain("names: [displayName(c.test.developer), c.title]");
-    expect(src("lib/server/ratings.ts")).toContain("names: [displayName(c.tester), c.title]");
+    expect(src("lib/server/ratings.ts")).toContain("names: [displayName(c.test.developer), c.test.title]"); // (§342)
+    expect(src("lib/server/ratings.ts")).toContain("names: [displayName(c.tester), c.test.title]"); // (Owner, Nov 9, §342) the current title
     const TITLE = "Harbor Run: The Extended Lighthouse Edition";
     const x = cutNamesIn(`Rate ${DEV} on “${TITLE}”`, [DEV, TITLE]);
     expect(x.shown).toBe(`Rate ${cutTo(DEV)} on “${cutTo(TITLE)}”`);
