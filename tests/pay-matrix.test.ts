@@ -14,7 +14,7 @@ import { act, addTo, joined, sact, seen, settle, setup } from "./fixtures";
 
 // (Owner, Nov 3, batch 35 §159) The payment stop matrix: one test per rule.
 // 1. The team's decision about the SAME tester always stops Pay / Pay more / Confirm once; about ANOTHER tester it follows "Decisions by the team".
-// 2. The tester's sent / updated / added work on the SAME part always stops Pay / Pay more / Confirm once; work on other parts follows "Work sent".
+// 2. Work on the same part always stops Pay and Pay more once. Bank confirmations and work on other parts follow "Work sent".
 // 3. A tester leaving follows "Testers leaving".
 // 4. The tester's Charge / Let it go stop once for a developer payment on THAT part and for the team's decision on any of their disputes, whatever their Alerts;
 //    a payment on their other parts follows their Alerts.
@@ -203,16 +203,21 @@ describe("§159 rule 2: work on the part being paid forces a stop", () => {
     expect(c.status, JSON.stringify(c.body)).toBe(200);
   });
 
-  it("confirming a waiting payment stops once for new work on its own part", async () => {
-    const w = await workWorld(true);
+  it.each([true, false])("confirming a waiting payment follows Work sent for its own part (off=%s)", async (off) => {
+    const w = await workWorld(off);
     const waiting = await db.payment.create({ data: { kind: "review", contractId: w.sessionId, submissionId: w.sub.id, developerId: w.dev.user.id, testerId: w.tester.user.id, amountCents: 1000, feeCents: 0, testerCents: 0, status: "needs_confirmation", actionPi: "pi_" + randomUUID(), actionBy: new Date(Date.now() + 60_000) } });
     const loaded = seen(); await settle();
     expect((await addTo(w.sessionId, w.tester.cookie, { text: "one more thing", confirmed: true })).status).toBe(200);
     setStripeForTests(null);
     const first = await confirmStart(w.dev.cookie, waiting.id, { seenAt: loaded });
-    expect(first.body.error?.code, JSON.stringify(first.body)).toBe("stop_once");
-    expect(first.body.error.changes).toEqual([expect.objectContaining({ forced: true })]);
-    expect((await confirmStart(w.dev.cookie, waiting.id, { seenAt: loaded, confirmed: true, boxAt: first.body.error.now })).status).toBe(200);
+    if (off) {
+      expect(first.status, JSON.stringify(first.body)).toBe(200);
+    } else {
+      expect(first.body.error?.code, JSON.stringify(first.body)).toBe("stop_once");
+      expect(texts(first)).toEqual([expect.stringMatching(/^Ana Silva added to her answer to/)]);
+      expect(first.body.error.changes[0].forced).not.toBe(true);
+      expect((await confirmStart(w.dev.cookie, waiting.id, { seenAt: loaded, confirmed: true, boxAt: first.body.error.now })).status).toBe(200);
+    }
   });
 });
 

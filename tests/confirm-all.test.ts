@@ -105,7 +105,7 @@ const allOf = (devId: string) => db.payment.findMany({ where: { developerId: dev
 const NAMES = ["Ana Silva's written answers on “Harbor Run” $10.00", "Ben Okafor's written answers on “Sky Lab” $12.00", "Ana Silva's written answers on “Sky Lab” $20.00"];
 
 describe("§147 Confirm all: one payment, one bank check", () => {
-  it("stops for new work on a covered part even with Work sent off", async () => {
+  it("continues for new work on a covered part with Work sent off", async () => {
     const st = bank();
     const w = await world(st);
     await db.test.update({ where: { id: w.testId }, data: { ignoredAlerts: ["work"] } });
@@ -113,11 +113,8 @@ describe("§147 Confirm all: one payment, one bank check", () => {
     await settle();
     expect((await addTo(w.ana.sessionId, w.ana.tester.cookie, { text: "Another detail about the opening screen.", confirmed: true })).status).toBe(200);
     const first = await press(w.dev.cookie, body);
-    expect(first.body.error?.code, JSON.stringify(first.body)).toBe("stop_once");
-    expect(first.body.error.changes.map((c: { text: string }) => c.text)).toEqual([expect.stringContaining(NAMES[0])]);
-    expect(st.cancelled).toHaveLength(0);
-    expect(st.made).toHaveLength(0);
-    expect((await press(w.dev.cookie, { ...body, confirmed: true, boxAt: first.body.error.now })).status).toBe(200);
+    expect(first.status, JSON.stringify(first.body)).toBe(200);
+    expect(first.body).toMatchObject({ n: 3, cents: 4200 });
     expect(st.made).toHaveLength(1);
   });
 

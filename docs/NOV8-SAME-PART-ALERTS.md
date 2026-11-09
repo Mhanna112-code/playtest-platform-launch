@@ -2,7 +2,7 @@
 
 Developer payments, including Pay more and $0 answers to additions, follow tester Alerts for Send, Add, recording additions and Dispute. Charge and Let it go still refuse a part already paid.
 
-New or added work on the part being paid stops Pay, Pay more, and applicable bank confirmation presses once, even with Work sent Alerts off. Work on other parts and ordinary payment updates follow Alerts. Call problem reports and final measured lengths follow Call changes.
+New or added work on the same part stops Pay and Pay more once, even with Work sent Alerts off. Confirm with your bank and Confirm all follow Work sent Alerts for that work. Work on other parts and ordinary payment updates follow Alerts. Call problem reports and final measured lengths follow Call changes.
 
 Separate forced checks remain for disputes, team decisions, tester charges, the payment's tester leaving, own actions in another tab, pauses and contract changes. An open bank window continues to show its tester's changes. Payment caps, settled-part refusals and duplicate-payment protections are unchanged.
 

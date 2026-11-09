@@ -50,7 +50,7 @@ These notices use the action's timestamp and apply to eligible presses on a view
 | Tester makes an eligible press | Developer added their side to the tester's dispute. | `{developer} added {possessive pronoun} side to your dispute about your written answers`, `… your recording`, or `… your live call on {call time}`. |
 | Tester makes an eligible press | Team decided the tester's dispute. | `The team decided your dispute with {developer} about your {part}: the pay was raised to {amount}` or `The team decided your dispute with {developer} about your {part}: the pay stays at {amount}`. |
 
-New or added work on the part being paid stops an eligible payment press once even with Work sent Alerts off. Work on other parts, ordinary developer payments, and ordinary call activity depend on Alerts. An unrelated tester's event can appear under Alerts, while a forced same-tester event uses the target of the pressed button. [Forced event filter](../src/lib/server/live.ts#L276) · [Tester dispute wording](../src/lib/server/testerGate.ts#L145) · [Team decision wording](../src/lib/server/live.ts#L490)
+New or added work on the same part stops an eligible Pay or Pay more press once even with Work sent Alerts off. Bank confirmations follow Work sent Alerts for these updates. Work on other parts, ordinary developer payments, and ordinary call activity also depend on Alerts. An unrelated tester's event can appear under Alerts, while a forced same-tester event uses the target of the pressed button. [Forced event filter](../src/lib/server/live.ts#L276) · [Tester dispute wording](../src/lib/server/testerGate.ts#L145) · [Team decision wording](../src/lib/server/live.ts#L490)
 
 ## Listing, work, join and call changes
 

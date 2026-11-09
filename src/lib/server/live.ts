@@ -248,8 +248,8 @@ export async function devChanges(devId: string, testId: string, since: Date, tab
   // (Owner, Nov 3, batch 35 §159 rule 1; narrows the same day's "any part") The team's dispute decision about the SAME tester (any of their parts in this test: the
   // decision's contract is the press's) always stops a payment press once (Pay, Pay more, Confirm with your bank), even with "Decisions by the team" ticked: what
   // was decided changes what that tester is owed. A decision about ANOTHER tester follows the Alerts ticks like every other line.
-  // Work on the part being paid has a forced check. Ordinary payments and
-  // call details follow Alerts.
+  // New Pay and Pay more force a check for work on the same part.
+  // Bank confirmations, ordinary payments and call details follow Alerts for their ordinary updates.
   // An open bank window still shows all updates about its tester (wholeTester).
   const press = opts.press;
   const keep = (c: TestEventLike & { contractId?: string | null }) => {
@@ -275,7 +275,6 @@ const onPart = (c: TestEventLike, press?: Press) => {
 /** Forced checks for same-part work, departures, disputes, team decisions and tester charges. */
 export function alwaysStops(c: TestEventLike & { contractId?: string | null }, press?: Press) {
   const payContract = payContractOf(press);
-  if (payContract && c.contractId === payContract && c.kind === "sent" && onPart(c, press)) return true;
   if (press?.awayCharge) {
     // (Owner, Nov 4, §193) And a charge about that same tester, except a charge on a part this press itself confirms (`confirms`: the waiting charge's own line,
     // which the box already shows as its row; Confirm all: every part it covers): stopping for it could only show the press what it is paying.
@@ -287,7 +286,7 @@ export function alwaysStops(c: TestEventLike & { contractId?: string | null }, p
   // that tester once, exactly like a dispute (§171 A2). Presses about the whole test and about other testers follow the Payments tick.
   if ((c.kind === "dispute" || isTeamDecision(c) || !!c.charge) && !!c.contractId && pressContracts(press).includes(c.contractId)) return true;
   if (!payContract) return false;
-  return c.kind === "left" && c.contractId === payContract;
+  return c.contractId === payContract && (c.kind === "left" || (c.kind === "sent" && onPart(c, press)));
 }
 
 /**
