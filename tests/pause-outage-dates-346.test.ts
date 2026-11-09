@@ -8,7 +8,7 @@ import { dayIn, endOfDayIn, movedDue } from "@/lib/rules";
 import { makeUser } from "./helpers";
 import { joined, sact, settle, setup } from "./fixtures";
 
-// (Owner, Nov 9, §346) The three date bugs from the pauses/outages audit (audit-nov9/p1-pauses).
+// (Owner, Nov 9, §346 and §347) The three date bugs from the pauses/outages audit (audit-nov9/p1-pauses), and Open until on tests no longer taking testers.
 const H = 3_600_000, D = 24 * H, M = 60_000;
 // Far in the future (each test its own window): an outage there moves only this file's own dates, never every row in the test schema.
 const farFuture = () => new Date(Date.UTC(2091, 0, 1) + Math.floor(Math.random() * 20000) * D + Math.floor(Math.random() * 20) * H);
@@ -83,5 +83,23 @@ describe("§346 (3) an outage inside a 2-day team pause moves nothing twice", ()
     expect(shift).toBeLessThan(48 * H + 5 * M); // the pause (plus the seconds the test took), never + the 17 minutes again
     const c1 = await db.contract.findUniqueOrThrow({ where: { id: f.sessionId } });
     expect(c1.dueAt.getTime()).toBe(movedDue(c0.dueAt, shift, tz).getTime());
+  });
+});
+
+describe("§347 an outage never moves Open until on a test no longer taking testers", () => {
+  it("stopped, closed or ended: Open until stays; an open test's moves", async () => {
+    const start = farFuture(), end = new Date(start.getTime() + 20 * M);
+    const ids: Record<string, string> = {};
+    for (const kind of ["open", "stopped", "closed", "ended"]) {
+      const { testId } = await setup();
+      const ou = new Date(start.getTime() + 10 * D);
+      await db.test.update({ where: { id: testId }, data: { openUntil: ou, ...(kind === "stopped" ? { status: "stopped" } : kind === "closed" ? { status: "closed" } : kind === "ended" ? { workEndedAt: new Date() } : {}) } });
+      ids[kind] = testId;
+    }
+    const before = new Map((await db.test.findMany({ where: { id: { in: Object.values(ids) } } })).map((t) => [t.id, t.openUntil!.getTime()]));
+    expect(await recordOutage(start, end)).toBeTruthy();
+    const after = new Map((await db.test.findMany({ where: { id: { in: Object.values(ids) } } })).map((t) => [t.id, t.openUntil!.getTime()]));
+    for (const kind of ["stopped", "closed", "ended"]) expect(after.get(ids[kind]), kind).toBe(before.get(ids[kind]));
+    expect(after.get(ids.open)).not.toBe(undefined);
   });
 });

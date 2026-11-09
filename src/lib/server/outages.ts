@@ -354,8 +354,8 @@ async function applyOutage(o: { startAt: Date; endAt: Date; ms: number }, opts: 
     if (opts.deadlines !== false)
       for (const c of await tx.contract.findMany({ where: { status: "working", dueAt: { gt: start }, testId: { notIn: paused } }, select: { id: true, dueAt: true, test: { select: { developer: { select: { timeZone: true } } } } } }))
         await tx.contract.update({ where: { id: c.id }, data: { dueAt: movedDue(c.dueAt, L, c.test.developer.timeZone) } });
-    // (§346) Not on a test paused through the outage (its lift moves Open until).
-    for (const t of await tx.test.findMany({ where: { openUntil: { gt: start }, id: { notIn: paused } }, select: { id: true, openUntil: true, developer: { select: { timeZone: true } } } }))
+    // (Owner, Nov 9, §347) Open until only on tests still taking testers (open, not paused through it): never a stopped, closed or ended test's.
+    for (const t of await tx.test.findMany({ where: { openUntil: { gt: start }, status: "open", workEndedAt: null, id: { notIn: paused } }, select: { id: true, openUntil: true, developer: { select: { timeZone: true } } } }))
       await tx.test.update({ where: { id: t.id }, data: { openUntil: nearestDayEnd(new Date(t.openUntil!.getTime() + L), t.developer.timeZone) } });
     // Rating windows (14 days from the tester's rating).
     await tx.$executeRaw`UPDATE "Rating" SET "createdAt" = "createdAt" + ${L} * interval '1 millisecond' WHERE side = 'tester' AND "revealedAt" IS NULL AND "createdAt" + interval '14 days' > (${start}::timestamptz AT TIME ZONE 'UTC')`;
