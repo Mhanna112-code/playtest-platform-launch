@@ -80,4 +80,14 @@ export const FREE_KEYS_RULE = "Keys in use can't be added. When a tester leaves 
 /** (Owner, Nov 6, §304) No "This key doesn't work": a tester whose key fails tells the developer in chat, and the developer sends one by message (this hint). */
 /** The Free keys notice's hint (its "in Edit" opens Edit's access keys section in a new tab). */
 export const FREE_KEYS_HINT = ["If a tester's key doesn't work, delete a free key ", "in Edit", " and send it to them in a message."] as const;
+/** The refusal when a tester would join a test that uses keys and none is free (assignKeyAtJoin: Join, Accept, an Invite that joins an applicant). */
+export const NO_FREE_KEY = "No access key is free right now, so this test can't take another tester until the developer adds one.";
+/**
+ * (Owner, Nov 9, §338) The same refusal naming the applicant an Invite (or the switch to "Anyone can join") couldn't join: "Ana Silva: no access key is free right
+ * now, so this test can't take another tester until the developer adds one."
+ */
+export const noFreeKeyFor = (name: string) => `${name}: ${NO_FREE_KEY[0].toLowerCase()}${NO_FREE_KEY.slice(1)}`;
+/** (Owner, Nov 9, §338) The switch to "Anyone can join" couldn't join these waiting applicants: no access key is free. One line, on the Save's note and in the log. */
+export const noKeyWaitingLine = (names: string[]) =>
+  `No access key is free, so ${names.length === 1 ? "this application stays" : "these applications stay"} waiting: ${names.join(", ")}. Add keys in Edit to let them join.`;
 export const openSpotsKeyLine = (open: number) => `${open} open spot${open === 1 ? "" : "s"}: each new tester gets one.`;

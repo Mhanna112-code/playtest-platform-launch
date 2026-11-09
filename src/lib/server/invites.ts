@@ -7,6 +7,7 @@ import type { Prisma } from "@prisma/client";
 import { displayName, fmtDate, pronouns } from "@/lib/server/dateFormat";
 import { andList, inviteTesterRefusal, inviteTestRefusal, MAX_ACTIVE_TESTS, TEST_LIMIT_LINE, termsLine, type TestEventLike } from "@/lib/rules";
 import { HttpError } from "./http";
+import { noFreeKeyFor } from "@/lib/keys";
 import { notify } from "./notify";
 import { asListing, devGate, needsGap, ownTest, recordEvent } from "./tests";
 import { ratingSummary, revealedRatingsWhere } from "./ratings";
@@ -438,7 +439,17 @@ export async function inviteTesters(dev: U & { holdStartedAt?: Date | null }, te
   for (const i of result.invited) {
     const app = await db.application.findFirst({ where: { testId, testerId: i.id, status: "pending" } });
     if (!app) continue;
-    if (await joining.matchInviteAndAsk(testId, i.id, { byDeveloper: true })) {
+    // (Owner, Nov 9, §338) The invites are already saved: a join that can't happen now (no free access key, or a refusal under the test's lock) never fails the
+    // press. That applicant's invite stays sent (emailed below with the others), their application waits, and the result names them.
+    let joinedNow;
+    try {
+      joinedNow = await joining.matchInviteAndAsk(testId, i.id, { byDeveloper: true });
+    } catch (e) {
+      if (!(e instanceof HttpError)) throw e;
+      joinedLines.push(e.code === "no_key" ? noFreeKeyFor(i.name) : `${i.name}: ${e.message}`);
+      continue;
+    }
+    if (joinedNow) {
       matched.push(i.id);
       joinedLines.push(joining.invitedJoinedLine(i.name, i.pronoun, app.kind));
       continue;

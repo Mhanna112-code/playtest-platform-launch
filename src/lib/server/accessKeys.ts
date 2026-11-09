@@ -1,7 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { displayName } from "@/lib/format";
-import { keyNeedLine, keyRefusal, KEY_MAX_LENGTH, KEY_TOO_LONG, parseKeys, repeatedKeys, reusedKeyLine } from "@/lib/keys";
+import { keyNeedLine, keyRefusal, KEY_MAX_LENGTH, KEY_TOO_LONG, NO_FREE_KEY, parseKeys, repeatedKeys, reusedKeyLine } from "@/lib/keys";
 import { HttpError } from "./http";
 
 type Tx = Prisma.TransactionClient | typeof db;
@@ -81,7 +81,7 @@ export async function assignKeyAtJoin(tx: Tx, testId: string, contractId: string
     return held.value;
   }
   const free = await tx.accessKey.findFirst({ where: { testId, status: "free" }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] });
-  if (!free) throw new HttpError(409, "no_key", "No access key is free right now, so this test can't take another tester until the developer adds one.");
+  if (!free) throw new HttpError(409, "no_key", NO_FREE_KEY);
   await tx.accessKey.update({ where: { id: free.id }, data: { status: "inuse", contractId, assignedAt: new Date() } });
   await tx.contractNote.create({ data: { contractId, kind: "key_assigned", text: free.value } });
   return free.value;

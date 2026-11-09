@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, fmtTime, pronouns } from "@/lib/server/dateFormat";
 import { PAUSED_RIGHT_NOW, closedToNewLine, canAskToRejoin, leftText, movedDue, MAX_ACTIVE_TESTS, termsLine, testPaused, TEST_LIMIT_LINE, type TestEventLike } from "@/lib/rules";
 import { HttpError } from "./http";
+import { noKeyWaitingLine } from "@/lib/keys";
 import { LIMITS } from "@/lib/limits";
 import { bell, notify } from "./notify";
 import { APP_WITHDRAWN_GROUP, APPLICATIONS_GROUP } from "@/lib/bell";
@@ -378,7 +379,9 @@ export async function onSwitchToAnyone(testId: string) {
   const t = await db.test.findUniqueOrThrow({ where: { id: testId } });
   const pending = await db.application.findMany({ where: { testId, status: "pending" }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] });
   let accepted = 0;
-  for (const a of pending) {
+  // (Owner, Nov 9, §338) No free access key: the Save stays done, like a full test; this application and the ones after it stay waiting, and the Save's note names them.
+  const noKey: string[] = [];
+  for (const [n, a] of pending.entries()) {
     if (await db.contract.count({ where: { testId, status: "working" } }) >= t.spots) break;
     const tester = await db.user.findUniqueOrThrow({ where: { id: a.testerId } });
     if (!sameListingIgnoringMode(a.listing, t)) {
@@ -400,10 +403,18 @@ export async function onSwitchToAnyone(testId: string) {
     } catch (error) {
       if (error instanceof HttpError && error.code === "application_gone") continue;
       if (error instanceof HttpError && error.code === "refused" && /full/i.test(error.message)) break;
+      if (error instanceof HttpError && error.code === "no_key") {
+        const waiting = await db.application.findMany({ where: { id: { in: pending.slice(n).map((x) => x.id) }, status: "pending" }, select: { testerId: true } });
+        const names = new Map((await db.user.findMany({ where: { id: { in: waiting.map((w) => w.testerId) } } })).map((u) => [u.id, displayName(u)]));
+        noKey.push(...waiting.map((w) => names.get(w.testerId) ?? "A tester"));
+        break;
+      }
       throw error;
     }
   }
   if (accepted) await logEvent(testId, "applied", `${accepted} waiting application${accepted === 1 ? " was" : "s were"} accepted when you switched to joins instantly`);
+  if (noKey.length) await logEvent(testId, "applied", noKeyWaitingLine(noKey));
+  return { noKey };
 }
 
 /**

@@ -602,7 +602,8 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     if (filled) await tellFull(filled);
     else await spotOpened(testId);
   }
-  if (switchedToAnyone) await (await import("./joining")).onSwitchToAnyone(testId);
+  // (Owner, Nov 9, §338) Applicants it couldn't join for want of a free access key stay waiting; the Save's note names them.
+  const noKeyApps = switchedToAnyone ? (await (await import("./joining")).onSwitchToAnyone(testId)).noKey : [];
   // (NEWEST+4) Any listing change except spots / who can join re-sends open invites on the new listing.
   const { skipped: notReinvited, resent } = reinvite ? await (await import("./invites")).reinviteAfterEdit(testId) : { skipped: [], resent: [] };
   // (Batch 15 section 43) The Save's effects on others, on its Contract changes entry.
@@ -631,7 +632,7 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
   // (Batch 30 §17) Each tester given a key: a line in their session page's top box (the key itself only on their page). (Owner, Nov 6, §312c) No bell or email
   // line any more ("<dev> gave you an access key for “X”").
   for (const g of keysGiven) await logEvent(testId, KEY_GIVEN, keyGivenEventLine(displayName(dev), g.name), g.contractId);
-  return Object.assign(result, { offered, changed: changedNames, notReinvited, resent, closedApps, keysGiven: keysGiven.length });
+  return Object.assign(result, { offered, changed: changedNames, notReinvited, resent, closedApps, keysGiven: keysGiven.length, noKeyApps });
 }
 
 /** The access keys as an Edit tab needs them to tell what changed elsewhere (the free keys and how many are in use). */

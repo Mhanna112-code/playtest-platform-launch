@@ -572,7 +572,7 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
       const all = toApi(f);
       const fields: Record<string, unknown> = {};
       for (const k of touched) for (const a of API_FIELDS[k]) fields[a] = all[a];
-      const r = await api<{ offered: number; notReinvited?: string[]; resent?: string[]; closedApps?: string[]; version?: number; listing?: Listing; keys?: KeysData }>(`/api/tests/${edit.id}/edit`, {
+      const r = await api<{ offered: number; notReinvited?: string[]; resent?: string[]; closedApps?: string[]; noKeyApps?: string[]; version?: number; listing?: Listing; keys?: KeysData }>(`/api/tests/${edit.id}/edit`, {
         version, fields, confirmHigh: confirmHigh(), payRulesOk: payTick, seenAt: edit.seenAt, confirmed: changes != null, ...(changes != null && boxAt ? { boxAt } : {}), timeZone: browserZone(),
         keysAdd: fb.added, keysRemove: fb.removed,
         // (Batch 16 section 17) What this tab loaded and what it holds: another tab's save of the same values is no reason to stop.
