@@ -254,6 +254,9 @@ export function WrittenForm({ sessionId, questions, newQs = [], initial, initial
       // (Owner, Nov 5, §269) Always with the questions the boxes are for (`for`): the server reads the answers by their words, and a page whose questions are no
       // longer the contract's stops once (then takes the new questions) instead of sending them under other questions.
       await api(`/api/sessions/${sessionId}/written`, { answers, notes, seenAt, confirmed, boxAt, for: questions });
+      setBox(null);
+      setBoxAt("");
+      setPausedNow("");
       await keep.clear();
       fin.finish("Sent your answers.");
     } catch (err) {
@@ -276,8 +279,7 @@ export function WrittenForm({ sessionId, questions, newQs = [], initial, initial
     <SendingScope.Provider value={busy}>
     <form className="space-y-3" onSubmit={send}>
       {/* (Owner, Oct 30) The mistake list sits once, at the top of the written part. (Batch 16 section 10) The server's "answer every required question" goes to the first empty required box. */}
-      {/* (Owner, Nov 4, batch 35 §170) A refusal names the press as the server's own lines do. (Owner, Nov 5, §235) The button always reads "Send Answers". */}
-      <FormMistakes top text={msg && !msg.ok ? msg.text : ""} press={SEND_ANSWERS} named={PRESS_VERBS.written}
+      <FormMistakes top text={msg && !msg.ok && msg.text.startsWith(FIELD) ? msg.text : ""} press={SEND_ANSWERS}
         find={(m) => (m === ANSWER_ONE || isShortLine(m) ? document.getElementById(`a${missingAt ?? 0}`) : m === ANSWER_REQUIRED ? (missingAt != null ? document.getElementById(`a${missingAt}`) : null) ?? Array.from(document.querySelectorAll<HTMLTextAreaElement>(`textarea[data-required-msg="${ANSWER_REQUIRED}"]`)).find((t) => !t.value.trim()) : null)} />
       {/* (Batch 20 section 1) More than 3 questions: the questions and their answer boxes sit in a scroll box about 3 questions tall; the notes, counter, files
           and Send stay below it, and a red mistake scrolls the box to its question. */}
@@ -314,6 +316,7 @@ export function WrittenForm({ sessionId, questions, newQs = [], initial, initial
       <p className={`text-xs ${length > WRITTEN_MAX_CHARS ? "text-rose-300" : "text-slate-500"}`} data-written-count="">{length.toLocaleString("en-US")} / {WRITTEN_MAX_CHARS.toLocaleString("en-US")}</p>
       {canSend && lines.map((l) => <p key={l} className="note" data-above-send="">{l}</p>)}
       <span>{canSend && <button className={`btn ${unchanged ? "!bg-white/10 !text-ink-400 !shadow-none" : ""}`} disabled={busy || length > WRITTEN_MAX_CHARS || unchanged} title={unchanged ? NOTHING_CHANGED_LINE : undefined} data-send-idle={unchanged ? "" : undefined}>{busy && !fin.done ? "Sending…" : SEND_ANSWERS}</button>}{keep.restored && [...keep.drafted].some(keep.isDraft) && <DraftButton className="ml-3 text-sm text-sky-300 underline" data-use-saved-all="" disabled={busy || fin.done} onPress={() => { setAnswers(questions.map((_, i) => initial[i] ?? "")); setNotes(initialNotes); }}>{update ? USE_SAVED_ALL_LABEL : DISCARD_ALL_LABEL}</DraftButton>}</span>
+      <Err text={msg && !msg.ok && !msg.text.startsWith(FIELD) ? msg.text : ""} press={sendPress} />
       <PausedSend sessionId={sessionId} press={sendPress} canSend={canSend} now={pausedNow} />
       {!canSend && <p className="note" data-draft-kept="">Your answers are kept as a draft. Send comes back when the test resumes.</p>}
       {/* (Owner, Oct 30, batch 32 §4) Under Send, where the press is (above the questions it could be out of view); in view when it appears. */}
