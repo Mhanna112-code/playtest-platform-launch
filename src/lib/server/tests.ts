@@ -207,11 +207,13 @@ export async function tellFull(f: { title: string; testId: string; dev: string; 
  * (Correction 6) A spot opened (someone left / was ended, or spots were raised) on a test that was full: every open
  * invite is told (first come, first served). Closed applicants aren't. Reminders resume by themselves.
  */
-export async function spotOpened(testId: string) {
+export async function spotOpened(testId: string, opts: { /** (§341) a free key was added to a test full for want of one */ keyAdded?: boolean } = {}) {
   const t = await db.test.findUniqueOrThrow({ where: { id: testId }, include: { developer: true } });
   const last = await db.testEvent.findFirst({ where: { testId, kind: { in: ["full", "spot_open"] } }, orderBy: { createdAt: "desc" } });
-  if (last?.kind !== "full") return;
+  if (last?.kind !== "full" && !opts.keyAdded) return;
   if ((await db.contract.count({ where: working(testId) })) >= t.spots) return;
+  // (Owner, Nov 9, §341) A spot that opened with no free key isn't open to testers yet: they hear of it when a key is added.
+  if (await (await import("./accessKeys")).keysFullNow(db, testId)) return;
   await db.testEvent.create({ data: { testId, kind: "spot_open", text: spotOpenLine(t.title, displayName(t.developer)) } });
   // Once per invite: only those never told a spot opened.
   const invs = await db.invite.findMany({ where: { testId, status: "sent", openNotifiedAt: null } });
@@ -357,6 +359,8 @@ export async function createTest(dev: U, body: Record<string, unknown>) {
 export async function editTest(dev: U, testId: string, body: Record<string, unknown>) {
   // (Owner, Nov 3, batch 35 §168) A closed test has no Edit: a Save (an older page's too) is refused plainly, never a stop-once.
   if ((await ownTest(dev.id, testId)).status === "closed") throw new HttpError(409, "closed", TEST_CLOSED_NO_EDIT);
+  // (Owner, Nov 9, §341) Full for want of a free key before this Save: once a key is added, the spot reopens (spotOpened, below).
+  const keysWereFull = await (await import("./accessKeys")).keysFullNow(db, testId);
   const loaded = Number(body.version);
   const confirmed = body.confirmed === true;
   const touched = parseListing((body.fields ?? {}) as Record<string, unknown>, true, tzOf(body, dev));
@@ -602,6 +606,8 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     if (filled) await tellFull(filled);
     else await spotOpened(testId);
   }
+  // (§341) A key added to a test that was full for want of one: joinable again, and invitees told it was full hear a spot opened (once per invite).
+  if (keysWereFull && !(await (await import("./accessKeys")).keysFullNow(db, testId))) await spotOpened(testId, { keyAdded: true });
   // (Owner, Nov 9, §338) Applicants it couldn't join for want of a free access key stay waiting; the Save's note names them.
   const noKeyApps = switchedToAnyone ? (await (await import("./joining")).onSwitchToAnyone(testId)).noKey : [];
   // (NEWEST+4) Any listing change except spots / who can join re-sends open invites on the new listing.
@@ -1008,7 +1014,9 @@ export async function findTests(tester: U, q?: unknown) {
   const p = await db.testerProfile.findUnique({ where: { userId: tester.id } });
   const rank = (t: { devices: string[]; languages: string[] }) =>
     t.devices.length ? (t.devices.some((d) => p?.devices.includes(d)) ? 0 : 2) : 1;
-  const all = [...tests.filter((t) => t._count.contracts < t.spots), ...joined.filter((j) => !tests.some((t) => t.id === j.id))].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  // (Owner, Nov 9, §341) A test that uses access keys with none free is full to testers too: out of Find like a full one.
+  const noKey = await (await import("./accessKeys")).noFreeKeyTests(db, tests.map((t) => t.id));
+  const all = [...tests.filter((t) => t._count.contracts < t.spots && !noKey.has(t.id)), ...joined.filter((j) => !tests.some((t) => t.id === j.id))].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   return all.map((t, i) => ({ t, i })).sort((a, b) => rank(a.t) - rank(b.t) || a.i - b.i).map(({ t }) => ({ ...t, previousName: previousNameMatch(t.developer.name, names.get(t.developerId), query) }));
 }
 

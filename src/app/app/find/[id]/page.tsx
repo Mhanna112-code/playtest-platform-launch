@@ -106,7 +106,9 @@ export default async function ListingPage({ params, searchParams }: { params: Pr
       </div>
     );
   }
-  const closed = paused || t.status !== "open" || testersIn >= t.spots || (t.openUntil && t.openUntil < new Date());
+  // (Owner, Nov 9, §341) No free access key with a spot open: full to testers, in the full wording (an invite stays open, as for a real full).
+  const full = testersIn >= t.spots || (await (await import("@/lib/server/accessKeys")).noFreeKeyTests(db, [t.id])).has(t.id);
+  const closed = paused || t.status !== "open" || full || (t.openUntil && t.openUntil < new Date());
   const dev = displayName(t.developer);
   // (Owner, Nov 5, §238) A line naming the developer: the name cut at 20 with "…" opening it in place, the arrow the whole line; whole, it links to their profile.
   // `linked`: the badge keeps its plain words (no link inside the pill).
@@ -271,12 +273,12 @@ export default async function ListingPage({ params, searchParams }: { params: Pr
         <p className="card note">Turn on “test apps, games and more” in your <a href="/app/profile">profile</a> to join.</p>
       ) : blocked ? (
         <p className="card note">This test isn&apos;t taking new testers right now.</p>
-      ) : closed && invite && t.status === "open" && testersIn >= t.spots ? (
+      ) : closed && invite && t.status === "open" && full ? (
         <p className="info"><TestName text={t.title} /> is full right now. Your invite stays open; we&apos;ll tell you when a spot opens.</p>
       ) : paused ? (
         <p className="info" data-paused="">This test is paused right now.</p>
       ) : closed ? (
-        <p className="err">{t.status === "stopped" ? "This test was stopped." : testersIn >= t.spots ? "This test is full." : "This test isn't taking new testers any more."}</p>
+        <p className="err">{t.status === "stopped" ? "This test was stopped." : full ? "This test is full." : "This test isn't taking new testers any more."}</p>
       ) : (
         <>{gaps.map((g) => <p key={g} className="info">{g}</p>)}</>
       )}

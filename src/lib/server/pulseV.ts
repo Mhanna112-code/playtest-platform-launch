@@ -34,7 +34,9 @@ export async function joinPageV(testerId: string, testId: string) {
     db.testerProfile.findUnique({ where: { userId: testerId }, select: { updatedAt: true } }),
   ]);
   const listingV = listing ? [listing.updatedAt.getTime(), listing.status, listing.spots, listing._count.contracts, listing.openUntil?.getTime() ?? 0, listing.developer.holdStartedAt?.getTime() ?? 0, listing.developer.devSuspendedAt?.getTime() ?? 0].join(":") : "";
-  return [capacity >= MAX_ACTIVE_TESTS, blocked, profile?.updatedAt.getTime() ?? 0, listingV, listing?.openUntil && listing.openUntil <= new Date() ? "closed" : "open", a ? `${a.id}:${a.status}:${a.decidedAt?.getTime() ?? 0}:${a.changedAt?.getTime() ?? 0}` : "", c ? `${c.id}:${c.status}` : "", i?.id ?? ""].join("|");
+  // (Owner, Nov 9, §341) Full for want of a free access key, or open again once a key is added: the page redraws.
+  const noKey = listing ? (await (await import("./accessKeys")).noFreeKeyTests(db, [testId])).has(testId) : false;
+  return [capacity >= MAX_ACTIVE_TESTS, blocked, profile?.updatedAt.getTime() ?? 0, listingV, noKey ? "nokey" : "", listing?.openUntil && listing.openUntil <= new Date() ? "closed" : "open", a ? `${a.id}:${a.status}:${a.decidedAt?.getTime() ?? 0}:${a.changedAt?.getTime() ?? 0}` : "", c ? `${c.id}:${c.status}` : "", i?.id ?? ""].join("|");
 }
 
 /** (Batch 30 §8) The line the join page shows once its tester is in the test (an accepted application or ask), with their session. */

@@ -1,6 +1,6 @@
 import { NameLink } from "@/components/Cut";
 import { KeyRound } from "lucide-react";
-import { FREE_KEYS_HINT } from "@/lib/keys";
+import { FREE_KEYS_HINT, reopenSpotKeyLine } from "@/lib/keys";
 
 export type KeysView = { free: { id: string; value: string; reused?: { from: string } }[]; inUse: { id: string; value: string; tester: string; /** (Owner, Nov 3, §166) their profile: the name is the green link */ testerHref?: string | null; gone?: "left" | "finished" }[]; open: number };
 
@@ -15,6 +15,11 @@ export function KeysNotice({ testId, keys, canEdit = true }: { testId: string; k
   return (
     <section id="keys-notice" className="space-y-2 rounded-xl border border-amber-400/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-100" aria-label="Access keys" data-keys-notice="">
       <p className="flex items-center gap-2 font-medium"><KeyRound className="h-4 w-4" /> Access keys</p>
+      {/* (Owner, Nov 9, §341) A spot is open but no key is free: testers see the test as full until a key is added. */}
+      {canEdit && keys.open > 0 && keys.free.length === 0 && (() => {
+        const [a, b, c] = reopenSpotKeyLine(keys.open);
+        return <p className="font-medium text-amber-50" data-keys-full="">{a}<a href={`/app/tests/${testId}/edit#keys`} className="underline">{b}</a>{c}</p>;
+      })()}
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="min-w-0 space-y-1">
           <p className="text-xs font-medium text-amber-200">Free (not given to anyone yet)</p>

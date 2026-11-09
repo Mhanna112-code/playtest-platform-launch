@@ -18,7 +18,6 @@ describe("§338 no free access key", () => {
 
   it("Invite of several, one of whom applied: every invite is saved and every invitee told; the applicant who can't join is named; nothing fails", async () => {
     const { dev, testId } = await setup({ joinMode: "apply", spots: 5 });
-    await noFreeKey(testId);
     const ana = await makeUser({ tester: true, name: "Ana Silva", pronoun: "she" });
     const ben = await makeUser({ tester: true, name: "Ben Cole", pronoun: "he" });
     const cam = await makeUser({ tester: true, name: "Cam Lee", pronoun: "they" });
@@ -26,6 +25,7 @@ describe("§338 no free access key", () => {
     await settle();
     expect((await act(testId, "apply", ana.cookie, { seenAt: seen(), confirmed: true, note: "I sail a lot" })).status).toBe(200);
     await settle();
+    await noFreeKey(testId); // (§341) after she applied: with no free key, a new Apply is refused as full
     const r = await act(testId, "invite", dev.cookie, { seenAt: devPageAt, testerIds: [ana.user.id, ben.user.id, cam.user.id], confirmed: true });
     expect(r.status).toBe(200);
     expect(r.body.message).toContain("Invited Ana Silva, Ben Cole and Cam Lee.");

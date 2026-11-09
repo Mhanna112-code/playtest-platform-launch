@@ -35,8 +35,11 @@ const sameListingIgnoringMode = (saved: unknown, current: Parameters<typeof list
   };
   return clean(saved) === clean(listingSnapshot(current));
 };
-/** Shared final refusals for Join, Apply to join and Accept. */
-export async function joinRefusal(testerId: string, testId: string, opts: { rejoin?: boolean } = {}) {
+/**
+ * Shared final refusals for Join, Apply to join and Accept. (Owner, Nov 9, §341) `byDeveloper`: the developer's own Accept / Invite / switch to "Anyone can join":
+ * a test with no free access key isn't "full" for them; the join itself is then refused with the key line (assignKeyAtJoin).
+ */
+export async function joinRefusal(testerId: string, testId: string, opts: { rejoin?: boolean; byDeveloper?: boolean } = {}) {
   const t = await db.test.findUniqueOrThrow({ where: { id: testId }, include: { developer: true } });
   if (t.status === "stopped") return "This test was stopped.";
   if (t.openUntil && t.openUntil < new Date()) return closedToNewLine(t.openUntil, (d) => fmtDate(d).replace(/, \d{4}$/, "")); // (batch 15 section 18)
@@ -48,7 +51,9 @@ export async function joinRefusal(testerId: string, testId: string, opts: { rejo
   if (old && (await db.rating.count({ where: { contractId: old.id } }))) return old.status === "left" && old.endKind === "rated" ? "You rated this test, so you can't join it again." : "You can't join this test again.";
   if (old?.status === "ended" && !opts.rejoin && !(await db.invite.findFirst({ where: { testId, testerId, status: "sent" } }))) return "You can't join this test again.";
   const testersIn = await db.contract.count({ where: { testId, status: "working" } });
-  if (testersIn >= t.spots) return (await db.invite.findFirst({ where: { testId, testerId, status: "sent" } })) ? `${t.title} is full right now.` : "This test is full.";
+  // (§341) To testers, a test that uses access keys with none free is full while it lasts (nothing closes: applications, asks and invites stay).
+  const full = testersIn >= t.spots || (!opts.byDeveloper && (await (await import("./accessKeys")).noFreeKeyTests(db, [testId])).has(testId));
+  if (full) return (await db.invite.findFirst({ where: { testId, testerId, status: "sent" } })) ? `${t.title} is full right now.` : "This test is full.";
   if (await db.block.count({ where: { blockerId: testerId, blockedId: t.developerId } })) return `You blocked ${displayName(t.developer)}: unblock ${pronouns(t.developer.pronoun).obj} in Account → Blocked people to join.`;
   if (await db.block.count({ where: { blockerId: t.developerId, blockedId: testerId } })) return "This test isn't taking new testers right now.";
   if ((await db.contract.count({ where: { testerId, status: "working" } })) >= MAX_ACTIVE_TESTS) return TEST_LIMIT_LINE;
@@ -227,7 +232,9 @@ export async function join(tester: U, testId: string, body: Record<string, unkno
   }
   if (t.joinMode === "invite" && !(await db.invite.findFirst({ where: { testId, testerId: tester.id, status: "sent" } }))) throw new HttpError(409, "invite_only", "This test is invite only.");
   // (Owner, Nov 3, races) The check above ran before the test's lock: joinTest runs it again under the lock (an Edit saved in between stops the press once).
-  const c = await joinTest(tester, testId, { ...body, listingVersion: t.listingVersion, confirmed: true, anyway: body.anyway === true }, { lockedGate: () => listingGate(tester.id, testId, body, "join") });
+  const c = await joinTest(tester, testId, { ...body, listingVersion: t.listingVersion, confirmed: true, anyway: body.anyway === true }, { lockedGate: () => listingGate(tester.id, testId, body, "join") })
+    // (Owner, Nov 9, §341) The last free key went meanwhile: to the tester the test is full, as joinRefusal says.
+    .catch(async (e) => { throw e instanceof HttpError && e.code === "no_key" ? new HttpError(409, "refused", (await joinRefusal(tester.id, testId, { rejoin: body.rejoinAccepted === true })) || "This test is full.") : e; });
   await db.application.updateMany({ where: { testId, testerId: tester.id, status: "pending" }, data: { status: "joined", decidedAt: new Date() } });
   return c;
 }
@@ -356,7 +363,7 @@ export async function decideApplication(dev: U, testId: string, body: Record<str
     return { declined: true };
   }
   const isRejoin = a.kind === "rejoin";
-  const refusal = await joinRefusal(tester.id, testId, { rejoin: isRejoin });
+  const refusal = await joinRefusal(tester.id, testId, { rejoin: isRejoin, byDeveloper: true }); // (§341) no free key: refused below with the key line
   if (refusal) throw new HttpError(409, "refused", refusal.replace("You've already joined", `${name} already joined`).replace(TEST_LIMIT_LINE, `${name} can't join more tests right now.`));
   const t = await db.test.findUniqueOrThrow({ where: { id: testId } });
   // (Nov 2, §119) The join claims the still-pending application inside its own lock (as "accepted"): a Withdraw a moment ago wins, and the refusal says so.
@@ -393,7 +400,7 @@ export async function onSwitchToAnyone(testId: string) {
     }
     const profile = await db.testerProfile.findUnique({ where: { userId: tester.id } });
     if (needsGap(asListing(t), profile)) continue;
-    if (await joinRefusal(tester.id, testId)) continue;
+    if (await joinRefusal(tester.id, testId, { byDeveloper: true })) continue; // (§341) no free key: caught below (§338)
     try {
       const c = await joinTest({ ...tester, isTester: true }, testId, {
         listingVersion: t.listingVersion, confirmed: true, anyway: true, acceptedByDeveloper: true,
@@ -518,10 +525,17 @@ export async function matchInviteAndAsk(testId: string, testerId: string, opts: 
   if (!app || !inv) return null;
   const tester = await db.user.findUniqueOrThrow({ where: { id: testerId } });
   const t = await db.test.findUniqueOrThrow({ where: { id: testId }, include: { developer: true } });
-  if (await joinRefusal(testerId, testId, { rejoin: true })) return null;
+  if (await joinRefusal(testerId, testId, { rejoin: true, byDeveloper: opts.byDeveloper })) return null; // (§341) the developer's Invite: the key line, below
   if (t.ndaText && !app.ndaAcceptedAt) return null; // they still have to accept the NDA themselves
   const back = app.kind === "rejoin";
-  const c = await joinTest(tester, testId, { listingVersion: t.listingVersion, confirmed: true, anyway: true, rejoinAccepted: true, ndaAccepted: !!app.ndaAcceptedAt, ndaAcceptedAt: app.ndaAcceptedAt?.toISOString(), ...(opts.byDeveloper ? { acceptedByDeveloper: true } : {}) });
+  // (§341) The tester's own ask meeting an invite, with the last free key gone meanwhile: the ask just waits (the developer's Invite: the key line, §338).
+  let c;
+  try {
+    c = await joinTest(tester, testId, { listingVersion: t.listingVersion, confirmed: true, anyway: true, rejoinAccepted: true, ndaAccepted: !!app.ndaAcceptedAt, ndaAcceptedAt: app.ndaAcceptedAt?.toISOString(), ...(opts.byDeveloper ? { acceptedByDeveloper: true } : {}) });
+  } catch (e) {
+    if (!opts.byDeveloper && e instanceof HttpError && e.code === "no_key") return null;
+    throw e;
+  }
   await db.application.update({ where: { id: app.id }, data: { status: opts.byDeveloper ? "accepted" : "joined", decidedAt: new Date() } });
   if (opts.byDeveloper) {
     // As Accept (decideApplication) tells them.

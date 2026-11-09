@@ -22,6 +22,23 @@ export async function openSpotsOf(tx: Tx, testId: string, spots?: number) {
 /** Does this test use access keys at all? (Any key ever added.) */
 export const usesKeys = async (tx: Tx, testId: string) => (await tx.accessKey.count({ where: { testId } })) > 0;
 
+/**
+ * (Owner, Nov 9, §341) The tests (of `testIds`) that use access keys and have NO free key: with a spot open they count as FULL to testers (Find, the join page,
+ * Join / Apply / Accept invite / Ask to rejoin), but unlike a real full nothing closes (applications, rejoin asks and invites stay), and the developer's own
+ * Accept or Invite is refused with the key line (NO_FREE_KEY). Whether a spot is open is the caller's (testers in < spots).
+ */
+export async function noFreeKeyTests(tx: Tx, testIds: string[]): Promise<Set<string>> {
+  if (!testIds.length) return new Set();
+  const rows = await tx.accessKey.groupBy({ by: ["testId", "status"], where: { testId: { in: testIds } }, _count: { _all: true } });
+  const uses = new Set(rows.map((r) => r.testId)), free = new Set(rows.filter((r) => r.status === "free" && r._count._all > 0).map((r) => r.testId));
+  return new Set([...uses].filter((id) => !free.has(id)));
+}
+/** (§341) This test is "full for want of a key" now: it uses keys, no key is free, and a spot is open. */
+export async function keysFullNow(tx: Tx, testId: string) {
+  if (!(await noFreeKeyTests(tx, [testId])).has(testId)) return false;
+  return (await openSpotsOf(tx, testId)) > 0;
+}
+
 /** Called under the test lock, in the same transaction that ends the tester's work. */
 export async function releaseTesterKeys(tx: Tx, contractId: string) {
   const keys = await tx.accessKey.findMany({ where: { contractId, status: { in: ["inuse", "held", "broken"] } }, select: { id: true, value: true, assignedAt: true, createdAt: true, contract: { select: { tester: { select: { name: true, email: true, deletedAt: true } } } } } });

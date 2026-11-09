@@ -454,7 +454,7 @@ export async function inviteTesters(dev: U & { holdStartedAt?: Date | null }, te
       joinedLines.push(joining.invitedJoinedLine(i.name, i.pronoun, app.kind));
       continue;
     }
-    const refusal = await joining.joinRefusal(i.id, testId, { rejoin: true });
+    const refusal = await joining.joinRefusal(i.id, testId, { rejoin: true, byDeveloper: true });
     if (refusal) joinedLines.push(refusal.replace("You've already joined", `${i.name} already joined`).replace(TEST_LIMIT_LINE, `${i.name} can't join more tests right now.`));
   }
   for (const i of result.invited.filter((x) => !matched.includes(x.id))) {

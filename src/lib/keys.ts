@@ -90,4 +90,7 @@ export const noFreeKeyFor = (name: string) => `${name}: ${NO_FREE_KEY[0].toLower
 /** (Owner, Nov 9, §338) The switch to "Anyone can join" couldn't join these waiting applicants: no access key is free. One line, on the Save's note and in the log. */
 export const noKeyWaitingLine = (names: string[]) =>
   `No access key is free, so ${names.length === 1 ? "this application stays" : "these applications stay"} waiting: ${names.join(", ")}. Add keys in Edit to let them join.`;
+/** (Owner, Nov 9, §341) The developer's test page while a spot is open but no key is free (testers see the test as full): "in Edit" links to the keys. */
+export const reopenSpotKeyLine = (open: number) =>
+  (open === 1 ? ["Add an access key ", "in Edit", " to reopen this spot."] : ["Add access keys ", "in Edit", ` to reopen these ${open} spots.`]) as [string, string, string];
 export const openSpotsKeyLine = (open: number) => `${open} open spot${open === 1 ? "" : "s"}: each new tester gets one.`;
