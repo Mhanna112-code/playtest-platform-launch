@@ -4,7 +4,9 @@ This table is organized by the button to press. Use the [stop-once reference](ST
 
 A **Stop once** row shows the change line inside the blue box. Its standard opening is `Your {button} didn't go through.` The normal closing is `Press {button} again to go ahead.` A **Refusal** row gives the message body. The usual display adds `Your {button} didn't go through: `. Rows marked **Bare** show their text on its own. Braces mark values inserted at runtime.
 
-## Tester
+## Original cases
+
+### Tester
 
 | # | Button | Result | Setup and press | Expected wording |
 |---|---|---|---|---|
@@ -29,7 +31,7 @@ A **Stop once** row shows the change line inside the blue box. Its standard open
 | T19 | Rate | Refusal | Another tab already rated the developer. | `You already rated {developer}.` |
 | T20 | Ask the developer | Refusal | The tester selects unpaid written answers for an excerpt. | `Only written answers the developer paid for can be shown as excerpts.` |
 
-## Developer
+### Developer
 
 | # | Button | Result | Setup and press | Expected wording |
 |---|---|---|---|---|
@@ -50,7 +52,7 @@ A **Stop once** row shows the change line inside the blue box. Its standard open
 | D15 | Pay what you owe | Stop once | The debts or total changed. | `Added to what you owe meanwhile: {item}` or `Another payment failed meanwhile: {item}`, with applicable adjustment lines. A late race reads `What you owe changed meanwhile. Press again to pay what's left.` |
 | D16 | Rate | Refusal | Another tab already rated the tester. | `You already rated {tester}.` |
 
-## Team and shared actions
+### Team and shared actions
 
 | # | Button | Result | Setup and press | Expected wording |
 |---|---|---|---|---|
@@ -60,7 +62,11 @@ A **Stop once** row shows the change line inside the blue box. Its standard open
 | A04 | Any eligible test, session, or account control with an own-tab gate | Stop once | The current account took a relevant action elsewhere after the page's timestamp. | `You {action} in another tab` for test activity. Settings, profile, and payment settings can use `Changed in another tab or device since you opened this page:` with `{field}: {old value} → {new value}`. |
 
 
-## Tester and developer application and invitation variants
+## Newly added cases
+
+These are the additional rows from the expanded matrix. Use the original row IDs above for the earlier manual checklist.
+
+### Tester and developer application and invitation variants
 
 [Join, Apply, Withdraw and developer application decisions](../src/lib/server/joining.ts) · [No thanks](../src/app/api/invites/%5Bid%5D/route.ts) · [Listing copy](../src/lib/listingSave.ts)
 
@@ -84,7 +90,7 @@ A **Stop once** row shows the change line inside the blue box. Its standard open
 | J16 | Developer Accept / Decline | Stop once | The application is still pending, but the tester's fit or rating changed since it was shown. | The current requirements or rating change line. See the [application gate](../src/lib/server/joining.ts#L328) for the formatters used for each change. |
 | J17 | Cancel invite | Refusal | The tester already joined, the invite was replaced, or it was already cancelled. | `{Subject pronoun} already joined.` / `This invite is no longer valid: it was re-sent on the new listing.` / `This invite was already cancelled.` |
 
-## Call button variants
+### Call button variants
 
 [Call request answers and sets](../src/lib/server/requests.ts) · [Individual calls and join](../src/lib/server/calls.ts)
 
@@ -106,7 +112,7 @@ A **Stop once** row shows the change line inside the blue box. Its standard open
 | C14 | Report a call problem | Refusal | A problem was already reported, or the call was cancelled. | `A problem with this call was already reported.` / `This call was cancelled.` |
 | C15 | Accept | Refusal | The selected time is too soon or falls after work ends. | `{date and time} is less than {lead time} from now, so it can't be booked any more. Request a later time instead.` / `{date and time} is after testers' work on this test ends ({end date and time}), so it can't be booked.` |
 
-## Work, rating, disputes and excerpts
+### Work, rating, disputes and excerpts
 
 [Charge and Let it go](../src/lib/server/holds.ts#L1878) · [Disputes](../src/lib/server/payments.ts) · [Rating](../src/lib/server/ratings.ts) · [Excerpts](../src/lib/server/excerpts.ts)
 
@@ -137,7 +143,7 @@ A **Stop once** row shows the change line inside the blue box. Its standard open
 | W23 | Leave | Refusal | The tester already left in another tab. | `You already left this test.` |
 | W24 | End early | Refusal | All selected testers' work has already ended and no eligible tester remains. | `{tester or list of testers}'s work already ended.` Other unavailable selections can add their own reasons. |
 
-## Bank, admin and account variants
+### Bank, admin and account variants
 
 [Bank confirmation](../src/lib/server/confirm.ts#L297) · [Confirm all](../src/lib/server/confirmAll.ts) · [Admin races](../src/lib/server/adminRace.ts#L189) · [Account stop-once wording](../src/lib/server/accountChanges.ts#L38)
 
