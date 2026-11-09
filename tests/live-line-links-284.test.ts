@@ -94,7 +94,7 @@ describe("§284: every top-box line opens what it's about, ignored ones too", ()
     expect(html).toContain('href="/app/developers/u1"');
     expect(html).toContain('<a href="#req-r1" class="text-inherit no-underline hover:underline" data-line-rest="">');
     const top = src("components/LiveTop.tsx");
-    expect(top).toContain("restClass: l.ignored ? IGNORED_REST : undefined, onRest:");
+    expect(top).toContain("restClass: l.ignored ? IGNORED_REST : undefined,\n    onRest:"); // (Codex 6b8a1077 reformatted it)
     expect(top).toContain("jumpToFirst(l.link!)");
     expect(src("app/app/sessions/[id]/page.tsx")).toContain("<section id={TESTER_REQUESTS_BOX}");
   });

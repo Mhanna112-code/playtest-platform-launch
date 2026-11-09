@@ -109,7 +109,7 @@ describe("§270 a bell line in pieces", () => {
     // Mark-as-read on every piece (each link carries the line's onClick).
     const list = src("app/app/notifications/BellList.tsx");
     expect(list).toContain('withLineLinks(short ?? l.text, l.links, { rest: l.href || null, restClass: "text-inherit no-underline hover:underline", onClick: () => markRead([l]), Anchor: Link })');
-    expect(list).toContain("withLineLinks(l.text, l.links, { onClick: () => markRead([l]), Anchor: Link })");
+    expect(list).toContain('withLineLinks(short ?? l.text, l.links, { rest: l.href || null, restClass: "text-inherit no-underline hover:underline", onClick: () => markRead([l]), Anchor: Link })'); // (Codex eb8ca7cd: expanded bell lines keep their destination on the other words)
     const pieces = withLineLinks(text, [ANA, HARBOR], { rest: "/x", onClick: () => null }) as React.ReactElement<{ children: React.ReactElement<{ onClick?: unknown }>[] }>;
     expect(pieces.props.children.every((c) => typeof c.props.onClick === "function")).toBe(true);
   });
@@ -141,7 +141,8 @@ describe("§270 payment rows, confirm rows, owed lines (with the database)", () 
     expect(out).toContain(`<a href="/app/tests/${testId}" class="text-volt-300 hover:underline" data-line-link="test">Harbor Run</a>`);
     // The tester's own row: the developer's profile and the tester's session page.
     const theirs = (await paidRows([{ ...p, note: p.note ?? "" }], "tester")).get(p.id)!;
-    expect(theirs.links).toEqual([{ text: "Nora Lane", href: `/app/developers/${dev.user.id}`, kind: "person" }, { text: "Harbor Run", href: `/app/sessions/${sessionId}`, kind: "test" }]);
+    // (Codex eb8ca7cd) The tester's row also links "your written answers" to that part's payment status on the session page.
+    expect(theirs.links).toEqual([{ text: "Nora Lane", href: `/app/developers/${dev.user.id}`, kind: "person" }, { text: "Harbor Run", href: `/app/sessions/${sessionId}`, kind: "test" }, { text: "your written answers", kind: "part", href: `/app/sessions/${sessionId}#payment-${sub.id}` }]);
     // The reader's pool: the tester's view of the same names; the reader never in it.
     const pool = await linkPool(tester.user.id);
     expect(lineLinks(pool, "Nora Lane changed “Harbor Run”").map((l) => l.href)).toEqual([`/app/developers/${dev.user.id}`, `/app/sessions/${sessionId}`]);
