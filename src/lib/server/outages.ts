@@ -314,6 +314,10 @@ async function applyOutage(o: { startAt: Date; endAt: Date; ms: number }, opts: 
     // Pay-by dates (3-day cut-off, which starts a hold) and daily retries.
     await tx.$executeRaw`UPDATE "Payment" SET "owedUntil" = "owedUntil" + ${L} * interval '1 millisecond' WHERE status = 'failed' AND "settledAt" IS NULL AND "owedUntil" > (${start}::timestamptz AT TIME ZONE 'UTC')`;
     await tx.$executeRaw`UPDATE "Payment" SET "retriedAt" = "retriedAt" + ${L} * interval '1 millisecond' WHERE status = 'failed' AND "settledAt" IS NULL AND "retriedAt" IS NOT NULL`;
+    // (Owner, Nov 9, §337) A payment waiting for the developer's bank: its confirm-by date (3 days for a charge made while they were away; the press's 15 minutes,
+    // and Confirm all's combined payment) moves by the outage, so no confirmation time is lost to downtime; the daily reminder and every "confirm by" line read
+    // it. Only dates still running at the outage's start; a reservation's 7-day expiry never moves (the card's authorization at the bank can't be extended).
+    await tx.$executeRaw`UPDATE "Payment" SET "actionBy" = "actionBy" + ${L} * interval '1 millisecond' WHERE "settledAt" IS NULL AND status IN ('needs_action', 'needs_confirmation', 'failed', 'owed', 'paying') AND "actionBy" > (${start}::timestamptz AT TIME ZONE 'UTC')`;
     // A hold's 30-day clock.
     await tx.$executeRaw`UPDATE "User" SET "holdStartedAt" = "holdStartedAt" + ${L} * interval '1 millisecond' WHERE "holdStartedAt" IS NOT NULL`;
     // Tester deadlines and Open until. (Owner, Nov 3, batch 35 §154) A moved deadline is rounded UP to the end of its day (11:59 PM in the developer's zone, where it
