@@ -36,7 +36,8 @@ export default async function NewTest({ searchParams }: { searchParams: Promise<
         tz={u.timeZone}
         perks={await hasPerks(u)}
         termsAgain={needsTermsAgain(u)}
-        init={draft ? asListing(draft) : { productName: "", mature: false, matureWhy: "", ndaText: "", title: "", description: "", buildUrl: "", categories: ["Productivity"], devices: [], languages: [], spots: 5, writtenCents: 1000, recordingCents: null, liveRateCents: null, liveMinutes: 30, deadlineDays: 7, questions: [], openUntil: null, joinMode: "anyone" }}
+        // (Owner, Nov 9, §345) A new test starts with no category ticked ("Start empty" the same): "Tick at least one category." asks for a real choice.
+        init={draft ? asListing(draft) : { productName: "", mature: false, matureWhy: "", ndaText: "", title: "", description: "", buildUrl: "", categories: [], devices: [], languages: [], spots: 5, writtenCents: 1000, recordingCents: null, liveRateCents: null, liveMinutes: 30, deadlineDays: 7, questions: [], openUntil: null, joinMode: "anyone" }}
       />
     </>
   );

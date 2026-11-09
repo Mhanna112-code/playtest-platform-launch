@@ -727,7 +727,7 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
           <div className="flex flex-wrap gap-2">
             {CATEGORIES.map((o) => (
               <label key={o} className={PICK_CHIP}>
-                <input type="checkbox" name="categories" value={o} checked={f.categories.includes(o)} onChange={(e) => set({ categories: e.target.checked ? [...f.categories, o] : f.categories.filter((x) => x !== o) })} /> {o}
+                <input type="checkbox" name="categories" value={o} checked={f.categories.includes(o)} onChange={(e) => set({ categories: CATEGORIES.filter((x) => (x === o ? e.target.checked : f.categories.includes(x))) })} /> {o}
               </label>
             ))}
           </div>

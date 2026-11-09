@@ -127,7 +127,8 @@ export function parseListing(body: Record<string, unknown>, partial = false, tz?
     // (Batch 15 section 35) https:// only, as the message says.
     if (out.buildUrl && !buildUrlOk(out.buildUrl)) throw new HttpError(400, "bad_url", BUILD_URL_LINE); // (batch 35 §27) the same rule and line as the box
   }
-  if (has("categories")) out.categories = list(body.categories, CATEGORIES);
+  // (Owner, Nov 9, §345) Saved in the CATEGORIES list's order, so the first one (the tile's) never depends on the order they were ticked.
+  if (has("categories")) { const picked = list(body.categories, CATEGORIES); out.categories = CATEGORIES.filter((c) => picked.includes(c)); }
   if (has("devices")) out.devices = list(body.devices, DEVICES);
   if (has("languages")) out.languages = list(body.languages, LANGUAGES);
   if (has("spots")) out.spots = int(body.spots);
