@@ -153,7 +153,9 @@ describe("§283 3: every contract follows the listing's questions", () => {
     await db.contract.update({ where: { id: b.sessionId }, data: { status: "left", endKind: "left", endedAt: new Date() } });
     await db.test.update({ where: { id: testId }, data: { questions: [Q1, Q3] } });
     const t = await db.test.findUniqueOrThrow({ where: { id: testId } });
-    const r = await act(testId, "join", b.tester.cookie, { listingVersion: t.listingVersion, rejoinAccepted: true });
+    // (§352) Back by an invite (a request body can't say the rejoin was accepted any more).
+    await db.invite.create({ data: { testId, testerId: b.tester.user.id } });
+    const r = await act(testId, "join", b.tester.cookie, { listingVersion: t.listingVersion });
     expect(r.status).toBe(200);
     const c = await db.contract.findUniqueOrThrow({ where: { id: b.sessionId } });
     expect(c.status).toBe("working");

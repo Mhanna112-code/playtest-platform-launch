@@ -220,17 +220,33 @@ async function inviteBeforePress(tester: { id: string }, testId: string, body: R
   return inv;
 }
 
+/**
+ * (Security, §352) The join flags only the server may set: the developer's acceptance (`acceptedByDeveloper`), an accepted rejoin ask (`rejoinAccepted`), the time
+ * an NDA was accepted at an earlier press (`ndaAcceptedAt`: an application's or ask's own), and the contract's `keepPrivate` (no page sets it). The internal callers
+ * (decideApplication, the invite auto-join, matchInviteAndAsk, onSwitchToAnyone) pass them to joinTest themselves; a request body never carries them: a tester who
+ * left or was ended early sending {rejoinAccepted: true} to Join rejoined with no acceptance.
+ */
+export const SERVER_ONLY_JOIN_FLAGS = ["rejoinAccepted", "acceptedByDeveloper", "ndaAcceptedAt", "keepPrivate"] as const;
+/** A request body without the server-only join flags. */
+export function clientJoinBody(body: Record<string, unknown>) {
+  const out = { ...body };
+  for (const k of SERVER_ONLY_JOIN_FLAGS) delete out[k];
+  return out;
+}
+
 /** Join (Who can join = Anyone, or an invited tester on an invite-only test). */
-export async function join(tester: U, testId: string, body: Record<string, unknown>) {
+export async function join(tester: U, testId: string, rawBody: Record<string, unknown>) {
+  // (§352) The tester's own press: never the server-only flags (rejoining is the developer's accepted ask, or an invite).
+  const body = clientJoinBody(rawBody);
   if (!tester.isTester) throw new HttpError(403, "not_tester", "Turn on “test apps, games and more” in your profile to join tests.");
   const t = await db.test.findUnique({ where: { id: testId } });
   if (!t) throw new HttpError(404, "not_found", "That test doesn't exist.");
   await closedInvite(tester.id, body); // (batch 16 section 32) the invite closed meanwhile: refused with the reason
-  const refusal = await joinRefusal(tester.id, testId, { rejoin: body.rejoinAccepted === true });
+  const refusal = await joinRefusal(tester.id, testId);
   if (refusal) throw new HttpError(409, "refused", refusal);
-  // (Design doc 7.3) Coming back is always an ask the developer accepts, unless they invited the tester back (or this is the accepted ask).
+  // (Design doc 7.3) Coming back is always an ask the developer accepts, unless they invited the tester back. (§352) An accepted ask never comes through here.
   const gone = await db.contract.findUnique({ where: { testId_testerId: { testId, testerId: tester.id } } });
-  if (gone && gone.status !== "working" && body.rejoinAccepted !== true && !(await db.invite.findFirst({ where: { testId, testerId: tester.id, status: "sent" } })))
+  if (gone && gone.status !== "working" && !(await db.invite.findFirst({ where: { testId, testerId: tester.id, status: "sent" } })))
     throw new HttpError(409, "ask", "You left this test, so you ask to rejoin and the developer accepts.");
   // (Batch 34 §10) The "changed since you opened this page" stop first: the press stops once with every change (the NDA's too, whose tick clears), then the invite.
   await listingGate(tester.id, testId, body, "join");
@@ -240,9 +256,9 @@ export async function join(tester: U, testId: string, body: Record<string, unkno
   }
   if (t.joinMode === "invite" && !(await db.invite.findFirst({ where: { testId, testerId: tester.id, status: "sent" } }))) throw new HttpError(409, "invite_only", "This test is invite only.");
   // (Owner, Nov 3, races) The check above ran before the test's lock: joinTest runs it again under the lock (an Edit saved in between stops the press once).
-  const c = await joinTest(tester, testId, { ...body, listingVersion: t.listingVersion, confirmed: true, anyway: body.anyway === true }, { lockedGate: () => listingGate(tester.id, testId, body, "join") })
+  const c = await joinTest(tester, testId, { ...body, listingVersion: t.listingVersion, confirmed: true, anyway: body.anyway === true, rejoinAccepted: false, acceptedByDeveloper: false }, { lockedGate: () => listingGate(tester.id, testId, body, "join") })
     // (Owner, Nov 9, §348) The last free key went meanwhile: refused with joinRefusal's reason now (the key line, or "full" if the test filled).
-    .catch(async (e) => { throw e instanceof HttpError && e.code === "no_key" ? new HttpError(409, "refused", (await joinRefusal(tester.id, testId, { rejoin: body.rejoinAccepted === true })) || NO_FREE_KEY) : e; });
+    .catch(async (e) => { throw e instanceof HttpError && e.code === "no_key" ? new HttpError(409, "refused", (await joinRefusal(tester.id, testId)) || NO_FREE_KEY) : e; });
   await db.application.updateMany({ where: { testId, testerId: tester.id, status: "pending" }, data: { status: "joined", decidedAt: new Date() } });
   return c;
 }

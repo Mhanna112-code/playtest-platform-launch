@@ -4,7 +4,7 @@ import { HttpError, handle, ok, readJson } from "@/lib/server/http";
 import { devCancelCall, reportNoShow } from "@/lib/server/calls";
 import { cancelInvite, inviteGaps, invitePanel, inviteRestore, inviteTesters } from "@/lib/server/invites";
 import { answerRequest, cancelCallSet, devRequestTime } from "@/lib/server/requests";
-import { apply, askToRejoin, decideApplication, join, joinStopList, withdrawApplication } from "@/lib/server/joining";
+import { apply, askToRejoin, clientJoinBody, decideApplication, join, joinStopList, withdrawApplication } from "@/lib/server/joining";
 import { addDevSide, payExtra } from "@/lib/server/payments";
 import { sendChat, sendMessage } from "@/lib/server/messages";
 import { countingState, asListing, deleteDraft, editTest, endEarly, nextRound, openDraft, ownTest, postDraft, stopTest } from "@/lib/server/tests";
@@ -160,18 +160,19 @@ async function run(u: Awaited<ReturnType<typeof requireActive>>, id: string, act
         const m = body.testerId ? await sendChat(u, id, String(body.testerId), body.body, body.clientId, body) : await sendMessage(u, String(body.contractId ?? ""), body.body, body.clientId, body); // (§271) with the page's load time
         return ok({ id: m.id });
       }
+      // (Security, §352) Join, Apply, Ask to rejoin and the developer's Accept never take the server-only join flags from the request.
       case "join": {
-        const c = await join(u, id, body);
+        const c = await join(u, id, clientJoinBody(body));
         return ok({ sessionId: c.id });
       }
       case "apply":
-        return ok(await apply(u, id, body));
+        return ok(await apply(u, id, clientJoinBody(body)));
       case "rejoin-ask":
-        return ok(await askToRejoin(u, id, body));
+        return ok(await askToRejoin(u, id, clientJoinBody(body)));
       case "withdraw-application":
         return ok(await withdrawApplication(u, id, body));
       case "application":
-        return ok(await decideApplication(u, id, body));
+        return ok(await decideApplication(u, id, clientJoinBody(body)));
     }
     throw new HttpError(404, "not_found", "That action doesn't exist.");
   }
