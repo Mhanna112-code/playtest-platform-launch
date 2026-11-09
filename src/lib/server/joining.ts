@@ -88,7 +88,7 @@ export async function joinPageChanges(userId: string, testId: string, seenAt: un
   if (await (await import("./blocks")).hiddenByBlock(userId, t)) return [];
   const gone: TestEventLike[] = [];
   for (const a of await db.application.findMany({ where: { testId, testerId: userId, status: "closed", decidedAt: { gt: d } } }))
-    gone.push({ kind: "applied", text: a.closedReason === "blocked" ? (await import("./blocks")).appClosedLine(t.title).replace(/\.$/, "") : a.closedReason === "full" ? `${t.title} is full: your application was closed` : a.closedReason === "invite_only" ? `${displayName(t.developer)} made the test invite only: your application was closed` : `${displayName(t.developer)} changed the listing: your application was closed`, createdAt: a.decidedAt! });
+    gone.push({ kind: "applied", text: a.closedReason === "blocked" ? (await import("./blocks")).appClosedLine(t.title).replace(/\.$/, "") : a.closedReason === "full" ? `${t.title} is full: your application was closed` : a.closedReason === "invite_only" ? `${displayName(t.developer)} made the test invite only: your application was closed` : a.closedReason === "joining_closed" ? `Joining ${t.title} closed (Open until passed) on ${fmtDate(t.openUntil ?? a.decidedAt!)}: your application was closed` : a.closedReason === "stopped" ? `${t.title} was stopped: your application was closed` : `${displayName(t.developer)} changed the listing: your application was closed`, createdAt: a.decidedAt! }); // (§354) each its real reason
   // (Correction 6) Invited: the test filled (the invite stays open) / a spot opened.
   if (await db.invite.findFirst({ where: { testId, testerId: userId, status: "sent" } })) {
     for (const e of await db.testEvent.findMany({ where: { testId, kind: { in: ["full", "spot_open"] }, createdAt: { gt: d } } }))
@@ -321,6 +321,19 @@ export async function withdrawApplication(tester: { id: string }, testId: string
 /** "There's no pending application to withdraw." (never one, or one that ended some other way). */
 export const NO_PENDING_APPLICATION = "There's no pending application to withdraw.";
 /**
+ * (Owner, Nov 9, §354) The developer's Accept / Decline on a closed application names why it closed: the test filled up, joining closed (Open until passed),
+ * the test was stopped, the test became invite only, or the listing changed (in another tab). A block's closing never says why.
+ */
+export function appClosedForDev(name: string, reason: string | null, at: Date, openUntil: Date | null) {
+  if (reason === "full") return `${name}'s application closed when the test filled up at ${fmtTime(at)}.`;
+  if (reason === "blocked") return `${name}'s application was closed.`;
+  if (reason === "invite_only") return `${name}'s application closed when the test became invite only at ${fmtTime(at)}.`;
+  if (reason === "joining_closed") return `${name}'s application closed when joining closed (Open until passed) on ${fmtDate(openUntil ?? at)}.`;
+  if (reason === "stopped") return `${name}'s application closed when the test was stopped at ${fmtTime(at)}.`;
+  return `${name}'s application closed when you changed the listing in another tab at ${fmtTime(at)}.`;
+}
+
+/**
  * (Owner, Oct 31, batch 35 §48) Withdraw on an application that's no longer pending says why, with the time: "<Dev> accepted your application at 3:20 AM, so
  * you're in this test." / "<Dev> declined your application at 3:20 AM." / "You withdrew it in another tab at 3:20 AM." / "It closed when <Dev> changed the
  * listing at 3:20 AM. You can apply again."; never one (or closed another way): the plain line.
@@ -335,6 +348,11 @@ export async function withdrawGoneLine(testerId: string, testId: string) {
   if (a.status === "declined") return `${dev} declined your application at ${at}.`;
   if (a.status === "withdrawn") return `You withdrew it in another tab at ${at}.`;
   if (a.status === "closed" && a.closedReason === "listing") return `It closed when ${dev} changed the listing at ${at}. You can apply again.`;
+  // (Owner, Nov 9, §354) The same reasons as the developer's line. A block's closing stays neutral (the plain line).
+  if (a.status === "closed" && a.closedReason === "full") return `It closed when the test filled up at ${at}.`;
+  if (a.status === "closed" && a.closedReason === "invite_only") return `It closed when ${dev} made the test invite only at ${at}.`;
+  if (a.status === "closed" && a.closedReason === "joining_closed") return `It closed when joining closed (Open until passed) on ${fmtDate(t?.openUntil ?? a.decidedAt ?? new Date())}.`;
+  if (a.status === "closed" && a.closedReason === "stopped") return `It closed when the test was stopped at ${at}.`;
   return NO_PENDING_APPLICATION;
 }
 
@@ -348,12 +366,14 @@ export async function decideApplication(dev: U, testId: string, body: Record<str
   if (!a || a.testId !== testId) throw new HttpError(404, "not_found", "That application doesn't exist.");
   const tester = await db.user.findUniqueOrThrow({ where: { id: a.testerId }, include: { profile: true } });
   const name = displayName(tester);
+  const openUntil = (await db.test.findUnique({ where: { id: testId }, select: { openUntil: true } }))?.openUntil ?? null;
   /** Why this application can't be answered any more (read again after a lost race: Nov 2, §119). */
   const gone = (a: { status: string; closedReason: string | null; decidedAt: Date | null }) => {
     if (a.status === "closed" && a.closedReason === "full") return new HttpError(409, "gone", `${name}'s application closed when the test filled up at ${fmtTime(a.decidedAt ?? new Date())}.`);
     // (Batch 16 section 11) Closed by a block (either way): neutral, never says why.
     if (a.status === "closed" && a.closedReason === "blocked") return new HttpError(409, "gone", `${name}'s application was closed.`);
-    if (a.status === "closed") return new HttpError(409, "gone", a.closedReason === "invite_only" ? `${name}'s application closed when the test became invite only at ${fmtTime(a.decidedAt ?? new Date())}.` : `${name}'s application closed when you changed the listing in another tab at ${fmtTime(a.decidedAt ?? new Date())}.`);
+    // (Owner, Nov 9, §354) Each closed application names its real reason: joining closed (Open until passed), the test stopped, or the listing changed.
+    if (a.status === "closed") return new HttpError(409, "gone", appClosedForDev(name, a.closedReason, a.decidedAt ?? new Date(), openUntil));
     // (Batch 16 section 21) Answered already (in another tab): a plain refusal naming it, no stop box.
     return new HttpError(409, "gone", a.status === "withdrawn" ? `${name} withdrew ${pronouns(tester.pronoun).poss} application.` : a.status === "declined" ? "You already declined this application." : a.status === "accepted" || a.status === "joined" ? "You already accepted this application." : "This application was already answered.");
   };
