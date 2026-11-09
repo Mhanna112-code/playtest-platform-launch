@@ -8,7 +8,7 @@ import { FullBellLine } from "@/app/app/notifications/BellList";
 import { FindTestCard } from "@/components/FindTestCard";
 import { SearchPanel } from "@/components/SearchPanel";
 import { panelMatches } from "@/lib/panelSearch";
-import { previousTestGroup, developerTestGroups } from "@/lib/dashboardPanels";
+import { DEV_TEST_FILTERS, previousTestGroup, developerTestGroups } from "@/lib/dashboardPanels";
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh() { } }), usePathname: () => "/app", useSearchParams: () => new URLSearchParams() }));
 globalThis.React = React;
 it("an expanded bell keeps names, tests and destination independently clickable without nesting anchors", () => {
@@ -36,11 +36,20 @@ it("previous tests distinguish removal, personal departure, normal completion an
     expect(previousTestGroup({ ...base, status: "working", endKind: "" })).toBeNull();
     expect(previousTestGroup({ ...base, status: "working", endKind: "", test: { status: "stopped", workEndedAt: null } })).toBe("Closed");
 });
-it("developer filters separate admin and own stops and retain Open through close-out", () => {
-    expect(developerTestGroups({ status: "stopped", adminStoppedAt: new Date() }, false, false)).toEqual(["Stopped by admin", "Open"]);
-    expect(developerTestGroups({ status: "stopped", adminStoppedAt: null }, false, true)).toEqual(["Stopped by you"]);
-    expect(developerTestGroups({ status: "open", adminStoppedAt: null }, true, false)).toEqual(["Paused", "Open"]);
-    expect(developerTestGroups({ status: "draft", adminStoppedAt: null }, false, false)).toEqual([]);
+it("(§353) developer filters: one tick per test; Open never lists a stopped or closed test", () => {
+    const none = {};
+    const t = (over: Record<string, unknown>) => ({ status: "open", adminStoppedAt: null, pauseClosedAt: null, workEndedAt: null, adminPausedAt: null, ...over }) as Parameters<typeof developerTestGroups>[0];
+    expect(developerTestGroups(t({}), none)).toEqual(["Open"]); // open (full, or past Open until with testers working, the same)
+    expect(developerTestGroups(t({ adminPausedAt: new Date() }), none)).toEqual(["Paused"]); // the team's pause
+    expect(developerTestGroups(t({}), { holdStartedAt: new Date() })).toEqual(["Paused"]); // a hold
+    expect(developerTestGroups(t({}), { devSuspendedAt: new Date() })).toEqual(["Paused"]); // a suspension
+    expect(developerTestGroups(t({ status: "stopped" }), none)).toEqual(["Stopped by you"]);
+    expect(developerTestGroups(t({ status: "stopped" }), { holdStartedAt: new Date() })).toEqual(["Stopped by you"]); // never Paused as well
+    expect(developerTestGroups(t({ status: "stopped", adminStoppedAt: new Date() }), none)).toEqual(["Stopped by admin"]);
+    expect(developerTestGroups(t({ status: "stopped", pauseClosedAt: new Date() }), none)).toEqual(["Closed"]); // a pause ran 7 days
+    expect(developerTestGroups(t({ status: "closed", workEndedAt: new Date() }), none)).toEqual(["Closed"]); // the last deadline passed
+    expect(developerTestGroups(t({ status: "draft" }), none)).toEqual([]);
+    expect(DEV_TEST_FILTERS).toEqual(["Stopped by admin", "Stopped by you", "Paused", "Open", "Closed"]);
 });
 it("search panels expose independent labels and resize handles", () => {
     const html = renderToStaticMarkup(React.createElement(React.Fragment, null,

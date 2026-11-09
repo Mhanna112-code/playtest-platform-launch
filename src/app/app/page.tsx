@@ -63,7 +63,7 @@ import { chargebackSteps } from "@/lib/server/chargeback";
 import { PAUSE_CLOSE_DAYS, pauseReasons } from "@/lib/pause";
 import { HOLD_APPROVAL_AFTER, REVIEW_DAYS, joiningClosedLine, testerPayable } from "@/lib/rules";
 import { testTitleOf } from "@/lib/rules";
-import { closeOutOf, closedOut, pieceCloseOut } from "@/lib/server/closeOut";
+import { closedOut, pieceCloseOut } from "@/lib/server/closeOut";
 import { updateRoomLeft } from "@/lib/server/paidUpdates";
 import { lateSentLine, pieceDay, updateWaiting } from "@/lib/moneyLines";
 import { GetStarted } from "./GetStarted";
@@ -211,7 +211,6 @@ async function DeveloperDashboard({ user, now, category, restricted }: { user: V
     include: { contracts: { include: { tester: true, submissions: { include: { review: true, dispute: true } }, calls: { include: { review: true, dispute: true } } } }, _count: { select: { accessKeys: true } } },
   });
   const testIds = allTests.map((t) => t.id);
-  const closedTests = new Map(await Promise.all(allTests.map(async t=>[t.id,closedOut(await closeOutOf(t.id,now),now)] as const)));
   // (Batch 17 §19) A piece whose Pay closed (its own closing date) has nothing left to pay: it leaves Needs review (and the count); in its last 7 days the test's row
   // says when Pay closes (the soonest such piece).
   const unpaidKeys: { submissionId?: string; callId?: string }[] = allTests.flatMap((t) => t.contracts.flatMap((c) => [...c.submissions.filter((x) => !x.review).map((x) => ({ submissionId: x.id })), ...c.calls.filter((y) => y.status === "booked" && callMinutesOf(y) != null && !y.review).map((y) => ({ callId: y.id }))]));
@@ -323,7 +322,7 @@ async function DeveloperDashboard({ user, now, category, restricted }: { user: V
               // (Owner, Nov 3, batch 35 §168) A Next round's draft not named yet: "Untitled draft (round 2)".
               const title = <span className="text-lg font-semibold" {...(t.title.trim() ? {} : { "data-untitled-draft": "" })}><TestName text={testTitleOf(t)} /></span>;
               return {
-                key: t.id, title: testTitleOf(t), product: t.productName, states: developerTestGroups(t, paused, closedTests.get(t.id)??false), node: (
+                key: t.id, title: testTitleOf(t), product: t.productName, states: developerTestGroups(t, user) /* (§353) */, node: (
                 <>
                   {/* The whole card opens the test (its title's link stretches over it); a suspended developer's cards don't open. */}
                   <div className="card card-hover relative block h-full space-y-4" data-test-card={t.status === "stopped" ? "stopped" : paused ? "paused" : t.status}>
