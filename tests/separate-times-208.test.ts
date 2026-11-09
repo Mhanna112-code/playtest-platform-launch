@@ -173,6 +173,7 @@ describe("§208 each time is its own request", () => {
     const text = first.body.error.limitSeen as string;
     expect(text).toBe("You already have 2 calls or requests with Ana Silva: you can send 1 more.");
     expect(first.body.error.tail).toBe("Press again to send to the others (Ben Carter).");
+    expect(first.body.error.sendTo).toEqual([ben.sessionId]); // (§350) who the next press goes to (the page stops checking the others red)
     expect(await db.callRequest.count({ where: { testId: s.testId, fromSide: "developer" } })).toBe(0);
     const second = await devReq(s.testId, s.dev.cookie, [ana.sessionId, ben.sessionId], { rows, limitSeen: text });
     expect(second.status).toBe(200);

@@ -689,7 +689,7 @@ export async function devRequestTime(dev: U, testId: string, body: Record<string
     // (Owner, NEXT-UI 12b) The second press names what the box said (limitSeen); if who is blocked / at the limit changed
     // since, it stops again with the new line.
     if (body.confirmed !== true || body.limitSeen !== text) {
-      throw new HttpError(409, "stop_once", "Press again to send to the others.", { changes: [{ text, at: new Date() }], tail: `Press again to send to the others (${ok.map((x) => displayName(x.c.tester)).join(", ")}).`, limit: true, limitSeen: text });
+      throw new HttpError(409, "stop_once", "Press again to send to the others.", { changes: [{ text, at: new Date() }], tail: `Press again to send to the others (${ok.map((x) => displayName(x.c.tester)).join(", ")}).`, limit: true, /* (§350) who goes on the next press */ sendTo: ok.map((x) => x.c.id), limitSeen: text });
     }
   }
   // The auto-matches book first (each turns their request into one booked time; §184: its own match is booked here, never dropped).

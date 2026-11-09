@@ -69,7 +69,16 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
     setGoneLines(g);
     if (g.length) setTicked((now) => now.filter((id) => !g.some((x) => x.contractId === id)));
   };
-  const { press, changes, error, busy, at, errData, doneLine, finish } = usePress(seenAt, (data) => { if (Array.isArray(data?.gone)) takeGone(data); router.refresh(); }, { onFresh: () => { setFrozen(null); setMade(null); setGoneLines([]); } });
+  // (Owner, Nov 9, §350; audit D04) A group request with one tester over a limit (or busy at that time) stops once: "Press again to send to the others (Ben Okafor)."
+  // The next press sends back what the box said (`limitSeen`) and goes to the others; the testers that line names aren't checked red meanwhile (they're skipped).
+  const [limitSeen, setLimitSeen] = useState("");
+  const [limitSendTo, setLimitSendTo] = useState<string[] | null>(null);
+  const takeLimit = (data: Record<string, unknown> | null | undefined) => {
+    if (typeof data?.limitSeen !== "string") return;
+    setLimitSeen(data.limitSeen);
+    setLimitSendTo(Array.isArray(data.sendTo) ? (data.sendTo as string[]) : null);
+  };
+  const { press, changes, error, busy, at, errData, doneLine, finish } = usePress(seenAt, (data) => { if (Array.isArray(data?.gone)) takeGone(data); takeLimit(data); router.refresh(); }, { onFresh: () => { setFrozen(null); setMade(null); setGoneLines([]); } });
   // Requesting the same time again is already done: said plainly, and the request shows in the panel.
   useEffect(() => {
     if (error.startsWith("You already requested this time")) router.refresh();
@@ -80,6 +89,10 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
   const tickedIds = liveTicks(ticked, testers.map((t) => t.contractId));
   const [rows, setRows] = useState<RowState[]>([newRow()]);
   const [minutes, setMinutes] = useState("");
+  // (§350) Another time, length or tick: the limit stop no longer applies (the server stops again if it still does).
+  const reqKey = JSON.stringify([rows.map((r) => r.when), minutes, ticked]);
+  const lastKey = useRef(reqKey);
+  useEffect(() => { if (lastKey.current !== reqKey) { lastKey.current = reqKey; setLimitSeen(""); setLimitSendTo(null); } }, [reqKey]);
   // (Owner, Oct 28, batch 20 section 18) The typed times, length and ticks survive any reload (kept on the server, "Draft"; batch 35 §8: after signing in, with "Use saved"), and are forgotten once sent.
   const keep = useKept<{ rows: RowState[]; minutes: string; ticked: string[] }>(`request:t-${testId}`, { rows, minutes, ticked }, rows.every((r) => !r.when) && !minutes.trim(), (v) => {
     if (Array.isArray(v.rows) && v.rows.length) setRows(v.rows);
@@ -92,7 +105,7 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
   const [open, setOpen] = useState<Record<string, boolean>>({});
   // (Batch 16 section 10) A mistake in the request form is red at its box and listed under Request a time (not as a plain line).
   const red = error.startsWith(FIELD);
-  const box = (k: string) => (at === k ? <div className="basis-full"><ChangesBox changes={changes} error={k === "request" && red ? "" : error} link={typeof errData.requestId === "string" ? `req-${errData.requestId}` : undefined} /></div> : null);
+  const box = (k: string) => (at === k ? <div className="basis-full"><ChangesBox changes={changes} error={k === "request" && red ? "" : error} link={typeof errData.requestId === "string" ? `req-${errData.requestId}` : undefined} {...(k === "request" && typeof errData.tail === "string" ? { tail: errData.tail } : {}) /* (§350) the server's own tail: "Press again to send to the others (…)" */} /></div> : null);
   const go = async (path: string, body: Record<string, unknown>, key: string) => {
     const r = await press<{ message?: string }>(`/api/tests/${testId}/${path}`, body, key);
     if (r) finish(); // (batch 35 §40, §41) the page redraws in place; the buttons stay greyed until it has
@@ -123,7 +136,8 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
   // (Owner, Oct 28, batch 16 section 33) Clash checks as the form is filled, for every ticked tester (and every call of a Daily / Weekly set): red lines under the
   // row (listed under the button; the press waits until fixed), a blue line for an exact match with their waiting request, and the limits in today's wording.
   // (Owner, Nov 6, §280) The Length is 10–180 minutes whatever is left of the $500 for the ticked testers' calls (no "At most N minutes", no cap in the hint).
-  const clash = alignedClash(rows, minutes, "developer", checked.filter((t) => ticked.includes(t.contractId)).map((t) => ({
+  // (§350) The testers the limit stop named are skipped by the next press: not checked red here.
+  const clash = alignedClash(rows, minutes, "developer", checked.filter((t) => ticked.includes(t.contractId) && (!limitSendTo || limitSendTo.includes(t.contractId))).map((t) => ({
     name: t.name, pending: t.pending, booked: t.booked, busy: t.busy,
     calls: t.calls.map((c) => ({ id: c.id, start: c.when, minutes: c.minutes })),
     requests: t.requests.map((q) => ({ id: q.id, rows: q.rows, minutes: q.minutes ?? 0, mine: q.mine })),
@@ -222,7 +236,7 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
             <button
               className="btn"
               disabled={busy || !filled.length || tickedIds.length === 0}
-              onClick={() => checkFields(form.current) && request({ contractIds: tickedIds, minutes: minutes.trim() ? minutes.trim() : "", rows: filled })}
+              onClick={() => checkFields(form.current) && request({ contractIds: tickedIds, minutes: minutes.trim() ? minutes.trim() : "", rows: filled, ...(limitSeen ? { limitSeen } : {}) /* (§350) */ })}
             >
               Request a time
             </button>
