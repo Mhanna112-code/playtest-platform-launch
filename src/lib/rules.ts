@@ -220,7 +220,7 @@ export const lateLabel = (dueAt: Date, fmt: (d: Date) => string) => `Sent late (
  */
 export function testerRefusal(
   c: StopCtx & { status: string },
-  test: { openUntil: Date | null; adminStoppedAt?: Date | null; adminPausedAt?: Date | null; developer?: { holdStartedAt?: Date | null; devSuspendedAt?: Date | null } },
+  test: { openUntil: Date | null; adminStoppedAt?: Date | null; adminPausedAt?: Date | null; developer?: { holdStartedAt?: Date | null; devSuspendedAt?: Date | null; deletedAt?: Date | null } },
   devName: string,
   fmt: (d: Date) => string,
   now: Date,
@@ -748,7 +748,18 @@ export function devStopOnce(events: TestEventLike[], seenAt: Date, confirmed: bo
  * (Owner, Oct 29, batch 26 section 3) What a tester's stop line needs: the contract's end, and the test's `adminStoppedAt` (the team's Stop: the line never names the
  * developer, "This test was stopped at 3:10 PM."); `teamTime` is that time as the tester reads it (their zone; without it, "on <date>").
  */
-export type StopCtx = { endKind: string; endedAt: Date | null; test?: { adminStoppedAt?: Date | null; /** (§342) its current title */ title?: string } | null; teamTime?: string };
+export type StopCtx = { endKind: string; endedAt: Date | null; test?: { adminStoppedAt?: Date | null; /** (§342) its current title */ title?: string; /** (§355) */ developer?: { deletedAt?: Date | null } | null } | null; teamTime?: string };
+/**
+ * (Owner, Nov 9, §355) Was this tester's session ended BY the developer deleting their account (the deletion stops their tests)? Only a stop at or after the
+ * deletion: a session that had already ended (left, ended early, closed, rated, an earlier Stop) keeps its own line.
+ */
+export const endedByDevDeletion = (c: StopCtx) => {
+  const gone = c.test?.developer?.deletedAt;
+  return c.endKind === "stopped" && !c.test?.adminStoppedAt && !!gone && !!c.endedAt && c.endedAt.getTime() >= gone.getTime();
+};
+/** (§355) The tester's top line then (never "You can still ask to show an excerpt and chat"). */
+export const devDeletedStopLine = (endedAt: Date, fmt: (d: Date) => string) =>
+  `The developer deleted their account, so this test was stopped on ${fmt(endedAt)}. Work you sent that's listed is paid automatically when it's due; chat and excerpt requests are closed.`;
 /** (Batch 26 section 3) Was this tester's work ended by the team's Stop (never named)? */
 export const teamStopped = (c: StopCtx) => c.endKind === "stopped" && !!c.test?.adminStoppedAt;
 /** "This test was stopped at 3:10 PM" (or "…on Oct 29, 2026" when no time was given). */
@@ -759,6 +770,7 @@ export function endedLine(c: StopCtx & { status: string; title?: string }, devNa
   if (c.status !== "ended" || !c.endedAt) return "";
   if (c.endKind === "blocked") return `Your session on ${c.test?.title ?? c.title ?? "this test"} ended.`; // neutral: a block is never revealed
   if (teamStopped(c)) return `${teamStopHalf(c, fmt)}. Work you sent is still reviewed.`;
+  if (endedByDevDeletion(c)) return devDeletedStopLine(c.endedAt, fmt); // (§355)
   if (c.endKind === "stopped") return `${devName} stopped the test on ${fmt(c.endedAt)}. Work you sent is still reviewed.`;
   if (c.endKind === "closed") return `This test ended on ${fmt(c.endedAt)}. Work you sent is still reviewed.`; // neutral: a pause closure never says why
   if (c.endKind === "rated") return `${devName} finished your part in ${c.test?.title ?? c.title ?? "this test"}. Work you sent is still reviewed.`;
@@ -801,13 +813,17 @@ export function workOverPress(action: string, body: Record<string, unknown> = {}
 }
 /** An old page's press after the work ended: "Nora Lane stopped the test on Nov 3, so your Send didn't go through. Work you sent is still reviewed." */
 export const workOverLine = (c: StopCtx, devName: string, fmt: (d: Date) => string, press: string) =>
-  `${overHalf(c, devName, fmt)}, so your ${press} didn't go through. Work you sent is still reviewed.`;
+  endedByDevDeletion(c) ? devDeletedPressLine(c, fmt, press) : `${overHalf(c, devName, fmt)}, so your ${press} didn't go through. Work you sent is still reviewed.`;
+/** (§355) The deletion's line with the refused press named: "…stopped on Nov 9: your Send didn't go through. Work you sent that's listed …". */
+const devDeletedPressLine = (c: StopCtx, fmt: (d: Date) => string, press: string) =>
+  press ? devDeletedStopLine(c.endedAt!, fmt).replace(/\. Work you sent/, `: your ${press} didn't go through. Work you sent`) : devDeletedStopLine(c.endedAt!, fmt);
 /**
  * The stopped line at the top of the session page, listing what still works (built from what is actually on the page, as the paused banner does):
  * "Nora Lane stopped the test on Nov 3. You can still charge or let go of unreviewed work, dispute, rate and chat. Work you sent is still reviewed."
  * With `press` (an old page's press was refused), it names it: "Nora Lane stopped the test on Nov 3, so your Send didn't go through. You can still …".
  */
 export function stillWorksLine(c: StopCtx, devName: string, fmt: (d: Date) => string, can: { charge?: boolean; dispute?: boolean; rate?: boolean; chat?: boolean; excerpt?: boolean }, press = "") {
+  if (endedByDevDeletion(c)) return devDeletedPressLine(c, fmt, press); // (§355) no "You can still …" list
   const list = [can.charge && "charge or let go of unreviewed work", can.dispute && "dispute", can.rate && "rate", can.excerpt && "ask to show an excerpt", can.chat && "chat"].filter((x): x is string => !!x);
   return `${overHalf(c, devName, fmt)}${press ? `, so your ${press} didn't go through` : ""}.${list.length ? ` You can still ${andList(list)}.` : ""} Work you sent is still reviewed.`;
 }
