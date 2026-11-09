@@ -56,7 +56,8 @@ import { ListingPanel } from "./ListingPanel";
 import { ListingSeeIt, SeeItTarget } from "@/components/ListingInfo";
 import { panelRows } from "@/lib/listingPanel";
 import { lastListingSave } from "@/lib/server/listingPanel";
-import { Fold, OwnPanel, PART_PANEL, ResizeBox } from "@/components/Panel";
+import { Fold, OwnPanel, ResizeBox } from "@/components/Panel";
+import { PART_PANEL } from "@/lib/panelStyle"; // (§351) not from the client module: its constant reached this server page as a function
 import { SentWork } from "@/components/SentWork";
 import { lastPaidAt } from "@/lib/paidCut";
 import { additionsOf, answersByQuestion } from "@/lib/additions";

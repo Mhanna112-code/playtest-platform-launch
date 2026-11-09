@@ -2,7 +2,8 @@ import type { PartPayLine } from "@/lib/server/partPayments";
 import { WhatLine } from "@/components/WholeLine";
 import { withLineLinks } from "@/components/LineLinks";
 import { LIST_PANEL, PAY_LINES_SHOWN, PanelWhen } from "@/components/ScrollList";
-import { Fold, PART_PANEL } from "@/components/Panel";
+import { Fold } from "@/components/Panel";
+import { PART_PANEL } from "@/lib/panelStyle"; // (§351) a plain module: from the client one it reached this server component as a function
 
 /**
  * (Owner, Nov 3, batch 35 §152) Under a part on the developer's test page (in the tester rows and Needs you, where its paid total shows): that part's payments, oldest
