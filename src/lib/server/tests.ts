@@ -26,7 +26,7 @@ import { T, safeZone, renderTimes } from "@/lib/tz";
 import { LISTING_INFO_FIELDS, LISTING_VALUES, valuesText } from "@/lib/listingInfo";
 import { LISTING_SAVED, savedText } from "@/lib/listingPanel";
 import {
-  andList, testClosedToNewLine, daysBetween, dueAfterDays, movedDue, endOfDayIn, openUntilDay, testerDaysOf, testPaused, testerPaused, PAUSED_SEND, checkWrittenLength, checkAdditionLength, PAUSED_RIGHT_NOW, openUntilShortened, changedTerms, sameListingValue, checkListing, checkOpenUntilChange, contractSnapshot, editCheck, joinCheck, payByFrom, PAY_WAITS, testerRefusal, LISTING_FIELDS, mergeEdit, termsLine, type Listing, type TestEventLike,
+  andList, testClosedToNewLine, daysBetween, dueAfterDays, movedDue, endOfDayIn, openUntilDay, testerDaysOf, testPaused, testerPaused, PAUSED_SEND, checkWrittenLength, checkAdditionLength, PAUSED_RIGHT_NOW, openUntilShortened, changedTerms, sameListingValue, checkListing, checkOpenUntilChange, contractSnapshot, editCheck, joinCheck, payByFrom, PAY_WAITS, testerRefusal, LISTING_FIELDS, mergeEdit, dropHiddenPartFields, termsLine, type Listing, type TestEventLike,
 } from "@/lib/rules";
 import { gapsOf, gapsUnseen, missingNeedText, noGaps, readGaps } from "@/lib/gaps";
 import { HttpError, readText } from "./http";
@@ -417,6 +417,7 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     // The "fields you didn't touch keep the newer values" tail only when the listing itself was saved elsewhere.
     const listingEdited = events.some((e) => e.kind === "edited" || e.kind === "edited_spots");
     const current = asListing(t);
+    dropHiddenPartFields(current, touched); // (§349) an unticked part's hidden fields are neither saved nor announced
     const next = mergeEdit(current, touched);
     if (!next.mature) next.matureWhy = "";
     const ou = checkOpenUntilChange(t.openUntil, next.openUntil ? new Date(next.openUntil) : null, new Date(), dev.timeZone);

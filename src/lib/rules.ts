@@ -836,6 +836,22 @@ export function editCheck(loadedVersion: number, currentVersion: number, events:
   return { go: false, changes };
 }
 
+/**
+ * (Owner, Nov 9, §349) A part that isn't on the listing after this Save (unticked, or never ticked) keeps its hidden fields as they are: what was typed in them while
+ * it was ticked (the questions and their Required ticks for written answers; a part's Required tick; a call's length) is neither saved nor announced. Removes those
+ * fields from `touched` in place (the page keeps them in its draft).
+ */
+export function dropHiddenPartFields(current: Listing, touched: Partial<Listing>) {
+  const after = <K extends keyof Listing>(k: K) => (k in touched && touched[k] !== undefined ? touched[k] : current[k]);
+  const hidden: (keyof Listing)[] = [
+    ...(after("writtenCents") == null ? (["questions", "writtenRequired"] as const) : []),
+    ...(after("recordingCents") == null ? (["recordingRequired"] as const) : []),
+    ...(after("liveRateCents") == null ? (["liveRequired", "liveMinutes"] as const) : []),
+  ];
+  for (const k of hidden) delete (touched as Record<string, unknown>)[k];
+  return touched;
+}
+
 /** The second Save: the typed (touched) fields go on top of the newest values; untouched fields keep the newer values. */
 export function mergeEdit(current: Listing, touched: Partial<Listing>): Listing {
   const out: Listing = { ...current };
