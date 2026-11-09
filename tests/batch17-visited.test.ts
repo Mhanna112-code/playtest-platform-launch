@@ -126,7 +126,7 @@ describe("Tests visited: what goes on and off the list (Batch 17 §18)", () => {
     expect(await db.testVisit.count({ where: { testerId: a.ana.user.id } })).toBe(2); // one row per test, the last visit
   });
 
-  it("Remove drops the card at once (no confirm); opening the join page again brings it back", async () => {
+  it("the visit removal endpoint only affects the signed-in tester's saved visits", async () => {
     const x = await visited();
     const r = await remove(x.testId, x.ana.cookie);
     expect(r.status).toBe(200);
@@ -136,8 +136,12 @@ describe("Tests visited: what goes on and off the list (Batch 17 §18)", () => {
     const other = await makeUser({ tester: true });
     expect((await remove(x.testId, other.cookie)).status).toBe(200);
     expect((await x.rows()).map((r) => r.testId)).toEqual([x.testId]);
-    expect(src("app/app/RemoveVisit.tsx")).toContain("<X className=\"h-3.5 w-3.5\" /> Remove");
-    expect(src("app/app/RemoveVisit.tsx")).not.toContain("confirm(");
+  });
+
+  it("Tests Visited shows linked test cards without a Remove action", () => {
+    const box = src("app/app/TestsVisited.tsx");
+    expect(box).toContain("<FindTestCard");
+    expect(box).not.toMatch(/RemoveVisit|VisitedCard|<button|footer=/);
   });
 
   it("a visit then joining: it leaves the list (and stays off after leaving the test)", async () => {

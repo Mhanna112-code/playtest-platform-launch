@@ -4,7 +4,6 @@ import { asListing } from "@/lib/server/tests";
 import { termsLine } from "@/lib/rules";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { visitedTests, visitedV } from "@/lib/server/testVisits";
-import { VisitedCard } from "./RemoveVisit";
 
 /** The dashboard poll refreshes this panel when a visited test's eligibility or state changes. */
 export async function TestsVisited({ testerId }: { testerId: string }) {
@@ -23,9 +22,9 @@ export async function TestsVisited({ testerId }: { testerId: string }) {
             search: `${r.title} ${r.developer}`,
             states: [r.state],
             node: (
-              <VisitedCard testId={r.testId} title={r.title}>
+              <div data-visited={r.testId}>
                 <FindTestCard test={r.test} href={r.href} developerName={r.developer} terms={termsLine(asListing(r.test), true)} state={r.label} />
-              </VisitedCard>
+              </div>
             ),
           }))}
         />
