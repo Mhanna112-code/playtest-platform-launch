@@ -135,6 +135,10 @@ describe("batch 35 §5: file sizes", () => {
 });
 
 describe("batch 35 §7: a link to a piece that was paid since lands on its tester's row", () => {
+  it("a paid-work update prefers Needs you and falls back to the same part under Testers", () => {
+    expect(hashTargets("update-sub1")).toEqual(["update-sub1", "part-sub1"]);
+  });
+
   it("#piece-<id> falls back to that part's line on the tester's row; other links are unchanged", () => {
     expect(hashTargets("piece-sub1")).toEqual(["piece-sub1", "part-sub1"]);
     expect(hashTargets("call-c1")).toEqual(["call-c1"]);
