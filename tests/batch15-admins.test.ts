@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { POST as adminPOST } from "@/app/api/admin/[action]/route";
@@ -17,6 +18,30 @@ async function admin() {
 const aact = (cookie: string, action: string, body: Record<string, unknown>) => adminPOST(req(`/api/admin/${action}`, { cookie, body }), { params: Promise.resolve({ action }) }).then(json);
 
 describe("which admin did what (section 21)", () => {
+  it("saves the submitted note with the decision and shows it on both sides", async () => {
+    const a = await admin();
+    const { dev, testId } = await setup();
+    const { tester, sessionId } = await joined(testId);
+    expect((await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] })).status).toBe(200);
+    const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
+    expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "5.00", tickedCents: 500, reason: "Half of it" })).status).toBe(200);
+    expect((await sact(sessionId, "dispute", tester.cookie, { kind: "submission", id: sub.id, reason: "I answered everything in full.", seenAt: seen(), confirmed: true })).status).toBe(200);
+    const d = await db.dispute.findFirstOrThrow({ where: { submissionId: sub.id } });
+    const note = "The existing pay stands. Thank you for the details.";
+    expect((await aact(a.cookie, "decide", { id: d.id, total: "", note })).status).toBe(200);
+    const decided = await db.dispute.findUniqueOrThrow({ where: { id: d.id } });
+    expect(decided).toMatchObject({ status: "decided", decisionNote: note });
+    expect((await disputeRow(decided)).decisionNote).toBe(note);
+    const form = readFileSync("src/app/admin/DisputeDecision.tsx", "utf8");
+    expect(form).toContain("const submittedNote = noteInput.current?.value ?? note;");
+    expect(form).toContain("note: submittedNote");
+    const developerPage = readFileSync("src/app/app/tests/[id]/page.tsx", "utf8");
+    expect(developerPage).toContain("text={dispute.decisionNote}");
+    expect(developerPage).toContain("<DecisionNote dispute={r.sub.dispute} />");
+    expect(developerPage).toContain("<DecisionNote dispute={x.dispute} />");
+    expect(readFileSync("src/app/app/sessions/[id]/page.tsx", "utf8")).toContain("text={dispute.decisionNote}");
+  });
+
   it("a test row says who stopped it; a second admin's Decide names the first admin by email; a deleted admin reads 'an admin (deleted)'", async () => {
     const a = await admin(), b = await admin();
     const { dev, testId } = await setup();

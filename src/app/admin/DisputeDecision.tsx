@@ -37,6 +37,7 @@ export const decideFromDraft = (d: Record<string, unknown>) => ({ total: typeof 
  */
 export function DisputeDecision({ id, minCents: min0, maxCents: max0, range: range0 = "", side: side0 = "", sideAt: sideAt0 = null, dev = "The developer" }: { id: string; minCents: number; maxCents: number; range?: string; side?: string; sideAt?: string | null; dev?: string }) {
   const root = useRef<HTMLDivElement>(null);
+  const noteInput = useRef<HTMLTextAreaElement>(null);
   // (Owner, Oct 30, batch 15 section 27) The developer's side appears live ("added <time>"); a Decide pressed before reading one that arrived after the page loaded stops once.
   const first = useMemo(() => new Date().toISOString(), []);
   // (Owner, Nov 3, batch 35 §149) A Pay more since the page loaded took the pay above the decision: the stop moves the range up to what's paid and the page's time on.
@@ -98,7 +99,7 @@ export function DisputeDecision({ id, minCents: min0, maxCents: max0, range: ran
         <span className="flex w-full flex-col">
         {/* (Owner, Nov 3, batch 35 §140) Typing and pasting stop at the limit (maxLength). (Owner, Nov 5, §261) The total and the note are read-only while
             Decide is going through. */}
-        <textarea id={`note-${id}`} rows={2} maxLength={LIMITS.reason} className={`input w-full max-w-full ${note.length > LIMITS.reason ? "field-bad" : ""}`} data-match="^Keep it to" data-red-msg={note.length > LIMITS.reason ? reasonTooLong() : undefined} value={note} onChange={(e) => setNote(e.target.value)} {...lockText(busy || fin.done)} />
+        <textarea ref={noteInput} id={`note-${id}`} rows={2} maxLength={LIMITS.reason} className={`input w-full max-w-full ${note.length > LIMITS.reason ? "field-bad" : ""}`} data-match="^Keep it to" data-red-msg={note.length > LIMITS.reason ? reasonTooLong() : undefined} value={note} onChange={(e) => setNote(e.target.value)} {...lockText(busy || fin.done)} />
         <span className={`block text-right text-xs ${note.length > LIMITS.reason ? "text-rose-300" : "text-slate-500"}`} data-reason-count="">{counterText(note.length, LIMITS.reason)}</span>
         {note.length > LIMITS.reason && <span className="err-field">{reasonTooLong()}</span>}
         </span>
@@ -107,10 +108,11 @@ export function DisputeDecision({ id, minCents: min0, maxCents: max0, range: ran
           disabled={busy || (extra > 0 && !ticked)}
           onClick={async () => {
             if (!checkFields(root.current)) return;
+            const submittedNote = noteInput.current?.value ?? note;
             setBusy(true);
             setMsg(null);
             try {
-              const r = await api<{ line?: string }>("/api/admin/decide", { id, total, note, seenAt: loaded, confirmed: stopped, ...(ticked ? { tickCents: extra } : {}) });
+              const r = await api<{ line?: string }>("/api/admin/decide", { id, total, note: submittedNote, seenAt: loaded, confirmed: stopped, ...(ticked ? { tickCents: extra } : {}) });
               await keep.clear();
               // (Owner, Nov 3, batch 35 §163) The server's own result, not "Done.": "Done: raised the pay to $10.00 ($3.00 more charged)." After the reload the
               // row has left Open disputes; the same line stays in Your actions.

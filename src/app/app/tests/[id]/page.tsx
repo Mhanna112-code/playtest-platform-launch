@@ -82,12 +82,17 @@ import { qStored } from "@/lib/questions";
 import { pendingForDeveloper } from "@/lib/server/excerpts";
 import { ExcerptQuestion, ExcerptQuote, ExcerptReplaces } from "@/components/ExcerptList"; // (batch 16 section 37) the question above each excerpt request
 import { ExcerptDecision } from "@/components/Excerpts";
-import { TEAM_CLOSED_LABEL, UPDATED_AT_CAP, pieceDay, updateWaiting } from "@/lib/moneyLines";
+import { TEAM_CLOSED_LABEL, UPDATED_AT_CAP, pieceDay, teamDecidedLabel, updateWaiting } from "@/lib/moneyLines";
 
 import { testV } from "@/lib/server/pulseV";
 import { otherSideNotice } from "@/components/OtherSideNotice";
 export const metadata = { title: "Test · Playtest" };
 export const dynamic = "force-dynamic";
+
+function DecisionNote({ dispute }: { dispute: { id: string; status: string; decidedCents: number | null; decisionNote: string } | null }) {
+  if (dispute?.status !== "decided" || !dispute.decisionNote.trim()) return null;
+  return <LabeledReason data={{ "data-team-decided": "" }} line={teamDecidedLabel(money(dispute.decidedCents))} label="The team's decision" id={`decision-note-${dispute.id}`} text={dispute.decisionNote} />;
+}
 
 export default async function TestPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ failed?: string }> }) {
   const { id } = await params;
@@ -799,6 +804,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                       <div className="space-y-2">
                       {/* (Owner, Nov 6, §301) Right under the heading, above the content: the part's payments (§225) in "Payments (N)", closed at first. */}
                       <PartPayments id={r.sub.id} lines={partPays.get(r.sub.id)} />
+                      <DecisionNote dispute={r.sub.dispute} />
                       {/* (Batch 35 §139; owner, Nov 3) Inside the part's drop-down: the answers or recordings in a small panel.
                           (Owner, Nov 5, §226) Only what was paid for: the part up to its last payment (newer additions wait in Needs you); before the first
                           payment, what was sent. */}
@@ -867,6 +873,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                         <div className="space-y-2">
                         {/* (Owner, Nov 3, batch 35 §152) This call's payments (a panel above 4). */}
                         <PartPayments id={x.id} lines={partPays.get(x.id)} />
+                        <DecisionNote dispute={x.dispute} />
                         <div className={`space-y-1 ${PART_PANEL} empty:hidden`} data-part-panel="content">
                           {tookPlace(x) && <p className="text-xs text-slate-400" data-call-length="">{lengthOf(x)} · {x.rateCents == null ? NOT_LISTED : `In ${pronouns(c.tester.pronoun).poss} contract`}</p>}
                           {badge.reason && <ReasonQuote text={badge.reason} />}
