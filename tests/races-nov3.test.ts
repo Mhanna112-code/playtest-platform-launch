@@ -136,6 +136,30 @@ describe("(Nov 3, races) 1: the team's Decide and the developer's Pay more on th
     }
   });
 
+  it("a developer response saved while Decide waits to claim the dispute stops the decision before charging", async () => {
+    const w = await disputed();
+    const st = gatedStripe(false);
+    let locked!: () => void, release!: () => void;
+    const isLocked = new Promise<void>((resolve) => { locked = resolve; });
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    const side = "I have more information about the written answers.";
+    const holder = db.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${w.testId} FOR UPDATE`;
+      locked();
+      await held;
+      await tx.dispute.update({ where: { id: w.row.id }, data: { devSide: side, devSideAt: new Date() } });
+    }, { timeout: 15_000 });
+    await isLocked;
+    const [d] = await Promise.all([
+      outcome(decideDispute(w.admin, w.row.id, { total: "10.00", tickCents: 600, devSideSeenAt: null })),
+      sleep(400).then(() => release()),
+      holder,
+    ]);
+    expect(d).toMatchObject({ ok: false, e: { code: "stop_once", data: { devSide: side } } });
+    expect(st.made).toEqual([]);
+    expect(await db.dispute.findUniqueOrThrow({ where: { id: w.row.id } })).toMatchObject({ status: "open", devSide: side });
+  });
+
   it("both pressed at the same moment (Promise.all): exactly one charge; the piece ends at the decided $10", async () => {
     for (const lag of [0, 3, 8]) {
       const w = await disputed();

@@ -89,7 +89,7 @@ describe("the restricted view (sections 29 and 37)", () => {
 });
 
 describe("the developer's side of a dispute (section 27)", () => {
-  it("stops only for a pause since the page loaded (§271), works while suspended (from the dashboard box), is refused over 2,000; an admin's Decide answers a side that arrived after the page loaded (§86)", async () => {
+  it("stops only for a pause since the page loaded (§271), works while suspended (from the dashboard box), and stops Decide for an unseen developer response", async () => {
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
     await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
@@ -110,8 +110,15 @@ describe("the developer's side of a dispute (section 27)", () => {
     expect((await act(testId, "dispute-side", dev.cookie, { disputeId: d.id, text: "They skipped the second question.", seenAt: adminLoaded, confirmed: true, boxAt: stopped.body.error.now })).status).toBe(200);
     expect((await act(testId, "dispute-side", dev.cookie, { disputeId: d.id, text: "Again", seenAt: seen() })).body.error.message).toMatch(/^You already/);
     const a = await admin();
-    const first = await aact(a.cookie, "decide", { id: d.id, total: "", note: "", seenAt: adminLoaded });
-    expect(first.status, JSON.stringify(first.body)).toBe(200);
+    const decision = { id: d.id, total: "", note: "The original payment stands.", seenAt: seen(), devSideSeenAt: null };
+    const first = await aact(a.cookie, "decide", decision);
+    expect(first.status, JSON.stringify(first.body)).toBe(409);
+    expect(first.body.error).toMatchObject({ code: "stop_once", press: "Decide", devSide: "They skipped the second question.", devSideAt: expect.any(String) });
+    expect(first.body.error.changes).toEqual([{ text: expect.stringMatching(/^The developer added .* side$/), kind: "stop", at: first.body.error.devSideAt }]);
+    expect(await db.dispute.findUnique({ where: { id: d.id } })).toMatchObject({ status: "open" });
+    expect((await aact(a.cookie, "decide", { ...decision, confirmed: true })).body.error.code).toBe("stop_once");
+    expect((await aact(a.cookie, "decide", { ...decision, devSideSeenAt: first.body.error.devSideAt })).status).toBe(200);
+    expect(await db.dispute.findUnique({ where: { id: d.id } })).toMatchObject({ status: "decided", decisionNote: decision.note });
     expect(src("app/app/page.tsx")).toContain('<DashboardActionBox id="dispute-sides"');
   });
 });

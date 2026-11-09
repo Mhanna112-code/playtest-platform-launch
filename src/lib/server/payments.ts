@@ -452,12 +452,21 @@ export async function decideDispute(admin: U, disputeId: string, body: Record<st
   if (!d) throw new HttpError(404, "not_found", "That dispute doesn't exist.");
   // (Batch 15 section 21) The two-admin refusal names the other admin by email: "ben@… already decided this dispute at 3:10 PM."
   if (d.status !== "open") throw new HttpError(409, "decided", await decidedByLine(d.decidedById, d.decidedAt, presserOf(admin.id, body)));
-  // (§86) Decide answers this dispute, including its developer-side line.
   const seen = typeof body.seenAt === "string" ? new Date(body.seenAt) : null;
-  if (seen && !isNaN(seen.getTime()) && d.devSideAt && d.devSideAt > seen) {
-    const c = await db.contract.findUniqueOrThrow({ where: { id: d.contractId }, select: { testId: true, test: { select: { developer: { select: { pronoun: true } } } } } });
-    await (await import("./adminRace")).stopForUnanswered(admin.id, c.testId, "Decide", [{ item: d.id, text: `The developer added ${pronouns(c.test.developer.pronoun).poss} side`, at: d.devSideAt }], { item: d.id });
-  }
+  const seenAt = seen && !isNaN(seen.getTime()) ? seen : null;
+  const shownSide = typeof body.devSideSeenAt === "string" ? new Date(body.devSideSeenAt) : null;
+  const sideSeenAt = body.devSideSeenAt === undefined ? seenAt : shownSide && !isNaN(shownSide.getTime()) ? shownSide : null;
+  const checkSide = body.devSideSeenAt !== undefined || seenAt !== null;
+  const c = await db.contract.findUniqueOrThrow({ where: { id: d.contractId }, include: { tester: true, test: { include: { developer: true } } } });
+  const stopForNewSide = (current: Pick<typeof d, "devSide" | "devSideAt">) => {
+    if (!checkSide || !current.devSideAt || (sideSeenAt && current.devSideAt <= sideSeenAt)) return;
+    const at = current.devSideAt.toISOString();
+    throw new HttpError(409, "stop_once", "Press again to go ahead.", {
+      changes: [{ text: `The developer added ${pronouns(c.test.developer.pronoun).poss} side`, at, kind: "stop" }],
+      press: "Decide", devSide: current.devSide, devSideAt: at,
+    });
+  };
+  stopForNewSide(d);
   // (Owner, Oct 31, batch 35 §70) The developer's own payment on this piece waiting for their bank (up to 15 minutes) would be charged on top of the decision: refused until
   // it's confirmed or fails, so the piece is never paid more than decided.
   if (await (await import("./confirm")).pieceLocked({ submissionId: d.submissionId, callId: d.callId })) throw new HttpError(409, "locked", decideLockedLine(await devPronounOf(d.contractId)));
@@ -467,7 +476,6 @@ export async function decideDispute(admin: U, disputeId: string, body: Record<st
   const decided = blank ? min : toCents(body.total);
   // (Owner, Nov 3, batch 35 §149) The developer's Pay more since the admin's page loaded: the decision is still the piece's TOTAL. Below what is paid now, Decide stops
   // once naming it (nothing charged, the dispute stays open; the box's range moves up to what's paid); at or above it, it goes through charging only the difference.
-  const seenAt = seen && !isNaN(seen.getTime()) ? seen : null;
   const key = d.submissionId ? { submissionId: d.submissionId } : { callId: d.callId! };
   const paidSince = (tx: Prisma.TransactionClient = db) => (seenAt ? tx.payment.aggregate({ where: { ...key, kind: "extra", status: { in: COUNTED }, createdAt: { gt: seenAt } }, _sum: { amountCents: true } }).then((a) => a._sum.amountCents ?? 0) : Promise.resolve(0));
   const payChanged = async (paidNow: number, more: number, testerName: string) => {
@@ -484,7 +492,6 @@ export async function decideDispute(admin: U, disputeId: string, body: Record<st
   const check = checkDisputeDecision(decided, min, max, poolBinds);
   if (!check.ok) throw new HttpError(400, "bad_amount", check.message);
   const extra = check.extraCents!;
-  const c = await db.contract.findUniqueOrThrow({ where: { id: d.contractId }, include: { tester: true, test: { include: { developer: true } } } });
   const decidedPart = await partWords(d, callAt(c.test.developer));
   const note = readText(body.note, LIMITS.reason, "bad_note"); // (batch 15 section 20) the admin's decision note: 1,000
   // (Owner, Oct 30, batch 35 §1) A raise needs the tick naming exactly what it charges; a tick for another amount (the box changed) doesn't count.
@@ -497,8 +504,16 @@ export async function decideDispute(admin: U, disputeId: string, body: Record<st
   // paid) or comes after and stops once naming the decision (its line is already on the test). One still at the bank is §70's refusal, read again here.
   const claim = await db.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${c.testId} FOR UPDATE`;
-    const claimed = await tx.dispute.updateMany({ where: { id: d.id, status: "open" }, data: { status: "decided", decidedCents: decided!, decisionNote: note, decidedById: admin.id, decidedAt: new Date() } });
-    if (claimed.count !== 1) return null;
+    // The response can arrive after the first read. Check its timestamp in the same write that claims Decide.
+    const claimed = await tx.dispute.updateMany({
+      where: { id: d.id, status: "open", ...(checkSide ? { OR: [{ devSideAt: null }, ...(sideSeenAt ? [{ devSideAt: { lte: sideSeenAt } }] : [])] } : {}) },
+      data: { status: "decided", decidedCents: decided!, decisionNote: note, decidedById: admin.id, decidedAt: new Date() },
+    });
+    if (claimed.count !== 1) {
+      const current = await tx.dispute.findUnique({ where: { id: d.id }, select: { status: true, devSide: true, devSideAt: true } });
+      if (current?.status === "open") stopForNewSide(current);
+      return null;
+    }
     if (await tx.payment.count({ where: { ...key, status: { in: ["pending", "needs_action", "needs_confirmation"] } } })) throw new HttpError(409, "locked", decideLockedLine(c.test.developer.pronoun)); // the claim rolls back
     const piece = await pieceOf(key, tx);
     const paidNow = Math.max(review.amountCents, piece ? (await pieceRoom(piece, tx)).paidCents : review.amountCents);

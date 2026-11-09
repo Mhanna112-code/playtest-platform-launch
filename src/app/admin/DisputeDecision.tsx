@@ -112,7 +112,7 @@ export function DisputeDecision({ id, minCents: min0, maxCents: max0, range: ran
             setBusy(true);
             setMsg(null);
             try {
-              const r = await api<{ line?: string }>("/api/admin/decide", { id, total, note: submittedNote, seenAt: loaded, confirmed: stopped, ...(ticked ? { tickCents: extra } : {}) });
+              const r = await api<{ line?: string }>("/api/admin/decide", { id, total, note: submittedNote, seenAt: loaded, devSideSeenAt: side.at, confirmed: stopped, ...(ticked ? { tickCents: extra } : {}) });
               await keep.clear();
               // (Owner, Nov 3, batch 35 §163) The server's own result, not "Done.": "Done: raised the pay to $10.00 ($3.00 more charged)." After the reload the
               // row has left Open disputes; the same line stays in Your actions.
@@ -120,7 +120,7 @@ export function DisputeDecision({ id, minCents: min0, maxCents: max0, range: ran
             } catch (e) {
               if (e instanceof ApiError && e.code === "stop_once") {
                 setStopped(true);
-                if (typeof e.data.devSide === "string") setSide((s) => ({ text: e.data.devSide as string, at: s.at ?? new Date().toISOString() }));
+                if (typeof e.data.devSide === "string" && typeof e.data.devSideAt === "string") setSide({ text: e.data.devSide, at: e.data.devSideAt });
                 if (typeof e.data.minCents === "number" && typeof e.data.maxCents === "number") setBounds({ minCents: e.data.minCents, maxCents: e.data.maxCents, range: typeof e.data.range === "string" ? e.data.range : "", loaded: typeof e.data.seenAt === "string" ? e.data.seenAt : new Date().toISOString() });
                 setMsg({ ok: false, text: `Your Decide didn't go through. ${((e.data.changes as { text: string }[]) ?? []).map((c) => c.text).join(" ")}` });
               } else setMsg({ ok: false, text: errOf(e) });

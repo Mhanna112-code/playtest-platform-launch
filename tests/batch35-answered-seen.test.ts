@@ -75,7 +75,7 @@ describe("batch 35 §86: answered changes never stop a later press", () => {
     expect(answersIt(changes.find((e) => e.kind === "requested")!, { item: requests[0].id })).toBe(true);
   });
 
-  it("admin Decide answers a newly added dispute side and records the dispute id for later admin stops", async () => {
+  it("admin Decide stops for a newly added dispute side and records the dispute id after deciding", async () => {
     const { dev, testId } = await setup(); const { tester, sessionId } = await joined(testId, "Ana Silva", "they");
     await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
@@ -86,8 +86,10 @@ describe("batch 35 §86: answered changes never stop a later press", () => {
     await settle();
     expect((await act(testId, "dispute-side", dev.cookie, { disputeId: d.id, text: "They skipped half the questions" })).status).toBe(200);
     const admin = await makeUser(); const u = await db.user.update({ where: { id: admin.user.id }, data: { isAdmin: true } });
-    expect(await decideDispute(u, d.id, { seenAt: loaded, total: "", load: "admin-a" })).toEqual({ extraCents: 0, line: "Done: kept the pay at $4.00, which was already paid: nothing more was charged." });
     const side = await db.dispute.findUniqueOrThrow({ where: { id: d.id } });
+    const decision = { seenAt: loaded, total: "", load: "admin-a" };
+    await expect(decideDispute(u, d.id, decision)).rejects.toMatchObject({ code: "stop_once", data: { devSide: side.devSide, devSideAt: side.devSideAt!.toISOString() } });
+    expect(await decideDispute(u, d.id, { ...decision, devSideSeenAt: side.devSideAt!.toISOString() })).toEqual({ extraCents: 0, line: "Done: kept the pay at $4.00, which was already paid: nothing more was charged." });
     await expect(stopForUnanswered(u.id, testId, "Another press", [{ item: d.id, text: "The developer added their side", at: side.devSideAt! }])).resolves.toBeUndefined();
     await expect(stopForUnanswered(u.id, testId, "Another press", [
       { item: d.id, text: "The developer added their side", at: side.devSideAt! },

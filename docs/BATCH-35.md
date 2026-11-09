@@ -821,7 +821,7 @@ Once a person answers a change, its lines never stop a later press, on that page
 AFTER the change happened, using the same `answersIt` matching as §79 and the person's ActionLog (the answer's item id is kept in its existing metadata; no new
 table). An update made after the answer is new and still stops once, as does any unrelated unanswered change. Their own action in another tab stays its own line (§67).
 - Answers: Accept / Decline a call request, application or rejoin ask; Pay / Pay more / Confirm with your bank on a piece (its sent / updated lines); Switch / Keep
-  on the terms offer; Join from an invite; the developer's side of a dispute; the admin's Decide. Decide answers that dispute's own lines, including a side just added.
+  on the terms offer; Join from an invite; the developer's side of a dispute; the admin's Decide. An unseen developer response stops Decide once and shows the response. A successful Decide answers that dispute's own lines.
 - Applies to the developer's gates (test page and Edit), the tester's gate, Join, both Rate gates and the admin's stops. The live top box and the existing seen / second-press
   machinery keep their rules. Exact ids distinguish requests, applications and pieces; older event lines keep §79's kind / contract / piece-name or exact-text fallback.
 
