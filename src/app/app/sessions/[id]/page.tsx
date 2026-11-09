@@ -602,7 +602,8 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
               <p className="flex flex-wrap items-center gap-2 text-white">
                 {sub?.review ? (sub.review.rejected ? <XCircle className="h-4 w-4 text-rose-300" /> : <CheckCircle2 className="h-4 w-4 text-emerald-300" />) : <CircleDot className={`h-4 w-4 ${sub ? "text-amber-300" : "text-slate-400"}`} />}
                 <strong>{name}:</strong>
-                {sub && <TesterPaymentTag anchor={`payment-${sub.id}`} review={sub.review} confirming={confirmingBase.has(sub.id)} delayed={paymentDelayed(sub.id)} paidCents={partPaid.get(sub.id) ?? 0}
+                {/* (Owner, Nov 9, §334) No "Waiting for review" while the Charge / Let it go box is open on this piece (choiceOpen: the box's own condition). */}
+                {sub && <TesterPaymentTag anchor={`payment-${sub.id}`} choiceOpen={choiceOpen(sub)} review={sub.review} confirming={confirmingBase.has(sub.id)} delayed={paymentDelayed(sub.id)} paidCents={partPaid.get(sub.id) ?? 0}
                   developerDeleted={devGone && !sub.choiceOfferedAt ? devRealName : null} developerPronoun={c.test.developer.pronoun} closedOn={chargeShut(sub.id) ? shutOn(sub.id) : null} />}
                 <span className="text-slate-200">{sub ? <>{additionsOf(sub.additions).length ? "Updated" : "Sent"} {fmtDateTime(sub.updatedAt)}</> : "Not sent yet"}</span>
                 {cents != null && <span className={`badge ${required ? "border-amber-300/40 text-amber-200" : ""}`}>{required ? "Required" : "Not required"}</span>}
