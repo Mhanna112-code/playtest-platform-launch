@@ -140,7 +140,7 @@ describe("the tester's session page (§182)", () => {
     expect(f).toContain('<details open className="group/fold" data-add-fold="">');
     expect(f).toContain('data-add-scroll=""');
     expect(f).toContain("useKept(`add:${sessionId}:${questionKey}`");
-    expect(f).toContain("<FormMistakes text={err} press={sender} named={first ? ANSWER_PRESS : PRESS_VERBS[\"written-add\"]} />"); // (§222) Add, or Answer this question
+    expect(f).toContain("<FormMistakes text={err} press={sender} named={first ? ANSWER_PRESS : PRESS_VERBS[\"written-add\"]} find={"); // (§222) Add, or Answer this question (Codex b5ec34ce: `find`)
     // Below the panel the button names its question (its first line).
     const closed = html(createElement(WrittenAddForm, { sessionId: "s1", seenAt: "2026-11-04T00:00:00.000Z", questionKey: "qabc", question: "Where did you get stuck?", made: 2, slot: "s1:qabc" }));
     expect(closed).toContain(`data-add-more="written">${ADD_OPEN}</button>`);

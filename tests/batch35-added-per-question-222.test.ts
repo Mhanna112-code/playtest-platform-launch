@@ -181,7 +181,7 @@ describe("§222 the tester's rows", () => {
     expect(first).not.toContain("data-additions-left");
     expect(row({ made: 9, first: true })).toContain(">Answer this question</button>");
     const f = src("app/app/sessions/[id]/SessionActions.tsx");
-    expect(f).toContain('<FormMistakes text={err} press={sender} named={first ? ANSWER_PRESS : PRESS_VERBS["written-add"]} />');
+    expect(f).toContain('<FormMistakes text={err} press={sender} named={first ? ANSWER_PRESS : PRESS_VERBS["written-add"]} find={' /* (Codex b5ec34ce: the box finds its field) */);
     expect(f).toContain('label={first ? ANSWER_PRESS : "Add"}');
   });
 

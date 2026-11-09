@@ -159,9 +159,9 @@ describe("§170 (3) refusals name the press, not the button's sentence", () => {
     expect(html(createElement(FormMistakes, { text: "The test is paused.", press: "Send Answers", named: PRESS_VERBS.written }))).toContain("Your Send Answers didn&#x27;t go through: The test is paused.");
     expect(html(createElement(FormMistakes, { text: "The test is paused.", press: "Add to my answer", named: PRESS_VERBS["written-add"] }))).toContain("Your Add didn&#x27;t go through: The test is paused.");
     const form = src("app/app/sessions/[id]/SessionActions.tsx");
-    expect(form).toContain("press={SEND_ANSWERS} named={PRESS_VERBS.written}");
+    expect(form).toContain('press={SEND_ANSWERS}\n'); // (Codex b5ec34ce) its box names the press itself: "Your Send Answers didn't go through" (no `named`)
     // (Owner, Nov 5, §222) Or, for a question's first answer, the press Answer this question.
-    expect(form).toContain('<FormMistakes text={err} press={sender} named={first ? ANSWER_PRESS : PRESS_VERBS["written-add"]} />');
+    expect(form).toContain('<FormMistakes text={err} press={sender} named={first ? ANSWER_PRESS : PRESS_VERBS["written-add"]} find={' /* (Codex b5ec34ce: the box finds its field) */);
     // Without `named`, FormMistakes names the button as before.
     expect(html(createElement(FormMistakes, { text: "Your account is paused.", press: "Save profile" }))).toContain("Your Save profile didn&#x27;t go through: Your account is paused.");
   });

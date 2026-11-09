@@ -195,7 +195,7 @@ describe("the tester adds under one question", () => {
     // The same box as before: the editor with Bold, Italic, Code block and 📎, the 20,000 count (§186: the addition's own), the paused draft line.
     const form = actions.slice(actions.indexOf("export function WrittenAddForm"), actions.indexOf("export function LeaveButton"));
     // (Owner, Nov 4, §189) The count is the editor's own (AnswerBox `alone` carries data-written-count); the form draws no second one.
-    for (const s of ["<AnswerBox ", " alone value={text}", "What you add is kept as a draft. Adding comes back when the test resumes.", "<ChangesBox side=\"tester\""]) expect(form).toContain(s);
+    for (const s of ["<AnswerBox ", " alone min short=", "What you add is kept as a draft. Adding comes back when the test resumes.", "<ChangesBox side=\"tester\""]) expect(form).toContain(s);
     expect(form).not.toContain("data-written-count");
     expect(actions).toContain('{...(alone ? { "data-written-count": "" } : {})} />');
   });

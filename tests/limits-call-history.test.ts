@@ -34,7 +34,8 @@ describe("§186 text limits: 20,000 (was 50,000)", () => {
     expect(checkWrittenLength(["a".repeat(20_000)]).ok).toBe(true);
     expect(checkWrittenLength(["a".repeat(12_000), "b".repeat(8_001)])).toMatchObject({ ok: false, message: "Your written answers can be at most 20,000 characters in all (now 20,001)." });
     // No 50,000 left in the code.
-    for (const f of ["lib/limits.ts", "lib/rules.ts", "app/app/sessions/[id]/SessionActions.tsx", "lib/typingLimit.ts"]) expect(src(f), f).not.toMatch(/50_000|50000|(?<!was )50,000/);
+    // (Codex 2a0e553f) rules.ts's `partMax: 50_000` is a part's $500 cap in cents, not a text limit.
+    for (const f of ["lib/limits.ts", "lib/rules.ts", "app/app/sessions/[id]/SessionActions.tsx", "lib/typingLimit.ts"]) expect(src(f).replace("partMax: 50_000", ""), f).not.toMatch(/50_000|50000|(?<!was )50,000/);
   });
 
   it("an addition: 20,000 of its own (markers not counted), whatever the rest holds", () => {
@@ -57,7 +58,7 @@ describe("§186 text limits: 20,000 (was 50,000)", () => {
     const f = src("app/app/sessions/[id]/SessionActions.tsx");
     expect(f).toContain("const length = writtenLength([text]);");
     expect(f).toContain("return setErr(FIELD + additionTooLongLine(length));");
-    expect(f).toContain("total={length} alone value={text} onChange={setText} />");
+    expect(f).toContain("total={length} alone min short="); // (Codex 4d424d8f: an addition has its own minimum)
     expect(f).toContain("readOnly value={text} maxLength={WRITTEN_MAX_CHARS} data-add-readonly");
     expect(f).not.toContain("used: number");
     expect(src("app/app/sessions/[id]/page.tsx")).not.toContain("used={writtenLength(");

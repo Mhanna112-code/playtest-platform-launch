@@ -16,7 +16,7 @@ describe("§189 small UI fixes", () => {
     const form = actions.slice(actions.indexOf("export function WrittenAddForm"), actions.indexOf("export function LeaveButton"));
     // One editor, as an addition (`alone`: its own 20,000); no counter of the form's own beside it.
     expect(form.match(/<AnswerBox /g)).toHaveLength(1);
-    expect(form).toContain(" alone value={text} onChange={setText} />");
+    expect(form).toContain(" alone min short="); // (Codex 4d424d8f: an addition has its own minimum; its value and onChange follow)
     expect(form).not.toContain("data-written-count");
     expect(form).not.toContain('{length.toLocaleString("en-US")} / {WRITTEN_MAX_CHARS.toLocaleString("en-US")}');
     // The editor's counter carries the add form's hook; an answer box in the answers form keeps only its own (the form's total stays there).
