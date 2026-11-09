@@ -70,7 +70,11 @@ describe("A3) a payment hold, a chargeback hold and a suspension are one state",
       else await db.user.update({ where: { id: dev.user.id }, data: { devSuspendedAt: new Date(), testerSuspendedAt: new Date() } });
       const code = how === "hold" ? "held" : "suspended";
       // (Batch 15 section 29) Stop and End early now work from the restricted view (tested in batch15-paused); everything else is refused.
-      for (const [action, body] of [["edit", { version: 1, fields: { title: "x" } }], ["next-round", {}], ["invite", { testerIds: [tester.user.id] }], ["pay-extra", { contractId: sessionId, amount: "2.00" }], ["lower-length", { callId: call.id, minutes: 20, reason: "We stopped early." }], ["message", { contractId: sessionId, body: "hi" }]] as const) {
+      // (Codex 2033b106: Edit opens its NDA-only view while paused, held, suspended or stopped; other fields are refused as nda_only)
+      const ed = await act(testId, "edit", dev.cookie, { seenAt: seen(), confirmed: true, version: 1, fields: { title: "x" } });
+      expect(ed.status, `${how} edit`).toBe(409);
+      expect(ed.body.error.code, `${how} edit`).toBe("nda_only");
+      for (const [action, body] of [["next-round", {}], ["invite", { testerIds: [tester.user.id] }], ["pay-extra", { contractId: sessionId, amount: "2.00" }], ["lower-length", { callId: call.id, minutes: 20, reason: "We stopped early." }], ["message", { contractId: sessionId, body: "hi" }]] as const) {
         const r = await act(testId, action, dev.cookie, { seenAt: seen(), confirmed: true, ...body });
         expect(r.status, `${how} ${action}`).toBe(403);
         expect(r.body.error.code, `${how} ${action}`).toBe(code);
@@ -448,6 +452,7 @@ describe("follow-up 2, 3) the team stopping a test", () => {
     for (const [action, body] of [["edit", { version: 1, fields: { title: "x" } }], ["stop", { reason: "We have what we need." }], ["next-round", {}], ["invite", { testerIds: [sessionId] }], ["end-early", { contractIds: [sessionId], reason: "Enough said" }], ["request-time", { contractIds: [sessionId], startsAt: new Date(Date.now() + 48 * 3_600_000).toISOString() }]] as const) {
       const r = await act(testId, action, dev.cookie, { seenAt: loaded, ...body });
       expect(r.status, action).toBe(409);
+      if (action === "edit") { expect(r.body.error.code, action).toBe("nda_only"); continue; } // (Codex 2033b106: Edit opens its NDA-only view while paused, held, suspended or stopped; other fields are refused as nda_only)
       expect(r.body.error.code, action).toBe("admin_stopped");
       expect(r.body.error.failed, action).toMatch(/didn't go through$/);
     }
@@ -464,7 +469,7 @@ describe("follow-up 2, 3) the team stopping a test", () => {
     expect(ac).toContain("adminStopped");
     expect(ac).toContain("window.location.href = `/app/tests/${testId}`");
     expect(src("app/app/tests/[id]/edit/page.tsx")).toContain("<AutoRefresh");
-    expect(src("app/app/tests/[id]/edit/page.tsx")).toMatch(/className="err-field"[^>]*>This test was stopped\./); // red, not blue
+    expect(src("app/app/tests/[id]/edit/page.tsx")).toContain(") : ndaOnly ? ("); // (Codex 2033b106) a stopped test's Edit is its NDA-only view (was the red "This test was stopped.")
     expect(alertOf("stopped")).toBeNull();
   });
 });
@@ -473,7 +478,8 @@ describe("follow-up 4) the redirect for a restricted developer", () => {
   it("is decided before anything else renders, by the layout and by the page itself, and the pulse says restricted", async () => {
     const layout = src("app/app/layout.tsx");
     expect(layout.indexOf("closedForSuspended(path, u, side)")).toBeLessThan(layout.indexOf("unreadEntryCount(u.id)"));
-    for (const f of ["app/app/tests/[id]/edit/page.tsx", "app/app/tests/new/page.tsx"]) expect(src(f), f).toContain("requireOpenDevPage");
+    expect(src("app/app/tests/new/page.tsx")).toContain("requireOpenDevPage");
+    expect(src("app/app/tests/[id]/edit/page.tsx")).toContain("requireOpenPage(`/app/tests/${id}/edit`)"); // (Codex 2033b106: Edit opens its NDA-only view while paused, held, suspended or stopped; other fields are refused as nda_only)
     // (Batch 15 section 29) The test page opens in its restricted view: decided first, by the page's own path.
     expect(src("app/app/tests/[id]/page.tsx")).toContain("const u = await requireOpenPage(`/app/tests/${id}`);");
     expect(src("components/SessionWatch.tsx")).toContain('window.location.replace("/app")');

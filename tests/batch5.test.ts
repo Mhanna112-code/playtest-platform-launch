@@ -116,7 +116,8 @@ describe("batch 5 item 3: a restricted account's signed-in pages go to the dashb
   it("only the dashboard, Payments, Settings and the bell list stay open: for a suspended tester and a suspended or held developer", () => {
     for (const u of [susTester, heldDev, cbDev, susDev]) {
       // (Batch 16 section 28) A suspended tester's session page decides itself (the limited view of a test they were removed from).
-      for (const p of closedPaths) expect(closedForSuspended(p, u), `${p} ${JSON.stringify(u)}`).toBe(!(u === susTester && p === "/app/sessions/x"));
+      // (Codex 2033b106: Edit opens its NDA-only view while paused, held, suspended or stopped; other fields are refused as nda_only): a restricted developer's Edit is open (its NDA-only view).
+      for (const p of closedPaths) expect(closedForSuspended(p, u), `${p} ${JSON.stringify(u)}`).toBe(!(u === susTester && p === "/app/sessions/x") && !(u !== susTester && p === "/app/tests/x/edit"));
       expect(closedForSuspended("/app/tests/x", u)).toBe(u === susTester);
       for (const p of openPaths) expect(closedForSuspended(p, u), p).toBe(false);
     }
@@ -129,7 +130,8 @@ describe("batch 5 item 3: a restricted account's signed-in pages go to the dashb
   it("a hold keeps the tester side of an account with both sides open; an admin suspension closes both; the page decides a chat or call by the role in it", () => {
     const both = { isDeveloper: true, isTester: true, holdStartedAt: new Date(), holdReason: "unpaid", side: "tester" };
     for (const p of ["/app/find", "/app/find/x", "/app/sessions/x", "/app/developers/x"]) expect(closedForSuspended(p, both, "tester"), p).toBe(false);
-    for (const p of ["/app/tests/x/edit", "/app/tests/new", "/app/testers/x"]) expect(closedForSuspended(p, both, "developer"), p).toBe(true);
+    for (const p of ["/app/tests/new", "/app/testers/x"]) expect(closedForSuspended(p, both, "developer"), p).toBe(true);
+    expect(closedForSuspended("/app/tests/x/edit", both, "developer")).toBe(false); // (Codex 2033b106: Edit opens its NDA-only view while paused, held, suspended or stopped; other fields are refused as nda_only)
     expect(closedForSuspended("/app/tests/x", both, "developer")).toBe(false); // (batch 15 section 29) its restricted view
     expect(closedForSuspended("/app/profile", both, "tester")).toBe(false);
     expect(closedForSuspended("/app/profile", both, "developer")).toBe(true);

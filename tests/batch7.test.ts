@@ -36,7 +36,7 @@ describe("batch 7 item 1: 'Not listed'", () => {
 describe("batch 7 item 2: a stopped test shows only what still works", () => {
   it("developer: no Edit, End early, Stop, Invite or call-request tools (and no 'no calls' text); Next round stays and works", async () => {
     const top = src("app/app/tests/[id]/TopPanel.tsx");
-    expect(top).toContain("{!p.restricted && !noEdit && <a"); // (batch 35 §168) noEdit: stopped or closed
+    expect(top).toContain('{p.status !== "closed" && p.status !== "draft" && <a'); // (Codex 2033b106) a stopped test's Edit is its NDA-only view ("Edit NDA"); none when closed
     expect(top).toContain('{p.status !== "draft" && !stopped && !p.workEnded && <button');
     expect(top).toContain("{!stopped && !p.workEnded && <ConfirmButton");
     expect(top).toContain("{!(p.restricted || p.teamStopped || p.status === \"draft\") && ("); // (batch 35 §168) one Next round button

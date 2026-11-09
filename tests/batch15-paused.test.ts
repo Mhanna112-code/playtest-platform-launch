@@ -36,7 +36,7 @@ describe("the restricted view (sections 29 and 37)", () => {
   it("test pages open for a restricted developer (Edit and Post stay closed); the banner's title by cause and its allowed line built from what shows", () => {
     const dev = { isDeveloper: true, isTester: false, devSuspendedAt: new Date() };
     expect(closedForSuspended("/app/tests/abc", dev, "developer")).toBe(false);
-    expect(closedForSuspended("/app/tests/abc/edit", dev, "developer")).toBe(true);
+    expect(closedForSuspended("/app/tests/abc/edit", dev, "developer")).toBe(false); // (Codex 2033b106: Edit opens its NDA-only view while paused, held, suspended or stopped; other fields are refused as nda_only)
     expect(closedForSuspended("/app/tests/new", dev, "developer")).toBe(true);
     expect(closedForSuspended("/app/tests/abc", { isDeveloper: true, isTester: false, holdStartedAt: new Date() }, "developer")).toBe(false);
     expect(BANNER_TITLES["team-paused"]).toBe("The team paused this test.");
@@ -70,8 +70,7 @@ describe("the restricted view (sections 29 and 37)", () => {
     const { dev, testId, b, loaded } = await busyTest();
     await db.test.update({ where: { id: testId }, data: { adminPausedAt: new Date(), adminNote: "Build link is broken" } });
     const e = await act(testId, "edit", dev.cookie, { version: 1, fields: { title: "x" }, seenAt: loaded });
-    expect(e.body.error.code).toBe("admin_paused");
-    expect(e.body.error.failed).toBe("Your Save on Harbor Run didn't go through");
+    expect(e.body.error.code).toBe("nda_only"); // (Codex 2033b106: Edit opens its NDA-only view while paused, held, suspended or stopped; other fields are refused as nda_only)
     const p = await act(testId, "end-early", dev.cookie, { contractIds: [b.sessionId], reason: "Paused anyway", seenAt: loaded });
     expect(p.body.error.changes.map((c: { text: string }) => c.text)).toContainEqual(expect.stringMatching(/^The team paused this test at /));
     expect((await act(testId, "end-early", dev.cookie, { contractIds: [b.sessionId], reason: "Paused anyway", seenAt: loaded, confirmed: true, boxAt: seen() })).status).toBe(200);

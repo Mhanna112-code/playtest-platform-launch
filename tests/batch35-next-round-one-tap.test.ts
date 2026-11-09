@@ -173,7 +173,7 @@ describe("§168 a closed test has no Edit", () => {
 
   it("the Edit page says so instead of the form", () => {
     const page = src("app/app/tests/[id]/edit/page.tsx");
-    expect(page).toContain(') : t.status === "closed" ? (');
+    expect(page).toContain('{t.status === "closed" ? ('); // (Codex 2033b106: the closed check comes first, then the NDA-only view)
     expect(page).toContain('<p className="err-field" role="alert" data-closed="">{TEST_CLOSED_NO_EDIT}</p>');
   });
 
@@ -184,7 +184,9 @@ describe("§168 a closed test has no Edit", () => {
     const top = (status: string) => renderToStaticMarkup(React.createElement(TopPanel, { id: "t1", title: "Harbor Run", status, workEnded: status === "closed", terms: "", spotsLine: "1 of 3 spots used", seenAt: seen(), working: [], joinMode: "apply" }));
     for (const status of ["closed", "stopped"]) {
       const html = top(status);
-      expect(html, status).not.toContain("/edit");
+      // (Codex 2033b106) A stopped test keeps one link to Edit, its NDA-only view ("Edit NDA"); a closed test none.
+      if (status === "closed") expect(html, status).not.toContain("/edit");
+      else expect(html.match(/\/edit"/g)?.length, status).toBe(1);
       expect(html, status).not.toContain("> Edit</a>");
       expect(html, status).toContain("You approve each tester"); // the badge stays, as plain text
       expect(html, status).toContain("Next round");

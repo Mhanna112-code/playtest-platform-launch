@@ -56,7 +56,7 @@ describe("batch 35 §2: an application's Accept / Decline names its press", () =
     expect(dec.body.error.failed).toBe("Your Decline on Harbor Run didn't go through");
     // Other presses keep their wording.
     const t = await db.test.findUniqueOrThrow({ where: { id: testId } });
-    expect((await act(testId, "edit", dev.cookie, { version: t.version, fields: { spots: 4 } })).body.error.failed).toBe("Your Save on Harbor Run didn't go through");
+    expect((await act(testId, "edit", dev.cookie, { version: t.version, fields: { spots: 4 } })).body.error.code).toBe("nda_only"); // (Codex 2033b106: Edit opens its NDA-only view while paused, held, suspended or stopped; other fields are refused as nda_only)
   });
 });
 

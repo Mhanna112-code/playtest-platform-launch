@@ -35,8 +35,8 @@ describe("a suspended developer (design doc 2 and 11.4)", () => {
     const call = await bookCall(testId, dev.cookie, sessionId, tester.cookie, 24 * 6);
     expect((await adm("suspend", a.cookie, { id: dev.user.id, note: "Spam" })).status).toBe(200);
     const r = await act(testId, "edit", dev.cookie, { version: 1, fields: { title: "New" } });
-    expect(r.status).toBe(403);
-    expect(r.body.error).toMatchObject({ code: "suspended", failed: "Your Save on Harbor Run didn't go through" });
+    expect(r.status).toBe(409);
+    expect(r.body.error).toMatchObject({ code: "nda_only" }); // (Codex 2033b106: Edit opens its NDA-only view while paused, held, suspended or stopped; other fields are refused as nda_only)
     expect((await act(testId, "invite", dev.cookie, { seenAt: seen(), testerIds: [] })).body.error.failed).toBe("Your Invite on Harbor Run didn't go through");
     expect((await pay(dev.cookie, { amount: "0", kind: "submission", id: sub.id, reason: "Not enough here", confirmed: true })).body.error.code).toBe("suspended");
     expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000, confirmed: true })).body.error.code).toBe("suspended");
@@ -85,7 +85,8 @@ describe("a suspended developer (design doc 2 and 11.4)", () => {
     const tester = { isDeveloper: false, isTester: true, testerSuspendedAt: new Date() };
     for (const u of [dev, held]) {
       expect(closedForSuspended("/app/tests/abc", u)).toBe(false); // (batch 15 section 29) the restricted view
-      for (const p of ["/app/tests/abc/edit", "/app/tests/new", "/app/messages", "/app/chat/x", "/app/profile", "/app/testers/x", "/app/developers/x", "/app/find", "/app/find/x", "/app/sessions/x", "/app/calls/x"]) expect(closedForSuspended(p, u), p).toBe(true);
+      expect(closedForSuspended("/app/tests/abc/edit", u)).toBe(false); // (Codex 2033b106: Edit opens its NDA-only view while paused, held, suspended or stopped; other fields are refused as nda_only)
+      for (const p of ["/app/tests/new", "/app/messages", "/app/chat/x", "/app/profile", "/app/testers/x", "/app/developers/x", "/app/find", "/app/find/x", "/app/sessions/x", "/app/calls/x"]) expect(closedForSuspended(p, u), p).toBe(true);
       for (const p of ["/app", "/app/", "/app?failed=x", "/app/payments", "/app/help", "/app/account", "/app/account/blocked", "/app/notifications", "/app/switch"]) expect(closedForSuspended(p, u), p).toBe(false);
     }
     for (const p of ["/app/find", "/app/find/x", "/app/profile", "/app/messages", "/app/chat/x", "/app/calls/x", "/app/testers/x", "/app/developers/x"]) expect(closedForSuspended(p, tester), p).toBe(true);
@@ -94,7 +95,7 @@ describe("a suspended developer (design doc 2 and 11.4)", () => {
     expect(closedForSuspended("/app/payments", tester)).toBe(false);
     // A hold restricts only the developer side of an account with both.
     const both = { isDeveloper: true, isTester: true, holdStartedAt: new Date(), side: "tester" };
-    expect(closedForSuspended("/app/tests/abc/edit", both, "developer")).toBe(true);
+    expect(closedForSuspended("/app/tests/abc/edit", both, "developer")).toBe(false); // (Codex 2033b106) the NDA-only view
     expect(closedForSuspended("/app/find", both, "tester")).toBe(false);
     expect(closedForSuspended("/app/messages", both, "tester")).toBe(false);
     expect(closedForSuspended("/app/messages", both, "developer")).toBe(true);
@@ -202,7 +203,7 @@ describe("the team pausing or stopping a test (design doc 6)", () => {
     const a = await admin();
     await adm("pause-test", a.cookie, { id: testId, note: "Reported" });
     const e = await act(testId, "edit", dev.cookie, { version: 1, fields: { title: "x" } });
-    expect(e.body.error).toMatchObject({ code: "admin_paused", failed: "Your Save on Harbor Run didn't go through" });
+    expect(e.body.error).toMatchObject({ code: "nda_only" }); // (Codex 2033b106: Edit opens its NDA-only view while paused, held, suspended or stopped; other fields are refused as nda_only)
     const ben = await makeUser({ tester: true });
     expect((await act(testId, "join", ben.cookie, { listingVersion: 1 })).body.error.message).toBe("This test is paused right now.");
     expect((await sact(sessionId, "request-time", tester.cookie, { seenAt: seen(), startsAt: atHours(80) })).body.error.message).toMatch(/paused/);

@@ -235,7 +235,9 @@ describe("a suspended developer's test page: its restricted view (batch 15 secti
     const { dev, testId, sessionId } = await withWork();
     const a = await admin();
     await adm("suspend", a.cookie, { id: dev.user.id, note: "Spam" });
-    for (const [action, body] of [["edit", { version: 1, fields: { title: "x" } }], ["next-round", {}], ["invite", { testerIds: [sessionId] }]] as const) {
+    // (Codex 2033b106: Edit opens its NDA-only view while paused, held, suspended or stopped; other fields are refused as nda_only)
+    expect((await act(testId, "edit", dev.cookie, { seenAt: seen(), confirmed: true, version: 1, fields: { title: "x" } })).body.error.code).toBe("nda_only");
+    for (const [action, body] of [["next-round", {}], ["invite", { testerIds: [sessionId] }]] as const) {
       const r = await act(testId, action, dev.cookie, { seenAt: seen(), confirmed: true, ...body });
       expect(r.body.error.code, action).toBe("suspended");
       expect(r.body.error.failed, action).toMatch(/^Your .+ on Harbor Run didn't go through$/);
