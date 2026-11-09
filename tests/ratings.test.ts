@@ -53,7 +53,7 @@ describe("the tester rates the developer", () => {
     await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
     // (Batch 17 section 1) Everything sent must be settled first: paid under the listing (with a reason).
-    expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "4.00", tickedCents: 400, reason: "Short" })).status).toBe(200);
+    expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "4.00", tickedCents: 400, reason: "Short answers only" })).status).toBe(200);
     await bookCall(testId, dev.cookie, sessionId, tester.cookie, 72);
     const w = await rateWarning(sessionId);
     expect(w).toEqual({ working: true, lines: ["Not sent yet from your contract: recording ($12) — it won't be paid.", "All your upcoming calls will be cancelled."] });

@@ -15,7 +15,7 @@ describe("(Item 28; batch 28 §15) the dispute decision's range", () => {
   it("from what the piece was paid up to its cap", () => {
     expect(R.checkDisputeDecision(300, 0, 300)).toEqual({ ok: true, extraCents: 300 });
     expect(R.checkDisputeDecision(400, 0, 300)).toEqual({ ok: false, message: "At most $3.00: the most this piece can be paid." });
-    expect(R.checkDisputeDecision(400, 0, 300, true)).toEqual({ ok: false, message: "At most $3.00: what's left of the $1,000 for this tester's calls." });
+    expect(R.checkDisputeDecision(400, 0, 300, true)).toEqual({ ok: false, message: "At most $3.00: what's left of the $500 for this tester's calls." }); // (Codex 2a0e553f: the calls cap is $500)
     expect(R.checkDisputeDecision(0, 0, 300)).toEqual({ ok: true, extraCents: 0 });
     expect(R.checkDisputeDecision(100, 200, 300).ok).toBe(false); // below what this piece was paid
   });

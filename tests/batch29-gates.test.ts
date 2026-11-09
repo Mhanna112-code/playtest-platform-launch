@@ -105,9 +105,9 @@ describe("batch 29 section 11: stopped, closed and paused tests keep the stop-on
     await startHold(dev.user.id, "unpaid");
     const loaded = await loadedNow();
     await db.testEvent.create({ data: { testId, kind: "left", text: "Cara Diaz left the test" } });
-    const e = await act(testId, "end-early", dev.cookie, { contractIds: [b.sessionId], reason: "All done.", seenAt: loaded });
+    const e = await act(testId, "end-early", dev.cookie, { contractIds: [b.sessionId], reason: "All done, thank you.", seenAt: loaded });
     expect(texts(e)).toEqual(["Cara Diaz left the test"]);
-    expect((await act(testId, "end-early", dev.cookie, { contractIds: [b.sessionId], reason: "All done.", seenAt: loaded, confirmed: true, boxAt: seen() })).status).toBe(200);
+    expect((await act(testId, "end-early", dev.cookie, { contractIds: [b.sessionId], reason: "All done, thank you.", seenAt: loaded, confirmed: true, boxAt: seen() })).status).toBe(200);
   });
 
   it("Rate keeps its own short list on a stopped test; excerpt Allow / Deny never stop", async () => {
@@ -164,7 +164,7 @@ describe("batch 29 section 12: the developer's own changes in another tab stop e
     const B = { seenAt: loaded, tab: "B" };
     const n = await act(testId, "next-round", dev.cookie, B);
     expect(n.status, JSON.stringify(n.body)).toBe(200);
-    const e = await act(testId, "end-early", dev.cookie, { contractIds: [a.sessionId], reason: "All done.", ...B });
+    const e = await act(testId, "end-early", dev.cookie, { contractIds: [a.sessionId], reason: "All done, thank you.", ...B });
     expect(texts(e)).toContain(line);
     const q = await act(testId, "request-time", dev.cookie, { contractIds: [a.sessionId], startsAt: atHours(50), ...B });
     expect(texts(q)).toContain(line);

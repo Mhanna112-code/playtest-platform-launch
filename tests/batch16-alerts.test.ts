@@ -129,11 +129,11 @@ describe("big changes from another tab stop every press once (section 21)", () =
     await later();
     const loaded = seen();
     await later();
-    expect((await act(testId, "end-early", dev.cookie, { contractIds: [a.sessionId], reason: "All done.", seenAt: seen(), confirmed: true, tab: "A" })).status).toBe(200);
+    expect((await act(testId, "end-early", dev.cookie, { contractIds: [a.sessionId], reason: "All done, thank you.", seenAt: seen(), confirmed: true, tab: "A" })).status).toBe(200);
     expect((await devLive(dev.cookie, testId, loaded, "B")).filter((t) => /another tab/.test(t))).toEqual(["You ended Ana Silva's work early in another tab"]);
-    const r = await act(testId, "end-early", dev.cookie, { contractIds: [a.sessionId, b.sessionId], reason: "All done.", seenAt: loaded, tab: "B" });
+    const r = await act(testId, "end-early", dev.cookie, { contractIds: [a.sessionId, b.sessionId], reason: "All done, thank you.", seenAt: loaded, tab: "B" });
     expect(texts(r)).toEqual(["You ended Ana Silva's work early in another tab"]);
-    const r2 = await act(testId, "end-early", dev.cookie, { contractIds: [a.sessionId, b.sessionId], reason: "All done.", seenAt: loaded, tab: "B", ...again() });
+    const r2 = await act(testId, "end-early", dev.cookie, { contractIds: [a.sessionId, b.sessionId], reason: "All done, thank you.", seenAt: loaded, tab: "B", ...again() });
     expect(r2.status).toBe(200);
     expect(r2.body.count).toBe(1);
     expect((await db.contract.findUniqueOrThrow({ where: { id: b.sessionId } })).status).toBe("ended");

@@ -169,7 +169,7 @@ describe("§271 developer side: their own words, whatever the Alerts ticks", () 
 
   it("Add your side (exempt from stops) stops once for their suspension since the page loaded", async () => {
     const w = await sent();
-    expect((await pay(w.dev.cookie, { kind: "submission", id: w.sub.id, amount: "1.00", tickedCents: 100, reason: "Partly", seenAt: seen(), confirmed: true })).status).toBe(200);
+    expect((await pay(w.dev.cookie, { kind: "submission", id: w.sub.id, amount: "1.00", tickedCents: 100, reason: "Partly done only", seenAt: seen(), confirmed: true })).status).toBe(200);
     expect((await sact(w.a.sessionId, "dispute", w.a.tester.cookie, { kind: "submission", id: w.sub.id, reason: "I answered everything in full.", seenAt: seen(), confirmed: true })).status).toBe(200);
     const d = await db.dispute.findFirstOrThrow({ where: { submissionId: w.sub.id } });
     const loaded = await loadedNow();
@@ -187,7 +187,7 @@ describe("§271 the team's Decide dispute never stops for a pause or hold", () =
     const a = await joined(s.testId);
     await sact(a.sessionId, "written", a.tester.cookie, { answers: ["a", "b"] });
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: a.sessionId } });
-    expect((await pay(s.dev.cookie, { kind: "submission", id: sub.id, amount: "1.00", tickedCents: 100, reason: "Partly", seenAt: seen(), confirmed: true })).status).toBe(200);
+    expect((await pay(s.dev.cookie, { kind: "submission", id: sub.id, amount: "1.00", tickedCents: 100, reason: "Partly done only", seenAt: seen(), confirmed: true })).status).toBe(200);
     expect((await sact(a.sessionId, "dispute", a.tester.cookie, { kind: "submission", id: sub.id, reason: "I answered everything in full.", seenAt: seen(), confirmed: true })).status).toBe(200);
     const d = await db.dispute.findFirstOrThrow({ where: { submissionId: sub.id } });
     const team = await admin();
