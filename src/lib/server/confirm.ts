@@ -2,7 +2,7 @@ import { CHECK_CANCELLED_UNDERNEATH } from "@/lib/pressLabels";
 import { db } from "@/lib/db";
 import { displayName, fmtDateTimeIn, fmtTimeIn, money, pronouns } from "@/lib/format";
 import { CONFIRM_DAYS, OVER_PAY_TICK_LINE, PAY_TICK_CENTS, PRESS_ACTION_MS, BANK_TO_CONFIRM_HREF, bankAnchor, bankHref, bankWaitingAllLine, bankWaitingLine, BANK_NOT_CONFIRMED, cardDeclinedConfirmLine, cut10 } from "@/lib/rules";
-import { awayFromTest, dayIn, onTestLine } from "@/lib/rules"; // (§177)
+import { awayFromTest, dayIn, onTestLine, PAY_OWED_HREF } from "@/lib/rules"; // (§177; §332)
 import { bankTopLead, confirmByText, pieceWords, type BankTopRow } from "@/lib/bankTop";
 import { HttpError } from "./http";
 import { lineLinks, linkPool } from "./lineLinks";
@@ -64,15 +64,39 @@ export async function tellBankWaiting(devId: string, now = new Date()) {
   const dev = await db.user.findUniqueOrThrow({ where: { id: devId } });
   const waiting = await waitingConfirmation(devId, undefined, now);
   if (!waiting.length) return;
-  const titles = new Map((await db.contract.findMany({ where: { id: { in: waiting.map((w) => w.contractId).filter((x): x is string => !!x) } }, select: { id: true, test: { select: { title: true } } } })).map((c) => [c.id, c.test.title])); // (§339) the test's current title
-  const line = bankWaitingAllLine(waiting.map((w) => ({ cents: w.amountCents, title: w.contractId ? titles.get(w.contractId) ?? null : null, by: w.actionBy! })));
+  const line = await bankWaitingText(waiting);
+  // (Owner, Nov 9, §332) While a hold is on, the line opens Pay what you owe (the dashboard's confirm box isn't the place then).
+  const href = dev.holdStartedAt ? PAY_OWED_HREF : BANK_TO_CONFIRM_HREF;
   // (Owner, Nov 6, §320) One key for every copy ("bankwait"), so a Weekly or Monthly email shows only the newest; "today" is the reader's own day of the last line.
   const today = await bankLineToday(devId, dev.timeZone, now);
   if (today && !today.summarizedAt) {
-    await db.notification.update({ where: { id: today.id }, data: { text: await renderFor(devId, line), readAt: null, createdAt: now } });
+    await db.notification.update({ where: { id: today.id }, data: { text: await renderFor(devId, line), readAt: null, createdAt: now, link: href } });
     return;
   }
-  await notify(dev.email, line, [line + "."], BANK_TO_CONFIRM_HREF, { side: "developer", always: true, payment: true, group: "payhold", reminder: BANK_WAIT_KEY });
+  await notify(dev.email, line, [line + "."], href, { side: "developer", always: true, payment: true, group: "payhold", reminder: BANK_WAIT_KEY });
+}
+
+/** The one bank-waiting line for these waiting charges ("Your bank wants you to confirm 2 payments ($19.00 in all): the first by …"). */
+async function bankWaitingText(waiting: Awaited<ReturnType<typeof waitingConfirmation>>) {
+  const titles = new Map((await db.contract.findMany({ where: { id: { in: waiting.map((w) => w.contractId).filter((x): x is string => !!x) } }, select: { id: true, test: { select: { title: true } } } })).map((c) => [c.id, c.test.title]));
+  return bankWaitingAllLine(waiting.map((w) => ({ cents: w.amountCents, title: w.contractId ? titles.get(w.contractId) ?? null : null, by: w.actionBy! })));
+}
+
+/**
+ * (Owner, Nov 9, §332) A hold just started and turned the charges made while away that waited for the bank into ones that wait for the lift (pauseAwayChecks): today's
+ * "Your bank wants you to confirm …" line is rewritten to what still needs the bank (opening Pay what you owe while the hold lasts), or removed if nothing does. A
+ * line already summarized into an email stays as it was sent.
+ */
+export async function refreshBankLineAfterHold(devId: string, now = new Date()) {
+  const dev = await db.user.findUniqueOrThrow({ where: { id: devId }, select: { timeZone: true, holdStartedAt: true } });
+  const today = await bankLineToday(devId, dev.timeZone, now);
+  if (!today || today.summarizedAt) return;
+  const waiting = await waitingConfirmation(devId, undefined, now);
+  if (!waiting.length) {
+    await db.notification.delete({ where: { id: today.id } }).catch(() => null);
+    return;
+  }
+  await db.notification.update({ where: { id: today.id }, data: { text: await renderFor(devId, await bankWaitingText(waiting)), link: dev.holdStartedAt ? PAY_OWED_HREF : BANK_TO_CONFIRM_HREF } });
 }
 
 /** (§320) The bank-confirmation line's one reminder key (it was "bankwait:<date>", one per day: those rows still count as the day's line). */
@@ -226,6 +250,7 @@ export async function bankToConfirm(devId: string, now = new Date()): Promise<Ba
   const allRow: BankTopRow[] = all ? [{ id: all.id, lead: (await import("@/lib/confirmAllText")).allWaitingLine(await db.payment.count({ where: { coveredById: all.id } }), all.amountCents), full: "", by: "", soon: false, href: "/app/payments#confirm", at: all.actionBy?.getTime() ?? 0, all: true }] : [];
   if (!waiting.length) return allRow;
   const tz = await zoneOf(devId);
+  const held = !!(await db.user.findUnique({ where: { id: devId }, select: { holdStartedAt: true } }))?.holdStartedAt;
   const named = await piecesNamed(waiting, (d) => fmtDateTimeIn(d, tz)); // (Owner, Nov 4, §178) a call by its date and time
   const owedIds = waiting.filter((p) => p.kind === "owed").map((p) => p.id);
   const once = await import("./owedOnce");
@@ -253,7 +278,7 @@ export async function bankToConfirm(devId: string, now = new Date()): Promise<Ba
         return bankTopLead(p.amountCents, namesTest ? null : c?.test.title ?? null, what);
       };
       const by = confirmByText(p.actionBy!, now, tz);
-      return { id: p.id, lead: lead(n.piece, covers), full: lead(n.full, coversFull), by: by.text, soon: by.soon, href: c ? bankHref(c.testId, p.id) : `/app/payments#${bankAnchor(p.id)}`, at: p.actionBy!.getTime(), tests: links.get(p.id) ?? [], links: lineLinks(pool, lead(n.full, coversFull), c?.testId), cents: p.amountCents };
+      return { id: p.id, lead: lead(n.piece, covers), full: lead(n.full, coversFull), by: by.text, soon: by.soon, href: held ? PAY_OWED_HREF : c ? bankHref(c.testId, p.id) : `/app/payments#${bankAnchor(p.id)}` /* (§332) a hold: Pay what you owe */, at: p.actionBy!.getTime(), tests: links.get(p.id) ?? [], links: lineLinks(pool, lead(n.full, coversFull), c?.testId), cents: p.amountCents };
     })
     .concat(allRow)
     .sort((a, b) => a.at - b.at || a.id.localeCompare(b.id));

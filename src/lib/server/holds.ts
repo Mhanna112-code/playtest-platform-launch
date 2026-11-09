@@ -129,6 +129,8 @@ export async function startHold(devId: string, reason: string, /** (§315) the d
   // (Owner, Nov 2, batch 35 §122) Charges made while away still waiting for the bank are paused: their checks are cancelled at Stripe (one that already went through is
   // recorded as paid) and they wait for the lift with the other new charges (§113), made then as the one combined payment.
   await (await import("./owedOnce")).pauseAwayChecks(devId).catch((e) => console.error("[hold] pause bank checks:", (e as Error).message));
+  // (Owner, Nov 9, §332) Today's "Your bank wants you to confirm …" line now says only what still needs the bank (and opens Pay what you owe), or goes.
+  await (await import("./confirm")).refreshBankLineAfterHold(devId, now).catch((e) => console.error("[hold] bank line:", (e as Error).message));
   // (Owner, Nov 2) A Pay the developer pressed whose bank page is still open is cancelled too (at Stripe first; one the bank already approved is recorded as paid,
   // never charged again): nothing is charged on a card during a hold, and the piece is unpaid again (the tester can still Charge it later).
   // (Owner, Nov 4, §171 B5; as §159 rule 9 does at a suspension) A Pay more whose bank page is open too: cancelled at Stripe first (one that already went through is
