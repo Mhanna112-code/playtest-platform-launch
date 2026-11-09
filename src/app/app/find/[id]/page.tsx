@@ -96,7 +96,7 @@ export default async function ListingPage({ params, searchParams }: { params: Pr
   // (Owner, Oct 28, batch 16 section 11) A block either way hides that developer's tests this tester was never part of (no contract, invite or application): the
   // same line, nothing of the listing, never the reason.
   // (Owner, Oct 28, batch 17 §18) An open invite-only test for a tester who isn't invited, applying or in it (as from a profile, batch 17 §9): the same line,
-  // nothing of the listing ("Invite only" on their Tests visited card). A tester who was in it before keeps the page as it is (Ask to rejoin).
+  // nothing of the listing. A tester who was in it before keeps the page as it is (Ask to rejoin).
   const inviteOnly = !isAdmin(u) && (await inviteOnlyHidden(t, u.id));
   if (((paused && !involved) || inviteOnly || (blocked && !involved && t.developerId !== u.id)) && !isAdmin(u)) {
     return (

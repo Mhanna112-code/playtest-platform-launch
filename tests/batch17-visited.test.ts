@@ -12,7 +12,6 @@ import { act, joined, seen, settle, setup } from "./fixtures";
 
 // Batch 17 §18: "Tests visited" on the tester dashboard.
 const src = (f: string) => readFileSync(path.resolve(__dirname, "../src", f), "utf8");
-const utcDay = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 const pulse = async (cookie: string) => (await json(await pulseGET(req("/api/pulse?visited=1", { cookie, method: "GET" })))).body.v as string;
 const remove = (testId: string, cookie: string) => removePOST(req(`/api/visits/${testId}`, { cookie, body: {} }), { params: Promise.resolve({ testId }) }).then(json);
 
@@ -33,15 +32,19 @@ describe("Tests visited: the cards and their state now (Batch 17 §18)", () => {
     expect(await x.rows()).toEqual([expect.objectContaining({ testId: x.testId, title: "Harbor Run", developer: "Nora Lane", state: "Open", label: "Accepting testers", href: `/app/find/${x.testId}` })]);
   });
 
-  it("full, joining closed, paused (a hold and the team's pause), stopped and closed", async () => {
+  it("shows paused tests with spots, and hides full, joining-closed, stopped and closed tests", async () => {
     const full = await visited({ spots: 1 });
     await joined(full.testId, "Ben Okafor");
-    expect(await full.card()).toMatchObject({ state: "Full", label: "Full" });
+    expect(await full.card()).toBeUndefined();
+    await db.test.update({ where: { id: full.testId }, data: { adminPausedAt: new Date() } });
+    expect(await full.card()).toBeUndefined();
 
     const ou = await visited();
     const until = new Date(Date.now() - 60_000);
     await db.test.update({ where: { id: ou.testId }, data: { openUntil: until } });
-    expect(await ou.card()).toMatchObject({ state: "Joining closed", label: `Closed to new testers on ${utcDay(until)}` });
+    expect(await ou.card()).toBeUndefined();
+    await db.test.update({ where: { id: ou.testId }, data: { adminPausedAt: new Date() } });
+    expect(await ou.card()).toBeUndefined();
 
     const held = await visited();
     await startHold(held.dev.user.id, "unpaid");
@@ -57,42 +60,49 @@ describe("Tests visited: the cards and their state now (Batch 17 §18)", () => {
 
     const stopped = await visited();
     expect((await act(stopped.testId, "stop", stopped.dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true })).status).toBe(200);
-    expect(await stopped.card()).toMatchObject({ state: "Stopped", label: "Stopped" });
+    expect(await stopped.card()).toBeUndefined();
 
     const closed = await visited();
     await db.test.update({ where: { id: closed.testId }, data: { status: "closed" } });
-    expect(await closed.card()).toMatchObject({ state: "Closed", label: "Closed" });
+    expect(await closed.card()).toBeUndefined();
   });
 
-  it("applied (waiting), and invited (the card opens the invitation)", async () => {
+  it("keeps pending applications and sends active invitations to their own dashboard panel", async () => {
     const ap = await visited({ joinMode: "apply" });
     expect((await act(ap.testId, "apply", ap.ana.cookie, { seenAt: seen(), note: "hi" })).status).toBe(200);
     expect(await ap.card()).toMatchObject({ state: "Applied", label: "Applied (waiting)", href: `/app/find/${ap.testId}` });
 
-    const inv = await visited({ joinMode: "invite" });
-    expect(await inv.card()).toMatchObject({ state: "Invite only", label: "Invite only" });
+    const inv = await visited();
+    expect(await inv.card()).toMatchObject({ state: "Open" });
     expect((await act(inv.testId, "invite", inv.dev.cookie, { testerIds: [inv.ana.user.id], seenAt: seen(), confirmed: true })).status).toBe(200);
-    expect(await inv.card()).toMatchObject({ state: "Invited", label: "Invited", href: `/app/find/${inv.testId}#invitation` });
+    expect(await inv.card()).toBeUndefined();
+    const active = await db.invite.findFirstOrThrow({ where: { testId: inv.testId, testerId: inv.ana.user.id, status: "sent" } });
+    expect(src("app/app/page.tsx")).toContain('id="invitations"');
+    expect((await act(inv.testId, "cancel-invite", inv.dev.cookie, { inviteId: active.id, seenAt: seen(), confirmed: true })).status).toBe(200);
+    expect(await inv.card()).toMatchObject({ state: "Open" });
     expect(src("app/app/find/[id]/page.tsx")).toContain('<section className="card flex flex-wrap items-start gap-3 border-emerald-400/30" id="invitation">');
   });
 
-  it("invite only and not invited: the card says \"Invite only\" and the join page shows only \"This test isn't available right now.\"", async () => {
+  it("invite-only tests stay out of Tests visited even while paused or invited", async () => {
     const x = await visited({ joinMode: "invite" });
-    expect(await x.card()).toMatchObject({ state: "Invite only", label: "Invite only" });
+    expect(await x.card()).toBeUndefined();
     const t = await db.test.findUniqueOrThrow({ where: { id: x.testId } });
     expect(await inviteOnlyHidden(t, x.ana.user.id)).toBe(true);
     // Full or past Open until changes nothing for them: still only the line.
     await db.test.update({ where: { id: x.testId }, data: { openUntil: new Date(Date.now() - 60_000) } });
-    expect(await x.card()).toMatchObject({ state: "Invite only" });
+    expect(await x.card()).toBeUndefined();
     expect(await inviteOnlyHidden(await db.test.findUniqueOrThrow({ where: { id: x.testId } }), x.ana.user.id)).toBe(true);
     await db.test.update({ where: { id: x.testId }, data: { openUntil: new Date(Date.now() + 5 * 86_400_000) } });
     // Invited: the page shows the listing and the invitation; the developer cancels it: only the line again.
     expect((await act(x.testId, "invite", x.dev.cookie, { testerIds: [x.ana.user.id], seenAt: seen(), confirmed: true })).status).toBe(200);
     expect(await inviteOnlyHidden(t, x.ana.user.id)).toBe(false);
+    expect(await x.card()).toBeUndefined();
     const inv = await db.invite.findFirstOrThrow({ where: { testId: x.testId, testerId: x.ana.user.id, status: "sent" } });
     expect((await act(x.testId, "cancel-invite", x.dev.cookie, { inviteId: inv.id, seenAt: seen(), confirmed: true })).status).toBe(200);
     expect(await inviteOnlyHidden(t, x.ana.user.id)).toBe(true);
-    expect(await x.card()).toMatchObject({ state: "Invite only" });
+    expect(await x.card()).toBeUndefined();
+    await db.test.update({ where: { id: x.testId }, data: { adminPausedAt: new Date() } });
+    expect(await x.card()).toBeUndefined();
     // The developer never gets the line on their own test; a stopped invite-only test keeps its own refusal.
     expect(await inviteOnlyHidden(t, x.dev.user.id)).toBe(false);
     expect(await inviteOnlyHidden({ ...t, status: "stopped" }, x.ana.user.id)).toBe(false);
@@ -177,23 +187,20 @@ describe("Tests visited: live on the dashboard's poll (Batch 17 §18)", () => {
     await joined(x.testId, "Ben Okafor");
     expect(await pulse(x.ana.cookie)).toBe(v); // a spot taken but still open: the same card
     await joined(x.testId, "Cam Reed");
-    expect(await pulse(x.ana.cookie)).not.toBe(v); // full
-    v = await pulse(x.ana.cookie);
+    expect(await pulse(x.ana.cookie)).toBe(""); // full
+    await db.test.update({ where: { id: x.testId }, data: { spots: 3 } });
+    expect(await pulse(x.ana.cookie)).toBe(v); // the saved visit returns once a spot opens
     await db.test.update({ where: { id: x.testId }, data: { adminPausedAt: new Date() } });
     expect(await pulse(x.ana.cookie)).not.toBe(v); // paused
-    v = await pulse(x.ana.cookie);
+    expect(await x.card()).toMatchObject({ state: "Paused" });
     await db.test.update({ where: { id: x.testId }, data: { adminPausedAt: null, status: "stopped" } });
-    expect(await pulse(x.ana.cookie)).not.toBe(v); // stopped
-    v = await pulse(x.ana.cookie);
-    await remove(x.testId, x.ana.cookie);
-    expect(await pulse(x.ana.cookie)).not.toBe(v);
     expect(await pulse(x.ana.cookie)).toBe("");
 
     const dash = src("app/app/page.tsx");
     expect(dash).toContain("{!suspended && <TestsVisited testerId={userId} />}");
     const box = src("app/app/TestsVisited.tsx");
     expect(box).toContain('<AutoRefresh query="visited=1" v={visitedV(rows)} />');
-    expect(box).toContain('<ScrollList className="space-y-2" label="Tests visited">');
+    expect(box).toContain('filters={["Applied", "Open", "Paused"]}');
     expect(src("app/api/pulse/route.ts")).toContain('if (q.get("visited")) {');
   });
 });
