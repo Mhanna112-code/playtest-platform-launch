@@ -9,9 +9,10 @@ import { findTests } from "@/lib/server/tests";
 import { joinPageV } from "@/lib/server/pulseV";
 import { KeysNotice } from "@/app/app/tests/[id]/KeysNotice";
 import { makeUser } from "./helpers";
-import { act, seen, settle, setup } from "./fixtures";
+import { act, joined, seen, settle, setup } from "./fixtures";
 
-// (Owner, Nov 9, §341) A test that uses access keys with NO free key while a spot is open is FULL to testers (Find, the join page, Join / Apply / Accept invite),
+// (Owner, Nov 9, §341; §348) A test that uses access keys with NO free key while a spot is open is closed to testers (Find leaves it out; Join / Apply / Accept invite /
+// Ask to rejoin read the key line, not "full"),
 // but nothing closes (applications, rejoin asks and invites stay); the developer's Accept / Invite-that-joins get the key line; the developer's page says how to
 // reopen the spot; adding a key makes it joinable again and tells invitees a spot opened.
 (globalThis as unknown as { React: typeof React }).React = React;
@@ -40,9 +41,9 @@ describe("§341 no free access key: full to testers", () => {
     await unassigned(testId);
     const ana = await makeUser({ tester: true, name: "Ana Silva" });
     const anaUser = await db.user.findUniqueOrThrow({ where: { id: ana.user.id } });
-    expect(await joinRefusal(ana.user.id, testId)).toBe("This test is full.");
+    expect(await joinRefusal(ana.user.id, testId)).toBe(NO_FREE_KEY); // (§348) the key line, not "full"
     const r = await act(testId, "join", ana.cookie, { listingVersion: (await db.test.findUniqueOrThrow({ where: { id: testId } })).listingVersion, seenAt: seen(), confirmed: true });
-    expect(r.body.error?.message).toBe("This test is full.");
+    expect(r.body.error?.message).toBe(NO_FREE_KEY);
     expect((await findTests(anaUser as never)).some((t) => t.id === testId)).toBe(false);
     const v1 = await joinPageV(ana.user.id, testId);
 
@@ -63,11 +64,11 @@ describe("§341 no free access key: full to testers", () => {
     await unassigned(testId);
     await settle();
     // Ben's Apply: full. Ana's application and Cam's invite stay.
-    expect((await act(testId, "apply", ben.cookie, { seenAt: seen(), confirmed: true })).body.error?.message).toBe("This test is full.");
+    expect((await act(testId, "apply", ben.cookie, { seenAt: seen(), confirmed: true })).body.error?.message).toBe(NO_FREE_KEY);
     expect((await db.application.findFirstOrThrow({ where: { testId, testerId: ana.user.id } })).status).toBe("pending");
     expect((await db.invite.findFirstOrThrow({ where: { testId, testerId: cam.user.id } })).status).toBe("sent");
-    // Cam (invited) is told it's full right now, as for a real full.
-    expect(await joinRefusal(cam.user.id, testId)).toMatch(/is full right now\.$/);
+    // Cam (invited): the key line too (§348).
+    expect(await joinRefusal(cam.user.id, testId)).toBe(NO_FREE_KEY);
     // The developer's Accept: the key line.
     const app = await db.application.findFirstOrThrow({ where: { testId, testerId: ana.user.id } });
     const acc = await act(testId, "application", dev.cookie, { applicationId: app.id, action: "accept", seenAt: seen(), confirmed: true });
@@ -101,5 +102,22 @@ describe("§341 no free access key: full to testers", () => {
     expect(html({ free: [{ id: "k", value: "K-1" }], open: 1 })).not.toContain("data-keys-full");
     expect(html({ free: [], open: 0 })).not.toContain("data-keys-full");
     expect(html({ free: [], open: 1 }, false)).not.toContain("data-keys-full");
+  });
+
+  it("(§348) one reason at a time: full AND keyless reads only \"This test is full.\"; keyless and invite only reads only the key line", async () => {
+    // One spot: Ben joins (no keys yet), then the test's only key is an unassigned one: full AND no free key.
+    const { testId } = await setup({ spots: 1 });
+    await joined(testId, "Ben Cole", "he");
+    await unassigned(testId);
+    const ana = await makeUser({ tester: true, name: "Ana Silva" });
+    expect(await keysFullNow(db, testId)).toBe(false); // no spot open
+    expect(await joinRefusal(ana.user.id, testId)).toBe("This test is full.");
+    const r = await act(testId, "join", ana.cookie, { listingVersion: (await db.test.findUniqueOrThrow({ where: { id: testId } })).listingVersion, seenAt: seen(), confirmed: true });
+    expect(r.body.error?.message).toBe("This test is full.");
+    // Invite only, a spot open but no free key: the key line, never "invite only" as well.
+    const { testId: inviteOnly } = await setup({ spots: 2, joinMode: "invite" });
+    await unassigned(inviteOnly);
+    const r2 = await act(inviteOnly, "join", ana.cookie, { listingVersion: (await db.test.findUniqueOrThrow({ where: { id: inviteOnly } })).listingVersion, seenAt: seen(), confirmed: true });
+    expect(r2.body.error?.message).toBe(NO_FREE_KEY);
   });
 });

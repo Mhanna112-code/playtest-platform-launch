@@ -7,6 +7,7 @@ import { ArrowRight, BarChart3, CheckCircle2, Clock, FileSignature, FileText, He
 import { CategoryBadges } from "@/components/Category";
 import { CategoryTile, mainCategory, PartBadges } from "@/components/Ui";
 import { db } from "@/lib/db";
+import { NO_FREE_KEY } from "@/lib/keys";
 import { displayName, fmtDateIn, fmtDateTimeIn, money } from "@/lib/format";
 import { closedToNewLine, dueFromJoin, joinerDays, perTesterLine, testerDaysOf, testerShare, testPaused, yourDeadlineLine } from "@/lib/rules";
 import { QuestionTexts } from "@/components/QA";
@@ -106,9 +107,10 @@ export default async function ListingPage({ params, searchParams }: { params: Pr
       </div>
     );
   }
-  // (Owner, Nov 9, §341) No free access key with a spot open: full to testers, in the full wording (an invite stays open, as for a real full).
-  const full = testersIn >= t.spots || (await (await import("@/lib/server/accessKeys")).noFreeKeyTests(db, [t.id])).has(t.id);
-  const closed = paused || t.status !== "open" || full || (t.openUntil && t.openUntil < new Date());
+  const full = testersIn >= t.spots;
+  // (Owner, Nov 9, §341, §348) No free access key with a spot open: closed to new testers, with the key line (one reason, after "full": joinRefusal's order).
+  const keyless = !full && t.status === "open" && !(t.openUntil && t.openUntil < new Date()) && (await (await import("@/lib/server/accessKeys")).noFreeKeyTests(db, [t.id])).has(t.id);
+  const closed = paused || t.status !== "open" || full || keyless || (t.openUntil && t.openUntil < new Date());
   const dev = displayName(t.developer);
   // (Owner, Nov 5, §238) A line naming the developer: the name cut at 20 with "…" opening it in place, the arrow the whole line; whole, it links to their profile.
   // `linked`: the badge keeps its plain words (no link inside the pill).
@@ -278,7 +280,7 @@ export default async function ListingPage({ params, searchParams }: { params: Pr
       ) : paused ? (
         <p className="info" data-paused="">This test is paused right now.</p>
       ) : closed ? (
-        <p className="err">{t.status === "stopped" ? "This test was stopped." : full ? "This test is full." : "This test isn't taking new testers any more."}</p>
+        <p className="err">{t.status === "stopped" ? "This test was stopped." : full ? "This test is full." : keyless ? NO_FREE_KEY : "This test isn't taking new testers any more."}</p>
       ) : (
         <>{gaps.map((g) => <p key={g} className="info">{g}</p>)}</>
       )}
