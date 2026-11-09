@@ -72,7 +72,7 @@ describe("§166: no separate profile link next to a person, anywhere", () => {
 
   it("the developer's test page and its panels: the tester's name is a NameLink in every heading and row", () => {
     const page = src("app/app/tests/[id]/page.tsx");
-    expect(page).toContain('data-tester-fold-name=""><NameLink fit text={name} href={personHref} /></h3>'); // (§199) fitted, as §187's rows
+    expect(page).toContain('data-tester-fold-name=""><NameLink fit text={name} href={personHref} /><span hidden className="text-xs font-normal text-slate-400" data-previous-name-match="" /></h3>'); // (§199) fitted, as §187's rows (Codex 4d424d8f: the heading also holds the hidden “previously …” note for the name search)
     expect(page).toContain("<span className=\"min-w-0\" data-needs-person-name=\"\"><NameLink fit text={p.name} href={p.href} /></span>"); // (§181) Needs you's person drop-down; (§187) fitted
     expect(src("components/CallRequestsPanel.tsx")).toContain("<NameLink fit text={p.name} href={p.href} />"); // (§181) the Call requests box's person drop-down (an update is in its person's drop-down now)
     expect(page).not.toMatch(/<a href=\{`\/app\/testers\/[^`]*`\}[^>]*>\s*<Cut /);
@@ -110,7 +110,7 @@ describe("§166: no separate profile link next to a person, anywhere", () => {
     const html = unescape(render(await TestPage({ params: Promise.resolve({ id: s.testId }), searchParams: Promise.resolve({}) })));
     const href = `/app/testers/${j.tester.user.id}`;
     // The fold's heading: the green name link, inside the fold's toggle.
-    expect(html).toMatch(new RegExp(`<summary[^>]*><h3 class="mr-auto min-w-0 max-w-\\[calc\\(100%-1\\.25rem\\)\\] font-semibold text-white" data-tester-fold-name=""><a href="${href}" class="relative z-10 " data-name-link="person"><span class="\\[overflow-wrap:anywhere\\]" data-name-wraps="person">Bea Brook</span></a></h3>`)); // (§245) whole, wrapping (never cut by width)
+    expect(html).toMatch(new RegExp(`<summary[^>]*><h3 class="mr-auto min-w-0 max-w-\\[calc\\(100%-1\\.25rem\\)\\] font-semibold text-white" data-tester-fold-name=""><a href="${href}" class="relative z-10 " data-name-link="person"><span class="\\[overflow-wrap:anywhere\\]" data-name-wraps="person">Bea Brook</span></a><span hidden="" class="text-xs font-normal text-slate-400" data-previous-name-match=""></span></h3>`)); // (§245) whole, wrapping (never cut by width) (Codex 4d424d8f: the heading also holds the hidden “previously …” note for the name search)
     // The summary under it: Chat, and no separate profile link.
     const row = html.slice(html.indexOf(`id="tester-${j.sessionId}"`));
     const summary = row.slice(row.indexOf('data-tester-summary=""'), row.indexOf('data-tester-summary=""') + 1500);

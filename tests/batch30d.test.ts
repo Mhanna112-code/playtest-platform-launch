@@ -94,7 +94,7 @@ describe("batch 30 §8: a new invite shows on the tester dashboard live", () => 
     expect(await pv(`test=${testId}`, dev.cookie)).toBe(await testV(dev.user.id, testId));
     expect(await pv(`session=${j.sessionId}`, j.tester.cookie)).toBe(await testV(j.tester.user.id, testId, j.sessionId));
     expect(src("app/app/tests/[id]/page.tsx").split("<AutoRefresh query={`test=${t.id}`} v={pageV} />").length).toBe(3); // the full and the restricted view
-    expect(src("app/app/sessions/[id]/page.tsx")).toContain("<AutoRefresh query={`session=${c.id}`} v={pageV} />");
+    expect(src("app/app/sessions/[id]/page.tsx")).toContain('<AutoRefresh query={`session=${c.id}`} v={pageV} sessionActive={c.status === "working"} />'); // (Codex 6aa704d9: an old session's view polls less)
     expect(src("app/app/chat/[id]/page.tsx")).toContain("v={pageV} />");
     expect(src("app/app/find/[id]/page.tsx")).toContain('{invite && <AutoRefresh query="invites=1" v={invitesFp} />}');
   });

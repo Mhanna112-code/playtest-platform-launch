@@ -10,7 +10,9 @@ describe("(Owner, Nov 5) §273 a search that finds nobody only because of the ti
   });
   it("the server counts the name matches the filters left out (only when nothing matched and something is ticked); the panel shows the line, else the plain one", () => {
     const s = fs.readFileSync(path.resolve(__dirname, "../src/lib/server/invites.ts"), "utf8");
-    expect(s).toContain("const filteredOut = q.length >= 1 && !matches.length && (devices.length || languages.length) ? lean.filter((x) => nameMatches(x.name, q)).length : 0;");
+    // (Codex 4d424d8f) A name match also counts an earlier name (`named`).
+    expect(s).toContain("const filteredOut = q.length >= 1 && !matches.length && (devices.length || languages.length) ? lean.filter(named).length : 0;");
+    expect(s).toContain("const named = (x: (typeof lean)[number]) => !q || nameMatches(x.name, q) || !!previousNameMatch(x.name, previous.get(x.t.id), q);");
     const p = fs.readFileSync(path.resolve(__dirname, "../src/app/app/tests/[id]/InvitePanel.tsx"), "utf8");
     expect(p).toContain('data-invite-none="filters">{filteredOutLine(term, [...f.devices, ...f.languages], data.filteredOut)}');
     expect(p).toContain("No testers match “{term}”.");

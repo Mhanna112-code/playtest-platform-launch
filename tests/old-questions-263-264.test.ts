@@ -307,8 +307,9 @@ describe("§264 \"Your agreed scope\": four listing lines under Your contract", 
     expect(at("languages")).toBeGreaterThan(at("buildUrl"));
     expect(at("devices")).toBeGreaterThan(at("languages"));
     expect(contract.indexOf('data-scope-agreed=""')).toBeGreaterThan(at("devices"));
-    expect(contract).toContain("are the exception: they follow");
-    expect(contract).toContain("marked Updated.");
+    // (Codex 01d23cc5) The agreed line spells out Switch, Keep and the listing edits that still apply.
+    expect(contract).toContain("Other listing edits, including questions, what to do, the build link, languages, devices and NDA, still apply.");
+    expect(contract).toContain("Changes are marked Updated;");
     // Live: the current value, its Updated tag (See it marks lines by data-info-line / data-updated-at inside #scope); the shared boxes for long text.
     expect(contract).toMatch(/data-info-line="description" data-updated-at="[^"]+"/);
     expect(contract).toContain("Sail to the second island");

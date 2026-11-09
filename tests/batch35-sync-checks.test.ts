@@ -153,7 +153,7 @@ describe("batch 35 §37: the page redraw and the Updated box move together", () 
     expect(code("app/app/find/[id]/JoinBox.tsx")).toContain("afterChanges(added, announcedWithRedraw());");
     // Every page with the box has a redraw driver riding the same clock.
     expect(src("app/app/tests/[id]/page.tsx")).toContain("<AutoRefresh query={`test=${t.id}`} v={pageV} />");
-    expect(src("app/app/sessions/[id]/page.tsx")).toContain("<AutoRefresh query={`session=${c.id}`} v={pageV} />");
+    expect(src("app/app/sessions/[id]/page.tsx")).toContain('<AutoRefresh query={`session=${c.id}`} v={pageV} sessionActive={c.status === "working"} />'); // (Codex 6aa704d9: an old session's view polls less)
     expect(src("app/app/find/[id]/page.tsx")).toContain("<JoinWatch testId={t.id} v={joinFp} />");
     expect(src("app/app/page.tsx")).toContain('<AutoRefresh query="invites=1" v={invitesFp} />');
   });

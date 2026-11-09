@@ -149,7 +149,7 @@ describe("section 40: the tester's live call part has no blue box per call", () 
     const page = src("app/app/sessions/[id]/page.tsx");
     expect(page).not.toContain("Live call on {fmtDateTime(x.startsAt)}: waiting for {dev} to pay.");
     expect(page).toContain('data-call-row="" data-call-length=""');
-    expect(page).toContain('<TesterPaymentTag review={x.review}');
+    expect(page).toContain('<TesterPaymentTag anchor={`payment-${x.id}`} review={x.review}'); // (Codex eb8ca7cd: each part's status is a link target)
     expect(page).toContain('delayed={paymentDelayed(x.id) || failedCalls.has(x.id)}');
     expect(page).not.toContain('DELAYED_CALL_LINE');
     expect(page).not.toContain('callOutcome(');

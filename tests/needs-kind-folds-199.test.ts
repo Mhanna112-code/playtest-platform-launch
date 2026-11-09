@@ -184,12 +184,12 @@ describe("§199 Needs you: each kind a drop-down, Rate plain, one Applications d
     const html = await page(f.testId);
     const row = html.slice(html.indexOf(`id="tester-${j.sessionId}"`));
     const heading = row.slice(row.indexOf("<summary"), row.indexOf("</summary>"));
-    expect(heading).toMatch(new RegExp(`<h3 class="mr-auto min-w-0 max-w-\\[calc\\(100%-1\\.25rem\\)\\] font-semibold text-white" data-tester-fold-name=""><a href="/app/testers/${j.tester.user.id}" class="relative z-10 " data-name-link="person"><span class="\\[overflow-wrap:anywhere\\]" data-name-wraps="person">${LONG}</span></a></h3>`));
+    expect(heading).toMatch(new RegExp(`<h3 class="mr-auto min-w-0 max-w-\\[calc\\(100%-1\\.25rem\\)\\] font-semibold text-white" data-tester-fold-name=""><a href="/app/testers/${j.tester.user.id}" class="relative z-10 " data-name-link="person"><span class="\\[overflow-wrap:anywhere\\]" data-name-wraps="person">${LONG}</span></a><span hidden="" class="text-xs font-normal text-slate-400" data-previous-name-match=""></span></h3>`)); // (Codex 4d424d8f: the heading also holds the hidden “previously …” note for the name search)
     expect(heading).not.toContain("Maximiliana…");
     expect(heading).not.toContain("data-cut-shown");
     expect(heading).toMatch(/<span class="badge shrink-0 whitespace-nowrap">Working · due /);
     expect(heading).toMatch(/<span class="ml-auto shrink-0 whitespace-nowrap[^"]*" data-paid-so-far="0">paid \$0\.00/);
-    expect(src()).toContain('data-tester-fold-name=""><NameLink fit text={name} href={personHref} /></h3>');
+    expect(src()).toContain('data-tester-fold-name=""><NameLink fit text={name} href={personHref} /><span hidden className="text-xs font-normal text-slate-400" data-previous-name-match="" /></h3>'); // (Codex 4d424d8f: the hidden "previously …" note)
   });
 
   it("the restricted view: the charge only in its Needs you (no Applications group: it shows none today); the page's code never draws the box in a tester row", async () => {

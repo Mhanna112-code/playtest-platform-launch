@@ -76,12 +76,7 @@ describe("batch 35 §106, revised: the same separate boxes below the developer's
     const excerpt = await json(await excerptsPOST(req("/api/excerpts", { cookie: f.dev.cookie, body: { action: "decide", excerptId: f.excerpt.id, decision: "allow", seenAt: seen(), confirmed: true } })));
     expect(excerpt.status).toBe(200);
     const bank = await json(await confirmPOST(req("/api/payments/confirm", { cookie: f.dev.cookie, body: { paymentId: f.payment.id, start: true, seenAt: seen(), confirmed: true } })));
-    // (Owner, Nov 3, §159) Suspended: Confirm with your bank is refused like Pay; the charge keeps waiting.
-    if (state === "suspended") {
-      expect(bank.status).toBe(403);
-      expect(bank.body.error.message).toContain("Your account is suspended");
-      return;
-    }
+    // (Codex 0c32fd48) A pending bank confirmation is allowed while suspended too (it replaced §159's refusal).
     expect(bank.status).toBe(200);
     const finish = await json(await confirmPOST(req("/api/payments/confirm", { cookie: f.dev.cookie, body: { paymentId: f.payment.id, simulate: "succeeded" } })));
     expect(finish.status).toBe(200);

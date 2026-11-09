@@ -13,7 +13,8 @@ import { Fold } from "@/components/Panel";
 const src = (f: string) => readFileSync(path.resolve(__dirname, "../src", f), "utf8");
 const page = () => src("app/app/tests/[id]/page.tsx");
 /** The tester row's markup, from its opening div to the end of its map. */
-const row = () => { const p = page(); const a = p.indexOf('id={`tester-${c.id}`} data-tester-name={name} data-tester-id={c.testerId}>'); return p.slice(a, p.indexOf("</RowsBox>", a)); };
+// (Codex fb0fb9fc/4d424d8f: more data attributes follow the tester id.)
+const row = () => { const p = page(); const a = p.indexOf('id={`tester-${c.id}`} data-tester-name={name} data-tester-id={c.testerId}'); return p.slice(a, p.indexOf("</RowsBox>", a)); };
 
 describe("the circles filter the tester list", () => {
   it("a circle shows only that tester; pressing it again (or All testers) shows everyone", () => {
@@ -29,7 +30,7 @@ describe("the circles filter the tester list", () => {
     expect(filter).toContain('onClick={() => choose(on ? "" : testerId)}');
     expect(filter).toContain("All testers");
     // The list hides the other rows (the name search still works with it).
-    expect(src("app/app/tests/[id]/RowsBox.tsx")).toContain('(el) => rowShown(el.dataset.testerId ?? "", chosen)'); // (§274) with the Search testers box
+    expect(src("app/app/tests/[id]/RowsBox.tsx")).toContain('(el) => rowShown(el.dataset.testerId ?? "", current)'); // (§274) with the Search testers box; (Codex fb0fb9fc) a departed tester's filter resets
     expect(src("app/app/tests/[id]/TestersJoined.tsx")).toContain("<AvatarButton testerId={seat.testerId} name={seat.name} obj={pronouns(seat.pronoun).obj} />"); // (batch 35 §162)
   });
 });
@@ -40,7 +41,7 @@ describe("each tester folds by their name", () => {
     const fold = r.indexOf("<Fold id={`tester-${c.id}`}"), end = r.indexOf("</Fold>\n                <div className=\"space-y-1\" data-tester-summary=\"\">");
     expect(fold).toBeGreaterThan(0);
     expect(end).toBeGreaterThan(fold);
-    expect(r.slice(fold, fold + 1400)).toContain("<NameLink fit text={name} href={personHref} /></h3>"); // the name heads the toggle (§166: the green profile link; §199: fitted)
+    expect(r.slice(fold, fold + 1400)).toContain('<NameLink fit text={name} href={personHref} /><span hidden className="text-xs font-normal text-slate-400" data-previous-name-match="" /></h3>'); // the name heads the toggle (§166: the green profile link; §199: fitted)
     const inside = r.slice(fold, end), summary = r.slice(end);
     // (Owner, Nov 5, §254) No "<PrevSetFolds" any more; (§263, final) the tester's Terms history for the questions sits under the written answers.
     for (const s of ['data-parts-sent=""', "<SentWork ", 'data-calls-fold={c.id}', "data-dev-terms-history={c.id}"]) expect(inside).toContain(s);

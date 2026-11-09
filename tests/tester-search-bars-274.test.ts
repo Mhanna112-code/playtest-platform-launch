@@ -109,7 +109,7 @@ describe("§274 Search testers in Needs you and in the Testers list", () => {
   });
 
   it("hides the people (or rows) whose name doesn't match and counts the rest", () => {
-    const el = (name: string, extra: Record<string, string> = {}) => ({ dataset: { needsWho: name, ...extra }, hidden: false });
+    const el = (name: string, extra: Record<string, string> = {}) => ({ dataset: { needsWho: name, ...extra }, hidden: false, querySelector: () => null }); // (Codex 4d424d8f: each row may hold a "previously …" note)
     const els = [el("Ana Silva"), el("Bo Chen"), el("Anya Roy")];
     const root = { querySelectorAll: () => els } as unknown as HTMLElement;
     expect(hideUnmatched(root, "[data-needs-person]", "needsWho", "ana")).toBe(1);
@@ -145,7 +145,7 @@ describe("§274 Search testers in Needs you and in the Testers list", () => {
     expect(one).not.toContain("data-tester-search");
     const rows = src("app/app/tests/[id]/RowsBox.tsx");
     expect(rows).toContain("const q = useTesterSearch();");
-    expect(rows).toContain('hideUnmatched(box.current, "[data-tester-name]", "testerName", q, (el) => rowShown(el.dataset.testerId ?? "", chosen))');
+    expect(rows).toContain('hideUnmatched(box.current, "[data-tester-name]", "testerName", q, (el) => rowShown(el.dataset.testerId ?? "", current))'); // (Codex fb0fb9fc: a departed tester's filter resets)
     expect(rows).toContain("{noTestersMatch(q)}");
     expect(rows).not.toContain("placeholder=\"Find a tester by name\"");
     expect(src("app/app/tests/[id]/page.tsx")).toContain("rows={t.contracts.length}");
