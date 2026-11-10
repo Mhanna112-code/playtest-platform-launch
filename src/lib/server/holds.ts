@@ -26,7 +26,7 @@ import { withTimersLock } from "./timers";
 import { pieceWords } from "@/lib/bankTop";
 import { describedOnce, stripeDescription } from "./paymentRows";
 import { partOnTest } from "./partWords";
-import { LATE_REMINDER_TAIL, NO_CHARGE_LATE } from "@/lib/moneyLines";
+import { LATE_REMINDER_TAIL, NO_CHARGE_LATE, TEAM_CLOSED_NO_PAY } from "@/lib/moneyLines";
 
 // Payment hold (owner rule, Oct 27): starts AT ONCE when any payment is declined (part Pay, the tester's Charge, a call charge, extra pay), or when a chargeback opens
 // (a chargeback during a payment hold turns it into a chargeback hold). There is no owed window and no daily retry. While on hold all the developer's
@@ -2018,9 +2018,11 @@ async function claimChoice(testId: string, where: { submissionId: string } | { c
  * it should be more."; "paid $6.00 and $2.00 more" after a Pay more). The tester's own choice: "You already chose for this."; an old rejection: "rejected this
  * meanwhile". Null when nothing of the developer's went through (a cancelled or declined payment that left nothing paid: Charge as before).
  */
-async function devPaidRefusal(tx: Prisma.TransactionClient | typeof db, where: { submissionId: string } | { callId: string }, devName: string, review: { amountCents: number; rejected: boolean; reason: string } | null) {
+async function devPaidRefusal(tx: Prisma.TransactionClient | typeof db, where: { submissionId: string } | { callId: string }, devName: string, review: { amountCents: number; rejected: boolean; reason: string; teamClosedById?: string | null } | null) {
   if (review && byTesterChoice(review.reason)) return new HttpError(409, "done", "You already chose for this.");
   if (review?.rejected) return new HttpError(409, "done", `${devName} rejected this meanwhile.`);
+  // (§365, found by the money refusal matrix) The team's $0 closure is final and can't be disputed: it never reads as the developer paying $0 ("… you can dispute it").
+  if (review?.teamClosedById) return new HttpError(409, "done", TEAM_CLOSED_NO_PAY);
   const sum = async (kinds: string[]) => (await tx.payment.aggregate({ where: { ...where, kind: { in: kinds }, status: { in: ["charged", "not_set_up"] } }, _sum: { amountCents: true } }))._sum.amountCents ?? 0;
   const more = await sum(["extra"]);
   const pay = review ? review.amountCents : await sum(["review", "call"]);
