@@ -1507,7 +1507,8 @@ export function tzOf(body: Record<string, unknown>, dev: { timeZone?: string | n
  */
 export async function closeJoiningAfterOpenUntil(now = new Date()) {
   const tests = await db.test.findMany({
-    where: { status: "open", openUntil: { lt: now }, OR: [{ invites: { some: { status: "sent" } } }, { id: { in: (await db.application.findMany({ where: { status: "pending" }, select: { testId: true }, distinct: ["testId"] })).map((a) => a.testId) } }] },
+    // (Owner, Nov 9, §366) Not on a paused test: its Open until moves on by the pause when it lifts, and what waits keeps waiting.
+    where: { status: "open", openUntil: { lt: now }, adminPausedAt: null, developer: { holdStartedAt: null, devSuspendedAt: null }, OR: [{ invites: { some: { status: "sent" } } }, { id: { in: (await db.application.findMany({ where: { status: "pending" }, select: { testId: true }, distinct: ["testId"] })).map((a) => a.testId) } }] },
     include: { developer: true },
   });
   let n = 0;

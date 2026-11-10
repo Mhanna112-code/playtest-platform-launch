@@ -354,6 +354,8 @@ async function applyOutage(o: { startAt: Date; endAt: Date; ms: number }, opts: 
     if (opts.deadlines !== false)
       for (const c of await tx.contract.findMany({ where: { status: "working", dueAt: { gt: start }, testId: { notIn: paused } }, select: { id: true, dueAt: true, test: { select: { developer: { select: { timeZone: true } } } } } }))
         await tx.contract.update({ where: { id: c.id }, data: { dueAt: movedDue(c.dueAt, L, c.test.developer.timeZone) } });
+    // (Owner, Nov 9, §366 C) Pieces in review whose review date counts from a deadline that doesn't move (an ended tester's, an earlier stint's).
+    if (opts.deadlines !== false) await (await import("./holds")).shiftPieceDeadlines(tx, { testId: { notIn: paused } }, start, L);
     // (Owner, Nov 9, §347) Open until only on tests still taking testers (open, not paused through it): never a stopped, closed or ended test's.
     for (const t of await tx.test.findMany({ where: { openUntil: { gt: start }, status: "open", workEndedAt: null, id: { notIn: paused } }, select: { id: true, openUntil: true, developer: { select: { timeZone: true } } } }))
       await tx.test.update({ where: { id: t.id }, data: { openUntil: nearestDayEnd(new Date(t.openUntil!.getTime() + L), t.developer.timeZone) } });

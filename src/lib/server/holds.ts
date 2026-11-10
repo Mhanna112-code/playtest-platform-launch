@@ -36,7 +36,9 @@ import { teamPausedNow } from "@/lib/restricted";
 
 /** A test that is not paused (no payment hold, no suspension, no team pause): reminders tied to a test wait while it is paused and restart when it resumes. */
 // (Batch 12 section 1) A deleted developer's work under review never opens Charge, and they get no reminders.
-const PAUSE_FREE = { adminPausedAt: null, developer: { holdStartedAt: null, devSuspendedAt: null, deletedAt: null } } as const;
+// (Owner, Nov 9, §366 A) A stopped test isn't paused any more (its kept adminPausedAt, or a hold or suspension of its developer, no longer holds Charge opening or
+// the reminders back); a deleted developer's test still is (§363: their unreviewed work never gets Charge).
+const PAUSE_FREE = { developer: { deletedAt: null }, OR: [{ status: "stopped" }, { adminPausedAt: null, developer: { holdStartedAt: null, devSuspendedAt: null } }] } satisfies Prisma.TestWhereInput;
 
 export async function onHold(devId: string) {
   const u = await db.user.findUnique({ where: { id: devId }, select: { holdStartedAt: true } });
@@ -220,6 +222,29 @@ export async function markPaused(where: { developerId?: string; id?: string }, n
 }
 
 /**
+ * (Owner, Nov 9, §366 C) The deadline a piece still in review counts its review date from, when that deadline doesn't move with the contract's: a tester whose part
+ * ended (left, rated, ended early) before the pause, or work from an earlier stint (`stintDueAt`). It moves by the pause or outage (rounded up to the end of its
+ * day, like a working deadline), stamped on the piece as its own `stintDueAt`, so the ended tester's working deadline never moves. Only deadlines still ahead
+ * when the pause began; never a piece whose Charge is open or that was reviewed. Closing dates keep counting the spans after the moved date (pieceCloseOut).
+ */
+export async function shiftPieceDeadlines(tx: Prisma.TransactionClient, where: Prisma.ContractWhereInput, start: Date, ms: number) {
+  if (ms <= 0) return;
+  const inReview = { review: null, choiceOfferedAt: null } as const;
+  const cs = await tx.contract.findMany({
+    where: { ...where, OR: [{ status: { not: "working" } }, { submissions: { some: { stintDueAt: { not: null } } } }, { calls: { some: { stintDueAt: { not: null } } } }] },
+    select: { status: true, dueAt: true, test: { select: { developer: { select: { timeZone: true } } } }, submissions: { where: inReview, select: { id: true, stintDueAt: true } }, calls: { where: { ...inReview, status: "booked" }, select: { id: true, stintDueAt: true } } },
+  });
+  for (const c of cs) {
+    const moved = (x: { stintDueAt: Date | null }) => {
+      const due = x.stintDueAt ?? (c.status !== "working" ? c.dueAt : null);
+      return due && due > start ? movedDue(due, ms, c.test.developer.timeZone) : null;
+    };
+    for (const x of c.submissions) { const d = moved(x); if (d) await tx.submission.update({ where: { id: x.id }, data: { stintDueAt: d } }); }
+    for (const x of c.calls) { const d = moved(x); if (d) await tx.call.update({ where: { id: x.id }, data: { stintDueAt: d } }); }
+  }
+}
+
+/**
  * (Owner, Oct 28 afternoon, DEFAULT) One test's clocks after one of its pauses lifted: working testers' deadlines and Open until (and the review clocks of sent work) move later by
  * the pause's length (pauseShiftMs: only the part not covered by another pause still on). The same for a hold lift, a reinstatement and the team's unpause.
  */
@@ -240,6 +265,7 @@ export async function shiftAfterPause(tx: Prisma.TransactionClient, t: { id: str
   // (Owner, Nov 2) Only deadlines that hadn't passed when the pause started (like moving Open until later): one already passed keeps it.
   // (Owner, Nov 3, batch 35 §154) The moved deadline is rounded UP to the end of its day (11:59 PM in the zone it was counted in), never an odd time like 7:22 AM.
   for (const c of await tx.contract.findMany({ where: { testId: t.id, status: "working", dueAt: { gt: start } } })) await tx.contract.update({ where: { id: c.id }, data: { dueAt: movedDue(c.dueAt, ms, tz) } });
+  await shiftPieceDeadlines(tx, { testId: t.id }, start, ms); // (§366 C)
   for (const x of await tx.submission.findMany({ where: { contract: { testId: t.id }, review: null, payBy: { not: null } } })) {
     const by = pauseShiftMs(x.updatedAt > start ? x.updatedAt : start, now, others); // only the part of the pause after it was sent
     // (Owner, Nov 9, §346) Like a deadline: a review date (Charge open) that had already passed when the pause began stays. Its close-out counts the whole pause

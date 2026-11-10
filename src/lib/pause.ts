@@ -15,9 +15,11 @@ type Tst = { status: string; adminPausedAt?: Date | null; pauseCloseAt?: Date | 
  * (`pauseClosedAt`). Like a stopped test, a hold, suspension or team pause that STARTS after it never pauses the test or moves its dates; one that started
  * before still counts.
  */
-export const workEndOf = (t: { workEndedAt?: Date | null; pauseClosedAt?: Date | null } | null | undefined) => t?.workEndedAt ?? t?.pauseClosedAt ?? null;
+// (Owner, Nov 9, §366 B) A Stop (the developer's or the team's) ends the work too: `stoppedAt` on a stopped test.
+type WorkEnd = { workEndedAt?: Date | null; pauseClosedAt?: Date | null; status?: string; stoppedAt?: Date | null };
+export const workEndOf = (t: WorkEnd | null | undefined) => t?.workEndedAt ?? t?.pauseClosedAt ?? (t?.status === "stopped" ? t?.stoppedAt ?? null : null);
 /** (§358) Did a pause cause starting at `start` begin before the test's work ended (or is the work still on)? */
-export const startedBeforeWorkEnd = (start: Date | null | undefined, t: { workEndedAt?: Date | null; pauseClosedAt?: Date | null } | null | undefined) => {
+export const startedBeforeWorkEnd = (start: Date | null | undefined, t: WorkEnd | null | undefined) => {
   const end = workEndOf(t);
   return !!start && (!end || start.getTime() < end.getTime());
 };

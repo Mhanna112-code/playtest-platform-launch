@@ -235,10 +235,14 @@ export async function reinstateAccount(userId: string, asked?: unknown, adminId:
   const start = u[f.at], now = new Date();
   // Two admins at once: the second is refused, naming the first.
   // (Batch 17 §6) The lift and its record commit together, so a second admin's refusal can always name who reinstated it.
+  // (Owner, Nov 9, §366) The developer side's dates move in the SAME transaction as the lift (as the hold lift and the team's lift do), so no sweep can close a
+  // test at its old deadline in between.
+  let running: string[] = [];
   const lifted = start
     ? await db.$transaction(async (tx) => {
         const r = await tx.user.updateMany({ where: { id: userId, [f.at]: start }, data: { [f.at]: null, [f.note]: "", [f.by]: null, [f.back]: now } });
         if (r.count === 1) await tx.accountEvent.create({ data: { userId, kind: "reinstated", byId: adminId ?? u[f.by], note: "", side, createdAt: now } });
+        if (r.count === 1 && side === "developer" && u.isDeveloper) running = await resumeTests(tx, userId, start!, now, [u.holdStartedAt]);
         return r;
       })
     : { count: 0 };
@@ -252,7 +256,6 @@ export async function reinstateAccount(userId: string, asked?: unknown, adminId:
   }
   if (side === "developer" && u.isDeveloper) {
     // (Owner, Oct 28 afternoon, DEFAULT) Deadlines and Open until move on by the pause; a hold still on keeps the tests paused (they resume, and move on the rest, when it lifts).
-    const running = await db.$transaction((tx) => resumeTests(tx, userId, start!, now, [u.holdStartedAt]));
     if (!u.holdStartedAt) await chargeDeferred(userId);
     await (await import("./subscription")).resumeBilling(userId, now);
     const testers = await db.contract.findMany({ where: { status: "working", testId: { in: running } }, include: { tester: true, test: { select: { title: true } } } });

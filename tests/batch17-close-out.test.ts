@@ -277,7 +277,9 @@ describe("the reminders 3 days and 1 day before close-out (DEFAULT protections)"
     await deadlinesAt(w.testId, 11.5);
     expect((await pay(w.dev.cookie, { kind: "submission", id: w.sub.id, amount: "10.00", tickedCents: 1000 })).status).toBe(200);
     await cron();
-    const sent = (ids: string[]) => db.notification.count({ where: { userId: { in: ids }, reminderKey: { startsWith: "closeout:" } } });
+    // (Owner, Nov 9, §366) The keys the close-out lines use now: the developer's "Closing soon" countdown (`closesoon:<day>`) and the tester's daily "Charge or
+    // let go … by <date>" (`chargeday`); the old `closeout:` key no longer exists, so the check could never fail.
+    const sent = (ids: string[]) => db.notification.count({ where: { userId: { in: ids }, OR: [{ reminderKey: { startsWith: "closesoon:" } }, { reminderKey: "chargeday" }] } });
     expect(await sent([w.dev.user.id, w.tester.user.id])).toBe(0);
     const v = await sentWork();
     await deadlinesAt(v.testId, 11.5);
