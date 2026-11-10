@@ -213,7 +213,7 @@ describe("batch 35 §21: “Everyone you ticked now meets this test's needs” o
     expect(everyoneMeets({ devices: [], languages: [] }, [], shown)).toBe(false);
     expect(everyoneMeets({ devices: [], languages: [] }, ["cy"], shown)).toBe(false);
     expect(EVERYONE_MEETS).toBe("Everyone you ticked now meets this test's needs. Press Invite to send.");
-    expect(src("lib/server/invites.ts")).toContain(`"${EVERYONE_MEETS}"`); // the server's line reads the same
+    expect(src("lib/server/invites.ts")).not.toContain(`"${EVERYONE_MEETS}"`); // (Owner, Nov 9, §357) the server no longer refuses with it: Invite anyway sends
     const panel = src("app/app/tests/[id]/InvitePanel.tsx");
     expect(panel).toContain("const msgNow = msg === EVERYONE_MEETS && !everyoneMeets(p.options, ticked, shown.current) ? \"\" : msg;");
     expect(panel).toContain('{msgNow && <p className="info" data-invite-msg="">{msgNow}</p>}');

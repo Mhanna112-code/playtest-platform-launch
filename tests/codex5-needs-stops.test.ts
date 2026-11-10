@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { makeUser } from "./helpers";
 import { act, setup, seen, settle } from "./fixtures";
 import { invitable, inviteGaps, testerRowInfo } from "@/lib/server/invites";
-import { ratingChangedLine, testerNeedsChangedLines, type Needs } from "@/lib/testerState";
+import { ratingChangedLine, type Needs } from "@/lib/testerState";
 import { redrawTesterChanges } from "@/lib/useTesterChanges";
 import { testV } from "@/lib/server/pulseV";
 
@@ -33,16 +33,14 @@ const lines = (result: Awaited<ReturnType<typeof act>>) => (result.body.error?.c
 
 describe("Task 5: stops compare the rows currently shown", () => {
   for (const action of ["invite", "cancel", "accept", "decline"] as const) {
-    it(`${action}: adding the first needed language stops once, but a shown redraw goes through`, async () => {
+    // (Owner, Nov 9, §357) A tester's devices or languages changing never stops the press (only a rating change of a star or more does).
+    it(`${action}: adding the first needed language doesn't stop it`, async () => {
       const s = await scenario(action, []);
       const shown = await s.snapshot();
       await settle();
       await db.testerProfile.update({ where: { userId: s.tester.user.id }, data: { languages: ["Spanish"] } });
-      const stopped = await s.press(shown);
-      expect(stopped.body.error.code).toBe("stop_once");
-      expect(lines(stopped).map((c) => c.text)).toContain("Ana Silva now lists Spanish, which this test needs.");
-      const redrawn = await s.snapshot();
-      expect((await s.press(redrawn, { confirmed: true, boxAt: stopped.body.error.now })).status).toBe(200);
+      const r = await s.press(shown);
+      expect(r.status, JSON.stringify(r.body)).toBe(200);
     });
 
     it(`${action}: a live redraw already shown is accepted on the first press`, async () => {
@@ -58,13 +56,14 @@ describe("Task 5: stops compare the rows currently shown", () => {
       expect((await s.press(shown)).status).toBe(200);
     });
 
-    it(`${action}: removing the last needed language stops with its name`, async () => {
+    it(`${action}: removing the last needed language doesn't stop it (Invite asks Invite anyway, as for anyone missing a need)`, async () => {
       const s = await scenario(action);
       const shown = await s.snapshot();
       await db.testerProfile.update({ where: { userId: s.tester.user.id }, data: { languages: [] } });
       const result = await s.press(shown);
-      expect(result.body.error.code).toBe("stop_once");
-      expect(lines(result).map((c) => c.text)).toContain("Ana Silva no longer lists Russian, which this test needs.");
+      expect(lines(result).map((c) => c.text).join(" ")).not.toContain("no longer lists");
+      if (action === "invite") expect(result.body.error.code).toBe("needs_confirm");
+      else expect(result.status, JSON.stringify(result.body)).toBe(200);
     });
 
     it(`${action}: one star stops, half a star does not`, async () => {
@@ -80,7 +79,7 @@ describe("Task 5: stops compare the rows currently shown", () => {
     });
   }
 
-  it("Cancel invite combines needs and rating into one keyed line for the tester", async () => {
+  it("Cancel invite: one keyed line for the tester, the rating only (§357: no needs line)", async () => {
     const s = await scenario("cancel");
     await s.rate([5]);
     const shown = await s.snapshot();
@@ -89,8 +88,8 @@ describe("Task 5: stops compare the rows currently shown", () => {
     const result = await s.press(shown);
     const own = lines(result).filter((c) => c.key === `needs:${s.tester.user.id}`);
     expect(own).toHaveLength(1);
-    expect(own[0].text).toContain("no longer lists Russian");
-    expect(own[0].text).toContain("rating went from 5.0 to 3.0");
+    expect(own[0].text).not.toContain("no longer lists Russian");
+    expect(own[0].text).toBe("Ana Silva's rating went from 5.0 to 3.0");
   });
 
   it("rows name only missing kinds and show the public rating plus tests together", async () => {
@@ -119,11 +118,11 @@ describe("Task 5: stops compare the rows currently shown", () => {
   it("redraws open tester lines without erasing a fresh stop before the new row arrives", () => {
     const before = new Map([["ana", { devices: [], languages: ["Russian"], rating: 4.6 }]]);
     const change = [{ key: "needs:ana", kind: "profile", text: "Ana no longer lists Russian, which this test needs.", at: "2026-10-30T12:00:02Z" }];
-    expect(redrawTesterChanges(change, before, [{ id: "ana", name: "Ana", seen: before.get("ana")!, changedAt: "2026-10-30T12:00:01Z" }], needs)).toBe(change);
-    const redraw = redrawTesterChanges(change, before, [{ id: "ana", name: "Ana", seen: { devices: [], languages: [], rating: 3.5 }, changedAt: "2026-10-30T12:00:03Z" }], needs)!;
+    expect(redrawTesterChanges(change, before, [{ id: "ana", name: "Ana", seen: before.get("ana")!, changedAt: "2026-10-30T12:00:01Z" }])).toBe(change);
+    const redraw = redrawTesterChanges(change, before, [{ id: "ana", name: "Ana", seen: { devices: [], languages: [], rating: 3.5 }, changedAt: "2026-10-30T12:00:03Z" }])!;
     expect(redraw).toHaveLength(1);
     expect(redraw[0].text).toContain("rating went from 4.6 to 3.5");
-    expect(redrawTesterChanges(redraw, before, [{ id: "ana", name: "Ana", seen: { devices: [], languages: ["Spanish"], rating: 4.6 }, changedAt: "2026-10-30T12:00:04Z" }], needs)).toBeNull();
+    expect(redrawTesterChanges(redraw, before, [{ id: "ana", name: "Ana", seen: { devices: [], languages: ["Spanish"], rating: 4.6 }, changedAt: "2026-10-30T12:00:04Z" }])).toBeNull();
   });
 
   it("the live Invite anyway response carries the same fresh state for its rows and blue box", async () => {
@@ -136,7 +135,6 @@ describe("Task 5: stops compare the rows currently shown", () => {
   });
 
   it("kind flips, rather than needed-item substitutions, decide the lines", () => {
-    expect(testerNeedsChangedLines("Ana", { devices: [], languages: ["Russian"] }, { devices: [], languages: ["Spanish"] }, needs)).toEqual([]);
     expect(ratingChangedLine("Ana", 4.6, 4.1)).toBe("");
     expect(ratingChangedLine("Ana", 4.6, 3.6)).toBe("Ana's rating went from 4.6 to 3.6");
   });

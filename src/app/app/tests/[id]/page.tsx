@@ -642,7 +642,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       <div className="min-w-0 space-y-2">
         {[...apps].sort((a, b) => a.at.getTime() - b.at.getTime()).map((a) => (
           <div key={a.id} className="min-w-0 rounded-lg border border-white/10 p-2 sm:p-3" data-needs-application={a.id}>
-            <Applications embedded needs={{ devices: t.devices, languages: t.languages }} testId={t.id} seenAt={seenAt} apps={[a]} />
+            <Applications embedded testId={t.id} seenAt={seenAt} apps={[a]} />
           </div>
         ))}
       </div>

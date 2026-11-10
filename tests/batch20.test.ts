@@ -13,7 +13,6 @@ import { questionLimitLine } from "@/lib/questions";
 import { isMissingNeedLine, missingNeedLine, missingNeedText, testerGapText } from "@/lib/gaps";
 import { OrList, MissingNeedWords } from "@/components/MissingNeeds";
 import { GapLinesBox } from "@/app/app/tests/[id]/InvitePanel";
-import { testerNeedsChangedLines } from "@/lib/server/invites";
 import { AGE_LINE, AGE_TICK, TERMS_TICK_LABEL, TERMS_TICK_MISSING, TERMS_UPDATED_CODE, TERMS_VERSION, WHAT_CHANGED, needsTermsAgain } from "@/lib/termsOfUse";
 import { signUp } from "@/lib/server/passwords";
 import { POST as signupPOST } from "@/app/api/auth/signup/route";
@@ -170,10 +169,8 @@ describe("batch 20 section 3: Invite anyway names every missing need", () => {
     expect(r.body.error.message).toBe(`CONFIRM:${line}`);
     expect(r.body.error.lines).toEqual([line]);
     expect(r.body.error.items).toEqual([{ name: "fbbb", languages: langs, devices: devs }]);
-    // A box that showed only the languages (the old wording) is stale: stops once with the full line.
-    const stale = await act(testId, "invite", dev.cookie, { ...body, anyway: true, seenGaps: ["fbbb doesn't list Chinese or Portuguese, which this test needs."], ...again() });
-    expect(stale.body.error.message).toMatch(/^CONFIRM:What's missing changed since you looked/);
-    const ok = await act(testId, "invite", dev.cookie, { ...body, anyway: true, seenGaps: [line], ...again() });
+    // (Owner, Nov 9, §357) A box that showed older lines no longer stops Invite anyway: it sends on what's missing now.
+    const ok = await act(testId, "invite", dev.cookie, { ...body, anyway: true, seenGaps: ["fbbb doesn't list Chinese or Portuguese, which this test needs."], ...again() });
     expect(ok.body.message).toBe("Invited fbbb.");
     // The live box's check: the same lines.
     const g = await makeUser({ tester: true, name: "Gus" });
@@ -195,15 +192,7 @@ describe("batch 20 section 3: Invite anyway names every missing need", () => {
 });
 
 describe("batch 20 section 4: Invite stops only for required items, one net line per tester", () => {
-  const test = { languages: ["Chinese", "Portuguese"], devices: ["Windows PC"] };
-  it("unrelated changes: nothing; added; removed; both; added then removed: nothing", () => {
-    const none = { languages: [] as string[], devices: [] as string[] };
-    expect(testerNeedsChangedLines("fbbb", { languages: ["Chinese"], devices: ["VR headset"] }, { languages: ["Chinese", "French"], devices: ["VR headset", "Android tablet", "iPad", "PlayStation", "Xbox"] }, test)).toEqual([]);
-    expect(testerNeedsChangedLines("fbbb", none, { languages: ["Chinese"], devices: ["Windows PC"] }, test)).toEqual(["fbbb now lists Chinese and Windows PC, which this test needs."]);
-    expect(testerNeedsChangedLines("fbbb", { languages: ["Chinese"], devices: [] }, none, test)).toEqual(["fbbb no longer lists Chinese, which this test needs."]);
-    expect(testerNeedsChangedLines("fbbb", { languages: ["Chinese"], devices: [] }, { languages: [], devices: ["Windows PC"] }, test)).toEqual(["fbbb now lists Windows PC but no longer lists Chinese (this test needs Chinese or Portuguese)."]);
-    expect(testerNeedsChangedLines("fbbb", none, none, test)).toEqual([]);
-  });
+  // (Owner, Nov 9, §357) A tester's devices or languages changing never stops Accept / Decline, Invite (anyway) or Cancel invite: the needs lines went.
 
   it("(server) an unrelated edit never stops; several edits collapse into one line with one time; added then removed: no stop", async () => {
     const { dev, testId } = await setup();

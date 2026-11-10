@@ -11,7 +11,7 @@ import { bell, notify } from "./notify";
 import { APP_WITHDRAWN_GROUP, APPLICATIONS_GROUP } from "@/lib/bell";
 import { unanswered, answersIt, asLines, listingSaveLines, logEvent, ownChanges, seenOf, tabOf, withRenamed } from "./live";
 import { asListing, devGate, gapStop, joinTest, needsGap, ownTest, PROFILE_FIRST, profileSaved } from "./tests";
-import { ratingChangedLine, testerNeedsChangedLines } from "./invites";
+import { ratingChangedLine } from "./invites";
 import { ratingSummary } from "./ratings";
 
 // Joining (owner rule): Who can join = Anyone (Join) / Apply (Apply to join → the developer Accepts or Declines) /
@@ -383,17 +383,14 @@ export async function decideApplication(dev: U, testId: string, body: Record<str
   const shownTesters = body.seenTesters && typeof body.seenTesters === "object" ? body.seenTesters as Record<string, unknown> : {};
   const shownRaw = shownTesters[tester.id] && typeof shownTesters[tester.id] === "object" ? shownTesters[tester.id] as Record<string, unknown> : null;
   if (shownRaw) {
-    const shownDevices = Array.isArray(shownRaw.devices) ? shownRaw.devices.map(String) : [];
-    const shownLanguages = Array.isArray(shownRaw.languages) ? shownRaw.languages.map(String) : [];
-    const current = { devices: tester.profile?.devices ?? [], languages: tester.profile?.languages ?? [] };
-    const listing = await db.test.findUniqueOrThrow({ where: { id: testId } });
-    const lines = testerNeedsChangedLines(name, { devices: shownDevices, languages: shownLanguages }, current, listing);
+    // (Owner, Nov 9, §357) A tester's devices or languages changing (now meeting a need, or no longer) never stops the press; a rating change still does.
+    const lines: string[] = [];
     const shownRating = !("rating" in shownRaw) ? undefined : typeof shownRaw.rating === "number" ? shownRaw.rating : null;
     const rating = await ratingSummary(tester.id, "tester"); // (Owner, Nov 5, §276) as the application row shows it
     const currentRating = rating.n ? Number(rating.avg.toFixed(1)) : null;
     const ratingLine = ratingChangedLine(name, shownRating, currentRating, tester.pronoun);
     if (ratingLine) lines.push(ratingLine);
-    if (lines.length) extra.push({ kind: "profile", text: lines.join(" · "), createdAt: new Date(Math.max(tester.profile?.updatedAt.getTime() ?? 0, rating.at?.getTime() ?? 0)), key: `needs:${tester.id}` });
+    if (lines.length) extra.push({ kind: "profile", text: lines.join(" · "), createdAt: rating.at ?? new Date(), key: `needs:${tester.id}` });
   }
   extra.push(...(await listingChanges(testId, body.seenAt)));
   await db.$transaction((tx) => devGate(tx, testId, body, {}, extra, undefined, { acts: ["application"], keys: [`app:${a.id}`], answers: { item: a.id, kinds: ["applied"], texts: [`${name} applied to join`, `${name} asks to rejoin`] } })); // (batch 35 §79)

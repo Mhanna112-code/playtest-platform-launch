@@ -48,7 +48,7 @@ export function gapsOf(t: { devices: string[]; languages: string[] }, p: { devic
   };
 }
 
-/** The Invite panel's notice when nobody ticked misses a need any more (the server's "needs_none" line reads the same). */
+/** The Invite panel's live notice when nobody ticked misses a need any more (§357: the server no longer refuses an Invite anyway for it; it just sends). */
 export const EVERYONE_MEETS = "Everyone you ticked now meets this test's needs. Press Invite to send.";
 /**
  * (Owner's bug, Oct 31, batch 35 §21) Is that notice true NOW: someone is ticked, and every ticked tester's profile as the panel shows it meets the test's current

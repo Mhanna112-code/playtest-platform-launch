@@ -13,11 +13,11 @@ import type { Needs } from "@/lib/testerState";
 
 type App = { id: string; userId: string; name: string; note: string; tag: string; detail: string; changedAt: string; seen: { devices: string[]; languages: string[]; rating: number | null }; kind?: string; line?: string };
 
-export function Applications({ testId, seenAt, apps, needs, embedded = false }: { needs: Needs; testId: string; seenAt: string; apps: App[]; /** (Owner, Nov 4, §181) inside its person's Needs you drop-down: the list only (the drop-down names the person; a sub-heading says what it is) */ embedded?: boolean }) {
+export function Applications({ testId, seenAt, apps, embedded = false }: { testId: string; seenAt: string; apps: App[]; /** (Owner, Nov 4, §181) inside its person's Needs you drop-down: the list only (the drop-down names the person; a sub-heading says what it is) */ embedded?: boolean }) {
   const router = useRouter();
   const before = useRef(new Map<string, Needs>());
   const { press, changes, setChanges, error, busy, at, doneLine, finish } = usePress(seenAt, () => router.refresh());
-  useTesterChanges(setChanges, before, apps.map((a) => ({ id: a.userId, name: a.name, seen: a.seen, changedAt: a.changedAt })), needs);
+  useTesterChanges(setChanges, before, apps.map((a) => ({ id: a.userId, name: a.name, seen: a.seen, changedAt: a.changedAt })));
   if (!apps.length) return null;
   const go = async (a: App, action: "accept" | "decline") => {
     before.current.set(a.userId, a.seen);

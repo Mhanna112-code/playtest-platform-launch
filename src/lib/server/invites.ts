@@ -1,7 +1,7 @@
 import { TESTING_NO_LIMITS } from "@/lib/testingLimits";
 import { inviteAvailabilityKey, inviteDetailsKey } from "@/lib/inviteAvailability";
-import { ratingChangedLine, testerNeedsChangedLines, type Needs } from "@/lib/testerState";
-export { ratingChangedLine, testerNeedsChangedLines } from "@/lib/testerState";
+import { ratingChangedLine, type Needs } from "@/lib/testerState";
+export { ratingChangedLine } from "@/lib/testerState";
 import { db } from "@/lib/db";
 import type { Prisma } from "@prisma/client";
 import { displayName, fmtDate, pronouns } from "@/lib/server/dateFormat";
@@ -355,11 +355,12 @@ export async function inviteTesters(dev: U & { holdStartedAt?: Date | null }, te
         const seenP = seenTesters ? needsOf(seenTesters[p.id]) : null;
         // (Batch 20 section 4) One line per tester (`key`: a later stop's line replaces it in the box), with one time: the latest change.
         if (seenP) {
-          const lines = testerNeedsChangedLines(name, seenP, { devices: p.profile?.devices ?? [], languages: p.profile?.languages ?? [] }, t);
+          // (Owner, Nov 9, §357) A tester's devices or languages changing (now meeting a need, or no longer) never stops the press; a rating change still does.
+          const lines: string[] = [];
           const currentRating = shownRatingRows.get(p.id);
           const ratingLine = ratingChangedLine(name, seenP.rating, currentRating?.n ? Number(currentRating.avg.toFixed(1)) : null, p.pronoun);
           if (ratingLine) lines.push(ratingLine);
-          if (lines.length) extra.push({ kind: "profile", text: lines.join(" · "), createdAt: new Date(Math.max(p.profile?.updatedAt.getTime() ?? 0, currentRating?.at?.getTime() ?? 0)), key: `needs:${p.id}` });
+          if (lines.length) extra.push({ kind: "profile", text: lines.join(" · "), createdAt: currentRating?.at ?? new Date(), key: `needs:${p.id}` });
         }
         const joined = contracts.find((c) => c.testerId === p.id && c.joinedAt > seenAt);
         if (joined) extra.push({ kind: "joined", text: `${name} joined this test, so ${pronouns(p.pronoun).subjIs} no longer in your invite list`, createdAt: joined.joinedAt });
@@ -382,16 +383,9 @@ export async function inviteTesters(dev: U & { holdStartedAt?: Date | null }, te
     const rowInfo = await testerRowInfo(dev.id, t, people);
     const testers = people.map((p) => ({ id: p.id, name: displayName(p), ...rowInfo.get(p.id)! }));
     await devGate(tx, testId, body, { ...(gaps.length ? { lines: gaps, items: gapItems } : {}), testers }, extra, notTheirAsk, { acts: INVITE_ACTS, keys: ids.map((id) => `t:${id}`) });
-    const seenGaps = Array.isArray(body.seenGaps) ? (body.seenGaps as unknown[]).map(String) : null;
-    if (body.anyway === true && !gaps.length) {
-      // Everyone ticked now meets the needs: nothing is sent; the box closes and a notice shows under Invite.
-      throw new HttpError(409, "needs_none", "Everyone you ticked now meets this test's needs. Press Invite to send.");
-    }
+    // (Owner, Nov 9, §357) A ticked tester's devices or languages changing never stops the press: Invite anyway sends on what's missing now (no "everyone
+    // now meets" refusal, no "What's missing changed" stop).
     if (gaps.length && body.anyway !== true) throw new HttpError(409, "needs_confirm", "CONFIRM:" + gaps.join("\n"), { lines: gaps, items: gapItems, testers });
-    if (gaps.length && JSON.stringify(seenGaps) !== JSON.stringify(gaps)) {
-      // What's missing changed since the box showed: stop once in the box with the updated list.
-      throw new HttpError(409, "needs_confirm", "CONFIRM:" + ["What's missing changed since you looked. Press Invite anyway again to invite on this:", ...gaps].join("\n"), { lines: gaps, items: gapItems, testers, changed: true });
-    }
     const invited: { id: string; name: string; email: string; pronoun: string }[] = [];
     const seen = (await import("./joining")).pressSeen(body);
     const others: string[] = [];
@@ -473,11 +467,11 @@ export async function cancelInvite(dev: U, testId: string, body: Record<string, 
   const shown = body.seenTesters && typeof body.seenTesters === "object" ? needsOf((body.seenTesters as Record<string, unknown>)[inv.testerId]) : null;
   const extra: TestEventLike[] = [];
   if (shown && tester) {
-    const lines = testerNeedsChangedLines(displayName(tester), shown, { devices: tester.profile?.devices ?? [], languages: tester.profile?.languages ?? [] }, inv.test);
+    const lines: string[] = []; // (Owner, Nov 9, §357) A tester's devices or languages changing (now meeting a need, or no longer) never stops the press; a rating change still does.
     const latest = await ratingSummary(tester.id, "tester"); // (Owner, Nov 5, §276) as the row shows it
     const line = ratingChangedLine(displayName(tester), shown.rating, latest.n ? Number(latest.avg.toFixed(1)) : null, tester.pronoun);
     if (line) lines.push(line);
-    if (lines.length) extra.push({ kind: "profile", text: lines.join(" · "), createdAt: new Date(Math.max(tester.profile?.updatedAt.getTime() ?? 0, latest.at?.getTime() ?? 0)), key: `needs:${tester.id}` });
+    if (lines.length) extra.push({ kind: "profile", text: lines.join(" · "), createdAt: latest.at ?? new Date(), key: `needs:${tester.id}` });
   }
   // (Batch 16 section 21) Cancelled in another tab: this press stops once naming it, then it's already done.
   await db.$transaction((tx) => devGate(tx, testId, body, {}, extra, undefined, { acts: INVITE_ACTS, keys: [`t:${inv.testerId}`] }));

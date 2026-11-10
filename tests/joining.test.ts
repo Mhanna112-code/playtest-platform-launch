@@ -22,7 +22,8 @@ describe("joining: Anyone / Apply / Invite only", () => {
     expect(await db.notification.count({ where: { userId: ana.user.id, text: "You're in: Harbor Run" } })).toBe(1);
   });
 
-  it("Decline stops once when the tester loses their last needed device", async () => {
+  // (Owner, Nov 9, §357) A tester's devices or languages changing never stops Accept / Decline.
+  it("Decline doesn't stop when the tester loses their last needed device", async () => {
     const { dev, testId } = await setup({ joinMode: "apply", devices: ["Windows PC"] });
     const ana = await makeUser({ tester: true, name: "Ana Silva" });
     await act(testId, "apply", ana.cookie, {});
@@ -31,8 +32,8 @@ describe("joining: Anyone / Apply / Invite only", () => {
     await later();
     await db.testerProfile.update({ where: { userId: ana.user.id }, data: { devices: ["Mac"] } });
     const r = await act(testId, "application", dev.cookie, { applicationId: a.id, action: "decline", seenTesters: { [ana.user.id]: { devices: ["Windows PC"], languages: ["English"], rating: null } }, seenAt: pageLoaded });
-    expect(r.body.error.changes.map((c: { text: string }) => c.text)).toContain("Ana Silva no longer lists Windows PC, which this test needs.");
-    expect((await act(testId, "application", dev.cookie, { applicationId: a.id, action: "decline", seenTesters: { [ana.user.id]: { devices: ["Windows PC"], languages: ["English"], rating: null } }, seenAt: pageLoaded, confirmed: true })).body).toEqual({ declined: true });
+    expect(r.status, JSON.stringify(r.body)).toBe(200);
+    expect((await db.application.findUniqueOrThrow({ where: { id: a.id } })).status).toBe("declined");
   });
 
   it("Join and Apply stop once when anything about the listing changed (incl. who can join), but not for spots", async () => {

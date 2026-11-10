@@ -82,18 +82,20 @@ describe("invite list: greyed vs removed", () => {
     expect(ok.body.message).toBe("Invited Cara Diaz.");
   });
 
-  it("Invite anyway: nothing sent when everyone now fits; stops once with the updated list when what's missing changed", async () => {
+  // (Owner, Nov 9, §357) Invite anyway never stops for a ticked tester's devices or languages changing: it sends on what's missing now.
+  it("Invite anyway: sent at once when what's missing changed, and when everyone now fits", async () => {
     const { dev, testId } = await setup({ languages: ["English"], devices: ["Windows PC"] });
     const cara = await makeUser({ tester: true, name: "Cara Diaz" });
     await db.testerProfile.update({ where: { userId: cara.user.id }, data: { languages: ["Spanish"] } });
     const first = await act(testId, "invite", dev.cookie, { seenAt: seen(), testerIds: [cara.user.id] });
     await db.testerProfile.update({ where: { userId: cara.user.id }, data: { languages: ["English"], devices: ["Mac"] } });
     const changed = await act(testId, "invite", dev.cookie, { seenAt: seen(), testerIds: [cara.user.id], anyway: true, seenGaps: first.body.error.lines, confirmed: true });
-    expect(changed.body.error).toMatchObject({ code: "needs_confirm", changed: true, lines: ["Cara Diaz doesn't list a device this test needs (Windows PC)."] });
-    await db.testerProfile.update({ where: { userId: cara.user.id }, data: { devices: ["Windows PC"] } });
-    const none = await act(testId, "invite", dev.cookie, { seenAt: seen(), testerIds: [cara.user.id], anyway: true, seenGaps: changed.body.error.lines, confirmed: true });
-    expect(none.body.error.message).toBe("Everyone you ticked now meets this test's needs. Press Invite to send.");
-    expect(await db.invite.count({ where: { testId, testerId: cara.user.id } })).toBe(0);
-    expect((await act(testId, "invite-check", dev.cookie, { testerIds: [cara.user.id] })).body).toMatchObject({ lines: [] });
+    expect(changed.body.message, JSON.stringify(changed.body)).toBe("Invited Cara Diaz.");
+    const dee = await makeUser({ tester: true, name: "Dee Moss" });
+    await db.testerProfile.update({ where: { userId: dee.user.id }, data: { languages: ["Spanish"] } });
+    const deeFirst = await act(testId, "invite", dev.cookie, { seenAt: seen(), testerIds: [dee.user.id] });
+    await db.testerProfile.update({ where: { userId: dee.user.id }, data: { languages: ["English"], devices: ["Windows PC"] } });
+    const fits = await act(testId, "invite", dev.cookie, { seenAt: seen(), testerIds: [dee.user.id], anyway: true, seenGaps: deeFirst.body.error.lines, confirmed: true });
+    expect(fits.body.message, JSON.stringify(fits.body)).toBe("Invited Dee Moss.");
   });
 });

@@ -200,7 +200,7 @@ export function InvitePanel(p: { testId: string; /** (§173) the signed-in accou
     names.current.set(t.id, t.name);
   }
   for (const t of p.sent) { shown.current.set(t.testerId, t.seen); names.current.set(t.testerId, t.name); }
-  useTesterChanges(setChanges, pressShown, [...data.worked, ...data.suggested, ...data.found].map((t) => ({ id: t.id, name: t.name, changedAt: t.changedAt, seen: { devices: t.devices, languages: t.languages, rating: t.ratingAvg ?? null } })), p.options);
+  useTesterChanges(setChanges, pressShown, [...data.worked, ...data.suggested, ...data.found].map((t) => ({ id: t.id, name: t.name, changedAt: t.changedAt, seen: { devices: t.devices, languages: t.languages, rating: t.ratingAvg ?? null } })));
   useEffect(() => {
     const grey = new Set([...data.worked, ...data.suggested, ...data.found].filter((t) => t.grey).map((t) => t.id));
     if (grey.size) setTicked((tk) => (tk.some((id) => grey.has(id)) ? tk.filter((id) => !grey.has(id)) : tk));
@@ -418,7 +418,7 @@ export function InvitePanel(p: { testId: string; /** (§173) the signed-in accou
                 <span className="text-xs text-slate-500">{s.detail}</span>
                 {/* (Batch 35 §162) "waiting for her / him / them to join", in the tester's pronoun. */}
                 {s.status.startsWith("waiting for ") && (
-                  <CancelInviteButton testId={p.testId} seenAt={p.seenAt} row={s} needs={p.options} />
+                  <CancelInviteButton testId={p.testId} seenAt={p.seenAt} row={s} />
                 )}
               </li>
             ))}
@@ -505,11 +505,11 @@ export function GapLinesBox({ lines, items }: { lines: string[]; items: GapItem[
   return <div className="max-h-24 space-y-1 overflow-y-auto pr-1" data-gap-scroll={lines.length} tabIndex={0} role="region" aria-label="What each tester is missing">{lines.map(line)}</div>;
 }
 
-function CancelInviteButton({ testId, seenAt, row, needs }: { testId: string; seenAt: string; row: Sent; needs: Needs }) {
+function CancelInviteButton({ testId, seenAt, row }: { testId: string; seenAt: string; row: Sent }) {
   const router = useRouter();
   const before = useRef(new Map<string, Needs>());
   const { press, changes, setChanges, error, busy, doneLine, finish } = usePress(seenAt, () => router.refresh());
-  useTesterChanges(setChanges, before, [{ id: row.testerId, name: row.name, seen: row.seen, changedAt: row.changedAt }], needs);
+  useTesterChanges(setChanges, before, [{ id: row.testerId, name: row.name, seen: row.seen, changedAt: row.changedAt }]);
   return <><button className="btn-ghost" disabled={busy} onClick={async () => {
     before.current.set(row.testerId, row.seen);
     if (await press(`/api/tests/${testId}/cancel-invite`, { inviteId: row.id, seenTesters: { [row.testerId]: row.seen } })) finish(`Cancelled ${row.name}'s invite.`);

@@ -44,7 +44,7 @@ describe("batch 32 §3 and §4: the tester's pages", () => {
 });
 
 describe("batch 32 §9: one change, one stop (Invite anyway)", () => {
-  it("the stop carries what's missing now; with that list the next Invite anyway goes through", async () => {
+  it("(§357) a ticked tester dropping a needed language doesn't stop Invite anyway: it sends on what's missing now", async () => {
     const { dev, testId } = await setup();
     await db.test.update({ where: { id: testId }, data: { devices: ["Switch"], languages: ["Chinese"] } });
     const f = await makeUser({ tester: true, name: "fbbb" });
@@ -53,16 +53,10 @@ describe("batch 32 §9: one change, one stop (Invite anyway)", () => {
     const loaded = seen();
     await settle();
     const body = { testerIds: [f.user.id], seenAt: loaded, seenNeeds: { devices: ["Switch"], languages: ["Chinese"] }, seenTesters: { [f.user.id]: { devices: ["PlayStation"], languages: ["Chinese"] } } };
-    // fbbb drops Chinese after the page loaded: the press stops once, naming it, with the full list of what's missing now.
+    // (Owner, Nov 9, §357) fbbb drops Chinese after the page loaded: no stop; the press invites.
     await db.testerProfile.update({ where: { userId: f.user.id }, data: { languages: [] } });
     const r = await act(testId, "invite", dev.cookie, { ...body, anyway: true, seenGaps: ["fbbb doesn't list a device this test needs (Switch)."] });
-    expect(r.body.error.code).toBe("stop_once");
-    const lines = r.body.error.lines as string[];
-    expect(lines.join(" ")).toMatch(/Chinese/);
-    expect(lines.join(" ")).toMatch(/Switch/);
-    // The box redrew to those lines: the next Invite anyway goes through (no second "What's missing changed").
-    const ok = await act(testId, "invite", dev.cookie, { ...body, anyway: true, seenGaps: lines, confirmed: true, boxAt: new Date().toISOString() });
-    expect(ok.body.message).toBe("Invited fbbb.");
+    expect(r.body.message, JSON.stringify(r.body)).toBe("Invited fbbb.");
   });
 });
 

@@ -6,7 +6,7 @@ import { db } from "@/lib/db";
 import { fmtDate } from "@/lib/format";
 import { startHold } from "@/lib/server/holds";
 import { closeJoiningAfterOpenUntil } from "@/lib/server/tests";
-import { requirementsChangedLine, testerNeedsChangedLines } from "@/lib/server/invites";
+import { requirementsChangedLine } from "@/lib/server/invites";
 import { POST as invitePOST } from "@/app/api/invites/[id]/route";
 import { GET as liveGET } from "@/app/api/live/route";
 import { GET as pulseGET } from "@/app/api/pulse/route";
@@ -33,10 +33,7 @@ describe("invite: requirement and profile changes stop Invite once (section 31)"
   it("the lines", () => {
     expect(requirementsChangedLine({ devices: ["Windows PC"], languages: ["Russian", "Turkish"] }, { devices: ["iPad"], languages: ["English"] })).toBe("The test's requirements changed: Devices: Windows PC → iPad · Languages: Russian, Turkish → English");
     expect(requirementsChangedLine({ devices: ["Windows PC"], languages: [] }, { devices: ["Windows PC"], languages: [] })).toBe("");
-    const test = { devices: [], languages: ["Russian"] };
-    // (Batch 20 section 4) Only what the test requires, one net line.
-    expect(testerNeedsChangedLines("Fay Ito", { devices: [], languages: ["Russian"] }, { devices: [], languages: [] }, test)).toEqual(["Fay Ito no longer lists Russian, which this test needs."]);
-    expect(testerNeedsChangedLines("Fay Ito", { devices: [], languages: [] }, { devices: ["iPad"], languages: [] }, { devices: [], languages: [] })).toEqual([]);
+    // (Owner, Nov 9, §357) A tester's devices or languages changing never stops Accept / Decline, Invite (anyway) or Cancel invite: the needs lines went.
   });
 
   it("the owner's case: the test's requirements AND the tester's profile changed; one stop with both lines; then Invite anyway with the CURRENT needs", async () => {
@@ -51,15 +48,15 @@ describe("invite: requirement and profile changes stop Invite once (section 31)"
     await db.testerProfile.update({ where: { userId: f.user.id }, data: { devices: ["iPad"] } });
     const body = { testerIds: [f.user.id], seenAt: loaded, tab: "B", seenNeeds: { devices: ["Windows PC"], languages: ["Russian", "Turkish"] }, seenTesters: { [f.user.id]: { devices: [], languages: [] } } };
     const r = await act(testId, "invite", dev.cookie, body);
-    expect(texts(r)).toEqual(expect.arrayContaining(["The test's requirements changed: Devices: Windows PC → iPad · Languages: Russian, Turkish → English", "Fay Ito now lists iPad, which this test needs."]));
+    // (Owner, Nov 9, §357) a tester's devices or languages changing never stops the press: only the test's own change is a line.
+    expect(texts(r)).toEqual(expect.arrayContaining(["The test's requirements changed: Devices: Windows PC → iPad · Languages: Russian, Turkish → English"]));
+    expect(texts(r).join(" ")).not.toContain("now lists");
     // The second press: Fay still lacks English: the usual confirm, with the current needs.
     const r2 = await act(testId, "invite", dev.cookie, { ...body, ...again() });
     expect(r2.body.error.message).toBe("CONFIRM:Fay Ito doesn't list a language this test needs (English).");
-    // Invite anyway with gap lines the box showed earlier (stale): stops once with the current ones.
+    // Invite anyway with gap lines the box showed earlier (stale): ((Owner, Nov 9, §357) a tester's devices or languages changing never stops the press) it invites on the current ones.
     const stale = await act(testId, "invite", dev.cookie, { ...body, anyway: true, seenGaps: ["Fay Ito doesn't list a language this test needs (Russian or Turkish) or a device it needs (Windows PC)."], ...again() });
-    expect(stale.body.error.message).toMatch(/^CONFIRM:What's missing changed since you looked/);
-    const ok = await act(testId, "invite", dev.cookie, { ...body, anyway: true, seenGaps: ["Fay Ito doesn't list a language this test needs (English)."], ...again() });
-    expect(ok.body.message).toBe("Invited Fay Ito.");
+    expect(stale.body.message, JSON.stringify(stale.body)).toBe("Invited Fay Ito.");
   });
 
   it("only the test's requirements changed / only the tester's profile changed (added, removed)", async () => {
@@ -74,7 +71,7 @@ describe("invite: requirement and profile changes stop Invite once (section 31)"
       .toEqual([]);
     const h = await fay([], []);
     expect(texts(await act(testId, "invite", dev.cookie, { testerIds: [h.user.id], seenAt: seen(), seenNeeds: { devices: ["iPad"], languages: [] }, seenTesters: { [h.user.id]: { devices: ["iPad"], languages: [] } } })))
-      .toEqual(["Fay Ito no longer lists iPad, which this test needs."]);
+      .toEqual([]); // (Owner, Nov 9, §357) a tester's devices or languages changing never stops the press
   });
 
   it("the panel follows live: a tester's profile change changes the test page's fingerprint; the page sends what it showed", async () => {

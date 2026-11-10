@@ -49,7 +49,8 @@ describe("invites", () => {
     const r = await act(testId, "invite", dev.cookie, { seenAt: pageLoaded, testerIds: [cara.user.id, dee.user.id, ben.user.id], seenTesters: { [ben.user.id]: { devices: ["Windows PC"], languages: ["English"], rating: null } }, tab: "tab-1" });
     expect(r.body.error.code).toBe("stop_once");
     const texts = r.body.error.changes.map((c: { text: string }) => c.text);
-    expect(texts).toEqual(expect.arrayContaining(["Cara Diaz joined this test, so she's no longer in your invite list", "You invited Dee Moss in another tab", "Ben Carter no longer lists English, which this test needs."]));
+    expect(texts).toEqual(expect.arrayContaining(["Cara Diaz joined this test, so she's no longer in your invite list", "You invited Dee Moss in another tab"]));
+    expect(texts.join(" ")).not.toContain("no longer lists"); // (Owner, Nov 9, §357)
     await joined(testId, "Eve Ray");
     const full = await act(testId, "invite", dev.cookie, { seenAt: pageLoaded, testerIds: [ben.user.id], confirmed: true });
     expect(full.body.error.message).toBe("Harbor Run is full. Add spots to invite more people.");
