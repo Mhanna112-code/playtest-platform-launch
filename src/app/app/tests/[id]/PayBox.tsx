@@ -58,6 +58,8 @@ export function PayBox(p: {
   /** (Owner, Nov 5, §226) Needs you's box for what's new on a paid part: Pay more's route, checks and stops, named "Pay" (its button, its refusals and stops; the
    * request says so with `press: "Pay"`, so the server's failed-press line names Pay too). The Testers list keeps "Pay more". */
   moreLabel?: "Pay";
+  /** (Owner, Nov 9, §362) A box in Needs you: its press says so (`from: "needs"`), so work on this part since the page showed it stops it once whatever the Alerts. */
+  fromNeeds?: boolean;
   /** (Owner, Nov 6, §288) false once the tester rated the test (their disputes are closed): the line under Pay says nothing about disputing. */
   disputable?: boolean;
 }) {
@@ -161,10 +163,11 @@ export function PayBox(p: {
     const r = more
       ? await press<{ status?: string; amountCents: number }>(`/api/tests/${more.testId}/pay-extra`, {
         contractId: more.contractId, ...(p.kind === "call" ? { callId: p.id } : { submissionId: p.id }), amount, note: reason, payKey, tickedCents: ticked ? cents : null, over200: over && over200,
-        ...(p.moreLabel ? { press: p.moreLabel } : {}),
+        ...(p.moreLabel ? { press: p.moreLabel } : {}), ...(p.fromNeeds ? { from: "needs" } : {}),
       }, "pay")
       : await press<{ status?: string; amountCents: number }>("/api/review", {
         kind: p.kind, id: p.id, payKey, amount, reason, ...(isCall && rate ? { rate, typed } : {}), tickedCents: ticked ? cents : null, over200: over && over200,
+        ...(p.fromNeeds ? { from: "needs" } : {}),
       }, "pay");
     if (!r) {
       setPayKey(newPressId());

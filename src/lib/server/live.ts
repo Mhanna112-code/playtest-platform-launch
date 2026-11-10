@@ -52,6 +52,12 @@ export type Press = {
   skipTeamPause?: boolean;
   /** (Owner, Nov 4, §193) With `awayCharge`: the parts (submission or call ids) this press confirms. Confirm all: every covered part; a charge line on one never forces. */
   confirms?: readonly string[];
+  /**
+   * (Owner, Nov 9, §362) Pay / Pay more pressed in the NEEDS YOU panel (the page sends `from: "needs"`): work the tester sent, updated or added on the part it pays
+   * stops it once whatever the "Work sent" tick, marked forced. Only ever adds that one stop (never widens anything else); the Testers list's Pay more, Confirm
+   * with your bank and Confirm all don't carry it.
+   */
+  fromNeeds?: boolean;
 };
 /**
  * (Owner, Oct 31, batch 35 §79) A press never stops once for the line about the very thing it answers (Accept on a call request that just arrived, Accept on an
@@ -274,8 +280,10 @@ const onPart = (c: TestEventLike, press?: Press) => {
 };
 
 /** Forced checks for departures, disputes, team decisions and tester charges.
- * Ordinary same-part work and payments follow Alerts.
+ * Ordinary same-part work and payments follow Alerts, except (§362) work on the part a Needs you Pay / Pay more pays (`fromNeeds`).
  */
+/** (§362) Work sent, updated or added (the "sent" line; "sentpaid" at the cap) on a part this payment press pays. */
+const sentOnPart = (c: TestEventLike, press?: Press) => (c.kind === "sent" || c.kind === "sentpaid") && !!c.item && !!press && (press.keys.includes(`sub:${c.item}`) || press.keys.includes(`call:${c.item}`));
 export function alwaysStops(c: TestEventLike & { contractId?: string | null }, press?: Press) {
   if (press?.awayCharge) {
     // (§171 item 7) As before §171: the team's decision about that tester. (Owner, Nov 9, §340) That tester leaving no longer forces it: it follows the
@@ -292,6 +300,9 @@ export function alwaysStops(c: TestEventLike & { contractId?: string | null }, p
   if ((c.kind === "dispute" || isTeamDecision(c) || !!c.charge) && !!c.contractId && pressContracts(press).includes(c.contractId)) return true;
   const payContract = payContractOf(press);
   if (!payContract) return false;
+  // (Owner, Nov 9, §362) Needs you's Pay / Pay more: work on the very part being paid always stops it once (forced). Other payments on it, its call problem /
+  // length lines, other parts and other testers follow Alerts.
+  if (press?.fromNeeds && sentOnPart(c, press)) return true;
   return c.kind === "left" && c.contractId === payContract;
 }
 

@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
 import type Stripe from "stripe";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
@@ -195,6 +197,65 @@ describe("§159 rule 2: work on every part follows \"Work sent\"", () => {
     setStripeForTests(null);
     const c = await confirmStart(w.dev.cookie, waitRow.id, { seenAt: loaded });
     expect(c.status, JSON.stringify(c.body)).toBe(200);
+  });
+});
+
+// (Owner, Nov 9, §362) Needs you's Pay and Pay more only (`from: "needs"`): work the tester sent, updated or added on the part being paid stops the press once
+// whatever "Work sent", marked forced. The Testers list's Pay more, and work on another part, follow the tick.
+describe("§362 Needs you's Pay / Pay more: work on that part always stops once", () => {
+  async function needsWorld() {
+    const { dev, testId } = await setup({ recordingCents: "10.00" });
+    const { tester, sessionId } = await joined(testId, "Ana Silva");
+    expect((await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] })).status).toBe(200);
+    const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
+    const rec = await db.submission.create({ data: { contractId: sessionId, kind: "recording", agreedCents: 1000, sentAt: new Date(), updatedAt: new Date() } });
+    await db.test.update({ where: { id: testId }, data: { ignoredAlerts: ["work"] } });
+    paying();
+    await settle();
+    return { dev, testId, tester, sessionId, sub, rec };
+  }
+  const added = (r: { body: { error?: { changes?: { text: string; forced?: boolean }[] } } }) => r.body.error?.changes ?? [];
+
+  it("Pay in Needs you: an addition to that part stops it once (forced), the second press pays; an addition to another part doesn't stop it", async () => {
+    const w = await needsWorld();
+    const loaded = seen(); await settle();
+    expect((await addTo(w.sessionId, w.tester.cookie, { text: "one more thing", confirmed: true })).status).toBe(200);
+    const body = { kind: "submission", id: w.sub.id, amount: "10.00", tickedCents: 1000, seenAt: loaded, from: "needs" };
+    const first = await pay(w.dev.cookie, body);
+    expect(first.body.error?.code, JSON.stringify(first.body)).toBe("stop_once");
+    expect(added(first)).toEqual([expect.objectContaining({ text: expect.stringMatching(/^Ana Silva added to her answer to “/), forced: true })]);
+    expect((await pay(w.dev.cookie, { ...body, confirmed: true, boxAt: first.body.error!.now })).status).toBe(200);
+    // Another part (the recording) in Needs you: the written answers' addition follows the tick (ignored): straight through.
+    const v = await needsWorld();
+    const loaded2 = seen(); await settle();
+    expect((await addTo(v.sessionId, v.tester.cookie, { text: "one more thing", confirmed: true })).status).toBe(200);
+    const other = await pay(v.dev.cookie, { kind: "submission", id: v.rec.id, amount: "10.00", tickedCents: 1000, seenAt: loaded2, from: "needs" });
+    expect(other.status, JSON.stringify(other.body)).toBe(200);
+  });
+
+  it("Pay more: from Needs you (an update's Pay) it stops once (forced) then pays; from the Testers list it follows the tick and goes through", async () => {
+    for (const fromNeeds of [true, false]) {
+      const w = await needsWorld();
+      expect((await pay(w.dev.cookie, { kind: "submission", id: w.sub.id, amount: "10.00", tickedCents: 1000, confirmed: true })).status).toBe(200);
+      await settle();
+      const loaded = seen(); await settle();
+      expect((await addTo(w.sessionId, w.tester.cookie, { text: "more after the Pay", confirmed: true })).status).toBe(200);
+      const body = { contractId: w.sessionId, submissionId: w.sub.id, amount: "1.00", tickedCents: 100, seenAt: loaded, ...(fromNeeds ? { press: "Pay", from: "needs" } : {}) };
+      const first = await act(w.testId, "pay-extra", w.dev.cookie, body);
+      if (!fromNeeds) {
+        expect(first.status, JSON.stringify(first.body)).toBe(200);
+        continue;
+      }
+      expect(first.body.error?.code, JSON.stringify(first.body)).toBe("stop_once");
+      expect(added(first)).toEqual([expect.objectContaining({ forced: true })]);
+      expect((await act(w.testId, "pay-extra", w.dev.cookie, { ...body, confirmed: true, boxAt: first.body.error.now })).status).toBe(200);
+    }
+  });
+
+  it("the page marks only Needs you's boxes (Pay, a call's Pay, an update's Pay); the Testers list's Pay more boxes don't send it", () => {
+    const page = fs.readFileSync(path.resolve(__dirname, "../src/app/app/tests/[id]/page.tsx"), "utf8");
+    expect(page.match(/<PayBox fromNeeds /g)?.length).toBe(3);
+    expect(page.match(/<PayBox more=\{\{ testId: t\.id, contractId: c\.id \}\} awayInNeeds /g)?.length).toBe(2);
   });
 });
 

@@ -101,7 +101,7 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0] & { hold
     // nothing can reach them, so it can't be paid (final).
     if (!testerPayable(c.tester) && !(await tx.review.findFirst({ where: piece.where }))) throw new HttpError(409, "gone", deletedNoPayoutsLine(displayName({ ...c.tester, deletedAt: null }), c.tester.pronoun));
     const already = await tx.review.findFirst({ where: piece.where });
-    const payPress = payPressOf(c.id, piece.where);
+    const payPress = { ...payPressOf(c.id, piece.where), fromNeeds: body.from === "needs" }; // (§362) Needs you's Pay
     // (Owner, Nov 4, batch 35 §163; replaces batch 16 section 21's "another tab's Pay on this piece stops this press once, BEFORE it is refused as already done")
     // A part already settled is refused on the FIRST press, never after a stop: its second press could only be refused.
     if (already) {
@@ -763,7 +763,7 @@ export async function payExtra(dev: U & Parameters<typeof cardRefusal>[0], testI
     if (again) await tx.payment.update({ where: { id: again.id }, data: { pressKey: null } });
     // (Batch 9 section 6; batch 29 §38) Per piece: the part's max in all, listed or not.
     const room = await pieceRoom(piece, tx);
-    const morePress = payPressOf(c.id, at);
+    const morePress = { ...payPressOf(c.id, at), fromNeeds: body.from === "needs" }; // (§362) Needs you's Pay (an update's), never the Testers list's Pay more
     if (amount! > room.roomCents) {
       // (Owner, Nov 4, batch 35 §163; replaces batch 16 section 21's stop first) More than what's left: refused on the first press, never after a stop.
       throw new HttpError(400, "over_cap", overRoomLine(piece, room));

@@ -9,3 +9,5 @@ Separate forced checks remain for disputes, team decisions, tester charges, the 
 Regression coverage: tester-send-paid-stop-183, pay-matrix and batch35-stop-rules-v2.
 
 (Owner, Nov 9, §362) Restored on the tester side: a developer payment on the part a Send, Add (written answers or a recording) or Dispute is about stops that press once whatever the tester's Alerts (forced). Payments on other parts, Charge / Let it go's owed rule and the developer-side same-part rules stay as above.
+
+(Owner, Nov 9, §362) Restored on the developer side for Needs you only: work the tester sent, updated or added on the part a Needs you Pay or Pay more pays stops that press once whatever the Work sent tick (forced; the page sends `from: "needs"`). The Testers list's Pay more, Confirm with your bank and Confirm all, other payments on the part, call problem and length lines and work on other parts follow Alerts.
