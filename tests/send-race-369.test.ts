@@ -1,0 +1,199 @@
+import { randomUUID } from "node:crypto";
+import { afterEach, describe, expect, it } from "vitest";
+import { db } from "@/lib/db";
+import { carriedAnswers, questionKeys } from "@/lib/additions";
+import { itemsFor } from "@/lib/answerSets";
+import { QUESTIONS_CHANGED_MEANWHILE, sendWritten } from "@/lib/server/tests";
+import { act, addTo, joined, sact, seen, settle, setup } from "./fixtures";
+import { payMore } from "./b15";
+
+// (Owner, Nov 10, §369) "The result must never depend on timing." A press that checks before the test's lock and writes under it re-reads what it decided by under
+// the lock (questions first); any change rolls back and reruns the press from the top, so it ends exactly as a later press would: ONE normal stop-once box, never
+// "Your questions changed just now" or "Your answers were already sent". The interleavings are forced with the press's hook between its checks and its lock.
+
+const Q = ["What did you like?", "Where did you get stuck?", "What would you change?", "Anything about the controls?"];
+const Q3b = "What would you change first?";
+const A1 = "The harbour level was clear and the boats handled well on the first try.";
+type Res = { status: number; body: { error?: { code?: string; message?: string; questions?: boolean; now?: string; changes?: { text: string; forced?: boolean }[] } } & Record<string, unknown> };
+const hooks = () => ((globalThis as { __pressHooks?: Record<string, () => Promise<void>> }).__pressHooks ??= {});
+/** Runs `during` once, the first time a press reaches its lock (the pressing tab paused between its checks and its lock). */
+function pauseAt(name: string, during: () => Promise<unknown>) {
+  let fired = false;
+  hooks()[name] = async () => {
+    if (fired) return;
+    fired = true;
+    await during();
+    await settle();
+  };
+}
+afterEach(() => { delete (globalThis as { __pressHooks?: unknown }).__pressHooks; });
+const texts = (r: Res) => (r.body.error?.changes ?? []).map((c) => c.text);
+const editQuestions = async (testId: string, cookie: string, questions: string[]) => {
+  const v = (await db.test.findUniqueOrThrow({ where: { id: testId } })).version;
+  const r = await act(testId, "edit", cookie, { version: v, fields: { questions }, seenAt: seen(), confirmed: true });
+  expect(r.status, JSON.stringify(r.body)).toBe(200);
+};
+
+async function world() {
+  const s = await setup({ questions: Q, recordingCents: "10.00" });
+  const j = await joined(s.testId);
+  const loaded = seen(); // both tabs' pages
+  await settle();
+  return { ...s, ...j, loaded };
+}
+type W = Awaited<ReturnType<typeof world>>;
+/** Tab A's Send: Q1 and Q2 answered. */
+const sendA = (w: W) => sact(w.sessionId, "written", w.tester.cookie, { answers: [A1, A1, "", ""], for: Q, notes: "", seenAt: w.loaded, tab: "A" }) as Promise<Res>;
+/** Tab B's Send: all four typed (its page is the first form). */
+const B_TYPED = ["B's own take on what was good about it all.", "B's view on where things got stuck for a while.", "B would change the tutorial first of all things.", "B found the controls a little slow to respond."];
+const sendB = (w: W, extra: Record<string, unknown> = {}) => sact(w.sessionId, "written", w.tester.cookie, { answers: B_TYPED, for: Q, notes: "", seenAt: w.loaded, tab: "B", ...extra }) as Promise<Res>;
+const written = (w: W) => db.submission.findUnique({ where: { contractId_kind: { contractId: w.sessionId, kind: "written" } } });
+const OWN_SENT = "You sent your written answers in another tab";
+
+describe("§369 Send Answers in two tabs, and a questions Save, never depend on timing", () => {
+  it("(a) A and B press Send together: A saves; B stops ONCE (\"You sent your written answers in another tab\"); B's second press adds Q3 and Q4", async () => {
+    const w = await world();
+    pauseAt("written", async () => expect((await sendA(w)).status).toBe(200));
+    const b = await sendB(w);
+    expect(b.body.error?.code, JSON.stringify(b.body)).toBe("stop_once");
+    expect(texts(b)).toEqual([OWN_SENT]);
+    // A's answers were saved once and untouched; nothing of B's was written.
+    const sub = (await written(w))!;
+    expect(carriedAnswers(sub, Q)).toEqual([A1, A1, null, null]);
+    expect(await db.submission.count({ where: { contractId: w.sessionId } })).toBe(1);
+    // What B typed into Q1 and Q2 (answered by A) is kept as their "Add to this answer" drafts.
+    const keys = questionKeys(itemsFor(Q));
+    for (const i of [0, 1]) expect((await db.keptForm.findUnique({ where: { userId_key: { userId: w.tester.user.id, key: `add:${w.sessionId}:${keys[i]}` } } }))?.data).toEqual({ text: B_TYPED[i] });
+    // B's second press: the form below holds Q3 and Q4 (with B's typed answers): they are added as first answers.
+    await settle();
+    const second = await sact(w.sessionId, "written", w.tester.cookie, { answers: B_TYPED.slice(2), for: Q.slice(2), notes: "", seenAt: w.loaded, tab: "B", confirmed: true, boxAt: b.body.error!.now });
+    expect(second.status, JSON.stringify(second.body)).toBe(200);
+    expect(carriedAnswers((await written(w))!, Q)).toEqual([A1, A1, B_TYPED[2], B_TYPED[3]]);
+  });
+
+  it("(b) A sends, the developer changes Q3, then B presses: ONE box with both; the second press sends Q4 and Q3'", async () => {
+    const w = await world();
+    expect((await sendA(w)).status).toBe(200);
+    await editQuestions(w.testId, w.dev.cookie, [Q[0], Q[1], Q3b, Q[3]]);
+    await settle();
+    const b = await sendB(w);
+    expect(b.body.error?.code, JSON.stringify(b.body)).toBe("stop_once");
+    expect(b.body.error?.questions).toBe(true);
+    expect(texts(b)).toEqual(expect.arrayContaining([OWN_SENT, `Nora Lane added the question “${Q3b}”`, `Nora Lane removed the question “${Q[2]}”`]));
+    expect(carriedAnswers((await written(w))!, Q)).toEqual([A1, A1, null, null]);
+    await settle();
+    const second = await sact(w.sessionId, "written", w.tester.cookie, { answers: ["B on the changed question, typed after the box.", B_TYPED[3]], for: [Q3b, Q[3]], notes: "", seenAt: w.loaded, tab: "B", confirmed: true, boxAt: b.body.error!.now });
+    expect(second.status, JSON.stringify(second.body)).toBe(200);
+    expect(carriedAnswers((await written(w))!, [Q[0], Q[1], Q3b, Q[3]])).toEqual([A1, A1, "B on the changed question, typed after the box.", B_TYPED[3]]);
+  });
+
+  it("(c) the developer's Save lands between B's checks and B's lock: the question-change stop-once, not QUESTIONS_CHANGED_MEANWHILE", async () => {
+    const w = await world();
+    pauseAt("written", () => editQuestions(w.testId, w.dev.cookie, [Q[0], Q[1], Q3b, Q[3]]));
+    const b = await sendB(w);
+    expect(b.body.error?.code, JSON.stringify(b.body)).toBe("stop_once");
+    expect(b.body.error?.message).not.toBe(QUESTIONS_CHANGED_MEANWHILE);
+    expect(b.body.error?.questions).toBe(true);
+    expect(texts(b)).toEqual(expect.arrayContaining([`Nora Lane added the question “${Q3b}”`, `Nora Lane removed the question “${Q[2]}”`]));
+    expect(await written(w)).toBeNull();
+  });
+
+  it("(d) A's Send and the developer's Save both land in B's window: ONE box with both", async () => {
+    const w = await world();
+    pauseAt("written", async () => {
+      expect((await sendA(w)).status).toBe(200);
+      await editQuestions(w.testId, w.dev.cookie, [Q[0], Q[1], Q3b, Q[3]]);
+    });
+    const b = await sendB(w);
+    expect(b.body.error?.code, JSON.stringify(b.body)).toBe("stop_once");
+    expect(texts(b)).toEqual(expect.arrayContaining([OWN_SENT, `Nora Lane added the question “${Q3b}”`]));
+    expect(carriedAnswers((await written(w))!, Q)).toEqual([A1, A1, null, null]);
+    expect(await db.submission.count({ where: { contractId: w.sessionId } })).toBe(1);
+  });
+
+  it("the own-action line commits with the save: a Send made outside the route still stops the other tab; the route logs it once", async () => {
+    const w = await world();
+    const user = await db.user.findUniqueOrThrow({ where: { id: w.tester.user.id } });
+    // (The window the old after-success log left: the save visible, its line not yet written.) The library call alone writes both.
+    await sendWritten(user, w.sessionId, { answers: [A1, A1, "", ""], for: Q, notes: "", seenAt: w.loaded, tab: "A" });
+    expect(await db.actionLog.count({ where: { userId: user.id, testId: w.testId, text: "sent your written answers" } })).toBe(1);
+    const b = await sendB(w);
+    expect(texts(b)).toEqual([OWN_SENT]);
+    // Through the route: still one line (never again after the save).
+    const v = await world();
+    expect((await sendA(v)).status).toBe(200);
+    expect(await db.actionLog.count({ where: { userId: v.tester.user.id, testId: v.testId, text: "sent your written answers" } })).toBe(1);
+  });
+});
+
+describe("§369 the same race for Add to this answer and a recording's Send", () => {
+  it("Add to this answer in two tabs: A's addition saves; B stops once naming it; B's second press adds", async () => {
+    const w = await world();
+    expect((await sendA(w)).status).toBe(200);
+    await settle(); // (Windows' clock can lag ~15 ms: the page loads clearly after the last press)
+    const loaded = seen();
+    await settle();
+    const add = (tab: string, text: string, extra: Record<string, unknown> = {}) => addTo(w.sessionId, w.tester.cookie, { text, seenAt: loaded, tab, ...extra }) as Promise<Res>;
+    pauseAt("written-add", async () => expect((await add("A", "A adds a little more about the first level here.")).status).toBe(200));
+    const b = await add("B", "B adds a different note about the first level.");
+    expect(b.body.error?.code, JSON.stringify(b.body)).toBe("stop_once");
+    expect(texts(b)).toEqual([`You added to your answer to “${Q[0]}” in another tab`]);
+    const sub = (await written(w))!;
+    expect((sub.additions as unknown[]).length).toBe(1);
+    expect(carriedAnswers(sub, Q).slice(0, 2)).toEqual([A1, A1]);
+    await settle();
+    expect((await add("B", "B adds a different note about the first level.", { confirmed: true, boxAt: b.body.error!.now })).status).toBe(200);
+    expect(((await written(w))!.additions as unknown[]).length).toBe(2);
+  });
+
+  it("a recording's Send in two tabs: one piece; B ends as a later press would (nothing new to add)", async () => {
+    const w = await world();
+    const up = await sact(w.sessionId, "recording-start", w.tester.cookie, { filename: "run.mp4", size: 1000, contentType: "video/mp4" });
+    expect((await sact(w.sessionId, "recording-done", w.tester.cookie, { recordingId: up.body.recordingId })).status).toBe(200);
+    const send = (tab: string) => sact(w.sessionId, "recording-send", w.tester.cookie, { seenAt: w.loaded, tab }) as Promise<Res>;
+    pauseAt("recording-send", async () => expect((await send("A")).status).toBe(200));
+    const b = await send("B");
+    const later = await send("B");
+    expect([b.status, b.body.error?.code, b.body.error?.message]).toEqual([later.status, later.body.error?.code, later.body.error?.message]);
+    expect(await db.submission.count({ where: { contractId: w.sessionId, kind: "recording" } })).toBe(1);
+    expect(await db.recording.count({ where: { contractId: w.sessionId, submissionId: { not: null } } })).toBe(1);
+  });
+
+  it("a recording Add while the developer pays the recording in its window: the §362 stop-once, never an add past it", async () => {
+    const w = await world();
+    const upload = async () => {
+      const up = await sact(w.sessionId, "recording-start", w.tester.cookie, { filename: `r-${randomUUID().slice(0, 4)}.mp4`, size: 1000, contentType: "video/mp4" });
+      expect((await sact(w.sessionId, "recording-done", w.tester.cookie, { recordingId: up.body.recordingId })).status).toBe(200);
+    };
+    await upload();
+    expect((await sact(w.sessionId, "recording-send", w.tester.cookie, { seenAt: seen(), confirmed: true })).status).toBe(200);
+    const rec = await db.submission.findFirstOrThrow({ where: { contractId: w.sessionId, kind: "recording" } });
+    const { pay } = await import("./b15");
+    expect((await pay(w.dev.cookie, { kind: "submission", id: rec.id, amount: "5.00", tickedCents: 500, reason: "Half of it" })).status).toBe(200);
+    await upload();
+    await settle(); // (Windows' clock can lag ~15 ms: the page loads clearly after the last press)
+    const loaded = seen();
+    await settle();
+    pauseAt("recording-send", async () => expect((await payMore(w.testId, w.dev.cookie, { contractId: w.sessionId, submissionId: rec.id, amount: "2.00", tickedCents: 200 })).status).toBe(200));
+    const b = await sact(w.sessionId, "recording-send", w.tester.cookie, { add: true, seenAt: loaded, loadedAt: loaded, tab: "B" }) as Res;
+    expect(b.body.error?.code, JSON.stringify(b.body)).toBe("stop_once");
+    expect(texts(b)).toEqual(["Nora Lane paid you $2.00 more for your recording"]);
+    expect(((await db.submission.findUniqueOrThrow({ where: { id: rec.id } })).additions as unknown[]).length).toBe(0);
+  });
+
+  it("Dispute while the developer pays more on that part in its window: the §362 stop-once, never a dispute made past it", async () => {
+    const w = await world();
+    expect((await sendA(w)).status).toBe(200);
+    const sub = (await written(w))!;
+    const { pay } = await import("./b15");
+    expect((await pay(w.dev.cookie, { kind: "submission", id: sub.id, amount: "4.00", tickedCents: 400, reason: "Only half of it was useful" })).status).toBe(200);
+    await settle(); // (Windows' clock can lag ~15 ms: the page loads clearly after the last press)
+    const loaded = seen();
+    await settle();
+    pauseAt("dispute", async () => expect((await payMore(w.testId, w.dev.cookie, { contractId: w.sessionId, submissionId: sub.id, amount: "2.00", tickedCents: 200 })).status).toBe(200));
+    const b = await sact(w.sessionId, "dispute", w.tester.cookie, { kind: "submission", id: sub.id, reason: "I answered every question fully and in detail.", seenAt: loaded, loadedAt: loaded, tab: "B" }) as Res;
+    expect(b.body.error?.code, JSON.stringify(b.body)).toBe("stop_once");
+    expect(texts(b)).toEqual(["Nora Lane paid you $2.00 more for your written answers"]);
+    expect(await db.dispute.count({ where: { submissionId: sub.id } })).toBe(0);
+  });
+});

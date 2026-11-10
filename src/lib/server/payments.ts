@@ -1,3 +1,6 @@
+import { beforeLock, checkPrint, pressPrint, rerunOnChange } from "./pressRace";
+import { disputeOwnText } from "./actionText";
+import { logAction } from "./live";
 import { recordReviewDraft } from "./reviewDraft";
 import { randomUUID } from "node:crypto";
 import * as RF from "@/lib/refusal";
@@ -303,12 +306,14 @@ export async function finishReviewPay(paymentId: string, result: { status: strin
  * Tester: dispute once, on any part the developer reviewed (batch 10: listed or not, any amount, $0 included, or a Reject). (Owner, Nov 6, §288) Until the tester
  * rates the test or the part's closing date passes: RATED_NO_DISPUTE / disputeClosedLine after that.
  */
-export async function openDispute(tester: U, contractId: string, body: Record<string, unknown>) {
+export const openDispute = (tester: U, contractId: string, body: Record<string, unknown>) => rerunOnChange((strict) => openDisputeOnce(tester, contractId, body, strict)); // (§369)
+async function openDisputeOnce(tester: U, contractId: string, body: Record<string, unknown>, strict: boolean) {
   const kind = String(body.kind ?? ""), id = String(body.id ?? "");
   const reason = readText(body.reason, LIMITS.disputeText, "bad_reason");
   if (reason.length < 10) throw new HttpError(400, "bad_reason", "Say why you think the pay should be higher (at least a sentence).");
   const c = await db.contract.findUnique({ where: { id: contractId }, include: { test: { include: { developer: true } } } });
   if (!c || c.testerId !== tester.id) throw new HttpError(404, "not_found", "That session doesn't exist or isn't yours.");
+  const print = await pressPrint(db, { testId: c.testId, contractId, userId: tester.id }); // (§369) the first look
   const where = kind === "call" ? { callId: id } : { submissionId: id };
   // (Owner, Nov 6, §288) The tester rated the test, or the part's closing date passed: closed, decided before anything else (never after a terms block or a
   // stop-once that could only end in this refusal, §159). A part already disputed keeps its own line ("You already disputed this payment").
@@ -348,12 +353,19 @@ export async function openDispute(tester: U, contractId: string, body: Record<st
   // (Owner, Nov 3, §159) Dispute and Pay more on the same part are decided in one place: the dispute is made under the test's row lock (the lock Pay more reserves
   // under), after checking again what's left to dispute.
   let roomCents = first.roomCents;
+  const own = await disputeOwnText(where);
+  await beforeLock("dispute");
   const d = await db.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${c.testId} FOR UPDATE`;
+    // (Owner, Nov 10, §369) Anything changed since the first look (a payment on the part, another tab's Dispute, …): nothing is written; the press runs again
+    // from the top, ending as a later press would (its stop-once, or a refusal that is final whatever the timing).
+    await checkPrint(tx, { testId: c.testId, contractId, userId: tester.id }, print, strict);
     roomCents = (await disputable()).roomCents;
     // (Owner, Nov 3, §157) Two Disputes at the same moment (two tabs): the piece's one dispute is the unique key; the later one reads the usual line, never a 500.
     if (await tx.dispute.findFirst({ where })) throw new HttpError(409, "no_dispute", ALREADY_DISPUTED);
-    return tx.dispute.create({ data: { ...where, contractId, testerId: tester.id, reason } });
+    const made = await tx.dispute.create({ data: { ...where, contractId, testerId: tester.id, reason } });
+    await logAction(tester.id, c.testId, body, own, undefined, tx); // (§369) the own-action line commits with the dispute
+    return made;
   }).catch((e) => {
     if (isUniqueClash(e)) throw new HttpError(409, "no_dispute", ALREADY_DISPUTED);
     throw e;

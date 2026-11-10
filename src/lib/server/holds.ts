@@ -1,3 +1,5 @@
+import { beforeLock, checkPrint, pressPrint, rerunOnChange, type PressPrint } from "./pressRace";
+import { chooseOwnText } from "./actionText";
 import { randomUUID } from "node:crypto";
 import { startedBeforeWorkEnd } from "@/lib/pause";
 import * as RF from "@/lib/refusal";
@@ -1898,10 +1900,18 @@ export async function autoChargeCalls(now: Date) {
 }
 
 /** The tester's choice on a contract part (or, batch 15 section 15, a listed call) unreviewed for the review window: "charge" (the listing minus what is paid) or "letgo". */
-export async function chooseOutcome(tester: { id: string; email: string; name: string; pronoun?: string }, contractId: string, body: Record<string, unknown>) {
+export const chooseOutcome = (tester: { id: string; email: string; name: string; pronoun?: string }, contractId: string, body: Record<string, unknown>) =>
+  rerunOnChange(async (strict) => {
+    // (Owner, Nov 10, §369) The first look: under claimChoice's lock a difference reruns the press from the top (pressRace.ts).
+    const c = await db.contract.findUnique({ where: { id: contractId }, select: { testId: true } });
+    const race = c ? { print: await pressPrint(db, { testId: c.testId, contractId, userId: tester.id }), strict, userId: tester.id, contractId, body } : null;
+    return chooseOutcomeOnce(tester, contractId, body, race);
+  });
+type ChoiceRace = { print: PressPrint; strict: boolean; userId: string; contractId: string; body: Record<string, unknown> } | null;
+async function chooseOutcomeOnce(tester: { id: string; email: string; name: string; pronoun?: string }, contractId: string, body: Record<string, unknown>, race: ChoiceRace) {
   // (Owner, Oct 29, batch 32 §7) An open new-terms offer blocks Charge and Let it go until the tester answers it (Switch or Keep).
   if ((await db.contract.findUnique({ where: { id: contractId }, select: { testerId: true } }))?.testerId === tester.id) await (await import("./terms")).answerTermsFirst(contractId);
-  if (body.callId) return chooseCallOutcome(tester, contractId, body);
+  if (body.callId) return chooseCallOutcome(tester, contractId, body, race);
   const s = await db.submission.findUnique({ where: { id: String(body.submissionId ?? "") }, include: { review: true, contract: { include: { tester: true, test: { include: { developer: true } } } } } });
   if (!s || s.contractId !== contractId || s.contract.testerId !== tester.id) throw new HttpError(404, "not_found", "That work doesn't exist.");
   const c = s.contract, dev = c.test.developer, label = s.kind === "recording" ? "recording" : "written answers";
@@ -1938,7 +1948,7 @@ export async function chooseOutcome(tester: { id: string; email: string; name: s
   // (Batch 16 section 39) The tick only above $200, naming the typed amount.
   if (choice === "charge" && amount > CHARGE_TICK_CENTS && body.tickedCents !== amount) throw new HttpError(400, "tick", chargeTickLine(displayName(dev), amount));
   const payKey = serverKey("choice", s.id);
-  const review = await claimChoice(c.testId, { submissionId: s.id }, displayName(dev), { submissionId: s.id, contractId: c.id, amountCents: amount, agreedCents: s.agreedCents, reason: choice === "charge" ? CHARGED_BY_TESTER : LET_GO_BY_TESTER, payKey });
+  const review = await claimChoice(c.testId, { submissionId: s.id }, displayName(dev), { submissionId: s.id, contractId: c.id, amountCents: amount, agreedCents: s.agreedCents, reason: choice === "charge" ? CHARGED_BY_TESTER : LET_GO_BY_TESTER, payKey }, race && { ...race, own: await chooseOwnText(choice, displayName(dev), amount, { submissionId: s.id }) });
   if (!review) throw new HttpError(409, "done", "This was already settled.");
   if (choice === "letgo") {
     const line = `${displayName(tester)} let ${pronouns(tester.pronoun).poss} ${label} go: nothing charged`;
@@ -1993,17 +2003,23 @@ export async function chooseOutcome(tester: { id: string; email: string; name: s
  * row lock, the lock Pay takes to reserve it: a Pay whose payment is on its way, at the bank or paid wins (refused here, naming it); else the review is made, and a
  * Pay pressed after that sees it. Null when the part was already settled.
  */
-async function claimChoice(testId: string, where: { submissionId: string } | { callId: string }, devName: string, data: Prisma.ReviewUncheckedCreateInput) {
+async function claimChoice(testId: string, where: { submissionId: string } | { callId: string }, devName: string, data: Prisma.ReviewUncheckedCreateInput, race: (NonNullable<ChoiceRace> & { own: string }) | null = null) {
+  await beforeLock("choose");
   try {
     return await db.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${testId} FOR UPDATE`;
+      // (Owner, Nov 10, §369) Anything changed since the first look (a developer payment, another tab's Charge, …): nothing is written; the press runs again from
+      // the top, ending as a later press would (§163's one final refusal for a payment, or its stop-once).
+      if (race) await checkPrint(tx, { testId, contractId: race.contractId, userId: race.userId }, race.print, race.strict);
       // (Owner, Nov 3, batch 35 §163) The developer's Pay landed first (the same moment): the same one final refusal, decided here under the lock. (Owner, Nov 4,
       // §187) Paid anything wins over a payment of theirs still at the bank.
       const paid = await devPaidRefusal(tx, where, devName, await tx.review.findFirst({ where }));
       if (paid) throw paid;
       // (A Pay that went through made its review in the same step. What's still on its way or at the bank holds the part.)
       if (await tx.payment.findFirst({ where: { ...where, kind: { in: ["review", "call"] }, status: { in: ["pending", "needs_action", "needs_confirmation"] } } })) throw new HttpError(409, "locked", PIECE_LOCKED);
-      return tx.review.create({ data });
+      const made = await tx.review.create({ data });
+      if (race) await (await import("./live")).logAction(race.userId, testId, race.body, race.own, undefined, tx); // (§369) with the claim
+      return made;
     });
   } catch (e) {
     if (e instanceof HttpError) throw e;
@@ -2062,7 +2078,7 @@ async function chargeCloseOutGate(where: { submissionId: string } | { callId: st
 }
 
 /** (Batch 15 sections 15, 34 and 40) The tester's Charge / Let it go on a listed call left unpaid past its review date. */
-async function chooseCallOutcome(tester: { id: string; email: string; name: string; pronoun?: string }, contractId: string, body: Record<string, unknown>) {
+async function chooseCallOutcome(tester: { id: string; email: string; name: string; pronoun?: string }, contractId: string, body: Record<string, unknown>, race: ChoiceRace = null) {
   const x = await db.call.findUnique({ where: { id: String(body.callId ?? "") }, include: { review: true, contract: { include: { tester: true, test: { include: { developer: true } } } } } });
   if (!x || x.contractId !== contractId || x.contract.testerId !== tester.id) throw new HttpError(404, "not_found", "That call doesn't exist.");
   const c = x.contract, dev = c.test.developer, label = "live call";
@@ -2092,7 +2108,7 @@ async function chooseCallOutcome(tester: { id: string; email: string; name: stri
   if (choice === "charge" && amount > CHARGE_TICK_CENTS && body.tickedCents !== amount) throw new HttpError(400, "tick", chargeTickLine(displayName(dev), amount));
   const payKey = serverKey("choice", x.id);
   const minutes = callMinutesOf(x);
-  const review = await claimChoice(c.testId, { callId: x.id }, displayName(dev), { callId: x.id, contractId: c.id, amountCents: amount, agreedCents: x.rateCents != null && minutes != null ? callReference(x.rateCents, minutes).cents : null, reason: choice === "charge" ? CHARGED_BY_TESTER : LET_GO_BY_TESTER, payKey });
+  const review = await claimChoice(c.testId, { callId: x.id }, displayName(dev), { callId: x.id, contractId: c.id, amountCents: amount, agreedCents: x.rateCents != null && minutes != null ? callReference(x.rateCents, minutes).cents : null, reason: choice === "charge" ? CHARGED_BY_TESTER : LET_GO_BY_TESTER, payKey }, race && { ...race, own: await chooseOwnText(choice, displayName(dev), amount, { callId: x.id }) });
   if (!review) throw new HttpError(409, "done", "This was already settled.");
   if (choice === "letgo") {
     const line = `${displayName(tester)} let ${pronouns(tester.pronoun).poss} call on ${callAtFor(x.startsAt, dev)} go: nothing charged`;

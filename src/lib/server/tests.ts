@@ -11,7 +11,9 @@ import { CALL_ACTS, PAY_ACTS, unanswered, answersIt, devChanges, devForced, logE
 import { notListed, sidOf } from "./shownLines";
 import { ANSWER_ONE, NOT_REQUIRED, answerChars, answerMin, answerShortLine, answersMissing, qText, sameQuestionSet, sameQuestionWords } from "@/lib/questions";
 import { answerUnit, NOTES_UNIT } from "@/lib/draftUnits";
-import { patchKept, setKept } from "./kept";
+import { getKept, patchKept, setKept } from "./kept";
+import { beforeLock, checkPrint, pressPrint, rerunOnChange } from "./pressRace";
+import { addOwnText, writtenOwnText } from "./actionText";
 import { questionChangeTexts } from "@/lib/questionHistory";
 import { itemsFor, prevSetsOf, sameQuestions, snapshotOnlyFiles } from "@/lib/answerSets";
 import { ADDITIONS_MAX, ADD_UNDER_QUESTION, ANYTHING_ELSE_KEY, ANYTHING_ELSE_TITLE, QUESTION_GONE, addedToWhat, youAddedLine, additionsFull, additionsOf, addsCounted, carriedAnswers, currentQuestionsFor, latestItems, questionKey, questionKeys } from "@/lib/additions";
@@ -1197,8 +1199,11 @@ export async function leaveTest(tester: U, contractId: string, body: Record<stri
  * Send (or update, until it's paid) the written answers: one answer per question in the contract. Allowed even when
  * written answers aren't in the contract and after the deadline (shown as sent late).
  */
-export async function sendWritten(tester: U, contractId: string, body: Record<string, unknown>) {
+export const sendWritten = (tester: U, contractId: string, body: Record<string, unknown>) => rerunOnChange((strict) => sendWrittenOnce(tester, contractId, body, strict)); // (§369)
+async function sendWrittenOnce(tester: U, contractId: string, body: Record<string, unknown>, strict: boolean) {
   const c0 = await ownContract(tester.id, contractId);
+  // (Owner, Nov 10, §369) What this press decides by, at its first look: under the lock a difference reruns it from here (pressRace.ts).
+  const print = await pressPrint(db, { testId: c0.testId, contractId, userId: tester.id });
   const ended = sessionRefusal(c0, c0.test, displayName(c0.test.developer));
   if (ended) throw new HttpError(409, "closed", overPressLine(c0, "Send Answers")); // (§363 / §364)
   // (Batch 27 section 1) An open new-terms offer blocks Send until it's answered (Switch or Keep): nothing is checked or sent before.
@@ -1254,16 +1259,29 @@ export async function sendWritten(tester: U, contractId: string, body: Record<st
   const sent = await db.submission.findUnique({ where: { contractId_kind: { contractId, kind: "written" } }, include: { review: true } });
   const sentRefusal = sendRefusal(sent, qs, answers, !!fresh?.some((i) => answers[i].trim()));
   if (sentRefusal) throw sentRefusal;
+  // (Owner, Nov 10, §369) Questions answered meanwhile (another tab's Send): what this page typed into them is never lost: it becomes that question's
+  // "Add to this answer" draft (unless one is kept already); the answered ones stay as sent, the unanswered ones are this press's first answers (§235).
+  if (carried && forQs) {
+    const keys = questionKeys(itemsFor(qs));
+    for (const [i, q] of qs.entries()) {
+      const t = typed.get(qText(q))?.trim();
+      if (carried[i] == null || !t || t === carried[i]!.trim()) continue;
+      if (!(await getKept(tester.id, `add:${contractId}:${keys[i]}`)).data) await setKept(tester.id, `add:${contractId}:${keys[i]}`, { text: t });
+    }
+  }
   await testerSendGate(contractId, body, sent?.id, { stale: [] });
   const name = displayName(tester), poss = pronouns(tester.pronoun).poss;
+  await beforeLock("written");
   const { sub, updated, afterPaid } = await db.$transaction(async (tx) => {
     const t = await lockTest(tx, c0.testId);
     const c = await tx.contract.findUniqueOrThrow({ where: { id: contractId } });
     await (await import("./workWindow")).assertWorkOpen(tx, t.id, new Date(), "Send Answers");
     const refusal = sessionRefusal(c, t, displayName(c0.test.developer));
     if (refusal) throw new HttpError(409, "closed", overPressLine(c, "Send Answers")); // (§363 / §364)
-    // (§269) The questions changed between the checks and this lock: nothing is sent (refused before anything is written; the page keeps what it typed and
-    // redraws, and its next press meets the stop above).
+    // (Owner, Nov 10, §369; replaces §269's refusal here) The questions (first), the saved answers or anything newer changed since the first look: nothing is
+    // written, and the press runs again from the top, ending as a later press would (the question-change box, "You sent your written answers in another tab",
+    // in ONE box). Only the second rerun still refuses a questions change here (QUESTIONS_CHANGED_MEANWHILE), never writing to questions the page didn't show.
+    await checkPrint(tx, { testId: c0.testId, contractId, userId: tester.id }, print, strict, new HttpError(409, "questions_changed", QUESTIONS_CHANGED_MEANWHILE));
     if (!sameQuestionWords(writtenQuestions(c), qs)) throw new HttpError(409, "questions_changed", QUESTIONS_CHANGED_MEANWHILE);
     const now = new Date();
     const existing = await tx.submission.findUnique({ where: { contractId_kind: { contractId, kind: "written" } }, include: { review: true } });
@@ -1289,6 +1307,8 @@ export async function sendWritten(tester: U, contractId: string, body: Record<st
     // (Batch 11) Files and recordings attached to the written part go with it.
     await tx.recording.updateMany({ where: { id: { in: files.map((f) => f.id) } }, data: { submissionId: sub.id } });
     const afterPaid = await tellSent(tx, { testId: c.testId, contractId: c.id, subId: sub.id, name, poss, part: "written answers", added: !!existing, paid });
+    // (§369) The own-action line commits with the save: another tab that sees these answers also sees "You sent your written answers in another tab".
+    await (await import("./live")).logAction(tester.id, c.testId, body, writtenOwnText(!!existing), undefined, tx);
     return { sub, updated: !!existing, afterPaid };
   });
   await tellSentByBell(c0, tester, sub, "written answers", updated, afterPaid);
@@ -1394,8 +1414,10 @@ function addRefusal(existing: SentPart | null, c: { questions: unknown }, key: s
  * (Owner, Nov 4, §188) Or to Anything else (`question: "else"`, ANYTHING_ELSE_KEY), the fixed last spot after the questions: the same rules (its own 5, the 20,000,
  * the stop-once, the single refusals), named "added to “Anything else” in her written answers".
  */
-export async function addWritten(tester: U, contractId: string, body: Record<string, unknown>) {
+export const addWritten = (tester: U, contractId: string, body: Record<string, unknown>) => rerunOnChange((strict) => addWrittenOnce(tester, contractId, body, strict)); // (§369)
+async function addWrittenOnce(tester: U, contractId: string, body: Record<string, unknown>, strict: boolean) {
   const c0 = await ownContract(tester.id, contractId);
+  const print = await pressPrint(db, { testId: c0.testId, contractId, userId: tester.id }); // (§369) the first look
   const ended = sessionRefusal(c0, c0.test, displayName(c0.test.developer));
   if (ended) throw new HttpError(409, "closed", overPressLine(c0, "Add")); // (§363 / §364)
   await answerTermsFirst(contractId);
@@ -1431,12 +1453,15 @@ export async function addWritten(tester: U, contractId: string, body: Record<str
   if (beforeRefusal) throw beforeRefusal;
   await testerSendGate(contractId, body, before?.id, { stale: [] });
   const name = displayName(tester), poss = pronouns(tester.pronoun).poss;
+  await beforeLock("written-add");
   const { sub, afterPaid, question } = await db.$transaction(async (tx) => {
     const t = await lockTest(tx, c0.testId);
     const c = await tx.contract.findUniqueOrThrow({ where: { id: contractId } });
     await (await import("./workWindow")).assertWorkOpen(tx, t.id, new Date(), "Add");
     const refusal = sessionRefusal(c, t, displayName(c0.test.developer));
     if (refusal) throw new HttpError(409, "closed", overPressLine(c, "Add")); // (§363 / §364)
+    // (Owner, Nov 10, §369) Anything changed since the first look (the questions first): nothing is written; the press runs again, as a later press would.
+    await checkPrint(tx, { testId: c0.testId, contractId, userId: tester.id }, print, strict);
     const existing = await tx.submission.findUnique({ where: { contractId_kind: { contractId, kind: "written" } }, include: { review: true } });
     // (§222) The question's 5 (and every other refusal) counted again under the lock.
     const refused = addRefusal(existing, c, key, text);
@@ -1461,6 +1486,7 @@ export async function addWritten(tester: U, contractId: string, body: Record<str
     await tx.recording.updateMany({ where: { id: { in: fresh.map((f) => f.id) } }, data: { submissionId: sub.id } });
     const question = key === ANYTHING_ELSE_KEY ? ANYTHING_ELSE_TITLE : qText(qs[at]);
     const afterPaid = await tellSent(tx, { testId: c.testId, contractId: c.id, subId: sub.id, name, poss, part: "written answers", added: true, paid, question });
+    await (await import("./live")).logAction(tester.id, c.testId, body, addOwnText(c.questions, key), undefined, tx); // (§369) with the save
     return { sub, afterPaid, question };
   });
   await tellSentByBell(c0, tester, sub, "written answers", true, afterPaid, 1, question);

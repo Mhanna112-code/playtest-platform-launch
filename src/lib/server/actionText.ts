@@ -47,8 +47,32 @@ async function resent(contractId: string, kind: string) {
   return !!sub && sub.updatedAt.getTime() - sub.sentAt.getTime() > 1000;
 }
 
+/**
+ * (Owner, Nov 10, §369) The presses whose own-action line ("You sent your written answers in another tab") is written in the SAME transaction as their save, so
+ * another tab's press that sees the save also sees the line (a press re-run after the save never goes through without its stop-once). Never logged again after.
+ */
+export const LOGGED_WITH_SAVE = new Set(["written", "written-add", "recording-send", "dispute", "choose"]);
+/** "sent your written answers" / (a later Send: the answers to new or unanswered questions) "sent your answers to the new questions". */
+export const writtenOwnText = (resent: boolean) => (resent ? "sent your answers to the new questions" : "sent your written answers");
+/** (§167, §188) "added to your answer to “…”", "added to “Anything else” in your written answers". */
+export function addOwnText(questions: unknown, key: string) {
+  const qs = Array.isArray(questions) && questions.length ? (questions as string[]) : ["Your feedback"];
+  const q = qs[questionKeys(itemsFor(qs)).indexOf(key)];
+  return key === ANYTHING_ELSE_KEY ? `added ${addedToWhat("your", ANYTHING_ELSE_TITLE)}` : q ? `added to your answer to ${quoteQuestion(qText(q))}` : "added to your written answers";
+}
+/** "sent your recording" / "added a recording" / "added 2 recordings". */
+export const recordingOwnText = (added: number) => (added ? (added === 1 ? "added a recording" : `added ${added} recordings`) : "sent your recording");
+/** (§177) "disputed the pay for your live call on Tue, Oct 27, 2:00 PM". */
+export const disputeOwnText = async (piece: { submissionId?: string | null; callId?: string | null }) => `disputed the pay for your ${await partWords(piece, fmtAt)}`;
+/** (Batch 29 section 13) "charged Nora Lane $10.00 for your recording" / "let your recording go". */
+export const chooseOwnText = async (choice: "charge" | "letgo", devName: string, cents: number, piece: { submissionId?: string | null; callId?: string | null }) => {
+  const what = await partWords(piece, fmtAt);
+  return choice === "letgo" ? `let your ${what} go` : `charged ${devName} ${money(cents)} for your ${what}`;
+};
+
 /** The tester's session-page actions. */
 export async function logTesterAction(userId: string, contractId: string, action: string, body: B, result: unknown) {
+  if (LOGGED_WITH_SAVE.has(action)) return; // (§369) logged with the save
   const c = await db.contract.findUnique({ where: { id: contractId }, include: { test: { include: { developer: true } } } });
   if (!c) return;
   const devName = displayName(c.test.developer);
@@ -56,30 +80,13 @@ export async function logTesterAction(userId: string, contractId: string, action
   let about: OwnAbout | undefined;
   switch (action) {
     case "leave": text = "left the test"; break;
-    // (Owner, Oct 29, batch 29 section 13) "You sent your updated answers in another tab" (a part sent again replaces the sent one).
-    case "written": text = (await resent(contractId, "written")) ? "sent your answers to the new questions" : "sent your written answers"; break;
-    // (Batch 35 §136) Adding to sent work: "You added to your written answers in another tab", "You added a recording …".
-    // (§167) An addition to one question names it: "You added to your answer to “…” in another tab".
-    case "written-add": {
-      const qs = Array.isArray(c.questions) && c.questions.length ? (c.questions as string[]) : ["Your feedback"];
-      const q = qs[questionKeys(itemsFor(qs)).indexOf(s(body.question))];
-      // (Owner, Nov 4, §188) "You added to “Anything else” in your written answers in another tab".
-      text = s(body.question) === ANYTHING_ELSE_KEY ? `added ${addedToWhat("your", ANYTHING_ELSE_TITLE)}` : q ? `added to your answer to ${quoteQuestion(qText(q))}` : "added to your written answers";
-      break;
-    }
-    case "recording-send": {
-      const n = Number((result as { added?: number } | null)?.added ?? 0);
-      text = n ? (n === 1 ? "added a recording" : `added ${n} recordings`) : "sent your recording";
-      break;
-    }
+    case "written": text = writtenOwnText(await resent(contractId, "written")); break;
+    case "written-add": text = addOwnText(c.questions, s(body.question)); break;
+    case "recording-send": text = recordingOwnText(Number((result as { added?: number } | null)?.added ?? 0)); break;
     case "terms": text = body.choice === "switch" ? "switched to the new terms" : "kept your current terms"; break;
     case "choose": {
-      // (Batch 29 section 13) "You charged Nora Lane $10.00 for your recording in another tab".
-      // (Owner, Nov 4, §177) A call with its date and time: "You charged Nora Lane $15.00 for your live call on Tue, Oct 27, 2:00 PM in another tab".
-      const what = await partWords(body.callId ? { callId: s(body.callId) } : { submissionId: s(body.submissionId) }, fmtAt);
       const dev = await db.test.findUnique({ where: { id: c.testId }, include: { developer: true } });
-      const cents = (result as { amountCents?: number } | null)?.amountCents ?? 0;
-      text = body.choice === "letgo" ? `let your ${what} go` : `charged ${dev ? displayName(dev.developer) : "the developer"} ${money(cents)} for your ${what}`;
+      text = await chooseOwnText(body.choice === "letgo" ? "letgo" : "charge", dev ? displayName(dev.developer) : "the developer", (result as { amountCents?: number } | null)?.amountCents ?? 0, body.callId ? { callId: s(body.callId) } : { submissionId: s(body.submissionId) });
       break;
     }
     case "request-time": {
@@ -107,7 +114,7 @@ export async function logTesterAction(userId: string, contractId: string, action
     case "cancel-set": text = "cancelled the rest of a daily / weekly set of calls"; break;
     case "no-show": text = `reported a problem with ${await callLine(s(body.callId), false, devName)}`; break;
     // (Owner, Nov 4, §177) Which part: "You disputed the pay for your live call on Tue, Oct 27, 2:00 PM in another tab".
-    case "dispute": text = `disputed the pay for your ${await partWords(body.kind === "call" ? { callId: s(body.id) } : { submissionId: s(body.id) }, fmtAt)}`; break;
+    case "dispute": text = await disputeOwnText(body.kind === "call" ? { callId: s(body.id) } : { submissionId: s(body.id) }); break;
     // (Batch 29 section 13) Rate (and the end of the part it brings) is never a line that stops other presses: it only races with Rate itself ("You already rated …").
     default: return;
   }

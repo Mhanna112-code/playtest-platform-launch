@@ -110,8 +110,8 @@ const has = (list: readonly string[], a?: string) => !!a && list.includes(a);
 export const touches = (o: OwnEvent, p: Press) => !!o.about && p.acts.includes(o.about.a) && o.about.k.some((k) => p.keys.includes(k) || p.keys.includes("*"));
 
 /** Log one thing a person did on a test (any button that changes something), with what it was about. */
-export async function logAction(userId: string, testId: string, body: Record<string, unknown>, text: string, about?: OwnAbout) {
-  await db.actionLog.create({ data: { userId, testId, text: about ? `${text}${META}${JSON.stringify(about)}` : text, tab: tabOf(body) } });
+export async function logAction(userId: string, testId: string, body: Record<string, unknown>, text: string, about?: OwnAbout, tx: Tx | typeof db = db) {
+  await tx.actionLog.create({ data: { userId, testId, text: about ? `${text}${META}${JSON.stringify(about)}` : text, tab: tabOf(body) } });
 }
 
 /** A log line's text and what it was about. */

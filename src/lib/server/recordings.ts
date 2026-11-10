@@ -1,3 +1,5 @@
+import { beforeLock, checkPrint, pressPrint, rerunOnChange } from "./pressRace";
+import { recordingOwnText } from "./actionText";
 import { additionTerms } from "./submissionAdditions";
 import { randomBytes } from "node:crypto";
 import { db } from "@/lib/db";
@@ -165,8 +167,10 @@ export async function removeRecording(tester: U, contractId: string, body: Recor
 }
 
 /** Send the uploaded recordings (or send them again with new ones, until paid). */
-export async function sendRecording(tester: U, contractId: string, body: Record<string, unknown> = {}) {
+export const sendRecording = (tester: U, contractId: string, body: Record<string, unknown> = {}) => rerunOnChange((strict) => sendRecordingOnce(tester, contractId, body, strict)); // (§369)
+async function sendRecordingOnce(tester: U, contractId: string, body: Record<string, unknown>, strict: boolean) {
   const c0 = await ownContract(tester.id, contractId);
+  const print = await pressPrint(db, { testId: c0.testId, contractId, userId: tester.id }); // (§369) the first look
   const ended = sessionRefusal(c0, c0.test, displayName(c0.test.developer));
   const press = body.add === true ? "Add" : "Send";
   if (ended) throw new HttpError(409, "closed", overPressLine(c0, press)); // (§363 / §364)
@@ -183,6 +187,7 @@ export async function sendRecording(tester: U, contractId: string, body: Record<
   await testerSendGate(contractId, body, sent?.id);
 
   const name = displayName(tester), poss = pronouns(tester.pronoun).poss;
+  await beforeLock("recording-send");
   const { updated, late, subId, afterPaid, n } = await db.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${c0.testId} FOR UPDATE`;
     const c = await tx.contract.findUniqueOrThrow({ where: { id: contractId } });
@@ -190,6 +195,9 @@ export async function sendRecording(tester: U, contractId: string, body: Record<
     await (await import("./workWindow")).assertWorkOpen(tx, t.id, new Date(), press);
     const refusal = sessionRefusal(c, t, displayName(c0.test.developer));
     if (refusal) throw new HttpError(409, "closed", overPressLine(c, press)); // (§363 / §364)
+    // (Owner, Nov 10, §369) Anything changed since the first look (another tab's Send took the uploads, a payment, …): nothing is written; the press runs again
+    // from the top, as a later press would.
+    await checkPrint(tx, { testId: c0.testId, contractId, userId: tester.id }, print, strict);
     // (Batch 13 section 7) All of them go together as ONE piece; a Send from another tab while one is still uploading waits for it.
     if (await tx.recording.count({ where: { contractId, ...stillUploading("recording") } })) throw new HttpError(409, "uploading", STILL_UPLOADING);
     const existing = await tx.submission.findUnique({ where: { contractId_kind: { contractId, kind: "recording" } }, include: { review: true } });
@@ -209,6 +217,7 @@ export async function sendRecording(tester: U, contractId: string, body: Record<
       : await tx.submission.create({ data: { contractId, kind: "recording", agreedCents: c.recordingCents, ...data } });
     await tx.recording.updateMany({ where: { id: { in: fresh.map((r) => r.id) } }, data: { submissionId: sub.id } });
     const afterPaid = await tellSent(tx, { testId: c.testId, contractId: c.id, subId: sub.id, name, poss, part: "recording", added: !!existing, paid, n: fresh.length });
+    await (await import("./live")).logAction(tester.id, c.testId, body, recordingOwnText(existing ? fresh.length : 0), undefined, tx); // (§369) with the save
     return { updated: !!existing, late: data.late, subId: sub.id, afterPaid, n: fresh.length };
   });
   await tellSentByBell(c0, tester, { id: subId, late }, "recording", updated, afterPaid, n);
