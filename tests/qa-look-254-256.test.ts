@@ -67,7 +67,8 @@ describe("§254 / §263 the earlier sets are Terms history entries (lib)", () =>
     const sets = [{ until, items: old, versions: [{ kind: "sent", at: until, items: old }, { kind: "draft", items: [item(Q1, "the boats"), item(Q2, "an unsent draft line")] }] }];
     const now = questionChanges(sets, [Q1, Q3], { answers: old, additions: [{ at: "2026-11-05T10:05:00.000Z", items: [item(Q1, "the boats"), item(Q3, "c")], notes: "", files: [] }] }, { drafts: true });
     expect(now).toHaveLength(1);
-    expect(now[0].then.map((q) => [q.question, q.sent?.answer ?? null, q.draft])).toEqual([[Q1, "the boats", null], [Q2, "level two gate", null]]);
+    // (Owner, Nov 10, §371) A sent answer and other unsent text for it: both (the draft under the sent answer); the draft that's the sent text again is none.
+    expect(now[0].then.map((q) => [q.question, q.sent?.answer ?? null, q.draft])).toEqual([[Q1, "the boats", null], [Q2, "level two gate", "an unsent draft line"]]);
     expect(now[0].now.map((q) => q.question)).toEqual([Q1, Q3]);
     const legacy = questionChanges([{ until, items: old }], [Q1, Q3], { answers: [item(Q1, "the boats, again"), item(Q3, "the map colours")], additions: [] }, { drafts: true });
     expect(legacy[0].then.map((q) => q.sent?.answer)).toEqual(["the boats", "level two gate"]);
