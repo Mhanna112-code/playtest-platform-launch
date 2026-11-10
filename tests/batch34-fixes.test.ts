@@ -130,22 +130,16 @@ describe("batch 34 §10: Join after a re-sent invite", () => {
     return { dev, testId, ana, oldInvite, fresh, pageAt };
   }
 
-  // (Owner, Nov 11, §377; replaces this section's order) Join's own refusals come before the listing box: the replaced invite is refused first, with the new
-  // invite but no `now` while the page hasn't shown the changes (so they aren't counted as seen); the next press, on the new invite, stops once with the full list
-  // (the NDA change included: its tick clears), and the press after it joins. One outcome per press.
-  it("the first press: the replaced-invite refusal (no `now`); then the box with the full list (the NDA change included); then the join on the CURRENT invite", async () => {
+  it("the first press stops once with the full list (the NDA change included); the second joins on the CURRENT invite without a reload", async () => {
     const { testId, ana, oldInvite, fresh, pageAt } = await invitedThenChanged();
-    const refused = await act(testId, "join", ana.cookie, { seenAt: pageAt, inviteId: oldInvite.id, ndaAccepted: true });
-    expect(refused.status).toBe(409);
-    expect(refused.body.error.code).toBe("invite_replaced");
-    expect(refused.body.error.newInviteId).toBe(fresh.id);
-    expect(refused.body.error.now).toBeUndefined();
-    const first = await act(testId, "join", ana.cookie, { seenAt: pageAt, inviteId: fresh.id, ndaAccepted: true });
+    const first = await act(testId, "join", ana.cookie, { seenAt: pageAt, inviteId: oldInvite.id, ndaAccepted: true });
     expect(first.status).toBe(409);
     expect(first.body.error.code).toBe("stop_once");
     const lines = first.body.error.changes as { text: string; nda?: boolean }[];
     expect(lines.some((l) => l.nda)).toBe(true); // the page clears the NDA tick (JoinBox afterChanges)
-    const second = await act(testId, "join", ana.cookie, { seenAt: pageAt, inviteId: fresh.id, ndaAccepted: true, confirmed: true, boxAt: first.body.error.now });
+    expect(lines.some((l) => /new invite on the updated listing/.test(l.text))).toBe(true);
+    // The second press (the page still holds the old invite) joins on the current one.
+    const second = await act(testId, "join", ana.cookie, { seenAt: pageAt, inviteId: oldInvite.id, ndaAccepted: true, confirmed: true, boxAt: first.body.error.now });
     expect(second.status).toBe(200);
     expect((await db.invite.findUniqueOrThrow({ where: { id: fresh.id } })).status).toBe("joined");
     expect(await db.contract.count({ where: { testId, testerId: ana.user.id, status: "working" } })).toBe(1);
@@ -167,11 +161,13 @@ describe("batch 34 §10: Join after a re-sent invite", () => {
     expect(next.status).toBe(200);
     const box = src("app/app/find/[id]/JoinBox.tsx");
     expect(box).toContain("setErr(e.message);\n        if (typeof e.data.newInviteId === \"string\") setInviteId(e.data.newInviteId);\n        if (typeof e.data.now === \"string\") setBoxAt(e.data.now);");
-    // (§377) Join's steps: the replaced-invite refusal (step 2) runs before the listing box (step 4).
+    // (Owner, Nov 11, §377) In Join's one pass: a re-sent invite goes with the listing box (right after it); only an invite the change closed is refused before it.
     const joining = src("lib/server/joining.ts");
     const body = joining.slice(joining.indexOf("async function joinSteps("));
-    expect(body.indexOf("replacedInvite(tester.id, testId, body, tx")).toBeGreaterThan(-1);
-    expect(body.indexOf("replacedInvite(tester.id, testId, body, tx")).toBeLessThan(body.indexOf('listingGate(tester.id, testId, body, "join", tx)'));
+    const closedAt = body.indexOf('replacedInvite(tester.id, testId, body, tx, "closed")'), boxAt = body.indexOf('listingGate(tester.id, testId, body, "join", tx)'), freshAt = body.indexOf('replacedInvite(tester.id, testId, body, tx, "fresh")');
+    expect(closedAt).toBeGreaterThan(-1);
+    expect(closedAt).toBeLessThan(boxAt);
+    expect(boxAt).toBeLessThan(freshAt);
   });
 });
 

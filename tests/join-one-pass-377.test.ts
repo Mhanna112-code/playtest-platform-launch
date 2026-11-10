@@ -191,3 +191,43 @@ describe("§377 races: the result never depends on timing", () => {
     refused(both.find((r) => r.status !== 200)!, "You already asked to rejoin this test in another tab.");
   });
 });
+
+describe("§377 a re-sent invite goes with the listing box (batch 34 §10); an invite the change closed is a refusal", () => {
+  async function invitedThenEdited(fields: Record<string, unknown>) {
+    const s = await setup({ joinMode: "invite" });
+    const ana = await makeUser({ tester: true, name: "Ana Silva", pronoun: "she" });
+    expect((await act(s.testId, "invite", s.dev.cookie, { seenAt: seen(), confirmed: true, testerIds: [ana.user.id] })).status).toBe(200);
+    const oldInvite = await db.invite.findFirstOrThrow({ where: { testId: s.testId, testerId: ana.user.id, status: "sent" } });
+    await settle();
+    const pageAt = seen();
+    await settle();
+    const v = (await db.test.findUniqueOrThrow({ where: { id: s.testId } })).version;
+    expect((await act(s.testId, "edit", s.dev.cookie, { version: v, fields, seenAt: seen(), confirmed: true })).status).toBe(200);
+    await settle();
+    return { ...s, ana, oldInvite, pageAt };
+  }
+
+  it("re-sent: the first press is the box (the new invite's line, the NDA's line); the second joins on the current invite. Two presses", async () => {
+    const x = await invitedThenEdited({ ndaText: "Keep it secret, please." });
+    const fresh = await db.invite.findFirstOrThrow({ where: { testId: x.testId, testerId: x.ana.user.id, status: "sent" } });
+    expect(fresh.id).not.toBe(x.oldInvite.id);
+    const first = await act(x.testId, "join", x.ana.cookie, { seenAt: x.pageAt, inviteId: x.oldInvite.id, ndaAccepted: true });
+    expect(first.body.error.code).toBe("stop_once");
+    const lines = first.body.error.changes as { text: string; nda?: boolean }[];
+    expect(lines.some((l) => /new invite on the updated listing/.test(l.text))).toBe(true);
+    expect(lines.some((l) => l.nda)).toBe(true);
+    const second = await act(x.testId, "join", x.ana.cookie, { seenAt: x.pageAt, inviteId: x.oldInvite.id, ndaAccepted: true, confirmed: true, boxAt: first.body.error.now });
+    expect(second.status, JSON.stringify(second.body)).toBe(200);
+    expect((await db.invite.findUniqueOrThrow({ where: { id: fresh.id } })).status).toBe("joined");
+  });
+
+  it("not re-sent (the invite closed): refused with why, before the box", async () => {
+    const x = await invitedThenEdited({ description: `Sail through the harbors ${Date.now()}` });
+    // The change couldn't re-send it: no invite is open for Ana any more.
+    await db.invite.updateMany({ where: { testId: x.testId, testerId: x.ana.user.id }, data: { status: "replaced" } });
+    const r = await press(x.testId, "join", x.ana.cookie, { seenAt: x.pageAt, inviteId: x.oldInvite.id });
+    expect(r.code).toBe("invite_replaced");
+    expect(r.message).toMatch(/^Nora Lane changed the listing at .+, and this invite closed\.$/);
+    expect(r.lines).toEqual([]);
+  });
+});

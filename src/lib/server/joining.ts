@@ -186,20 +186,20 @@ export const newInviteLine = (dev: string, at: string) => `${dev} changed the li
  * Accept on an invite a listing change replaced. (Batch 34 §10, owner's finding) The join page's "changed since you opened this page" stop runs FIRST (Join), so a
  * press stops once with the full list; a press that already saw it (the second, confirmed press) joins on the tester's CURRENT invite without a reload. Otherwise
  * it's refused under the button with the new invite right there (its id and `now`: the page switches to it, and the next press goes ahead).
- * (Owner, Nov 11, §377; replaces batch 34 §10's order) Join's own refusals now come before the listing box, this one too. While the join page still has changes it
- * hasn't shown (`boxPending`: the listing's, an NDA change among them), the refusal carries no `now`: the page doesn't count them as seen, so the next press (on
- * the new invite) shows the box, which clears the NDA tick, and the press after it joins.
+ * (Owner, Nov 11, §377) Inside Join's one pass, in two places: `closed` (the change could NOT re-send the invite: the invite closed, with why) is one of Join's own
+ * refusals (step 2); `fresh` (re-sent on the updated listing) is NOT a refusal: it belongs with the listing box (batch 34 §10), so it runs right after that box,
+ * whose list already names the new invite.
  */
-async function replacedInvite(testerId: string, testId: string, body: Record<string, unknown>, q: Q = db, boxPending: () => Promise<boolean> = async () => false) {
+async function replacedInvite(testerId: string, testId: string, body: Record<string, unknown>, q: Q, which: "closed" | "fresh") {
   if (typeof body.inviteId !== "string" || !body.inviteId) return;
   const inv = await q.invite.findUnique({ where: { id: body.inviteId } });
   if (!inv || inv.testerId !== testerId || inv.status !== "replaced") return;
   const fresh = await q.invite.findFirst({ where: { testId, testerId, status: "sent" }, orderBy: { createdAt: "desc" } });
+  if (which === "closed" ? !!fresh : !fresh) return;
   if (fresh && body.confirmed === true) return; // joins on the current invite (join() takes the tester's sent invite)
   const t = await q.test.findUniqueOrThrow({ where: { id: testId } });
   const dev = await q.user.findUniqueOrThrow({ where: { id: t.developerId } });
-  const unseen = fresh ? await boxPending() : false;
-  throw new HttpError(409, "invite_replaced", fresh ? newInviteLine(displayName(dev), fmtTime(inv.updatedAt)) : `${displayName(dev)} changed the listing at ${fmtTime(inv.updatedAt)}, and this invite closed.`, fresh ? { newInviteId: fresh.id, terms: termsLine(asListing(t), true), listingVersion: t.listingVersion, ...(unseen ? {} : { now: new Date().toISOString() }) } : {});
+  throw new HttpError(409, "invite_replaced", fresh ? newInviteLine(displayName(dev), fmtTime(inv.updatedAt)) : `${displayName(dev)} changed the listing at ${fmtTime(inv.updatedAt)}, and this invite closed.`, fresh ? { newInviteId: fresh.id, terms: termsLine(asListing(t), true), listingVersion: t.listingVersion, now: new Date().toISOString() } : {});
 }
 
 /**
@@ -254,10 +254,11 @@ export function clientJoinBody(body: Record<string, unknown>) {
  *   1. J01: joinRefusal (stopped → joining closed → not open → paused → already joined → rated / can't join again → full → no free key → you blocked the
  *      developer → the developer blocks you → your test limit), in the press's pattern (joinPressRefusal). Apply / Ask to rejoin: an invite the page hadn't
  *      shown joins at once right here (batch 34 §16); one it showed is refused ("… invited you: press Join to join.").
- *   2. The button's own refusals. Join: the invite closed, left earlier without an invite, the invite replaced, an apply-only test. Apply / Ask to rejoin: already
+ *   2. The button's own refusals. Join: the invite closed, left earlier without an invite, the invite replaced with none re-sent, an apply-only test. Apply / Ask to rejoin: already
  *      waiting (J09, one wording), the 2-per-24-hours limit; Ask to rejoin first: never in / still in, a block either way (neutral), rated.
  *   3. The profile not saved.
- *   4. The listing-changed stop-once box (J04 / T05). (Owner's exception, Nov 11) "This test is invite only." stays right after it.
+ *   4. The listing-changed stop-once box (J04 / T05), a re-sent invite with it (batch 34 §10). (Owner's exception, Nov 11) "This test is invite only." stays
+ *      right after it.
  *   5. The profile-gap box ("Your profile is missing … Join anyway?"), then the NDA tick (red).
  *   6. The save (the join, or the application / the ask).
  */
@@ -299,16 +300,20 @@ async function joinSteps(tx: Tx, tester: U, t: TestRow, body: Record<string, unk
   // (Design doc 7.3) Coming back is always an ask the developer accepts, unless they invited the tester back. (§352) An accepted ask never comes through here.
   const old = await tx.contract.findUnique({ where: { testId_testerId: { testId, testerId: tester.id } } });
   if (old && old.status !== "working" && !invited) return { stop: new HttpError(409, "ask", "You left this test, so you ask to rejoin and the developer accepts.") };
-  const replaced = await stopOf(() => replacedInvite(tester.id, testId, body, tx, async () => !!(await joinStopList(tester.id, testId, body, "join", tx))));
-  if (replaced) return { stop: replaced };
+  // The change couldn't re-send the invite: it closed (with why).
+  const replacedClosed = await stopOf(() => replacedInvite(tester.id, testId, body, tx, "closed"));
+  if (replacedClosed) return { stop: replacedClosed };
   if (t.joinMode === "apply" && !invited && !(await tx.application.findFirst({ where: { testId, testerId: tester.id, status: "pending", changedAt: { not: null } } })))
     return { stop: new HttpError(409, "apply", "This test takes applications: press Apply to join.") };
   // 3. (Owner, Nov 2) A saved tester profile.
   const profile = await tx.testerProfile.findUnique({ where: { userId: tester.id } });
   if (!profileSaved(profile)) return { stop: new HttpError(409, "profile_first", PROFILE_FIRST) };
-  // 4. (Batch 34 §10) The "changed since you opened this page" box (the NDA's line clears its tick); then (owner's exception) invite only.
+  // 4. (Batch 34 §10) The "changed since you opened this page" box (the NDA's line clears its tick; a re-sent invite is one of its lines: "here's a new invite on
+  // the updated listing"), and with it the re-sent invite: the confirmed press joins on the tester's current invite. Then (owner's exception) invite only.
   const box = await stopOf(() => listingGate(tester.id, testId, body, "join", tx));
   if (box) return { stop: box };
+  const replacedFresh = await stopOf(() => replacedInvite(tester.id, testId, body, tx, "fresh"));
+  if (replacedFresh) return { stop: replacedFresh };
   if (t.joinMode === "invite" && !invited) return { stop: new HttpError(409, "invite_only", "This test is invite only.") };
   // 5. The gap box, then (design doc 7.3) the NDA tick.
   const gap = await stopOf(async () => gapStop(t, profile, body, as));
