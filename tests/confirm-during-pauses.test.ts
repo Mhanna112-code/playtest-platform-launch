@@ -5,7 +5,7 @@ import { awayAction, confirmFinish, confirmStart, expireActions } from "@/lib/se
 import { confirmAllPress, confirmAllState } from "@/lib/server/confirmAll";
 import { pauseTest, unpauseTest } from "@/lib/server/restrictions";
 import { makeUser } from "./helpers";
-import { act, joined, seen, settle, setup } from "./fixtures";
+import { joined, seen, settle, setup } from "./fixtures";
 import { pay } from "./b15";
 
 const DAY = 86_400_000;
@@ -46,9 +46,9 @@ describe("existing bank confirmations during pauses and suspensions", () => {
     const t = await db.test.findUniqueOrThrow({ where: { id: w.testId } });
     const dev = await db.user.findUniqueOrThrow({ where: { id: w.dev.user.id } });
     expect(kind === "pause" ? !!t.adminPausedAt : !!dev.devSuspendedAt).toBe(true);
-    expect((await act(w.testId, "pay-extra", w.dev.cookie, { contractId: w.sessionId, submissionId: p.submissionId, amount: "1.00", confirmed: true })).status).toBeGreaterThanOrEqual(400);
+    // (Owner, Nov 9, §368) A new Pay goes through during the pause or suspension too (tests/pay-during-pauses-368.test.ts covers Pay more and a call's Pay).
     const fresh = await db.submission.create({ data: { contractId: w.sessionId, kind: "extra-sample", agreedCents: 1000 } });
-    expect((await pay(w.dev.cookie, { kind: "submission", id: fresh.id, amount: "10.00", tickedCents: 1000, confirmed: true })).status).toBeGreaterThanOrEqual(400);
+    expect((await pay(w.dev.cookie, { kind: "submission", id: fresh.id, amount: "10.00", tickedCents: 1000, confirmed: true })).status).toBe(200);
   });
 
   it.each(["pause", "suspension"])("%s: Confirm all includes the waiting items and completes once", async (kind) => {

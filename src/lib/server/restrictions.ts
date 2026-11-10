@@ -199,12 +199,8 @@ export async function suspendAccount(adminId: string, userId: string, note: stri
     await pauseDeveloper(u);
     // (Owner, Nov 6, §295) Their testers read "“<test>” is paused": each test no other cause (a hold, the team's pause) was pausing already.
     if (!u.holdStartedAt) await tellTestersPaused((await db.test.findMany({ where: { developerId: userId, status: "open", workEndedAt: null, adminPausedAt: null }, select: { id: true } })).map((t) => t.id));
-    // (Owner, Nov 3, §159 rule 4a) The developer's own Pay / Pay more whose bank page is still open is cancelled (at Stripe first; one the bank already approved is
-    // recorded as paid once), like a hold does: nothing is charged by it, and the part is payable again after the lift. A tester's waiting charge being confirmed
-    // (needs_confirmation: Confirm with your bank, Confirm all) is NOT cancelled: its Complete goes through and is recorded normally (rule 4b).
-    const { release } = await import("./confirm");
-    for (const p of await db.payment.findMany({ where: { developerId: userId, status: "needs_action", kind: { in: ["review", "call", "extra"] } }, select: { id: true } }))
-      await release(p.id).catch((e) => console.error("[suspend] cancel open Pay check:", (e as Error).message));
+    // (Owner, Nov 9, §368; replaces §159 rule 4a) Paying goes on during a suspension: the developer's own Pay / Pay more whose bank page is still open is no longer
+    // cancelled (its Complete goes through and is recorded, as a tester's charge being confirmed always did, rule 4b). A hold still cancels it (holds.ts).
     await (await import("./subscription")).pauseBilling(userId);
   }
   if (side === "tester" && u.isTester) await removeTester(u, "suspended");
@@ -444,13 +440,9 @@ export async function pauseTest(adminId: string, testId: string, note: string, s
   const contractIds = (await db.contract.findMany({ where: { testId }, select: { id: true } })).map((c) => c.id);
   await closeRequests({ contractIds }, "the test is paused");
   // (Owner, Nov 4, §172) What a developer suspension does to each of the developer's tests, done to this one: calls starting within 3 days are cancelled with no
-  // fault (later ones 3 days before they start if the pause still lasts: the daily job), and the developer's own Pay / Pay more whose bank page is still open on
-  // this test is cancelled (§159 rule 9 / §171 B5: at Stripe first; one the bank already approved is recorded as paid once). A tester's charge waiting for "Confirm
-  // with your bank" is not cancelled (rule 4b): only a new Confirm waits for the lift.
+  // fault (later ones 3 days before they start if the pause still lasts: the daily job). (Owner, Nov 9, §368; replaces §159 rule 9 / §171 B5) Paying goes on: the
+  // developer's own Pay / Pay more whose bank page is open on this test is no longer cancelled.
   const callsCancelled = await cancelCallsNearPause(t.developerId, new Date(), testId);
-  const { release } = await import("./confirm");
-  for (const p of await db.payment.findMany({ where: { developerId: t.developerId, contractId: { in: contractIds }, status: "needs_action", kind: { in: ["review", "call", "extra"] } }, select: { id: true } }))
-    await release(p.id).catch((e) => console.error("[team pause] cancel open Pay check:", (e as Error).message));
   const dev = await db.user.findUniqueOrThrow({ where: { id: t.developerId } });
   // (Owner, Nov 6, §310b) The developer's line names the closing date in the paused line's words ("The team paused “…”: it closes on <date> unless the team lifts
   // the pause"). (§313a) There is no separate per-test paused line any more.
@@ -467,7 +459,7 @@ export async function pauseTest(adminId: string, testId: string, note: string, s
 
 /** (Owner, Nov 4, §172) The pause email's line: what still works on the test, and what waits for the lift. */
 export const TEAM_PAUSED_EMAIL_LINE =
-  "For now you can stop it, end testers' work early, cancel calls, or add your side of a dispute. Chat, Pay, Pay more, Confirm with your bank and Rate on this test wait until the team lifts the pause.";
+  "For now you can pay for work (Pay, Pay more, Confirm with your bank), stop it, end testers' work early, cancel calls, or add your side of a dispute. Chat and Rate on this test wait until the team lifts the pause."; // (§368)
 /** "2 calls in the next 3 days were cancelled. Later calls are cancelled 3 days before they start if the pause still lasts." */
 export const teamPauseCallsLine = (n: number) =>
   `${n === 1 ? "1 call" : `${n} calls`} in the next ${CALL_SUSPENSION_DAYS} days ${n === 1 ? "was" : "were"} cancelled. Later calls are cancelled ${CALL_SUSPENSION_DAYS} days before they start if the pause still lasts.`;

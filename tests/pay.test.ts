@@ -217,22 +217,18 @@ describe("(NEXT-UI 27) Payments: Waiting for your review", () => {
 });
 
 describe("(NEXT-UI 26) a suspended developer", () => {
-  it("cannot Pay, $0 included (it waits until the suspension is lifted); everything else (invite, Edit, chat, next round, calls) is refused with the suspended line", async () => {
+  // (Owner, Nov 9, §368; was "cannot Pay, $0 included") Pay goes through during a suspension; everything else stays refused.
+  it("can Pay, $0 included; everything else (invite, Edit, chat, next round, calls) is refused with the suspended line", async () => {
     const { dev, sub, sessionId, testId, tester } = await sent();
     await db.user.update({ where: { id: dev.user.id }, data: { devSuspendedAt: new Date(), testerSuspendedAt: new Date() } });
     // (Owner, Nov 9, §364 item 8) One cause, each press named.
-    const LINE = "Your account is suspended, so your Pay didn't go through.";
     const named = (press: string) => `Your account is suspended, so your ${press} didn't go through.`;
-    expect((await payReq(dev.cookie, { amount: "0", kind: "submission", id: sub.id, reason: "Nothing usable here" })).body.error.message).toBe(LINE);
     expect((await act(testId, "next-round", dev.cookie, { seenAt: seen(), confirmed: true })).body.error.message).toBe(named("Next round"));
     expect((await act(testId, "message", dev.cookie, { contractId: sessionId, body: "hi" })).body.error.message).toBe(named("Send"));
     expect((await act(testId, "invite", dev.cookie, { seenAt: seen(), testerIds: [tester.user.id] })).body.error.message).toBe(named("Invite"));
-    // Pay is refused too, and nothing is recorded: the piece still waits for review.
-    const p = await payReq(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 });
-    expect(p.status).toBe(403);
-    expect(p.body.error).toMatchObject({ code: "suspended", message: LINE, failed: "Your Pay on Harbor Run didn't go through" });
-    expect(await db.review.count({ where: { submissionId: sub.id } })).toBe(0);
-    expect(await db.payment.count({ where: { submissionId: sub.id } })).toBe(0);
+    // (§368) Pay goes through, $0 included.
+    expect((await payReq(dev.cookie, { amount: "0", kind: "submission", id: sub.id, reason: "Nothing usable here" })).status).toBe(200);
+    expect(await db.review.count({ where: { submissionId: sub.id } })).toBe(1);
     // A tester never reads "suspended".
     await db.user.update({ where: { id: tester.user.id }, data: { devSuspendedAt: new Date(), testerSuspendedAt: new Date() } });
     expect((await sact(sessionId, "request-time", tester.cookie, { seenAt: seen(), startsAt: new Date(Date.now() + 72 * 3_600_000).toISOString() })).body.error.message).not.toMatch(/suspend/i);

@@ -676,8 +676,9 @@ describe("batch 28 §3-§7 and §9", () => {
   });
 });
 
-describe("batch 28 §21: during a suspension the automatic charge waits for the reinstatement", () => {
-  it("added as waiting (deferred), charged when the account is clear, with its own receipt", async () => {
+// (Owner, Nov 9, §368; replaces "waits for the reinstatement") During a suspension the automatic charge is made at once, as the tester's Charge is.
+describe("batch 28 §21 / §368: during a suspension the automatic charge is made at once", () => {
+  it("charged at once, with its own receipt", async () => {
     const { bookCall } = await import("./fixtures");
     const st = strictStripe();
     const s = await setup();
@@ -685,13 +686,10 @@ describe("batch 28 §21: during a suspension the automatic charge waits for the 
     const call = await bookCall(s.testId, s.dev.cookie, j.sessionId, j.tester.cookie, 48);
     await db.call.update({ where: { id: call.id }, data: { startsAt: new Date(Date.now() - 8 * DAY), actualMinutes: 30, payBy: new Date(Date.now() - 60_000) } });
     await db.user.update({ where: { id: s.dev.user.id }, data: { stripeCustomerId: "cus_" + randomUUID(), stripePaymentMethodId: "pm_x", devSuspendedAt: new Date() } });
-    const { autoChargeCalls, chargeDeferred } = await import("@/lib/server/holds");
+    const { autoChargeCalls } = await import("@/lib/server/holds");
     expect(await autoChargeCalls(new Date())).toBe(1);
-    expect(st.of("pi.create")).toHaveLength(0);
-    expect(await db.payment.findFirstOrThrow({ where: { callId: call.id } })).toMatchObject({ status: "deferred", amountCents: 1500 });
-    await db.user.update({ where: { id: s.dev.user.id }, data: { devSuspendedAt: null } });
-    await chargeDeferred(s.dev.user.id);
-    expect(await db.payment.findFirstOrThrow({ where: { callId: call.id } })).toMatchObject({ status: "charged" });
+    expect(st.of("pi.create")).toHaveLength(1);
+    expect(await db.payment.findFirstOrThrow({ where: { callId: call.id } })).toMatchObject({ status: "charged", amountCents: 1500 });
     const r = await db.notification.findFirstOrThrow({ where: { userId: s.dev.user.id, text: { startsWith: "You paid $15.00 for Ana Silva's live call on “Harbor Run” (" } } });
     expect(r.text).toContain(", charged automatically after 7 days)");
   });

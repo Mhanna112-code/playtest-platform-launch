@@ -18,7 +18,7 @@ import { callsLeftWarning } from "@/lib/callMeasure";
 import { LabeledReason, ReasonQuote } from "@/components/ScrollText";
 import { requireOpenPage } from "@/lib/server/page-auth";
 import { PageLoaded } from "@/components/PageLoaded";
-import { devRestricted } from "@/lib/restricted";
+import { devRestricted, payGoesOn } from "@/lib/restricted";
 import { PAUSED_ALERTS, STOPPED_ALERTS } from "@/lib/alerts";
 import { TestBanner, allowedLine, type BannerCause } from "./TestBanner";
 import { RestrictedCalls } from "./RestrictedCalls";
@@ -152,6 +152,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const accountPaused = devRestricted(u, "developer");
   const teamPaused = !!t.adminPausedAt && t.status !== "stopped";
   const restricted = accountPaused || teamPaused;
+  // (Owner, Nov 9, §368) Paying goes on in the restricted view during a team pause or a developer suspension (as the tester's Charge does); a hold still stops it.
+  const restrictedPays = restricted && payGoesOn(u);
   const bannerCause: BannerCause | null = t.adminStoppedAt ? "team-stopped" : teamPaused ? "team-paused" : u.devSuspendedAt ? "suspended" : u.holdStartedAt ? (u.holdReason === "chargeback" ? "chargeback" : "hold") : t.status === "stopped" ? "stopped" : null;
   const bannerCauseReason = bannerCause === "team-paused" || bannerCause === "team-stopped" ? t.adminNote : bannerCause === "suspended" ? u.devSuspendNote : "";
   const keysEver = await db.accessKey.count({ where: { testId: id } });
@@ -454,70 +456,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       </div>
     )) };
   };
-  const banner = bannerCause ? (
-    <TestBanner cause={bannerCause} reason={bannerReason} failed={failed}
-      allowed={restricted ? allowedLine(true, { stop: t.status !== "stopped", endEarly: t.status !== "stopped" && working.length > 0, cancelCalls: bookedAhead.length > 0, disputes: disputesWaiting.length > 0 }) : allowedLine(false, { nextRound: !t.adminStoppedAt })} />
-  ) : null;
-  if (restricted) {
-    // (Owner, Nov 4, §172; replaces batch 17 §14) No Rate here: a test the team paused hides Rate as a suspension does.
-    const restrictedNeeds = (await developerNeedsRows(u.id,[t.id],now))[0]?.n??0;
-    const restrictedPeople = needsPeople(t.contracts.flatMap((c) => {
-      const calls = bookedAhead.filter((x) => x.contractId === c.id);
-      return [
-        bankKind(c, { "data-restricted-bank": "" }),
-        disputeKind(c, { "data-restricted-disputes": "" }),
-        { who: whoOf(c), kind: "calls", label: "Booked calls", ats: calls.map((x) => x.at), node: <RestrictedCalls testId={t.id} seenAt={seenAt} calls={calls} embedded person={c.id} /> },
-        excerptKind(c, { "data-restricted-excerpts": "" }),
-      ];
-    }));
-    return (
-      <>
-        <AutoRefresh query={`test=${t.id}`} v={pageV} />
-        {banner}
-        <TopPanel timeZone={u.timeZone}
-          id={t.id} title={t.title} productName={t.productName} ignoredAlerts={t.ignoredAlerts} alertsV={t.alertsV} restricted mature={t.mature} nda={!!t.ndaText} keysLeft={keysLeft}
-          parts={{ written: t.writtenCents != null, recording: t.recordingCents != null, live: t.liveRateCents != null }} paused status={t.status} workEnded={!!t.workEndedAt}
-          terms={termsLine({ ...asListing(t), testerDays: t.testerDays })} openUntil={t.openUntil ? t.openUntil.toISOString() : null} version={t.version} seenAt={seenAt}
-          teamStopped={!!t.adminStoppedAt} perks={perks} spotsLine={`${working.length} of ${t.spots} spots used`} full={working.length >= t.spots}
-          joinMode={t.joinMode} deadlineDays={t.deadlineDays} categories={t.categories}
-          alertKeys={t.status === "stopped" ? [...STOPPED_ALERTS] : [...PAUSED_ALERTS]}
-          doneTo={accountPaused ? "/app" : undefined}
-          working={working.map((c) => ({
-            contractId: c.id, name: displayName(c.tester),
-            sent: [...(c.submissions.some((x) => x.kind === "written") ? ["written answers"] : []), ...(c.submissions.some((x) => x.kind === "recording") ? ["recording"] : [])],
-            toSend: [...(c.writtenCents != null && !c.submissions.some((x) => x.kind === "written") ? ["written answers"] : []), ...(c.recordingCents != null && !c.submissions.some((x) => x.kind === "recording") ? ["recording"] : [])],
-            ahead: c.calls.filter((x) => x.status === "booked" && x.startsAt > now).length,
-            waiting: [...c.submissions.filter((x) => !x.review && !payShut(x.id)).map((x) => (x.kind === "recording" ? "recording" : "written answers")), ...(c.calls.some((x) => tookPlace(x) && !x.review && !payShut(x.id)) ? ["live call"] : [])],
-          }))}
-        />
-        <LiveTop scope={`test:${t.id}`} seenAt={seenAt} contractLink="scroll" />
-        <PageLoaded at={seenAt} />
-        {/* (Owner, Nov 4, §181) One drop-down per person: their charges waiting for the bank (Batch 17 §11: a charge made while away, e.g. a retry during the pause,
-            confirmed here), their disputes (Batch 15 section 27: the developer's side is optional, never stopped, works while paused or restricted), their booked calls
-            with Cancel, their excerpt requests (Batch 15 section 39: Allow / Deny go through anything; batch 29 section 30: no Take down). "#calls" lands on the list. */}
-        {restrictedNeeds > 0 && <NeedsYou count={restrictedNeeds} people={restrictedPeople.length}>
-          <div className="space-y-2" id={bookedAhead.length > 0 ? "calls" : undefined} data-needs-people="">
-            {restrictedPeople}
-          </div>
-        </NeedsYou>}
-        {shownEx.length > 0 && <section className="card space-y-2" aria-label="Shown excerpts">
-            {shownEx.map((e) => (
-              <div key={e.id} className="flex flex-wrap items-start gap-2 text-sm" data-shown-excerpt="">
-                <div className="min-w-0 flex-1 space-y-1"><span className="block text-slate-400">On a tester&apos;s profile:</span><ExcerptQuote id={`shown-excerpt-${e.id}`} text={e.text} /></div>
-              </div>
-            ))}
-        </section>}
-      </>
-    );
-  }
-  // (Owner, Oct 28, batch 20 section 24) Each open Rate in Needs you: "Rate ff · 14 days left", linking to that tester's Rate box (the page's poll brings it).
-  const rateNeeds = restricted ? [] : t.contracts.flatMap((c) => {
-    const st = rateStates.get(c.id);
-    // (§181) `at`: when the window opened (its end when that isn't known), for the order of the drop-downs.
-    return st?.kind === "open" && st.endsAt ? [{ id: c.id, at: st.opensAt ?? st.endsAt, line: rateNeedsLine(displayName(c.tester), st.endsAt, now) }] : [];
-  });
   // (Batch 30 §2) Updated versions sent after a piece was paid, below its cap while Pay more is open: each its own Needs you row with the piece's Pay more box.
-  const updates = restricted || !payMore.open ? [] : t.contracts.filter((c) => testerPayable(c.tester)).flatMap((c) => c.submissions.filter((x) => updateWaiting(x) && (rooms.get(x.id)?.room ?? 0) > 0).map((x) => ({ c, s: x })))
+  const updates = (restricted && !restrictedPays) || !payMore.open ? [] : t.contracts.filter((c) => testerPayable(c.tester)).flatMap((c) => c.submissions.filter((x) => updateWaiting(x) && (rooms.get(x.id)?.room ?? 0) > 0).map((x) => ({ c, s: x })))
     .sort((a, b) => a.s.paidUpdateAt!.getTime() - b.s.paidUpdateAt!.getTime());
   const needsCount = (await developerNeedsRows(u.id,[t.id],now))[0]?.n??0;
   // (Owner, Nov 4, §181) "the parts should have big drop down with their name then part and pay/pay more as own dropdowns": in the person's drop-down each part is a
@@ -607,6 +547,71 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       </HoldFold>
     </div>
   );
+  const banner = bannerCause ? (
+    <TestBanner cause={bannerCause} reason={bannerReason} failed={failed}
+      allowed={restricted ? allowedLine(true, { pay: restrictedPays && (pieces.length > 0 || updates.length > 0), stop: t.status !== "stopped", endEarly: t.status !== "stopped" && working.length > 0, cancelCalls: bookedAhead.length > 0, disputes: disputesWaiting.length > 0 }) : allowedLine(false, { nextRound: !t.adminStoppedAt })} />
+  ) : null;
+  if (restricted) {
+    // (Owner, Nov 4, §172; replaces batch 17 §14) No Rate here: a test the team paused hides Rate as a suspension does.
+    const restrictedNeeds = needsCount;
+    const restrictedPeople = needsPeople(t.contracts.flatMap((c) => {
+      const calls = bookedAhead.filter((x) => x.contractId === c.id);
+      // (§368) Their parts to pay (and updates after paying), as in the full view, while paying goes on.
+      const mine = restrictedPays ? pieces.filter((x) => x.c.id === c.id) : [], more = restrictedPays ? updates.filter((x) => x.c.id === c.id) : [];
+      return [
+        { who: whoOf(c), kind: "pay", label: "Pay", ats: [...mine.map((x) => x.at), ...more.map((x) => x.s.paidUpdateAt!)], data: { "data-restricted-pay": "" }, node: <div className="space-y-3">{mine.map(partNode)}{more.map(updateNode)}</div> },
+        bankKind(c, { "data-restricted-bank": "" }),
+        disputeKind(c, { "data-restricted-disputes": "" }),
+        { who: whoOf(c), kind: "calls", label: "Booked calls", ats: calls.map((x) => x.at), node: <RestrictedCalls testId={t.id} seenAt={seenAt} calls={calls} embedded person={c.id} /> },
+        excerptKind(c, { "data-restricted-excerpts": "" }),
+      ];
+    }));
+    return (
+      <>
+        <AutoRefresh query={`test=${t.id}`} v={pageV} />
+        {banner}
+        <TopPanel timeZone={u.timeZone}
+          id={t.id} title={t.title} productName={t.productName} ignoredAlerts={t.ignoredAlerts} alertsV={t.alertsV} restricted mature={t.mature} nda={!!t.ndaText} keysLeft={keysLeft}
+          parts={{ written: t.writtenCents != null, recording: t.recordingCents != null, live: t.liveRateCents != null }} paused status={t.status} workEnded={!!t.workEndedAt}
+          terms={termsLine({ ...asListing(t), testerDays: t.testerDays })} openUntil={t.openUntil ? t.openUntil.toISOString() : null} version={t.version} seenAt={seenAt}
+          teamStopped={!!t.adminStoppedAt} perks={perks} spotsLine={`${working.length} of ${t.spots} spots used`} full={working.length >= t.spots}
+          joinMode={t.joinMode} deadlineDays={t.deadlineDays} categories={t.categories}
+          alertKeys={t.status === "stopped" ? [...STOPPED_ALERTS] : [...PAUSED_ALERTS]}
+          doneTo={accountPaused ? "/app" : undefined}
+          working={working.map((c) => ({
+            contractId: c.id, name: displayName(c.tester),
+            sent: [...(c.submissions.some((x) => x.kind === "written") ? ["written answers"] : []), ...(c.submissions.some((x) => x.kind === "recording") ? ["recording"] : [])],
+            toSend: [...(c.writtenCents != null && !c.submissions.some((x) => x.kind === "written") ? ["written answers"] : []), ...(c.recordingCents != null && !c.submissions.some((x) => x.kind === "recording") ? ["recording"] : [])],
+            ahead: c.calls.filter((x) => x.status === "booked" && x.startsAt > now).length,
+            waiting: [...c.submissions.filter((x) => !x.review && !payShut(x.id)).map((x) => (x.kind === "recording" ? "recording" : "written answers")), ...(c.calls.some((x) => tookPlace(x) && !x.review && !payShut(x.id)) ? ["live call"] : [])],
+          }))}
+        />
+        <LiveTop scope={`test:${t.id}`} seenAt={seenAt} contractLink="scroll" />
+        <PageLoaded at={seenAt} />
+        {/* (Owner, Nov 4, §181) One drop-down per person: their charges waiting for the bank (Batch 17 §11: a charge made while away, e.g. a retry during the pause,
+            confirmed here), their disputes (Batch 15 section 27: the developer's side is optional, never stopped, works while paused or restricted), their booked calls
+            with Cancel, their excerpt requests (Batch 15 section 39: Allow / Deny go through anything; batch 29 section 30: no Take down). "#calls" lands on the list. */}
+        {restrictedNeeds > 0 && <NeedsYou count={restrictedNeeds} people={restrictedPeople.length}>
+          <div className="space-y-2" id={bookedAhead.length > 0 ? "calls" : undefined} data-needs-people="">
+            {restrictedPeople}
+          </div>
+        </NeedsYou>}
+        {shownEx.length > 0 && <section className="card space-y-2" aria-label="Shown excerpts">
+            {shownEx.map((e) => (
+              <div key={e.id} className="flex flex-wrap items-start gap-2 text-sm" data-shown-excerpt="">
+                <div className="min-w-0 flex-1 space-y-1"><span className="block text-slate-400">On a tester&apos;s profile:</span><ExcerptQuote id={`shown-excerpt-${e.id}`} text={e.text} /></div>
+              </div>
+            ))}
+        </section>}
+      </>
+    );
+  }
+  // (Owner, Oct 28, batch 20 section 24) Each open Rate in Needs you: "Rate ff · 14 days left", linking to that tester's Rate box (the page's poll brings it).
+  const rateNeeds = restricted ? [] : t.contracts.flatMap((c) => {
+    const st = rateStates.get(c.id);
+    // (§181) `at`: when the window opened (its end when that isn't known), for the order of the drop-downs.
+    return st?.kind === "open" && st.endsAt ? [{ id: c.id, at: st.opensAt ?? st.endsAt, line: rateNeedsLine(displayName(c.tester), st.endsAt, now) }] : [];
+  });
   // (Owner, Nov 4, §181) Everything in Needs you, by person, each person's kinds in this order: their parts to pay (and updates after paying), their charges waiting
   // for the bank, their disputes (Add your side), their call requests (the row opens the Live session's Call requests panel there, as before), their excerpt
   // requests (Allow / Deny), their Rate. (Owner, Nov 4, §199) Applications and asks to rejoin are in the one Applications drop-down above the names instead.

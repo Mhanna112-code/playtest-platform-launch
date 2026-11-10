@@ -25,8 +25,9 @@ export async function developerNeedsRows(developerId:string,testIds:string[],now
   const moreOpen=!closedOut(await payMoreClosesAt(t.id,now),now);
   for(const c of t.contracts){
    count += [...c.submissions,...c.calls].filter(x=>x.dispute?.status==="open"&&!x.dispute.devSide).length;
-   if(restricted){count+=c.calls.filter(x=>x.status==="booked"&&x.startsAt>now).length;continue;}
-   if(rates.get(c.id)?.kind==="open")count++;
+   // (Owner, Nov 9, §368) A team pause or a suspension (not a hold) keeps the parts to pay in the restricted view: paying goes on.
+   if(restricted){count+=c.calls.filter(x=>x.status==="booked"&&x.startsAt>now).length;if(dev.holdStartedAt)continue;}
+   else if(rates.get(c.id)?.kind==="open")count++;
    if(!testerPayable(c.tester))continue;
    for(const x of c.submissions){
     if(!x.review&&(confirming.some(p=>p.submissionId===x.id)||!closedOut(await pieceCloseOut({submissionId:x.id},"developer",now),now)))count++;

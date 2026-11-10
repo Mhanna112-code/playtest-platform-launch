@@ -2,12 +2,12 @@ import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { POST as testsPOST } from "@/app/api/tests/route";
-import { RATE_TEAM_PAUSED, RESTRICTED_OK_ACTIONS, TEAM_PAUSED_OK_ACTIONS, teamPausedWaits } from "@/lib/restricted";
+import { RATE_TEAM_PAUSED, RESTRICTED_OK_ACTIONS, TEAM_PAUSED_OK_ACTIONS } from "@/lib/restricted";
 import { CHAT_NOT_SENT } from "@/lib/rules";
 import { cancelLatePauseCalls, pauseTest, TEAM_PAUSED_EMAIL_LINE, unpauseTest } from "@/lib/server/restrictions";
 import { chatRestriction, openTesterChat, CHAT_UNABLE } from "@/lib/server/messages";
 import { devRateStates } from "@/lib/server/ratings";
-import { autoChargeCalls, chargeDeferred } from "@/lib/server/holds";
+import { autoChargeCalls } from "@/lib/server/holds";
 import { confirmStart } from "@/lib/server/confirm";
 import { confirmAllState } from "@/lib/server/confirmAll";
 import { json, makeUser, req } from "./helpers";
@@ -38,16 +38,16 @@ async function rateOpen() {
 }
 
 describe("§172: the developer's presses on a test the team paused are a suspended developer's", () => {
-  it("the same presses still work (Stop, End early, Cancel call, the side of a dispute); every other one, chat included, goes to the banner", async () => {
-    expect(TEAM_PAUSED_OK_ACTIONS).toBe(RESTRICTED_OK_ACTIONS);
+  it("the same presses still work (Stop, End early, Cancel call, the side of a dispute; §368: Pay more); every other one, chat included, goes to the banner", async () => {
+    expect([...TEAM_PAUSED_OK_ACTIONS].sort()).toEqual([...RESTRICTED_OK_ACTIONS, "pay-extra"].sort()); // (Owner, Nov 9, §368) paying goes on
     const s = await setup();
     const a = await joined(s.testId);
     await pauseTest(await admin(), s.testId, "Checking");
-    for (const [action, body] of [["message", { contractId: a.sessionId, body: "Hi" }], ["edit", { version: 1, fields: { title: "x" } }], ["invite", { testerIds: [] }], ["next-round", {}], ["pay-extra", { contractId: a.sessionId }]] as const) {
+    for (const [action, body] of [["message", { contractId: a.sessionId, body: "Hi" }], ["edit", { version: 1, fields: { title: "x" } }], ["invite", { testerIds: [] }], ["next-round", {}]] as const) {
       const r = await act(s.testId, action, s.dev.cookie, { ...body, seenAt: seen() });
       if (action === "edit") { expect(r.body.error?.code).toBe("nda_only"); continue; }
       expect(r.body.error?.code, action).toBe("admin_paused");
-      expect(r.body.error.message).toBe(`The team paused this test, so your ${({ message: "Send", invite: "Invite", "next-round": "Next round", "pay-extra": "Pay more" } as Record<string, string>)[action]} didn't go through.`); // (§364 item 6)
+      expect(r.body.error.message).toBe(`The team paused this test, so your ${({ message: "Send", invite: "Invite", "next-round": "Next round" } as Record<string, string>)[action]} didn't go through.`); // (§364 item 6)
       expect(r.body.error.testId).toBe(s.testId);
       expect(r.body.error.failed).toMatch(/didn't go through$/);
     }
@@ -55,32 +55,27 @@ describe("§172: the developer's presses on a test the team paused are a suspend
     expect((await act(s.testId, "stop", s.dev.cookie, { reason: "This trial is finished.", seenAt: seen() })).status).toBe(200);
   });
 
-  it("Pay waits for the lift on that test (refused back to its banner); Pay on the developer's other test goes through", async () => {
+  // (Owner, Nov 9, §368; replaces §172's wait for the lift) Pay and Pay more go through on a test the team paused, as the tester's Charge does.
+  it("Pay goes through on that test during the pause (§368), as on the developer's other test", async () => {
     const x = await sentWork();
     await pauseTest(await admin(), x.testId, "Checking");
-    const r = await pay(x.dev.cookie, { kind: "submission", id: x.sub.id, amount: "10.00", tickedCents: 1000 });
-    expect(r.status).toBe(409);
-    expect(r.body.error).toMatchObject({ code: "admin_paused", message: teamPausedWaits("Pay"), testId: x.testId, failed: "Your Pay on Harbor Run didn't go through" });
-    expect(await db.review.count({ where: { submissionId: x.sub.id } })).toBe(0);
-    // The developer's other test is unaffected.
+    expect((await pay(x.dev.cookie, { kind: "submission", id: x.sub.id, amount: "10.00", tickedCents: 1000 })).status).toBe(200);
+    expect(await db.review.count({ where: { submissionId: x.sub.id } })).toBe(1);
     const other = await secondTest(x.dev.cookie);
     const b = await joined(other, "Ben Okafor");
     await sact(b.sessionId, "written", b.tester.cookie, { answers: ["a", "b"] });
     await settle();
     const sub2 = await db.submission.findFirstOrThrow({ where: { contractId: b.sessionId } });
     expect((await pay(x.dev.cookie, { kind: "submission", id: sub2.id, amount: "10.00", tickedCents: 1000 })).status).toBe(200);
-    // Lifted: Pay goes through.
-    await unpauseTest(x.testId);
-    expect((await pay(x.dev.cookie, { kind: "submission", id: x.sub.id, amount: "10.00", tickedCents: 1000 })).status).toBe(200);
   });
 
-  it("Pay more waits too (the route and the backstop)", async () => {
+  it("Pay more goes through too (§368)", async () => {
     const x = await sentWork();
     expect((await pay(x.dev.cookie, { kind: "submission", id: x.sub.id, amount: "5.00", tickedCents: 500, reason: "Half of it" })).status).toBe(200);
     await pauseTest(await admin(), x.testId, "Checking");
-    const r = await payMore(x.testId, x.dev.cookie, { contractId: x.sessionId, submissionId: x.sub.id, amount: "2.00" });
-    expect(r.body.error.code).toBe("admin_paused");
-    expect(await db.payment.count({ where: { submissionId: x.sub.id, kind: "extra" } })).toBe(0);
+    const r = await payMore(x.testId, x.dev.cookie, { contractId: x.sessionId, submissionId: x.sub.id, amount: "2.00", tickedCents: 200 });
+    expect(r.status, JSON.stringify(r.body)).toBe(200);
+    expect(await db.payment.count({ where: { submissionId: x.sub.id, kind: "extra" } })).toBe(1);
   });
 
   it("Rate: hidden and refused with the team's wording (never 'suspended'); the tester's Rate is unaffected", async () => {
@@ -108,14 +103,16 @@ describe("§172: the developer's presses on a test the team paused are a suspend
     expect((await confirmAllState(x.dev.user.id)).ids).toEqual([row.id]);
   });
 
-  it("the pause cancels the developer's own Pay whose bank page is open on that test (§159 rule 9), and says what still works", async () => {
+  it("the pause no longer cancels the developer's own Pay whose bank page is open on that test (§368; was §159 rule 9), and says what still works", async () => {
     const x = await sentWork();
     const open = await db.payment.create({ data: { kind: "review", submissionId: x.sub.id, contractId: x.sessionId, developerId: x.dev.user.id, testerId: x.tester.user.id, amountCents: 1000, feeCents: 0, testerCents: 0, status: "needs_action", actionPi: "pi_" + randomUUID(), actionBy: new Date(Date.now() + 15 * 60_000) } });
     await pauseTest(await admin(), x.testId, "Checking");
-    expect((await db.payment.findUniqueOrThrow({ where: { id: open.id } })).status).toBe("cancelled");
+    expect((await db.payment.findUniqueOrThrow({ where: { id: open.id } })).status).toBe("needs_action");
     const mail = await db.notification.findFirstOrThrow({ where: { userId: x.dev.user.id, text: { startsWith: "The team paused “Harbor Run”: it closes on " } } }); // (§310b)
     void mail;
     expect(TEAM_PAUSED_EMAIL_LINE).toContain("add your side of a dispute");
+    expect(TEAM_PAUSED_EMAIL_LINE).toContain("pay for work (Pay, Pay more, Confirm with your bank)");
+    expect(TEAM_PAUSED_EMAIL_LINE).not.toMatch(/Pay[^.]*wait until/);
   });
 });
 
@@ -148,17 +145,14 @@ describe("§172: what a suspension runs or cancels, done for the one test", () =
     return { ...s, ...j, call };
   }
 
-  it("a listed call's automatic charge runs, then waits for the team's lift (charged then); the developer's other test's waiting charges don't wait", async () => {
+  it("a listed call's automatic charge is made at once during the team's pause (§368; was: waited for the lift)", async () => {
     const x = await heldCall();
-    const devId = (await db.test.findUniqueOrThrow({ where: { id: x.testId } })).developerId;
     await pauseTest(await admin(), x.testId, "Checking");
     expect(await autoChargeCalls(new Date())).toBeGreaterThanOrEqual(1);
-    expect(await db.payment.findFirstOrThrow({ where: { callId: x.call.id } })).toMatchObject({ status: "deferred", amountCents: 1500 });
-    expect((await db.testEvent.findFirstOrThrow({ where: { testId: x.testId, text: { contains: "charged when the team lifts the pause on this test" } } })).kind).toBe("paid");
-    await chargeDeferred(devId);
-    expect((await db.payment.findFirstOrThrow({ where: { callId: x.call.id } })).status).toBe("deferred");
-    await unpauseTest(x.testId);
-    expect(["charged", "not_set_up"]).toContain((await db.payment.findFirstOrThrow({ where: { callId: x.call.id } })).status);
+    const p = await db.payment.findFirstOrThrow({ where: { callId: x.call.id } });
+    expect(p.amountCents).toBe(1500);
+    expect(["charged", "not_set_up"]).toContain(p.status);
+    expect(await db.payment.count({ where: { callId: x.call.id } })).toBe(1);
   });
 
   it("calls within 3 days on that test are cancelled at the pause, later ones 3 days before (daily job); the other test's calls stay", async () => {

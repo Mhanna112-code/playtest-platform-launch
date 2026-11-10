@@ -13,7 +13,7 @@ import { getUserFromRequest } from "@/lib/server/session";
 import { failedLine, pressVerbOf, requireActive, requireConfirmed, requireCurrentTerms } from "@/lib/server/users";
 import { stoppedPressLine } from "@/lib/refusal";
 import * as RF from "@/lib/refusal";
-import { RESTRICTED_OK_ACTIONS, TEAM_PAUSED_OK_ACTIONS, teamPausedNow } from "@/lib/restricted";
+import { PAY_OK_ACTIONS, RESTRICTED_OK_ACTIONS, TEAM_PAUSED_OK_ACTIONS, teamPausedNow } from "@/lib/restricted";
 import { bodyPressVerb } from "@/lib/pressLabels";
 
 // (Owner, Oct 27) Email confirmation is needed only for Post a test (its own route), Join (which is also accepting an invite) and Apply. A blocked press is a blue notice under the button with Resend the link.
@@ -49,7 +49,7 @@ export async function POST(req: Request, { params }: Ctx) {
     // (Batch 17 section 2) Rate reaches its own refusal ("You can rate once your account is active again.") while the developer is suspended or on a hold.
     const what = await pressWhat(req, action);
     const verb = await pressVerbOf(req, what); // (§363 / §364) read before the body is (a refusal names the press)
-    const u = await requireActive(req, { devOk: SUSPENDED_OK.has(action) || action === "rate" || action === "edit", devSide: !TESTER_SIDE.has(action), what });
+    const u = await requireActive(req, { devOk: SUSPENDED_OK.has(action) || action === "rate" || action === "edit", devSide: !TESTER_SIDE.has(action), what, payOk: PAY_OK_ACTIONS.has(action) /* (§368) Pay more during a suspension */ });
     const body = await readJson(req, 900_000); // (batch 15 sections 3 and 17) an Edit with 20 questions and the steps at 20,000 characters each
     if (NEEDS_CONFIRMED.has(action)) requireConfirmed(u);
     await adminRefusal(req, u.id, id, action, what, verb);
@@ -84,6 +84,7 @@ async function adminRefusal(req: Request, userId: string, testId: string, action
   // (Owner, Nov 4, §172; replaces batch 15 sections 1, 23 and 37) A test the team paused follows a developer suspension's rules: Stop, End early, Cancel call and the
   // side of a dispute go on; Rate goes on to its own refusal (as a suspended developer's does: batch 17 section 2); every other press, chat included, goes to the
   // banner. A stopped or closed test isn't paused any more.
+  // (Owner, Nov 9, §368) Pay more goes on too (TEAM_PAUSED_OK_ACTIONS), as every payment press does during a team pause.
   if (teamPausedNow(t) && !TEAM_PAUSED_OK_ACTIONS.has(action) && action !== "rate" && action !== "edit") throw new HttpError(409, "admin_paused", RF.pressRefused(RF.TEAM_PAUSED_CAUSE, verb), { failed: await failedLine(req, what), testId }); // (§364 item 6)
 }
 

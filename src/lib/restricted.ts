@@ -1,4 +1,3 @@
-import { TEAM_PAUSED_CAUSE, pressOfWhat, pressRefused } from "./refusal";
 // (Owner, Oct 27) A payment hold, a chargeback hold and an admin suspension are ONE state for a developer's pages: every page of theirs that
 // changes anything is closed, every press is refused (and routes them to the top of the dashboard), and a blue box there says why and how to resume.
 // (Owner, Oct 30, batch 15 section 16) Suspensions are per side: a developer-side suspension restricts only the developer side (like a hold), a tester-side one only
@@ -53,19 +52,23 @@ export function testerRestricted(u: Restrictable & { isDeveloper?: boolean; isTe
  * test, End early and Cancel call, from the restricted view of a test page (and Cancel call from the dashboard's Calls box); and the developer's side of a dispute.
  */
 export const RESTRICTED_OK_ACTIONS = new Set(["cancel-call", "stop", "end-early", "dispute-side"]);
+/** (Owner, Nov 9, §368) The test route's payment presses that go through during a developer suspension and a team pause (not during a hold): Pay more. */
+export const PAY_OK_ACTIONS = new Set(["pay-extra"]);
 /**
  * (Owner, Nov 4, §172; replaces batch 15 sections 1, 23 and 37 and batch 17 §14 for a team pause) The team's pause of ONE test follows the same exact rules as a
  * developer suspension, for that test only: the same presses still work (Stop, End early, Cancel call and the developer's side of a dispute). Rate reaches its own
- * refusal (RATE_TEAM_PAUSED), as a suspended developer's does; chat, Pay, Pay more and Confirm with your bank wait for the lift.
+ * refusal (RATE_TEAM_PAUSED), as a suspended developer's does; chat waits for the lift.
+ * (Owner, Nov 9, §368) Paying goes on during a team pause and a developer suspension, the same as the tester's Charge: Pay, Pay more, a call's Pay, Confirm with your
+ * bank and Confirm all go through and charge at once (a payment or chargeback hold still makes them wait for Pay what you owe).
  */
-export const TEAM_PAUSED_OK_ACTIONS = RESTRICTED_OK_ACTIONS;
+export const TEAM_PAUSED_OK_ACTIONS = new Set([...RESTRICTED_OK_ACTIONS, ...PAY_OK_ACTIONS]);
+/** (§368) Is paying open for this developer while their test is paused or their account suspended? Only a hold (payment or chargeback) stops it. */
+export const payGoesOn = (u: Restrictable) => !u.holdStartedAt;
 
 /** (§172) Is this test paused by the team right now? A stopped or closed test isn't paused any more (the team can't lift it then: its pause is over). */
 export const teamPausedNow = (t: { adminPausedAt?: Date | string | null; status?: string | null }) => !!t.adminPausedAt && t.status !== "stopped";
 /** (§172) What a refused press on a test the team paused says (never "suspended" or "hold"). */
-export const TEAM_PAUSED_LINE = "The team paused this test: you can stop it, end testers' work early, cancel calls, or add your side of a dispute.";
-/** (§172) A press that waits for the lift, as under a suspension: "The team paused this test: Pay waits until the pause is lifted." */
-export const teamPausedWaits = (what: string) => pressRefused(TEAM_PAUSED_CAUSE, pressOfWhat(what)); // (Owner, Nov 9, §364 item 6) "The team paused this test, so your Pay didn't go through."
+export const TEAM_PAUSED_LINE = "The team paused this test: you can pay for work, stop it, end testers' work early, cancel calls, or add your side of a dispute."; // (§368) paying goes on
 /** (§172) The developer's Rate on a test the team paused (a suspended developer's reads RATE_INACTIVE). */
 export const RATE_TEAM_PAUSED = "The team paused this test: you can rate once the pause is lifted.";
 

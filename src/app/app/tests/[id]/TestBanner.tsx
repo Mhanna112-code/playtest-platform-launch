@@ -17,11 +17,11 @@ export const BANNER_TITLES: Record<BannerCause, string> = {
 };
 
 /** The bottom line, built from the buttons actually shown, so it never lists something hidden. */
-export function allowedLine(paused: boolean, can: { stop?: boolean; endEarly?: boolean; cancelCalls?: boolean; disputes?: boolean; nextRound?: boolean }) {
+export function allowedLine(paused: boolean, can: { pay?: boolean; stop?: boolean; endEarly?: boolean; cancelCalls?: boolean; disputes?: boolean; nextRound?: boolean }) {
   if (paused) {
     // (Owner, Nov 4, §172; replaces batch 19 section 2's "rate testers") A paused test never offers Rate (a team pause hides it as a suspension does); "add your side
-    // of a dispute" when one waits for it (the restricted view's Disputes box).
-    const parts = [can.stop ? "stop this test" : "", can.endEarly ? "end testers' work early" : "", can.cancelCalls ? "cancel calls" : "", can.disputes ? "add your side of a dispute" : ""].filter(Boolean);
+    // of a dispute" when one waits for it (the restricted view's Disputes box). (Owner, Nov 9, §368) "pay for work" during a team pause or a suspension (not a hold).
+    const parts = [can.pay ? "pay for work" : "", can.stop ? "stop this test" : "", can.endEarly ? "end testers' work early" : "", can.cancelCalls ? "cancel calls" : "", can.disputes ? "add your side of a dispute" : ""].filter(Boolean);
     if (!parts.length) return "";
     return `For now you can ${parts.length === 1 ? parts[0] : `${parts.slice(0, -1).join(", ")}, or ${parts[parts.length - 1]}`}.`;
   }

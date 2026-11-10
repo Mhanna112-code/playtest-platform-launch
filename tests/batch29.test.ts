@@ -63,13 +63,13 @@ describe("batch 29 §37: an automatic call charge the tester can't be paid for y
     expect(src("app/app/sessions/[id]/page.tsx")).toContain('{ status: { in: ["needs_confirmation", "owed", "deferred"] } }');
   });
 
-  it("during a suspension: waiting (deferred), the tester reads delayed too", async () => {
+  // (Owner, Nov 9, §368; was "waiting (deferred)") A suspension no longer holds it back: it is charged at once, as without one.
+  it("during a suspension: charged at once (§368)", async () => {
     const x = await heldCall();
     await db.user.update({ where: { id: x.dev.user.id }, data: { devSuspendedAt: new Date() } });
     expect(await autoCharge()).toBe(1);
-    expect(await db.payment.findFirstOrThrow({ where: { callId: x.call.id } })).toMatchObject({ status: "deferred" });
-    expect(await delayedLines(x.tester.user.id)).toBe(1);
-    expect(await eventsOf(x.testId)).toContain(`${await callOf(x)} is waiting to be charged: $15.00, charged when your account is clear`);
+    expect(["charged", "not_set_up"]).toContain((await db.payment.findFirstOrThrow({ where: { callId: x.call.id } })).status);
+    expect(await eventsOf(x.testId)).toContain(`${await callOf(x)} was charged automatically: $15.00`);
   });
 
   it("the developer's event says the true outcome: declined, or waiting for the bank", async () => {

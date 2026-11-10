@@ -79,13 +79,16 @@ export function pressSideOf(u: { isDeveloper: boolean; isTester: boolean; side?:
  * `devOk`: a developer's press that still works while restricted (Cancel call; batch 15: Stop and End early from the restricted test page).
  * (Owner, Oct 30, batch 15 section 16) A suspension refuses only the presses of its own side: a mixed account with the developer side suspended still tests normally.
  */
-export async function requireActive(req: Request, opts: { devOk?: boolean; devSide?: boolean | "auto"; what?: string; piece?: { kind: string; id: string } } = {}) {
+export async function requireActive(req: Request, opts: { devOk?: boolean; devSide?: boolean | "auto"; what?: string; piece?: { kind: string; id: string }; payOk?: boolean } = {}) {
   const u = await requireUser(req);
   const exempt = opts.devOk && u.isDeveloper;
   if (exempt) return u;
   const side = pressSideOf(u, opts.devSide);
   const asDev = side === "developer";
-  if (asDev ? u.devSuspendedAt : u.testerSuspendedAt) {
+  // (Owner, Nov 9, §368) A payment press (Pay, Pay more, a call's Pay) goes through during a developer suspension, as the tester's Charge does; a payment or
+  // chargeback hold still refuses it (below, or with the suspension's line when both are on).
+  const payGoes = asDev && opts.payOk && u.devSuspendedAt && !u.holdStartedAt;
+  if ((asDev ? u.devSuspendedAt : u.testerSuspendedAt) && !payGoes) {
     // (Owner, Nov 9, §364 item 8) "Your account is suspended, so your Pay didn't go through." / a tester: "Your account is paused, so your Send didn't go through."
     throw new HttpError(403, "suspended", RF.pressRefused(asDev ? RF.ACCOUNT_SUSPENDED_CAUSE : RF.ACCOUNT_PAUSED_CAUSE, await pressVerbOf(req, opts.what)), { failed: await failedLine(req, opts.what, opts.piece), suspended: true });
   }

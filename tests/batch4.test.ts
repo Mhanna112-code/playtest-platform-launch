@@ -74,7 +74,8 @@ describe("A3) a payment hold, a chargeback hold and a suspension are one state",
       const ed = await act(testId, "edit", dev.cookie, { seenAt: seen(), confirmed: true, version: 1, fields: { title: "x" } });
       expect(ed.status, `${how} edit`).toBe(409);
       expect(ed.body.error.code, `${how} edit`).toBe("nda_only");
-      for (const [action, body] of [["next-round", {}], ["invite", { testerIds: [tester.user.id] }], ["pay-extra", { contractId: sessionId, amount: "2.00" }], ["lower-length", { callId: call.id, minutes: 20, reason: "We stopped early." }], ["message", { contractId: sessionId, body: "hi" }]] as const) {
+      // (Owner, Nov 9, §368) Pay more goes through during a suspension (only a hold refuses it).
+      for (const [action, body] of [["next-round", {}], ["invite", { testerIds: [tester.user.id] }], ...(how === "hold" ? [["pay-extra", { contractId: sessionId, amount: "2.00" }] as const] : []), ["lower-length", { callId: call.id, minutes: 20, reason: "We stopped early." }], ["message", { contractId: sessionId, body: "hi" }]] as const) {
         const r = await act(testId, action, dev.cookie, { seenAt: seen(), confirmed: true, ...body });
         expect(r.status, `${how} ${action}`).toBe(403);
         expect(r.body.error.code, `${how} ${action}`).toBe(code);

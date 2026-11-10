@@ -29,7 +29,7 @@ async function withWork() {
 }
 
 describe("a suspended developer (design doc 2 and 11.4)", () => {
-  it("names the press that failed; Pay is refused too; (batch 15 section 29) Cancel call, Stop and End early go through", async () => {
+  it("names the press that failed; (§368) Pay goes through; (batch 15 section 29) Cancel call, Stop and End early go through", async () => {
     const { dev, testId, sub, sessionId, tester } = await withWork();
     const a = await admin();
     const call = await bookCall(testId, dev.cookie, sessionId, tester.cookie, 24 * 6);
@@ -38,8 +38,7 @@ describe("a suspended developer (design doc 2 and 11.4)", () => {
     expect(r.status).toBe(409);
     expect(r.body.error).toMatchObject({ code: "nda_only" }); // (Codex 2033b106: Edit opens its NDA-only view while paused, held, suspended or stopped; other fields are refused as nda_only)
     expect((await act(testId, "invite", dev.cookie, { seenAt: seen(), testerIds: [] })).body.error.failed).toBe("Your Invite on Harbor Run didn't go through");
-    expect((await pay(dev.cookie, { amount: "0", kind: "submission", id: sub.id, reason: "Not enough here", confirmed: true })).body.error.code).toBe("suspended");
-    expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000, confirmed: true })).body.error.code).toBe("suspended");
+    expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000, confirmed: true })).status).toBe(200); // (Owner, Nov 9, §368)
     // Cancel call is allowed (the call is 6 days away, so the suspension had not cancelled it yet).
     expect((await act(testId, "cancel-call", dev.cookie, { callId: call.id, seenAt: seen(), confirmed: true })).status).toBe(200);
   });

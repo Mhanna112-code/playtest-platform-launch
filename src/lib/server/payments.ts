@@ -29,7 +29,6 @@ import { ownOtherTabAction, payPressOf, seenOf, tabOf } from "./live";
 import { closedOut, disputeClosedFor, payMoreClosesAt, pieceCloseOut } from "./closeOut";
 import { TEAM_CLOSED_NO_DISPUTE, TEAM_CLOSED_NO_PAY, paidLine, updateWaiting } from "@/lib/moneyLines";
 import { PAID_GROUP } from "@/lib/bell";
-import { teamPausedWaits } from "@/lib/restricted";
 import { devPartRow } from "@/lib/lineAnchors";
 
 type U = { id: string; email: string; name: string; pronoun: string; isAdmin?: boolean };
@@ -85,18 +84,16 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0] & { hold
   // (Batch 9) A call's Pay: the rate typed ($/h), when one was. (Batch 15 section 40) Rate and Amount fill each other; the one typed last wins and the other is recomputed here.
   let rateCents = body.rate === undefined || body.rate === null || body.rate === "" ? null : toCents(body.rate);
 
-  // (Owner, Oct 27) Pay is unavailable during ANY payment hold, chargeback hold or suspension (the route refuses first; this is the backstop).
+  // (Owner, Oct 27) Pay is unavailable during a payment or chargeback hold (the route refuses first; this is the backstop). (Owner, Nov 9, §368) A suspension or the
+  // team's pause no longer stops it: it charges at once, as the tester's Charge does (a suspension that is also held keeps its own line).
   const devNow = await db.user.findUniqueOrThrow({ where: { id: dev.id }, select: { holdStartedAt: true, devSuspendedAt: true } });
-  if (devNow.devSuspendedAt || devNow.holdStartedAt) throw new HttpError(403, devNow.devSuspendedAt ? "suspended" : "held", devNow.devSuspendedAt ? suspendedLine("Pay") : RF.pressRefused(RF.HELD_CAUSE, "Pay")); // (§364 items 7, 8)
+  if (devNow.holdStartedAt) throw new HttpError(403, devNow.devSuspendedAt ? "suspended" : "held", devNow.devSuspendedAt ? suspendedLine("Pay") : RF.pressRefused(RF.HELD_CAUSE, "Pay")); // (§364 items 7, 8)
 
   const reserved = await reserving(() => db.$transaction(async (tx) => {
     const piece = await loadPiece(tx, kind, id);
     if (!piece || piece.contract.test.developerId !== dev.id) throw new HttpError(404, "not_found", "That work doesn't exist or isn't on your test.");
     const c = piece.contract;
     await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${c.testId} FOR UPDATE`;
-    await refuseSuspendedLocked(tx, dev.id, "Pay");
-    // (Owner, Nov 4, §172) The team paused this test: Pay waits for the lift, as under a suspension (read under the test's lock, which the team's Pause takes too).
-    await (await import("./teamPause")).refuseTeamPausedTest(tx, c.testId, "Pay");
     const name = displayName(c.tester);
     // (Owner, Oct 29, batch 11) A tester who deleted their account: their sent work is still reviewed when their payout account was connected; without one (DEFAULT)
     // nothing can reach them, so it can't be paid (final).
@@ -210,7 +207,7 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0] & { hold
     throw new HttpError(402, "card_failed", declinedHoldLine(name, rev.amountCents, piece.label), { held: true, failed: `Your Pay on ${c.test.title} was declined` });
   }
   // (Batch 11) The bank wants the developer to confirm: the piece stays locked while its pop-up is open (batch 12 section 5), nothing is charged yet.
-  if (result.status === "requires_action") return suspendedAfterCheck(dev.id, payment!.id, "Pay", await (await import("./confirm")).pressAction(payment!.id, result as NeedsAction & Record<string, unknown>));
+  if (result.status === "requires_action") return (await import("./confirm")).pressAction(payment!.id, result as NeedsAction & Record<string, unknown>);
   return finishReviewPay(payment!.id, result);
 }
 
@@ -242,31 +239,6 @@ export async function bankWaitsOf(tx: Prisma.TransactionClient | typeof db, at: 
 
 /** (Owner, Nov 3, §159) "Your account is suspended: Pay waits until it is lifted." (Pay more: "extra pay"; Confirm with your bank, Confirm all: their names). */
 export const suspendedLine = (what: string) => RF.pressRefused(RF.ACCOUNT_SUSPENDED_CAUSE, RF.pressOfWhat(what)); // (Owner, Nov 9, §364 item 8)
-/**
- * (Owner, Nov 3, §159) A press refused while the developer is suspended, read under the developer's row lock (FOR SHARE) inside the press's own locked step: an
- * admin's Suspend at the same moment either lands first (refused here) or waits for this step to commit (the press was first; its open check is cancelled below).
- */
-export async function refuseSuspendedLocked(tx: Prisma.TransactionClient, devId: string, what: string) {
-  const [u] = await tx.$queryRaw<{ devSuspendedAt: Date | null }[]>`SELECT "suspendedAt" AS "devSuspendedAt" FROM "User" WHERE id = ${devId} FOR SHARE`;
-  if (u?.devSuspendedAt) throw new HttpError(403, "suspended", suspendedLine(what));
-}
-/**
- * (Owner, Nov 3, §159 rule 4a) The developer's own Pay / Pay more whose bank check came back while a suspension landed: the suspension's cancel may have run before
- * the check existed, so it is cancelled here (at Stripe first; one already approved is recorded as paid once) and the press is refused like Pay.
- */
-// (Owner, Nov 4, §172) The same when the team paused the press's test meanwhile: its Pause cancels the open checks on that test, as a suspension does.
-async function suspendedAfterCheck<T>(devId: string, paymentId: string, what: string, action: T): Promise<T> {
-  const suspended = !!(await db.user.findUnique({ where: { id: devId }, select: { devSuspendedAt: true } }))?.devSuspendedAt;
-  const row = suspended ? null : await db.payment.findUnique({ where: { id: paymentId }, select: { contractId: true } });
-  const teamPaused = suspended ? null : await (await import("./teamPause")).teamPausedTestOf(db, row?.contractId);
-  if (!suspended && !teamPaused) return action;
-  await (await import("./confirm")).release(paymentId);
-  const p = await db.payment.findUnique({ where: { id: paymentId }, select: { status: true } });
-  if (p && (p.status === "charged" || p.status === "not_set_up")) return action;
-  if (teamPaused) throw new HttpError(409, "admin_paused", teamPausedWaits(what), { testId: teamPaused });
-  throw new HttpError(403, "suspended", suspendedLine(what));
-}
-
 /** (Batch 30 §20) Prisma's "transaction timed out / already closed" (P2028). */
 export const isTxTimeout = (e: unknown) => e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2028";
 /**
@@ -730,11 +702,10 @@ export async function payExtra(dev: U & Parameters<typeof cardRefusal>[0], testI
     const at = await payMoreClosesAt(testId);
     if (closedOut(at)) throw new HttpError(409, "pay_more_closed", payClosedLine(fmtDate(at!), true));
   }
-  // (Owner, Oct 27) Unavailable during ANY payment hold, chargeback hold or suspension (the route refuses first; this is the backstop).
-  const devNow = await db.user.findUniqueOrThrow({ where: { id: dev.id }, select: { devSuspendedAt: true } });
-  if (devNow.devSuspendedAt) throw new HttpError(403, "suspended", suspendedLine("extra pay")); // (§364 item 8)
-  // (Owner, Nov 4, §172) The team paused this test: the same backstop, for this test (the route refuses first).
-  await (await import("./teamPause")).refuseTeamPausedTest(db, testId, "extra pay");
+  // (Owner, Oct 27) Unavailable during a payment or chargeback hold (the route refuses first; this is the backstop). (Owner, Nov 9, §368) A suspension or the team's
+  // pause no longer stops it: it charges at once (a suspension that is also held keeps its own line).
+  const devNow = await db.user.findUniqueOrThrow({ where: { id: dev.id }, select: { devSuspendedAt: true, holdStartedAt: true } });
+  if (devNow.devSuspendedAt && devNow.holdStartedAt) throw new HttpError(403, "suspended", suspendedLine("extra pay")); // (§364 item 8)
   await (await import("./holds")).devHoldRefusal(dev.id, "pay", "Pay more");
   if ((await blockedEitherWay(dev.id, c.testerId)) || !testerPayable(c.tester)) throw new HttpError(409, "unavailable", "This payment isn't available.");
   const amount = toCents(body.amount);
@@ -753,8 +724,6 @@ export async function payExtra(dev: U & Parameters<typeof cardRefusal>[0], testI
   // (kind, pressKey) are unique, so two presses at once can never both pass the cap or charge twice.
   const reserved = await reserving(() => db.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${testId} FOR UPDATE`;
-    await refuseSuspendedLocked(tx, dev.id, "extra pay");
-    await (await import("./teamPause")).refuseTeamPausedTest(tx, testId, "extra pay"); // (§172) under the test's lock, as the team's Pause takes it
     // (Owner, Nov 3, §159) A payment on this part waiting for the bank: refused (never a stop-once: it can't go ahead), read in the locked step, so a Pay more pressed
     // the moment a Charge starts waiting can't slip through.
     const waits = await bankWaitsLine(tx, at, name);
@@ -805,7 +774,7 @@ export async function payExtra(dev: U & Parameters<typeof cardRefusal>[0], testI
     await (await import("./holds")).declinedPayment(dev.id, row.id, amount!, `extra pay for ${pieceName({ tester: name, part: piece.label, test: c.test.title, when: await callWhen(row), full: true })}`); // (§178)
     throw new HttpError(402, "card_failed", `Your card was declined, so ${name} wasn't paid ${money(amount)} extra yet. Your tests are paused until you pay what you owe: open Payments.`, { held: true, failed: `Your extra pay on ${c.test.title} was declined` });
   }
-  if (result.status === "requires_action") return suspendedAfterCheck(dev.id, row.id, "extra pay", await (await import("./confirm")).pressAction(row.id, result as NeedsAction & Record<string, unknown>));
+  if (result.status === "requires_action") return (await import("./confirm")).pressAction(row.id, result as NeedsAction & Record<string, unknown>);
   return finishExtraPay(row.id, result);
 }
 

@@ -19,9 +19,9 @@ rows (contracts, parts, requests, calls, payments, invites, applications, excerp
 | {name}'s session has ended | developer | End early, Request a time | same |
 | This test is paused right now | tester | Send, Request a time, Accept | "paused (the developer's hold)" |
 | Your tests are paused | developer | Next round, Invite, Pay, Subscribe for $7/month | same |
-| The team paused this test | developer | Invite, Next round, Send (chat), Pay more | "team paused" |
+| The team paused this test | developer | Invite, Next round, Send (chat) (§368: Pay and Pay more go through) | "team paused" |
 | Your account is paused | tester | Send Answers, Rate | "account paused / suspended" |
-| Your account is suspended | developer | Next round, Invite, Pay | same |
+| Your account is suspended | developer | Next round, Invite (§368: Pay goes through) | same |
 | This test closed to new testers on {date} / isn't taking new testers right now | tester | Join | "join and invites closed" |
 | This call was already cancelled. | both | Cancel call | "call already cancelled" |
 | This account no longer exists. | developer | Confirm with your bank | "own deleted account" |

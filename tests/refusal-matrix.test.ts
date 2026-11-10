@@ -159,7 +159,7 @@ describe("§365 refusal matrix: every cause × every button that reaches it", ()
       dev("invite", { testerIds: [] }, "Invite"),
       dev("next-round", {}, "Next round"),
       dev("message", { contractId: w.ana.sessionId, body: "Hi" }, "Send"),
-      dev("pay-extra", { contractId: w.ana.sessionId, submissionId: w.sub.id, amount: "1.00", tickedCents: 100 }, "Pay more"),
+      // (Owner, Nov 9, §368) Pay and Pay more go through during a team pause: tests/pay-during-pauses-368.test.ts.
     ])).toEqual([]);
   });
 
@@ -173,7 +173,7 @@ describe("§365 refusal matrix: every cause × every button that reaches it", ()
       { side: "tester", button: "Rate", go: () => sact(w.ana.sessionId, "rate", w.ana.tester.cookie, { stars: 5, seenAt: seen() }) },
       dev("next-round", {}, "Next round"),
       dev("invite", { testerIds: [] }, "Invite"),
-      { side: "developer", button: "Pay", go: () => reviewPOST(req("/api/review", { cookie: w.dev.cookie, body: { kind: "submission", id: w.sub.id, amount: "10.00", tickedCents: 1000, payKey: randomUUID(), seenAt: seen(), confirmed: true } })).then(json) },
+      // (Owner, Nov 9, §368) A suspended developer's Pay goes through: tests/pay-during-pauses-368.test.ts.
     ])).toEqual([]);
   });
 
