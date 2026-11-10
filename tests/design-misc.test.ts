@@ -46,17 +46,11 @@ describe("Pay ($0 included) while the account is not clear (owner, Oct 26; batch
     expect(await db.notification.count({ where: { userId: tester.user.id, text: { contains: "paid you" } } })).toBe(0);
   });
 
-  it("a suspended developer can't Pay, $0 included (each names itself, nothing is recorded); once lifted they can", async () => {
+  // (Owner, Nov 9, §368; was "can't Pay, $0 included") A suspension alone no longer stops Pay: it goes through, as the tester's Charge does.
+  it("a suspended developer can Pay; the tester is paid as usual", async () => {
     const { dev, sub, tester } = await withWork();
     const a = await admin();
     await adm("suspend", a.cookie, { id: dev.user.id, note: "Spam" });
-    expect((await pay(dev.cookie, { amount: "0", kind: "submission", id: sub.id, reason: "Not good enough" })).body.error.failed).toMatch(/^Your Pay on Harbor Run didn't go through$/);
-    const r = await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 });
-    expect(r.status).toBe(403);
-    expect(r.body.error).toMatchObject({ code: "suspended", failed: "Your Pay on Harbor Run didn't go through" });
-    expect(await db.payment.count({ where: { submissionId: sub.id } })).toBe(0);
-    expect(await db.review.count({ where: { submissionId: sub.id } })).toBe(0);
-    await adm("unsuspend", a.cookie, { id: dev.user.id });
     expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 })).status).toBe(200);
     expect((await db.payment.findFirstOrThrow({ where: { submissionId: sub.id } })).status).toBe("not_set_up");
     expect(await db.notification.count({ where: { userId: tester.user.id, text: { contains: "paid you $10.00 for your written answers" } } })).toBe(1);
