@@ -7,6 +7,8 @@ import { QUESTIONS_CHANGED_MEANWHILE, sendWritten } from "@/lib/server/tests";
 import { SENT_ANSWERS_LOCKED } from "@/lib/rules";
 import { act, addTo, joined, sact, seen, settle, setup } from "./fixtures";
 import { payMore } from "./b15";
+import { POST as releasePOST } from "@/app/api/test/race-release/route";
+import { req } from "./helpers";
 
 // (Owner, Nov 10, §369) "The result must never depend on timing." A press that checks before the test's lock and writes under it re-reads what it decided by under
 // the lock (questions first); any change rolls back and reruns the press from the top, so it ends exactly as a later press would: ONE normal stop-once box, never
@@ -221,5 +223,38 @@ describe("§369 a final refusal before the lock stays one", () => {
     }
     expect(reached).toBe(0);
     expect(await written(w)).toBeNull();
+  });
+});
+
+describe("§369 the test-only race hold (RACE_HOLDS=1)", () => {
+  const release = (body: Record<string, unknown>) => releasePOST(req("/api/test/race-release", { body }));
+  afterEach(() => { delete process.env.RACE_HOLDS; });
+
+  it("B waits before its lock; A saves; the developer changes Q3; B released: ONE box with the question lines and A's Send", async () => {
+    process.env.RACE_HOLDS = "1";
+    const w = await world();
+    const pending = sendB(w, { raceHold: "B" });
+    // 1. B's first look runs and it waits before the lock.
+    for (let i = 0; i < 200 && !(await (await release({ name: "B", peek: true })).json()).waiting; i++) await settle();
+    expect((await (await release({ name: "B", peek: true })).json()).waiting).toBe(true);
+    // 2. A presses and saves. 3. The developer saves the question change.
+    expect((await sendA(w)).status).toBe(200);
+    await editQuestions(w.testId, w.dev.cookie, [Q[0], Q[1], Q3b, Q[3]]);
+    await settle();
+    // 4. Release B.
+    expect((await (await release({ name: "B" })).json()).released).toBe(true);
+    const b = await pending;
+    oneBox(b);
+    expect(b.body.error?.questions).toBe(true);
+    expect(texts(b)).toEqual(expect.arrayContaining([OWN_SENT, `Nora Lane added the question “${Q3b}”`, `Nora Lane removed the question “${Q[2]}”`]));
+    expect(carriedAnswers((await written(w))!, Q)).toEqual([A1, A1, null, null]);
+    expect(await db.submission.count({ where: { contractId: w.sessionId } })).toBe(1);
+  });
+
+  it("RACE_HOLDS unset: raceHold is ignored completely and the release route doesn't exist", async () => {
+    const w = await world();
+    const r = await sendB(w, { raceHold: "B" });
+    expect(r.status, JSON.stringify(r.body)).toBe(200);
+    expect((await release({ name: "B" })).status).toBe(404);
   });
 });

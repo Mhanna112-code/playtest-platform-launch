@@ -1311,6 +1311,7 @@ async function sendWrittenOnce(tester: U, contractId: string, body: Record<strin
   await testerSendGate(contractId, body, sent?.id, { stale: [] });
   const name = displayName(tester), poss = pronouns(tester.pronoun).poss;
   await beforeLock("written");
+  await (await import("./raceHold")).raceHold(body); // (§369) test-only pause point (RACE_HOLDS=1), no lock held
   const { sub, updated, afterPaid } = await db.$transaction(async (tx) => {
     const t = await lockTest(tx, c0.testId);
     const c = await tx.contract.findUniqueOrThrow({ where: { id: contractId } });
@@ -1522,6 +1523,7 @@ async function addWrittenOnce(tester: U, contractId: string, body: Record<string
   await testerSendGate(contractId, body, before?.id, { stale: [] });
   const name = displayName(tester), poss = pronouns(tester.pronoun).poss;
   await beforeLock("written-add");
+  await (await import("./raceHold")).raceHold(body); // (§369) test-only pause point (RACE_HOLDS=1), no lock held
   const { sub, afterPaid, question } = await db.$transaction(async (tx) => {
     const t = await lockTest(tx, c0.testId);
     const c = await tx.contract.findUniqueOrThrow({ where: { id: contractId } });
