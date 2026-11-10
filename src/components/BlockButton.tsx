@@ -4,17 +4,14 @@ import { useState } from "react";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { Err } from "@/components/Err";
 import { api, errOf } from "@/lib/client";
-import { ChangesBox } from "@/components/ChangesBox";
-import { useStopOnce } from "@/lib/useStopOnce";
 
 /**
  * Block someone, on their profile only (owner, Oct 27): the confirm dialog, then the press. The only stop is a race check: if you already blocked them in
- * another tab, the press fails with a blue notice under this button. They are never told.
+ * another tab, the press fails with a blue notice under this button. They are never told. (Owner, Nov 11, §378; replaces §271 here) It never stops once (a pause
+ * since the profile loaded doesn't stop it).
  */
-export function BlockButton({ userId, name, effect, plain, seenAt }: { userId: string; name: string; effect: string; plain?: boolean; /** (§271) the profile's load time */ seenAt?: string }) {
+export function BlockButton({ userId, name, effect, plain }: { userId: string; name: string; effect: string; plain?: boolean }) {
   const [err, setErr] = useState("");
-  // (Owner, Nov 5, §271) A pause of a test of theirs she works on since the profile loaded (or the team's lift of it) stops Block once.
-  const stop = useStopOnce(seenAt);
   const [busy, setBusy] = useState(false);
   // (Batch 35 §40, §41) Blocked: the page redraws in place; the button stays greyed until it has.
   const fin = useFinished(() => setBusy(false));
@@ -26,19 +23,15 @@ export function BlockButton({ userId, name, effect, plain, seenAt }: { userId: s
           setBusy(true);
           setErr("");
           try {
-            await api("/api/blocks", { userId, ...stop.marks() });
-            stop.clear();
+            await api("/api/blocks", { userId });
             fin.finish();
           } catch (e) {
-            if (stop.stopped(e)) return setBusy(false);
-            stop.clear();
             setErr(errOf(e));
             setBusy(false);
           }
         }}>
         <span className="[overflow-wrap:anywhere]">Block {name}</span>
       </ConfirmButton>
-      <ChangesBox changes={stop.box} press="Block" side="tester" />
       <Err text={err} press="Block" />
     </div>
   );

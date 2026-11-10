@@ -48,7 +48,7 @@ export async function blockPartners(userId: string) {
   return rows.map((r) => (r.blockerId === userId ? r.blockedId : r.blockerId));
 }
 
-export async function blockUser(me: { id: string; email: string; name: string }, otherId: string, body: Record<string, unknown> = {}) {
+export async function blockUser(me: { id: string; email: string; name: string }, otherId: string) {
   if (!otherId || otherId === me.id) throw new HttpError(400, "bad_user", "Choose someone to block.");
   const other = await db.user.findUnique({ where: { id: otherId } });
   if (!other) throw new HttpError(404, "not_found", "That person doesn't exist.");
@@ -56,9 +56,8 @@ export async function blockUser(me: { id: string; email: string; name: string },
   if (other.deletedAt) throw new HttpError(409, "deleted", ACCOUNT_WAS_DELETED);
   // (Owner, Oct 27) The only stop: already blocked (in another tab).
   if (await iBlocked(me.id, otherId)) throw new HttpError(409, "already", `You already blocked ${displayName(other)}.`);
-  // (Owner, Nov 5, §271) A tester blocking a developer whose test she works on: a pause of that test since the profile loaded (or the team's lift) stops it once.
-  const m = await import("./stopMoment");
-  m.pauseStopOnce(await m.testerPauseMomentsWith(me.id, otherId, body), body);
+  // (Owner, Nov 11, §378; replaces §271 here) Block never stops once: a pause of their test (or the team's lift) since the profile loaded no longer stops it. Only
+  // the race refusal above stays (already blocked in another tab). Report keeps its §271 stop.
   // (Owner, Nov 3, batch 35 §157) The block row is the claim (its unique key): of two Blocks at the same moment (two tabs) one goes on to end sessions and send the
   // lines; the other reads "You already blocked <name>." and does nothing.
   await db.block.create({ data: { blockerId: me.id, blockedId: otherId } }).catch((e) => {
