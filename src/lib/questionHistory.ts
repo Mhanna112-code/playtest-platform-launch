@@ -6,7 +6,9 @@ import { qOptional, qStored, qText, questionSetChanges, sameQuestionSet } from "
  * (Owner, Nov 5, batch 35 §263, final; replaces §234's Past questions box and §254's earlier-set answers in it) Old questions live only in Terms history. Each
  * change of a tester's questions is one entry, "Questions changed <date/time>", Then → Now:
  * - Then: the questions as they were, each with what this tester had for it at that moment: their sent answer and its additions (the part's additions up to the
- *   change); otherwise their unsent draft ("Draft (not sent)", the tester's side only); otherwise "(no answer)".
+ *   change), and their unsent draft ("Draft (not sent)", the tester's side only); otherwise "(no answer)". (Owner, Nov 10, §371; recordings race-369 1 and 2)
+ *   A question with a sent answer AND other unsent text typed for it (another tab sent while this one typed) shows both: the sent answer as sent, the draft under
+ *   it. Nothing the tester typed is hidden. (A draft that's only the sent text again is no draft.)
  * - Now: the questions it changed to.
  * The entries come from the contract's earlier sets (`Contract.prevSets`, written at the change: the questions then, the draft-or-sent answers, and the "sent" and
  * "draft" versions; since §263 also `to`, the questions it changed to). An older set without `to` reads its Now from the next set (or the questions now).
@@ -32,7 +34,9 @@ export function questionChanges(prevSets: unknown, current: string[], sub: { ans
       const fromThread = t && (t.answer.trim() || t.adds.length) && (!sentText.trim() || (t.latest ?? t.answer) === sentText);
       const sent = fromThread ? { answer: t!.answer, adds: t!.adds } : sentText.trim() ? { answer: sentText, adds: [] } : null;
       const draftText = byWords(draftV, it.question);
-      return { question: qText(it.question), required: it.required, sent, draft: !sent && opts.drafts && draftText.trim() ? draftText : null };
+      // (§371) Beside a sent answer too, unless it is that sent text again (a per-field draft counts the boxes it never typed in as what was sent).
+      const sentAgain = !!sent && [sentText, sent.answer, t?.latest ?? ""].some((x) => x.trim() && x.trim() === draftText.trim());
+      return { question: qText(it.question), required: it.required, sent, draft: opts.drafts && draftText.trim() && !sentAgain ? draftText : null };
     });
     const next = p.to ?? (sets[i + 1] ? sets[i + 1].items.map((x) => (x.required ? `[required] ${x.question}` : x.question)) : current);
     return { at: p.until, then, now: inThenOrder(qs, asNow(next)) };
