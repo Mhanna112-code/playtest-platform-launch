@@ -5,7 +5,7 @@ import { carriedAnswers, questionKeys } from "@/lib/additions";
 import { itemsFor } from "@/lib/answerSets";
 import { QUESTIONS_CHANGED_MEANWHILE, sendWritten } from "@/lib/server/tests";
 import { SENT_ANSWERS_LOCKED } from "@/lib/rules";
-import { act, addTo, joined, sact, seen, settle, setup } from "./fixtures";
+import { act, addTo, atHours, joined, sact, seen, settle, setup } from "./fixtures";
 import { payMore } from "./b15";
 import { POST as releasePOST } from "@/app/api/test/race-release/route";
 import { req } from "./helpers";
@@ -257,4 +257,55 @@ describe("§369 the test-only race hold (RACE_HOLDS=1)", () => {
     expect(r.status, JSON.stringify(r.body)).toBe(200);
     expect((await release({ name: "B" })).status).toBe(404);
   });
+});
+
+describe("§369 the race with the developer's ordinary changes too (RACE_HOLDS=1)", () => {
+  const release = (body: Record<string, unknown>) => releasePOST(req("/api/test/race-release", { body }));
+  afterEach(() => { delete process.env.RACE_HOLDS; });
+
+  for (const alertsOff of [false, true]) {
+    it(`Alerts ${alertsOff ? "Off: only the always-stop lines" : "On: ONE box with all four, oldest first"}; nothing saved; the second press goes ahead`, async () => {
+      process.env.RACE_HOLDS = "1";
+      const s = await setup({ questions: Q, recordingCents: "10.00" });
+      const j = await joined(s.testId);
+      // Her recording, sent before the page loaded (the developer pays it during the race).
+      const up = await sact(j.sessionId, "recording-start", j.tester.cookie, { filename: "run.mp4", size: 1000, contentType: "video/mp4" });
+      expect((await sact(j.sessionId, "recording-done", j.tester.cookie, { recordingId: up.body.recordingId })).status).toBe(200);
+      expect((await sact(j.sessionId, "recording-send", j.tester.cookie, { seenAt: seen(), confirmed: true })).status).toBe(200);
+      const rec = await db.submission.findFirstOrThrow({ where: { contractId: j.sessionId, kind: "recording" } });
+      await db.user.update({ where: { id: j.tester.user.id }, data: { testerAlertsOff: alertsOff } });
+      await settle();
+      const w = { ...s, ...j, loaded: seen() };
+      await settle();
+      const pending = sendB(w, { raceHold: "B" });
+      for (let i = 0; i < 200 && !(await (await release({ name: "B", peek: true })).json()).waiting; i++) await settle();
+      // While B waits before its lock, in order: A sends; the developer changes Q3; requests a call with her; pays her recording.
+      expect((await sendA(w)).status).toBe(200);
+      await settle();
+      await editQuestions(w.testId, w.dev.cookie, [Q[0], Q[1], Q3b, Q[3]]);
+      await settle();
+      expect((await act(w.testId, "request-time", w.dev.cookie, { minutes: "30", contractIds: [w.sessionId], rows: [{ startsAt: atHours(72), repeat: "once", count: 1 }], seenAt: seen(), confirmed: true })).status).toBe(200);
+      await settle();
+      const { pay } = await import("./b15");
+      expect((await pay(w.dev.cookie, { kind: "submission", id: rec.id, amount: "10.00", tickedCents: 1000 })).status).toBe(200);
+      await settle();
+      const before = await written(w);
+      expect((await (await release({ name: "B" })).json()).released).toBe(true);
+      const b = await pending;
+      oneBox(b);
+      expect(b.body.error?.questions).toBe(true);
+      const QUESTION_LINES = [`Nora Lane removed the question “${Q[2]}”`, `Nora Lane added the question “${Q3b}”`];
+      // Oldest first: A's Send (another tab), the question change (with Alerts on, also its ordinary listing line), the call request, the payment.
+      if (alertsOff) expect(texts(b)).toEqual([OWN_SENT, ...QUESTION_LINES]);
+      else expect(texts(b)).toEqual([OWN_SENT, ...QUESTION_LINES, "Nora Lane edited the listing", expect.stringMatching(/^Nora Lane requested a call for .+$/), "Nora Lane paid $10.00 for your recording"]);
+      // Nothing of B's was saved: A's answers only, untouched.
+      expect((await written(w))!.updatedAt).toEqual(before!.updatedAt);
+      expect(carriedAnswers((await written(w))!, Q)).toEqual([A1, A1, null, null]);
+      // The page took the new questions: the second press (its form: the unanswered ones) goes ahead.
+      await settle();
+      const second = await sact(w.sessionId, "written", w.tester.cookie, { answers: ["B's answer to the changed question, after the box.", B_TYPED[3]], for: [Q3b, Q[3]], notes: "", seenAt: w.loaded, tab: "B", confirmed: true, boxAt: b.body.error!.now });
+      expect(second.status, JSON.stringify(second.body)).toBe(200);
+      expect(carriedAnswers((await written(w))!, [Q[0], Q[1], Q3b, Q[3]])).toEqual([A1, A1, "B's answer to the changed question, after the box.", B_TYPED[3]]);
+    });
+  }
 });
