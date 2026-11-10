@@ -356,7 +356,9 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
     }
     return (!sub || sub.late) && cents != null && cents > 0 && now > c.dueAt ? [lateBeforeSendLine(fmtDate(c.dueAt), dev)] : [];
   };
-  const pausedBanner = rulesPaused ? pausedForTesters({
+  // (Owner, Nov 11, §376) A tester whose part is over (ended early, left, rated, blocked, stopped, the test closed: `refusal`) reads ONLY the ended notice below,
+  // never this paused one too, whether the pause started before or after the end. The paused notice stays for a tester whose part is still working.
+  const pausedBanner = rulesPaused && !refusal ? pausedForTesters({
     drafts: draftsShown && !refusal && !meOff && unpaidPart,
     charge: choiceOpen(written) || choiceOpen(recording),
     dispute: [written, recording].some((x) => x && !chargedOwed.has(x.id) && !delayedSubs.has(x.id) && disputable(x.review, x.dispute, x.id)) || c.calls.some((x) => !owedCalls.has(x.id) && disputable(x.review, x.dispute, x.id)),
@@ -369,12 +371,14 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
     deadline: c.status === "working", // (batch 11) a working tester's deadline moves with the pause
   }) : "";
   // (Batch 16 section 24) What still works once the work is over, built from what is actually on the page (as the paused banner does).
+  // (Owner, Nov 11, §376) ONLY what truly works right now: Charge / Let it go only while its box is open (choiceOpen, not a Charge that opens later); chat and
+  // excerpts during a pause too (§376 item 2), never with a deleted developer's read-only chat.
   const stillWorks = {
-    charge: !meOff && !devGone && ([written, recording].some((x) => !!x && !x.review && !x.late && !chargeShut(x.id) && (x.agreedCents ?? 0) > 0 && chargeAmount(x.agreedCents, partPaid.get(x.id) ?? 0) > 0)),
+    charge: !devGone && (choiceOpen(written) || choiceOpen(recording)),
     dispute: [written, recording].some((x) => x && !chargedOwed.has(x.id) && !delayedSubs.has(x.id) && disputable(x.review, x.dispute, x.id)) || c.calls.some((x) => !owedCalls.has(x.id) && disputable(x.review, x.dispute, x.id)),
     rate: rateBlock === "" && !meOff,
     excerpt: excerptPicks.length > 0,
-    chat: !meOff && !blockedPair,
+    chat: !meOff && !blockedPair && !devGone,
   };
   // The full app's session page: one centred column; the header card (title, by, badges, Chat, Open the product), then a
   // card per part.

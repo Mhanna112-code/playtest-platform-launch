@@ -144,7 +144,7 @@ describe("batch 10 item 2: a paused test hides what doesn't work, with a banner 
 
   it("the session page: the banner at the top; Send, the call-request tools, Join call and chat's message box hidden while paused", () => {
     const page = src("app/app/sessions/[id]/page.tsx");
-    expect(page).toContain("const pausedBanner = rulesPaused ? pausedForTesters({");
+    expect(page).toContain("const pausedBanner = rulesPaused && !refusal ? pausedForTesters({"); // (Owner, Nov 11, §376) never with the ended notice
     // The banner sits right under the title, above the key box and the live box.
     expect(page.indexOf('{pausedBanner && <p className="info" data-paused="">{pausedBanner}</p>}')).toBeLessThan(page.indexOf("{key && <KeyBox"));
     expect(page).toMatch(/<WrittenForm [^>]*canSend=\{!rulesPaused\}/);
