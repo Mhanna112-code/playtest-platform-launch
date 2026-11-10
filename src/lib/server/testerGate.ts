@@ -173,7 +173,11 @@ export const TESTER_CALL_KINDS = new Set(["requested", "booked", "cancelled"]);
 /** The one tester gate: the first press stops (the box shows under that button); the second goes ahead. */
 export async function testerGate(testerId: string, contractId: string, testId: string, body: Record<string, unknown>, tail = "Press again to go ahead.", opts: { skipTerms?: boolean; keep?: (e: TestEventLike) => boolean; piece?: string; /** (Batch 35 §79) what the press answers */ answers?: Answers;
   /** (§159 rule 4) Charge / Let it go on this piece (submission or call id): a developer payment on it, or the team's decision on any of the tester's disputes. */ owedPiece?: string;
-  /** (Owner, Nov 4, §183) Send / Add to this answer / a recording's add on this sent part (its submission id): developer payments follow Alerts, including the $0 answer to an update. */ sendPiece?: string;
+  /**
+   * (Owner, Nov 4, §183; restored Nov 9, §362) Send Answers / Add to this answer (written answers) and a recording's Send / Add on a part already sent (its
+   * submission id): a developer payment on THAT part since the page showed it (Pay, Pay more, the developer's $0 answer to an update, the team's dispute-decision
+   * charge on it, a delayed payment going through) stops the press once whatever the tester's Alerts, marked forced. Payments on their other parts follow Alerts.
+   */ sendPiece?: string;
   /** (Owner, Nov 5, §268; replaces §232's open-terms stop) Rate and Leave: new terms (and an NDA change) follow the ordinary rule: they stop once only with Alerts
    * on, and only when the change came before what the live pill showed (seen counts, §90). */ ordinaryTerms?: boolean;
   /** (Owner, Nov 5, §269) Send Answers / Add to this answer: a questions change the page hasn't shown (the ordinary rule) is listed question by question. */ questionLines?: boolean;
@@ -216,10 +220,16 @@ export async function testerGate(testerId: string, contractId: string, testId: s
   const changes = all.filter((e) => (e.kind === "terms" ? !opts.skipTerms && e.createdAt > termsFrom : true));
   const terms = changes.filter((e) => e.kind === "terms");
   const r = stopOnce(changes.filter((e) => e.kind !== "terms"), callsFrom, false, [...KINDS, "renamed", "keygiven"]);
-  // Developer payment updates, including the same part, follow the tester's Alerts.
-  // Contract changes, own-tab actions and dispute changes retain their forced checks.
+  // Contract changes, own-tab actions and dispute changes stop whatever the Alerts (forced).
+  // (Owner, Nov 4, §183 and Oct 31, batch 35 §68; removed by Codex 343018a9; restored by the owner Nov 9, §362) The part a press is about: Send / Add / a recording's
+  // add on a part already sent (`sendPiece`) and Dispute (`piece`): a developer payment on THAT part since the page showed it (Pay, Pay more, the $0 answer to an
+  // update, the team's dispute-decision charge on it, a delayed payment going through) changes whether they still want to add or dispute anything, so it stops
+  // the press once even with Alerts Off, marked forced. Payments on their other parts follow their Alerts. (Charge / Let it go keep following Alerts: §362 leaves
+  // owedPiece's rule removed; a part already paid is refused there.)
+  const part = opts.sendPiece ?? opts.piece;
+  const onPart = (e: TestEventLike) => !!part && e.piece === part;
   const off = (await db.user.findUnique({ where: { id: testerId }, select: { testerAlertsOff: true } }))?.testerAlertsOff;
-  const rest = r.go ? [] : off ? r.changes.filter((e) => ALERTS_OFF_KINDS.has(e.kind) || disputeChange(e)) : r.changes;
+  const rest = r.go ? [] : off ? r.changes.filter((e) => ALERTS_OFF_KINDS.has(e.kind) || disputeChange(e) || onPart(e)) : r.changes;
   // (§268) Rate and Leave with Alerts Off: an offer never stops them (it's an ordinary line for them).
   const termsShown = off && opts.ordinaryTerms ? [] : terms;
   // (Batch 35 §79) Never the line about the very thing this press answers (Accept on the developer's call request that just arrived).
@@ -227,9 +237,9 @@ export async function testerGate(testerId: string, contractId: string, testId: s
   const list = [...withRenamed(notListed((await unanswered(testerId, testId, [...termsShown, ...rest])).filter((e) => !answersIt(e, opts.answers)), body), body), ...stale].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
   // (Batch 17 section 13) `alertsOff`: the box drops "Turn off alerts" and "You can turn these stops off below" when Alerts is already Off.
   // (Owner, Nov 3, §160) Each line says whether the tester's Alerts could have switched it off (`forced`): new terms, their own other-tab
-  // actions, a stop or pause, and dispute changes always stop.
+  // actions, a stop or pause, dispute changes, and (§362) a developer payment on the part a Send / Add / Dispute is about always stop.
   // (§171 A2) And the team's decision on her dispute, or the developer's side added to it, on every press.
-  const forced = (e: TestEventLike) => (ALERTS_OFF_KINDS.has(e.kind) && !(opts.ordinaryTerms && e.kind === "terms")) || e.kind === "stop" || disputeChange(e);
+  const forced = (e: TestEventLike) => (ALERTS_OFF_KINDS.has(e.kind) && !(opts.ordinaryTerms && e.kind === "terms")) || e.kind === "stop" || disputeChange(e) || onPart(e);
   // (§269) `questions`: the box lists a questions change, so the page redraws and its form takes the new questions in place (typed text kept by words).
   if (list.length) throw new HttpError(409, "stop_once", tail, { changes: asLines(list.map((e) => (forced(e) ? { ...e, forced: true } : e))), tail, top: termsShown.some((t) => list.includes(t)) /* (§250) a listed offer line no longer sends the page up */, alertsOff: !!off, ...(stale.length || list.some(isQuestionLine) ? { questions: true } : {}) });
 }

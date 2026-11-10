@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { TEAM_CLOSED_NO_CHANGE } from "@/lib/moneyLines";
@@ -7,7 +9,7 @@ import { addTo, joined, sact, seen, settle, setup } from "./fixtures";
 import { makeUser } from "./helpers";
 import { testerGate } from "@/lib/server/testerGate";
 
-// Developer payments on the same part follow tester Alerts; final refusals still apply.
+// (§362) Developer payments on the part a Send / Add / Dispute is about stop it once whatever the Alerts (forced); final refusals still apply.
 
 const ANS = "The harbour level was clear and the boats handled well on the first try.";
 type Res = { status: number; body: { error?: { code?: string; message?: string; changes?: { text: string; forced?: boolean }[] } } & Record<string, unknown> };
@@ -36,20 +38,26 @@ async function world(alertsOff = true) {
 type W = Awaited<ReturnType<typeof world>>;
 const more = (w: W, submissionId: string, amount = "2.00") => payMore(w.testId, w.dev.cookie, { contractId: w.sessionId, submissionId, amount, tickedCents: Math.round(Number(amount) * 100) });
 
-describe("tester payment stops follow Alerts", () => {
-  it.each([true, false])("Dispute and Charge gate payment notices follow Alerts Off=%s", async (off) => {
+// (Owner, Nov 9, §362; restores §183 and batch 35 §68 after Codex 343018a9) A developer payment on the part a Send / Add (written answers or a recording) or a
+// Dispute is about stops that press once WHATEVER the tester's Alerts, marked forced; the second press goes ahead. Payments on her other parts follow Alerts, and
+// Charge / Let it go's owed rule stays removed (it follows Alerts).
+const forcedLines = (r: Res) => lines(r).filter((x) => x.forced);
+const dispute = (w: W, id: string, body: Record<string, unknown>) => sact(w.sessionId, "dispute", w.tester.cookie, { kind: "submission", id, reason: "I answered every question fully and in detail.", ...body });
+
+describe("§362 a payment on the same part stops Send / Add / Dispute once, whatever the Alerts", () => {
+  it.each([true, false])("the gate: Dispute's part forced (Alerts Off=%s); Charge's owed part follows Alerts", async (off) => {
     const w = await world(off);
     const loaded = seen();
     await settle();
     expect((await more(w, w.written.id)).status).toBe(200);
     await settle();
-    for (const opts of [{ piece: w.written.id }, { owedPiece: w.written.id }]) {
-      const press = testerGate(w.tester.user.id, w.sessionId, w.testId, { seenAt: loaded, loadedAt: loaded }, undefined, opts);
-      if (off) await expect(press).resolves.toBeUndefined();
-      else await expect(press).rejects.toMatchObject({ code: "stop_once" });
-    }
+    await expect(testerGate(w.tester.user.id, w.sessionId, w.testId, { seenAt: loaded, loadedAt: loaded }, undefined, { piece: w.written.id })).rejects.toMatchObject({ code: "stop_once", data: { changes: [expect.objectContaining({ forced: true })] } });
+    const charge = testerGate(w.tester.user.id, w.sessionId, w.testId, { seenAt: loaded, loadedAt: loaded }, undefined, { owedPiece: w.written.id });
+    if (off) await expect(charge).resolves.toBeUndefined();
+    else await expect(charge).rejects.toMatchObject({ code: "stop_once" });
   });
-  it.each(["written", "recording", "zero"])("Alerts Off allows an addition after a same-part %s payment", async (kind) => {
+
+  it.each(["written", "recording", "zero"])("Alerts Off: a same-part %s payment stops the add once (forced); the second press goes ahead", async (kind) => {
     const w = await world();
     if (kind === "recording") await addRecording(w.sessionId, w.tester.cookie);
     if (kind === "zero") expect((await addTo(w.sessionId, w.tester.cookie, { text: "An initial addition.", seenAt: seen(), confirmed: true })).status).toBe(200);
@@ -57,15 +65,67 @@ describe("tester payment stops follow Alerts", () => {
     await settle();
     expect((await more(w, kind === "recording" ? w.rec.id : w.written.id, kind === "zero" ? "0" : "2.00")).status).toBe(200);
     await settle();
-    const r = kind === "recording"
-      ? await sact(w.sessionId, "recording-send", w.tester.cookie, { seenAt: loaded, loadedAt: loaded })
-      : await addTo(w.sessionId, w.tester.cookie, { text: "An addition after payment.", seenAt: loaded, loadedAt: loaded });
-    expect(r.status, JSON.stringify(r.body)).toBe(200);
+    const press = (extra: Record<string, unknown>) => kind === "recording"
+      ? sact(w.sessionId, "recording-send", w.tester.cookie, { add: true, ...extra })
+      : addTo(w.sessionId, w.tester.cookie, { text: "An addition after payment.", ...extra });
+    const first = await press({ seenAt: loaded, loadedAt: loaded });
+    expect(first.body.error?.code, JSON.stringify(first.body)).toBe("stop_once");
+    expect(lines(first).length).toBe(1);
+    expect(forcedLines(first)).toEqual([expect.objectContaining({ text: kind === "zero" ? "Nora Lane paid $0 more for what you added to your written answers" : `Nora Lane paid you $2.00 more for your ${kind === "recording" ? "recording" : "written answers"}` })]);
+    expect(first.body.error).toMatchObject({ alertsOff: true });
+    await settle();
+    const second = await press({ seenAt: loaded, boxAt: seen(), confirmed: true });
+    expect(second.status, JSON.stringify(second.body)).toBe(200);
+  });
+
+  it("Alerts Off: a payment on ANOTHER part stops neither the written Add nor the recording add", async () => {
+    const w = await world();
+    await addRecording(w.sessionId, w.tester.cookie);
+    const loaded = seen();
+    await settle();
+    expect((await more(w, w.rec.id)).status).toBe(200);
+    await settle();
+    expect((await addTo(w.sessionId, w.tester.cookie, { text: "Added with Alerts Off.", seenAt: loaded, loadedAt: loaded })).status).toBe(200);
+    const v = await world();
+    await addRecording(v.sessionId, v.tester.cookie);
+    const loaded2 = seen();
+    await settle();
+    expect((await more(v, v.written.id)).status).toBe(200);
+    await settle();
+    expect((await sact(v.sessionId, "recording-send", v.tester.cookie, { add: true, seenAt: loaded2, loadedAt: loaded2 })).status).toBe(200);
+  });
+
+  it("Alerts Off: a Pay more on the disputed part stops Dispute once (forced), the second goes ahead; one on another part doesn't stop it", async () => {
+    const w = await world();
+    const loaded = seen();
+    await settle();
+    expect((await more(w, w.written.id)).status).toBe(200);
+    await settle();
+    const first = await dispute(w, w.written.id, { seenAt: loaded, loadedAt: loaded });
+    expect(first.body.error?.code, JSON.stringify(first.body)).toBe("stop_once");
+    expect(forcedLines(first)).toEqual([expect.objectContaining({ text: "Nora Lane paid you $2.00 more for your written answers" })]);
+    await settle();
+    const second = await dispute(w, w.written.id, { seenAt: loaded, boxAt: seen(), confirmed: true });
+    expect(second.status, JSON.stringify(second.body)).toBe(200);
+    const v = await world();
+    const loaded2 = seen();
+    await settle();
+    expect((await more(v, v.rec.id)).status).toBe(200);
+    await settle();
+    const other = await dispute(v, v.written.id, { seenAt: loaded2, loadedAt: loaded2 });
+    expect(other.status, JSON.stringify(other.body)).toBe(200);
+  });
+
+  it("every Send / Add route passes its sent part to the gate (Send Answers' resend, Add to this answer, a recording's Send or Add)", () => {
+    const tests = fs.readFileSync(path.resolve(__dirname, "../src/lib/server/tests.ts"), "utf8");
+    expect(tests).toContain("await testerSendGate(contractId, body, sent?.id, { stale: [] });"); // Send Answers (a resend)
+    expect(tests).toContain("await testerSendGate(contractId, body, before?.id, { stale: [] });"); // Add to this answer
+    expect(fs.readFileSync(path.resolve(__dirname, "../src/lib/server/recordings.ts"), "utf8")).toContain("await testerSendGate(contractId, body, sent?.id);"); // a recording's Send / Add
   });
 });
 
 describe("§183 Add to this answer after a payment on the written answers", () => {
-  it("Pay more on them after her page loaded: the first Add stops once, the payment line following Alerts On; the second press goes", async () => {
+  it("Pay more on them after her page loaded: the first Add stops once (forced, §362); the second press goes", async () => {
     const w = await world(false);
     const loaded = seen();
     await settle();
@@ -73,14 +133,14 @@ describe("§183 Add to this answer after a payment on the written answers", () =
     await settle();
     const first = await addTo(w.sessionId, w.tester.cookie, { text: "One more thing about the boats.", seenAt: loaded, loadedAt: loaded });
     expect(first.body.error?.code, JSON.stringify(first.body)).toBe("stop_once");
-    expect(lines(first).every((line) => !line.forced)).toBe(true);
+    expect(lines(first).every((line) => line.forced)).toBe(true); // (§362) forced whatever the Alerts
     expect(lines(first)).toEqual([expect.objectContaining({ text: "Nora Lane paid you $2.00 more for your written answers" })]);
     await settle();
     const second = await addTo(w.sessionId, w.tester.cookie, { text: "One more thing about the boats.", seenAt: loaded, boxAt: seen(), confirmed: true });
     expect(second.status, JSON.stringify(second.body)).toBe(200);
   });
 
-  it("the developer's $0 answer to her update stops the next Add once with Alerts On", async () => {
+  it("the developer's $0 answer to her update stops the next Add once (forced, §362)", async () => {
     const w = await world(false);
     expect((await addTo(w.sessionId, w.tester.cookie, { text: "First addition after the Pay.", seenAt: seen(), confirmed: true })).status).toBe(200);
     await settle();
@@ -92,7 +152,7 @@ describe("§183 Add to this answer after a payment on the written answers", () =
     await settle();
     const first = await addTo(w.sessionId, w.tester.cookie, { text: "Second addition.", seenAt: loaded, loadedAt: loaded });
     expect(first.body.error?.code, JSON.stringify(first.body)).toBe("stop_once");
-    expect(lines(first).every((line) => !line.forced)).toBe(true);
+    expect(lines(first).every((line) => line.forced)).toBe(true); // (§362) forced whatever the Alerts
     expect(lines(first)).toEqual([expect.objectContaining({ text: "Nora Lane paid $0 more for what you added to your written answers" })]);
   });
 
@@ -137,7 +197,7 @@ describe("§183 Add to this answer after a payment on the written answers", () =
 });
 
 describe("§183 adding recordings after a payment on the recording", () => {
-  it("Pay more on the recording after her page loaded: the add stops once, following Alerts On; the second press goes", async () => {
+  it("Pay more on the recording after her page loaded: the add stops once (forced, §362); the second press goes", async () => {
     const w = await world(false);
     await addRecording(w.sessionId, w.tester.cookie);
     const loaded = seen();
@@ -146,7 +206,7 @@ describe("§183 adding recordings after a payment on the recording", () => {
     await settle();
     const first = await sact(w.sessionId, "recording-send", w.tester.cookie, { seenAt: loaded, loadedAt: loaded });
     expect(first.body.error?.code, JSON.stringify(first.body)).toBe("stop_once");
-    expect(lines(first).every((line) => !line.forced)).toBe(true);
+    expect(lines(first).every((line) => line.forced)).toBe(true); // (§362) forced whatever the Alerts
     expect(lines(first)).toEqual([expect.objectContaining({ text: "Nora Lane paid you $2.00 more for your recording" })]);
     await settle();
     const second = await sact(w.sessionId, "recording-send", w.tester.cookie, { seenAt: loaded, boxAt: seen(), confirmed: true });
@@ -177,9 +237,11 @@ describe("§183 adding recordings after a payment on the recording", () => {
 });
 
 describe("§183 the Terms", () => {
-  it("“Changes while you pay” says a payment on the same part follows the tester’s Alerts", () => {
+  it("“Changes while you pay” says a payment on the part a tester is adding to or disputing stops their press once whatever their Alerts (§362)", () => {
     const c = PAYMENT_RULES.find((r) => r.heading === "Changes while you pay")!;
-    expect(c.text).toContain("Ordinary developer payments follow the tester’s Alerts, even on that part.");
+    expect(c.text).toContain("A developer payment on a part the tester is adding to or disputing (written answers or a recording) always stops their Send, Add or Dispute press once, whatever their Alerts; other developer payment updates follow the tester’s Alerts.");
+    expect(c.text).not.toContain("Ordinary developer payments follow the tester’s Alerts, even on that part.");
+    expect(c.text).toContain("Unavailable actions are refused immediately, including Charge or Let it go after the developer pays.");
     expect(c.text).toContain("a team decision or the developer adding their side to the tester’s dispute forces a stop on applicable buttons.");
   });
 });
