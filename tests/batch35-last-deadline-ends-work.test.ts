@@ -138,8 +138,9 @@ describe("work ends at the last tester deadline, with financial windows continui
     expect(after.openUntil).toEqual(before.openUntil);
     expect(after.workEndedAt).toEqual(f.deadline);
     expect((await db.contract.findUniqueOrThrow({ where: { id: f.early.sessionId } })).dueAt).toEqual(contractBefore.dueAt);
-    expect((await db.submission.findUniqueOrThrow({ where: { id: sub.id } })).payBy).toEqual(new Date(sub.payBy!.getTime() + 8 * DAY));
-    expect(await closeOutOf(f.testId)).toEqual(new Date(f.deadline.getTime() + 22 * DAY));
+    // (Owner, Nov 9, §358; was: the review clock and close-out moved by the 8 days) A pause that starts after the work ended moves none of its dates.
+    expect((await db.submission.findUniqueOrThrow({ where: { id: sub.id } })).payBy).toEqual(sub.payBy);
+    expect(await closeOutOf(f.testId)).toEqual(new Date(f.deadline.getTime() + 14 * DAY));
   });
 
   it("Pay and the later Charge window remain available after work ends; Rate keeps its own close-out", async () => {

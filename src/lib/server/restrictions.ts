@@ -61,7 +61,8 @@ export async function cancelLatePauseCalls(now = new Date()) {
 export const cancelLateSuspensionCalls = cancelLatePauseCalls;
 
 async function pauseDeveloper(u: { id: string; email: string }) {
-  const tests = await db.test.findMany({ where: { developerId: u.id, status: { in: ["open", "closed", "draft"] } }, select: { id: true } });
+  // (Owner, Nov 9, §358) Not a closed test (its work ended): like a stopped one, a suspension starting now doesn't pause it.
+  const tests = await db.test.findMany({ where: { developerId: u.id, status: { in: ["open", "draft"] }, workEndedAt: null }, select: { id: true } });
   const contractIds = (await db.contract.findMany({ where: { test: { developerId: u.id } }, select: { id: true } })).map((c) => c.id);
   await closeRequests({ contractIds }, "the test is paused");
   // (Owner, Oct 28 afternoon) Invites and applications WAIT while the tests are paused: they work again after the lift unless something else closed them.
@@ -197,7 +198,7 @@ export async function suspendAccount(adminId: string, userId: string, note: stri
     await markPaused({ developerId: userId }); // (batch 9) one clock per paused test
     await pauseDeveloper(u);
     // (Owner, Nov 6, §295) Their testers read "“<test>” is paused": each test no other cause (a hold, the team's pause) was pausing already.
-    if (!u.holdStartedAt) await tellTestersPaused((await db.test.findMany({ where: { developerId: userId, status: { in: ["open", "closed"] }, adminPausedAt: null }, select: { id: true } })).map((t) => t.id));
+    if (!u.holdStartedAt) await tellTestersPaused((await db.test.findMany({ where: { developerId: userId, status: "open", workEndedAt: null, adminPausedAt: null }, select: { id: true } })).map((t) => t.id));
     // (Owner, Nov 3, §159 rule 4a) The developer's own Pay / Pay more whose bank page is still open is cancelled (at Stripe first; one the bank already approved is
     // recorded as paid once), like a hold does: nothing is charged by it, and the part is payable again after the lift. A tester's waiting charge being confirmed
     // (needs_confirmation: Confirm with your bank, Confirm all) is NOT cancelled: its Complete goes through and is recorded normally (rule 4b).
@@ -411,11 +412,15 @@ export async function suspendedAccountsReminder(now = new Date()) {
  * Admin: pause one test. (Owner, Nov 4, §172; replaces batch 15 sections 23 and 37) The same exact rules as a developer suspension, for this test only: the developer can
  * stop it, end testers' work early, cancel calls and add their side of a dispute; testers see it as paused.
  */
+/** (Owner, Nov 9, §358) The team's Pause on a test whose work ended on its own. */
+export const WORK_ENDED_NO_PAUSE = "This test's work has ended, so it can't be paused.";
 export async function pauseTest(adminId: string, testId: string, note: string, seen: AdminSeen | null = null) {
   const t = await db.test.findUnique({ where: { id: testId } });
   if (!t) throw new HttpError(404, "not_found", "That test doesn't exist.");
   // (Batch 34 §1) No longer possible: refused naming who and when. Still possible after another admin's change since the page loaded: stops once.
   if (t.status === "stopped") throw await stoppedRefusal(t, presserOf(adminId, seen));
+  // (Owner, Nov 9, §358) A closed test (its work ended on its own) is treated like a stopped one: nothing left to pause.
+  if (t.status === "closed" || t.workEndedAt) throw new HttpError(409, "work_ended", WORK_ENDED_NO_PAUSE);
   if (t.adminPausedAt) throw await pausedRefusal(t, presserOf(adminId, seen));
   const from = checkFrom(seen);
   if (from) stopIfChanged("Pause", await testChangesSince(testId, adminId, from, seen?.tab));
@@ -425,6 +430,7 @@ export async function pauseTest(adminId: string, testId: string, note: string, s
     await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${testId} FOR UPDATE`;
     const now = await tx.test.findUniqueOrThrow({ where: { id: testId } });
     if (now.status === "stopped") throw await stoppedRefusal(now, presserOf(adminId, seen));
+    if (now.status === "closed" || now.workEndedAt) throw new HttpError(409, "work_ended", WORK_ENDED_NO_PAUSE); // (§358)
     if (now.adminPausedAt) throw await pausedRefusal(now, presserOf(adminId, seen));
     const ev = await recordEvent(tx, testId, "paused", "The team paused this test", true, { adminPausedAt: new Date(), adminNote: note, adminPausedById: adminId });
     await keepNote(tx, ev.id, adminId, note); // (batch 35 §49) the pause's own reason, with its event

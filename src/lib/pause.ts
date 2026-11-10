@@ -8,15 +8,28 @@ const DAY = 86_400_000;
 export type PauseCause = "hold" | "chargeback" | "suspension" | "team";
 
 type Dev = { holdStartedAt?: Date | null; holdReason?: string | null; devSuspendedAt?: Date | null };
-type Tst = { status: string; adminPausedAt?: Date | null; pauseCloseAt?: Date | null; pauseCloseSetAt?: Date | null; pausedSince?: Date | null };
+type Tst = { status: string; adminPausedAt?: Date | null; pauseCloseAt?: Date | null; pauseCloseSetAt?: Date | null; pausedSince?: Date | null; workEndedAt?: Date | null };
+
+/**
+ * (Owner, Nov 9, §358) When a test's work ended on its own: Open until and every deadline passed (`workEndedAt`, status "closed"), or the 7-day pause closure
+ * (`pauseClosedAt`). Like a stopped test, a hold, suspension or team pause that STARTS after it never pauses the test or moves its dates; one that started
+ * before still counts.
+ */
+export const workEndOf = (t: { workEndedAt?: Date | null; pauseClosedAt?: Date | null } | null | undefined) => t?.workEndedAt ?? t?.pauseClosedAt ?? null;
+/** (§358) Did a pause cause starting at `start` begin before the test's work ended (or is the work still on)? */
+export const startedBeforeWorkEnd = (start: Date | null | undefined, t: { workEndedAt?: Date | null; pauseClosedAt?: Date | null } | null | undefined) => {
+  const end = workEndOf(t);
+  return !!start && (!end || start.getTime() < end.getTime());
+};
 
 /** Why a test is paused right now (empty when it isn't). Only tests that are live (open or full) count. */
 export function pauseCauses(dev: Dev, test: Tst): PauseCause[] {
   if (test.status !== "open" && test.status !== "closed") return [];
   const out: PauseCause[] = [];
-  if (dev.holdStartedAt) out.push(dev.holdReason === "chargeback" ? "chargeback" : "hold");
-  if (dev.devSuspendedAt) out.push("suspension");
-  if (test.adminPausedAt) out.push("team");
+  // (§358) A closed test counts only the causes that began before its work ended.
+  if (startedBeforeWorkEnd(dev.holdStartedAt, test)) out.push(dev.holdReason === "chargeback" ? "chargeback" : "hold");
+  if (startedBeforeWorkEnd(dev.devSuspendedAt, test)) out.push("suspension");
+  if (startedBeforeWorkEnd(test.adminPausedAt, test)) out.push("team");
   return out;
 }
 
@@ -26,7 +39,7 @@ export function pauseCauses(dev: Dev, test: Tst): PauseCause[] {
  */
 export function pauseSince(dev: Dev, test: Tst): Date | null {
   if (!pauseCauses(dev, test).length) return null;
-  const times = [dev.holdStartedAt, dev.devSuspendedAt, test.adminPausedAt, test.pausedSince].filter((d): d is Date => !!d).map((d) => d.getTime());
+  const times = [dev.holdStartedAt, dev.devSuspendedAt, test.adminPausedAt, test.pausedSince].filter((d): d is Date => startedBeforeWorkEnd(d, test)).map((d) => d.getTime());
   return new Date(Math.min(...times));
 }
 

@@ -102,7 +102,8 @@ function PauseToggle({ t }: { t: TestVM }) {
   usePauseDraftGoes(t.id, t.adminPaused);
   return (
     <>
-      {t.adminPaused ? <AdminButton key="lift" action="unpause-test" id={t.id} label="Lift the pause" extra={since(t)} onRefused={onRefused} /> : <AdminButton key="pause" action="pause-test" id={t.id} label="Pause" fields={[{ name: "note", label: "Why" }]} extra={since(t)} onRefused={onRefused} />}
+      {/* (Owner, Nov 9, §358) A closed test (its work ended) can't be paused, like a stopped one: no Pause (an older row's press is refused). */}
+      {t.adminPaused ? <AdminButton key="lift" action="unpause-test" id={t.id} label="Lift the pause" extra={since(t)} onRefused={onRefused} /> : t.workEnded ? null : <AdminButton key="pause" action="pause-test" id={t.id} label="Pause" fields={[{ name: "note", label: "Why" }]} extra={since(t)} onRefused={onRefused} />}
       {refused && <span className="err" data-pause-refused="">{refused}</span>}
     </>
   );

@@ -109,7 +109,7 @@ export async function AdminTestBoxes({ testId, adminId }: { testId: string; admi
     <section className="card space-y-4 border-amber-300/30" id="admin-boxes" data-admin-only="">
       <h2 className="text-lg font-semibold text-white">For the team (only admins see this)</h2>
       {/* (Batch 30 §5) This test's open reviews, closed at $0 by the team (Preview first, then the reason). */}
-      {row && <TestActions id={testId} seen={row.seen ?? new Date().toISOString()} adminPaused={row.adminPaused} stopped={row.stopped} critical={row.critical} closure={info ? `${pauseCountdownLine(info.at, info.causes)} (${fmtDateTime(info.at)})` : null} />}
+      {row && <TestActions id={testId} seen={row.seen ?? new Date().toISOString()} adminPaused={row.adminPaused} stopped={row.stopped} workEnded={row.workEnded} critical={row.critical} closure={info ? `${pauseCountdownLine(info.at, info.causes)} (${fmtDateTime(info.at)})` : null} />}
       <TeamCloseBox id={testId} scope="test" />
       <Box title="Timeline" kind="t-timeline" arg={testId} page={timeline} />
       <Box title="Contract changes" kind="t-contracts" arg={testId} page={contracts} />

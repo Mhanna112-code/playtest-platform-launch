@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { workEndOf } from "@/lib/pause";
 import { CLOSE_OUT_DAYS, RATED_NO_DISPUTE, closeOutBase, disputeClosedLine, pieceDueAt, reviewDateOf } from "@/lib/rules";
 import { fmtDate } from "@/lib/server/dateFormat";
 import { callMinutesOf } from "@/lib/callMeasure";
@@ -105,13 +106,15 @@ export async function teamPauseSpans(testId: string, adminPausedAt: Date | null,
 }
 
 /** Everything that moves a test's close-out: the team's pauses, the developer's holds and suspensions, and outages. */
-async function testSpans(t: { id: string; adminPausedAt: Date | null; developer: { id: string; holdStartedAt: Date | null; devSuspendedAt: Date | null } }, from: Date, now: Date) {
+async function testSpans(t: { id: string; adminPausedAt: Date | null; workEndedAt?: Date | null; pauseClosedAt?: Date | null; developer: { id: string; holdStartedAt: Date | null; devSuspendedAt: Date | null } }, from: Date, now: Date) {
   const [devEvents, outages, team] = await Promise.all([
     db.accountEvent.findMany({ where: { userId: t.developer.id, kind: { in: ["hold", "hold-lifted", "suspended", "reinstated"] } }, select: { kind: true, side: true, createdAt: true } }),
     db.outage.findMany({ where: { endAt: { gt: from }, OR: [{ needsApproval: false }, { approvedAt: { not: null } }] }, select: { startAt: true, endAt: true } }),
     teamPauseSpans(t.id, t.adminPausedAt, now),
   ]);
-  return mergeSpans([...devPauseSpans(devEvents, t.developer, now), ...team, ...outages.map((o) => ({ start: o.startAt.getTime(), end: o.endAt.getTime(), open: false }))]);
+  // (Owner, Nov 9, §358) A hold, suspension or team pause that began after the test's work ended (closed, or the 7-day pause closure) moves none of its dates.
+  const end = workEndOf(t)?.getTime() ?? Infinity;
+  return mergeSpans([...[...devPauseSpans(devEvents, t.developer, now), ...team].filter((s) => s.start < end), ...outages.map((o) => ({ start: o.startAt.getTime(), end: o.endAt.getTime(), open: false }))]);
 }
 
 const CONTRACTS = { select: { status: true, dueAt: true, endedAt: true } } as const;

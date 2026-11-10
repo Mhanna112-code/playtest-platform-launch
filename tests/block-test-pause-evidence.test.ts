@@ -31,7 +31,9 @@ it("BlockTest rehearsal: lifting a two-day team pause shifts working and settlem
   await db.test.update({ where: { id: active.testId }, data: { openUntil: joinBy } });
   await db.contract.update({ where: { id: elapsedDuring.sessionId }, data: { dueAt: dueDuring } });
   await db.contract.update({ where: { id: alreadyExpired.sessionId }, data: { dueAt: dueBefore } });
-  await db.test.update({ where: { id: closed.testId }, data: { openUntil: dueBefore, workEndedAt: dueBefore } });
+  // (Owner, Nov 9, §358) Its deadlines and Open until passed, but the closing job hadn't ended its work yet (workEndedAt unset): a pause starting now began before
+  // the work ended, so it still moves the settlement windows. (A test whose work had ended can't be paused: below.)
+  await db.test.update({ where: { id: closed.testId }, data: { openUntil: dueBefore } });
   await db.contract.update({ where: { id: finished.sessionId }, data: { dueAt: dueBefore, status: "ended", endedAt: dueBefore, endKind: "closed" } });
   await db.contract.update({ where: { id: rated.sessionId }, data: { dueAt: dueBefore, status: "left", endedAt: dueBefore, endKind: "rated" } });
   const paid = await db.submission.create({ data: { contractId: rated.sessionId, kind: "written", agreedCents: 1000, sentAt, updatedAt: sentAt } });
@@ -72,7 +74,7 @@ it("BlockTest rehearsal: lifting a two-day team pause shifts working and settlem
     expect(working.dueAt).toEqual(shifted(dueDuring));
     expect(expired.dueAt).toEqual(dueBefore);
     expect(finishedTest.openUntil).toEqual(dueBefore);
-    expect(finishedTest.workEndedAt).toEqual(dueBefore);
+    expect(finishedTest.workEndedAt).toBeNull();
     expect(work).toMatchObject({ payBy: shifted(reviewBy), choiceBy: shifted(choiceBy) });
     expect(measured).toMatchObject({ payBy: shifted(reviewBy), measuredAt: sentAt });
     expect(before.every(Boolean)).toBe(true);
@@ -82,6 +84,9 @@ it("BlockTest rehearsal: lifting a two-day team pause shifts working and settlem
     const newClose = after[3]!;
     expect(await disputeClosedFor(finished.sessionId, piece, new Date(+oldClose + 1))).toBeNull();
     expect(await disputeClosedFor(finished.sessionId, piece, newClose)).toMatch(/can't be disputed any more/);
+    // (§358) Once its work ended, the team's Pause is refused and nothing moves.
+    await db.test.update({ where: { id: closed.testId }, data: { status: "closed", workEndedAt: dueBefore } });
+    await expect(pauseTest(admin.id, closed.testId, "Checking all deadline windows.")).rejects.toMatchObject({ code: "work_ended" });
     console.info("BlockTest window evidence (UTC)", JSON.stringify({
       pause: [start, lift], openUntil: [joinBy, listing.openUntil], workingDue: [dueDuring, working.dueAt],
       alreadyExpiredDue: [dueBefore, expired.dueAt], writtenReview: [reviewBy, work.payBy], chargeChoiceBy: [choiceBy, work.choiceBy], callReview: [reviewBy, measured.payBy],

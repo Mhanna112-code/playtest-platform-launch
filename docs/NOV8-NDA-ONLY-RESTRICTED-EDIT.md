@@ -1,6 +1,6 @@
 # NDA-only edits during pauses and after stops
 
-The developer's Edit page shows the NDA section and Save while the test is paused (team pause, payment hold or developer suspension) or stopped. Closed tests keep their existing no-edit rule. Other listing fields and access keys cannot be changed through this exception; the server checks under the test lock. It never reopens participation or changes payment dates.
+The developer's Edit page shows the NDA section and Save while the test is paused (team pause, payment hold or developer suspension) or stopped. (Owner, Nov 9, §358) A closed test (its work ended on its own) is edited the same way as a stopped one: the NDA only. Other listing fields and access keys cannot be changed through this exception; the server checks under the test lock. It never reopens participation or changes payment dates.
 
 The NDA editor uses the existing stop-once save checks. A pause or stop after the page opened is listed once, and another tab's NDA save is checked before replacement. Typed text is kept. The full editor stays available on an active test.
 

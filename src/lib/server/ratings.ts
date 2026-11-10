@@ -1,4 +1,5 @@
 import type { Prisma } from "@prisma/client";
+import { workEndOf } from "@/lib/pause";
 import { db } from "@/lib/db";
 import { notListed } from "./shownLines";
 import { T } from "@/lib/tz";
@@ -97,7 +98,8 @@ export async function devRateStates(contractIds: string[], now = new Date()) {
     const dev = c.test.developer;
     const name = displayName(c.tester);
     // (Owner, Nov 4, §172) The window also pauses while the team paused this test (as under a developer suspension), for this test only.
-    if (!spans.has(c.testId)) spans.set(c.testId, mergeSpans([...devPauseSpans(events.filter((e) => e.userId === dev.id), dev, now), ...(await teamPauseSpans(c.testId, c.test.adminPausedAt, now, c.test.status === "stopped" ? c.test.stoppedAt ?? now : null))]));
+    // (Owner, Nov 9, §358) Not a hold or suspension that began after the test's work ended.
+    if (!spans.has(c.testId)) spans.set(c.testId, mergeSpans([...devPauseSpans(events.filter((e) => e.userId === dev.id), dev, now).filter((s) => s.start < (workEndOf(c.test)?.getTime() ?? Infinity)), ...(await teamPauseSpans(c.testId, c.test.adminPausedAt, now, c.test.status === "stopped" ? c.test.stoppedAt ?? now : null))]));
     const mine = ratings.find((r) => r.contractId === c.id && r.side === "developer");
     const theirs = ratings.find((r) => r.contractId === c.id && r.side === "tester");
     // Everything they sent is settled: every part and every call that took place has its Pay, Charge or Let it go.

@@ -7,7 +7,8 @@ import { db } from "@/lib/db";
 import { startHold } from "@/lib/server/holds";
 import { nextRound } from "@/lib/server/tests";
 import { testRow } from "@/lib/server/adminLists";
-import { TEST_CLOSED_NO_EDIT, testTitleOf, untitledDraft } from "@/lib/rules";
+import { testTitleOf, untitledDraft } from "@/lib/rules";
+import { NDA_ONLY_EDIT, ndaOnlyEdit } from "@/lib/ndaEditing";
 import { act, joined, listingBody, seen, settle, setup } from "./fixtures";
 
 // (Owner, Nov 3, batch 35 §168) "Round 2 to be a one tap button that opens a draft each time with no name (name field empty); shouldn't do any weird detection if
@@ -149,44 +150,54 @@ describe("§168 an empty draft name never shows blank", () => {
   });
 });
 
-describe("§168 a closed test has no Edit", () => {
+// (Owner, Nov 9, §358; replaces §168's "a closed test has no Edit") A closed test is edited like a stopped one: Edit opens the NDA-only editor (NdaCard), and an
+// older full-editor tab's Save is refused with the NDA-only line.
+describe("§168 / §358 a closed test: the NDA-only Edit, like a stopped one", () => {
   async function closedTest() {
     const s = await setup({ spots: 3, accessKeys: "K1\nK2\nK3" });
     await db.test.update({ where: { id: s.testId }, data: { status: "closed", workEndedAt: new Date(), openUntil: new Date(Date.now() - DAY) } });
     return s;
   }
 
-  it("Save on a closed test (an older page's too) is refused with the plain line; nothing changes", async () => {
+  it("a full-editor Save on a closed test (an older page's too) is refused with the NDA-only line; the NDA alone saves", async () => {
     const { dev, testId } = await closedTest();
     const t = await db.test.findUniqueOrThrow({ where: { id: testId } });
     const r = await act(testId, "edit", dev.cookie, { version: t.version, fields: { description: "Sail on" }, seenAt: seen() });
     expect(r.status).toBe(409);
-    expect(r.body.error).toMatchObject({ code: "closed", message: TEST_CLOSED_NO_EDIT });
-    expect(TEST_CLOSED_NO_EDIT).toBe("This test is closed, so it can't be edited.");
+    expect(r.body.error).toMatchObject({ code: "nda_only", message: NDA_ONLY_EDIT });
     // Confirmed (a second press) and an old version: the same refusal, never a stop-once.
     const again = await act(testId, "edit", dev.cookie, { version: t.version - 1, fields: { description: "Sail on" }, seenAt: seen(), confirmed: true });
-    expect(again.body.error).toMatchObject({ code: "closed", message: TEST_CLOSED_NO_EDIT });
+    expect(again.body.error).toMatchObject({ code: "nda_only", message: NDA_ONLY_EDIT });
     expect((await db.test.findUniqueOrThrow({ where: { id: testId } })).description).toBe(t.description);
+    // The NDA-only editor's Save goes through; the test stays closed with its dates.
+    const nda = await act(testId, "edit", dev.cookie, { ndaOnly: true, version: t.version, fields: { ndaText: "Keep this build private." }, seenAt: seen(), confirmed: true, payRulesOk: false });
+    expect(nda.status, JSON.stringify(nda.body)).toBe(200);
+    expect(await db.test.findUniqueOrThrow({ where: { id: testId } })).toMatchObject({ status: "closed", ndaText: "Keep this build private.", openUntil: t.openUntil, workEndedAt: t.workEndedAt });
     // Next round still works on it.
     expect((await act(testId, "next-round", dev.cookie, { seenAt: seen() })).status).toBe(200);
   });
 
-  it("the Edit page says so instead of the form", () => {
+  it("the Edit page opens the NDA-only editor for a closed test, as for a stopped one", () => {
     const page = src("app/app/tests/[id]/edit/page.tsx");
-    expect(page).toContain('{t.status === "closed" ? ('); // (Codex 2033b106: the closed check comes first, then the NDA-only view)
-    expect(page).toContain('<p className="err-field" role="alert" data-closed="">{TEST_CLOSED_NO_EDIT}</p>');
+    expect(page).not.toContain("TEST_CLOSED_NO_EDIT");
+    expect(page).toContain("{ndaOnly ? (");
+    expect(page).toContain("<NdaOnlyForm id={id}");
+    const when = { holdStartedAt: null, devSuspendedAt: null };
+    expect(ndaOnlyEdit({ status: "closed", adminPausedAt: null, workEndedAt: new Date() }, when)).toBe(true);
+    expect(ndaOnlyEdit({ status: "stopped", adminPausedAt: null }, when)).toBe(true);
+    expect(ndaOnlyEdit({ status: "open", adminPausedAt: null, workEndedAt: null }, when)).toBe(false);
   });
 
-  it("the test page: no Edit button and no links to Edit (join-mode badge, Change in Edit, the keys hint)", async () => {
+  it("the test page: only Edit NDA, no other links to Edit (join-mode badge, Change in Edit, the keys hint)", async () => {
     const { TopPanel } = await import("@/app/app/tests/[id]/TopPanel");
     const { TestersJoined } = await import("@/app/app/tests/[id]/TestersJoined");
     const { KeysNotice } = await import("@/app/app/tests/[id]/KeysNotice");
     const top = (status: string) => renderToStaticMarkup(React.createElement(TopPanel, { id: "t1", title: "Harbor Run", status, workEnded: status === "closed", terms: "", spotsLine: "1 of 3 spots used", seenAt: seen(), working: [], joinMode: "apply" }));
     for (const status of ["closed", "stopped"]) {
       const html = top(status);
-      // (Codex 2033b106) A stopped test keeps one link to Edit, its NDA-only view ("Edit NDA"); a closed test none.
-      if (status === "closed") expect(html, status).not.toContain("/edit");
-      else expect(html.match(/\/edit"/g)?.length, status).toBe(1);
+      // (Codex 2033b106; §358) A stopped or closed test keeps one link to Edit, its NDA-only view ("Edit NDA").
+      expect(html.match(/\/edit"/g)?.length, status).toBe(1);
+      expect(html, status).toContain("Edit NDA");
       expect(html, status).not.toContain("> Edit</a>");
       expect(html, status).toContain("You approve each tester"); // the badge stays, as plain text
       expect(html, status).toContain("Next round");

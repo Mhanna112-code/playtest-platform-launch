@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { startedBeforeWorkEnd } from "@/lib/pause";
 import { Prisma, type Payment } from "@prisma/client";
 import { T } from "@/lib/tz";
 import { APPS_WAITING_GROUP } from "@/lib/bell";
@@ -143,7 +144,8 @@ export async function startHold(devId: string, reason: string, /** (§315) the d
   // (Batch 8) Subscription billing pauses while the hold lasts.
   await (await import("./subscription")).pauseBilling(devId, now);
   const dev = await db.user.findUniqueOrThrow({ where: { id: devId } });
-  const tests = await db.test.findMany({ where: { developerId: devId, status: { in: ["open", "closed", "draft"] } } });
+  // (Owner, Nov 9, §358) Not a closed test (its work ended): like a stopped one, a hold starting now doesn't pause it.
+  const tests = await db.test.findMany({ where: { developerId: devId, status: { in: ["open", "draft"] }, workEndedAt: null } });
   for (const t of tests) {
     // Pending call requests close (both told).
     for (const r of await (await import("./requests")).closeRequests({ contractIds: (await db.contract.findMany({ where: { testId: t.id }, select: { id: true } })).map((x) => x.id) }, "the test is paused")) {
@@ -185,7 +187,7 @@ export async function resumeTests(tx: Prisma.TransactionClient, devId: string, s
     if (still.some(Boolean)) continue;
     running.push(t.id);
     if (t.pausedSince) await tx.test.update({ where: { id: t.id }, data: { pausedSince: null } }); // (batch 9) no cause left: the clock ends
-    if (t.status !== "stopped") await recordEvent(tx, t.id, "resumed", "Your tests are running again", false);
+    if (t.status !== "stopped" && startedBeforeWorkEnd(start, t)) await recordEvent(tx, t.id, "resumed", "Your tests are running again", false); // (§358) not a closed test it never paused
   }
   return running;
 }
@@ -211,17 +213,20 @@ export async function tellTestersPaused(testIds: string[]) {
 export async function markPaused(where: { developerId?: string; id?: string }, now = new Date()) {
   // (Owner, Oct 28, batch 16 section 32) Open invites close when the test or its developer can't take testers (any pause, hold or suspension); nothing reopens
   // by itself: the developer can invite again after.
-  const closing = await (await import("./invites")).openInviteIds({ test: { ...where, status: { in: ["open", "closed"] } } });
+  // (Owner, Nov 9, §358) A closed test (its work ended) is like a stopped one: a pause starting now doesn't pause it.
+  const closing = await (await import("./invites")).openInviteIds({ test: { ...where, status: "open" } });
   await db.invite.updateMany({ where: { id: { in: closing }, status: "sent" }, data: { status: "cancelled" } });
   await (await import("./invites")).tellInvitesClosed(closing); // (batch 30 §6) the neutral line, never why
-  await db.test.updateMany({ where: { ...where, status: { in: ["open", "closed"] }, pausedSince: null }, data: { pausedSince: now } });
+  await db.test.updateMany({ where: { ...where, status: "open", pausedSince: null }, data: { pausedSince: now } });
 }
 
 /**
  * (Owner, Oct 28 afternoon, DEFAULT) One test's clocks after one of its pauses lifted: working testers' deadlines and Open until (and the review clocks of sent work) move later by
  * the pause's length (pauseShiftMs: only the part not covered by another pause still on). The same for a hold lift, a reinstatement and the team's unpause.
  */
-export async function shiftAfterPause(tx: Prisma.TransactionClient, t: { id: string; status: string; openUntil: Date | null; workEndedAt?: Date | null }, start: Date, now: Date, others: (Date | null | undefined)[] = []) {
+export async function shiftAfterPause(tx: Prisma.TransactionClient, t: { id: string; status: string; openUntil: Date | null; workEndedAt?: Date | null; pauseClosedAt?: Date | null }, start: Date, now: Date, others: (Date | null | undefined)[] = []) {
+  // (Owner, Nov 9, §358) A pause that began after the test's work ended (closed, or the 7-day pause closure) moves none of its dates.
+  if (!startedBeforeWorkEnd(start, t)) return 0;
   const ms = pauseShiftMs(start, now, others);
   if (ms <= 0) return 0;
   const later = <T extends Date | null>(d: T, by = ms) => (d ? (new Date(d.getTime() + by) as T) : d);

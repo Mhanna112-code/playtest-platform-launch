@@ -82,7 +82,7 @@ export function mineJump(x: { pausedTestId?: string | null; suspendedUserId?: st
 export type UserVM = { href: string; id: string; at: string; line: string; reports: number; state: "deleted" | "suspended" | "normal"; stateLine: string; devSuspended?: boolean; testerSuspended?: boolean; isDeveloper?: boolean; isTester?: boolean; acct: AccountState; /** (Batch 33 §1) "Nora Lane (nora@…) · developer + tester · …": the name opens the profile */ parts?: Rich };
 /** (Batch 17 §5) A search and ticks on the Accounts or Tests list (see lib/adminScroll.ts). */
 export type ListFilter = { q?: string; ticks?: string[] };
-export type TestVM = { /** (Batch 34 §1) when this row was read */ seen?: string; href: string; id: string; at: string; line: string; status: string; adminPaused: boolean; stopped: boolean; critical: number; closedLine: string; /** (Batch 33 §1) the line with the test and its developer as links */ parts?: Rich };
+export type TestVM = { /** (Batch 34 §1) when this row was read */ seen?: string; href: string; id: string; at: string; line: string; status: string; adminPaused: boolean; stopped: boolean; /** (§358) its work ended on its own (closed): no Pause */ workEnded?: boolean; critical: number; closedLine: string; /** (Batch 33 §1) the line with the test and its developer as links */ parts?: Rich };
 /** (Owner, Oct 28 afternoon) The per-field change counts on an admin test row: "steps 3, questions 1". */
 const countsText = (v: unknown) => { const c = countsOf(v); return CRITICAL_KEYS.filter((k) => c[k] > 0).map((k) => `${CRITICAL_FIELDS[k]} ${c[k]}`).join(", "); };
 /** (Batch 22 section 4) `em`: a quoted reason shown in italics after the text (a dispute's). */
@@ -383,6 +383,7 @@ export async function testRow(t: Awaited<ReturnType<typeof db.test.findMany<{ in
     status: t.status,
     adminPaused: !!t.adminPausedAt && !closed && t.status !== "stopped",
     stopped: t.status === "stopped",
+    workEnded: t.status === "closed" || !!t.workEndedAt, // (Owner, Nov 9, §358) like a stopped test: the team can't pause it
     critical: lockedFields(countsOf(t.criticalCounts)).length, // fields that used all 3 changes
     closedLine: t.pauseClosedAt ? `Closed after 7 days paused: ${t.pauseClosedReason}` : "",
   };

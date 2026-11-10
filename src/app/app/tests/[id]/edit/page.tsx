@@ -2,7 +2,7 @@ import { ndaOnlyEdit } from "@/lib/ndaEditing";
 import { NdaOnlyForm } from "../../NdaOnlyForm";
 import { withDateZone } from "@/lib/server/dateZone";
 import { hasPerks } from "@/lib/server/subscription";
-import { openUntilCapDay, testerDaysOf, TEST_CLOSED_NO_EDIT } from "@/lib/rules";
+import { openUntilCapDay, testerDaysOf } from "@/lib/rules";
 import { notFound, redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireOpenPage } from "@/lib/server/page-auth";
@@ -44,9 +44,8 @@ export default async function EditTest({ params, searchParams }: { params: Promi
         <h1 className="text-3xl font-bold tracking-tight text-white">Edit “{t.title}”</h1>
         <AlertsMenu testId={t.id} ignored={t.ignoredAlerts} v={t.alertsV} />
       </div>
-      {t.status === "closed" ? (
-        <p className="err-field" role="alert" data-closed="">{TEST_CLOSED_NO_EDIT}</p>
-      ) : ndaOnly ? (
+      {/* (Owner, Nov 9, §358) A closed test opens the NDA-only editor too (ndaOnlyEdit), exactly as a stopped one. */}
+      {ndaOnly ? (
         <><NdaOnlyForm id={id} version={t.version} ndaText={t.ndaText} seenAt={seenAt} /><LiveTop scope={`test:${id}`} seenAt={seenAt} contractLink={{ testId: id }} /><PageLoaded at={seenAt} /></>
       ) : (
         <>

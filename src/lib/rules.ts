@@ -7,6 +7,7 @@ import { money, pronouns } from "./format";
 import { LIMITS } from "./limits";
 import { qText, sameQuestionSet } from "./questions";
 import { T, safeZone } from "./tz";
+import { startedBeforeWorkEnd } from "./pause";
 
 // ---------- Money ----------
 
@@ -490,8 +491,6 @@ export const TITLE_FIELD = "Name of this test";
  */
 export const untitledDraft = (round: number) => `Untitled draft (round ${round})`;
 export const testTitleOf = (t: { title: string; round?: number | null }) => t.title.trim() || untitledDraft(t.round ?? 1);
-/** (§168) A closed test (no new joiners; every tester's work ended) can't be edited: the Edit page and Save (an older page's too) say so. */
-export const TEST_CLOSED_NO_EDIT = "This test is closed, so it can't be edited.";
 export const STEPS_FIELD = "What should testers do";
 /** The counter while a field is under its minimum: "6 / 10 minimum". */
 export const minCounter = (n: number) => `${n} / ${LISTING_MIN_CHARS} minimum`;
@@ -976,10 +975,12 @@ export const CHAT_NOT_SENT = "Messages are paused for now, so this wasn't sent."
 /** (Owner, Oct 28 afternoon) A Charge pressed while the developer is on a payment or chargeback hold: added to what they owe, paid when they pay it. */
 export const chargedDelayedLine = (cents: number) => `Charged ${money(cents)}. Payment may be delayed until the test resumes.`;
 /** Is a developer's test paused for its testers (a payment hold, the developer's suspension, or an admin pause)? */
-export const testPaused = (dev: { holdStartedAt?: Date | null; devSuspendedAt?: Date | null }, test?: { adminPausedAt?: Date | null } | null) => !!(dev.holdStartedAt || dev.devSuspendedAt || test?.adminPausedAt);
+export const testPaused = (dev: { holdStartedAt?: Date | null; devSuspendedAt?: Date | null }, test?: { adminPausedAt?: Date | null; /** (§358) */ workEndedAt?: Date | null; pauseClosedAt?: Date | null } | null) => (test?.workEndedAt || test?.pauseClosedAt ? [dev.holdStartedAt, dev.devSuspendedAt, test.adminPausedAt].some((d) => startedBeforeWorkEnd(d, test)) : !!(dev.holdStartedAt || dev.devSuspendedAt || test?.adminPausedAt));
 /** (Owner, Oct 28 afternoon) Do the paused-test tester rules apply (no sending, chat closed)? A team pause of one test counts only with PAUSE_DEFAULTS.teamPauseSameRules. */
-export const testerPaused = (dev: { holdStartedAt?: Date | null; devSuspendedAt?: Date | null }, test?: { adminPausedAt?: Date | null } | null) =>
-  !!(dev.holdStartedAt || dev.devSuspendedAt || (PAUSE_DEFAULTS.teamPauseSameRules && test?.adminPausedAt));
+export const testerPaused = (dev: { holdStartedAt?: Date | null; devSuspendedAt?: Date | null }, test?: { adminPausedAt?: Date | null; /** (§358) */ workEndedAt?: Date | null; pauseClosedAt?: Date | null } | null) =>
+  test?.workEndedAt || test?.pauseClosedAt
+    ? [dev.holdStartedAt, dev.devSuspendedAt, PAUSE_DEFAULTS.teamPauseSameRules ? test.adminPausedAt : null].some((d) => startedBeforeWorkEnd(d, test))
+    : !!(dev.holdStartedAt || dev.devSuspendedAt || (PAUSE_DEFAULTS.teamPauseSameRules && test?.adminPausedAt));
 /**
  * (Owner, Oct 28 afternoon, DEFAULT) How far a pause that ran from `start` to `now` moves deadlines, Open until and review clocks. When another pause of the same test is still on
  * (`others`: the start of each), only the part before the earliest of them counts now: the rest is counted when that one lifts, so overlapping pauses never count twice.

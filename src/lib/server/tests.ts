@@ -38,7 +38,7 @@ import { blockPartners } from "./blocks";
 import { notifyPaidUpdate, paidUpdateRoom, resendRefusal } from "./paidUpdates";
 import { addedWhat, updatedAfterPaidLive, updatedAtCapLive } from "@/lib/moneyLines";
 import { markerIds, withoutAttachmentMarkers } from "@/lib/answerAttachments";
-import { forgetDeadlineMarks, callCancelledLine, questionsUpdatedLine, STOP_NOTE_KIND, stopEventText, stopNoteText, PAY_RULES_TICK_MISSING, payRulesTicked, PART_PRICE_MISSING, SENT_ANSWERS_LOCKED, NOTHING_TO_ADD, WHY_MIN_CHARS, WHY_TOO_SHORT, MAX_SPOTS, TEST_CLOSED_NO_EDIT } from "@/lib/rules";
+import { forgetDeadlineMarks, callCancelledLine, questionsUpdatedLine, STOP_NOTE_KIND, stopEventText, stopNoteText, PAY_RULES_TICK_MISSING, payRulesTicked, PART_PRICE_MISSING, SENT_ANSWERS_LOCKED, NOTHING_TO_ADD, WHY_MIN_CHARS, WHY_TOO_SHORT, MAX_SPOTS } from "@/lib/rules";
 import { closeOffersOfEnded } from "./offerClose";
 import { testerRow } from "@/lib/lineAnchors";
 
@@ -358,8 +358,9 @@ export async function createTest(dev: U, body: Record<string, unknown>) {
  * Edit only changes the listing for new joiners: contracts are snapshots.
  */
 export async function editTest(dev: U, testId: string, body: Record<string, unknown>) {
-  // (Owner, Nov 3, batch 35 §168) A closed test has no Edit: a Save (an older page's too) is refused plainly, never a stop-once.
-  if ((await ownTest(dev.id, testId)).status === "closed") throw new HttpError(409, "closed", TEST_CLOSED_NO_EDIT);
+  // (Owner, Nov 9, §358; replaces batch 35 §168's "a closed test has no Edit") A closed test is edited like a stopped one: the NDA only (ndaOnlyEdit, below), and
+  // an older full-editor tab's Save is refused with the NDA-only line.
+  await ownTest(dev.id, testId);
   // (Owner, Nov 9, §341) Full for want of a free key before this Save: once a key is added, the spot reopens (spotOpened, below).
   const keysWereFull = await (await import("./accessKeys")).keysFullNow(db, testId);
   const loaded = Number(body.version);
@@ -392,7 +393,6 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     const devNow = await tx.user.findUniqueOrThrow({ where: { id: dev.id }, select: { holdStartedAt: true, devSuspendedAt: true } });
     const ndaOnly = ndaOnlyEdit(t, devNow) || body.ndaOnly === true;
     if (ndaOnly && (Object.keys((body.fields ?? {}) as Record<string, unknown>).some((k) => k !== "ndaText") || keysAdd.length || keysRemove.length)) throw new HttpError(409, "nda_only", NDA_ONLY_EDIT);
-    if (t.status === "closed") throw new HttpError(409, "closed", TEST_CLOSED_NO_EDIT); // (§168) closed while this Save waited for the lock
     if (typeof touched.title === "string" && touched.title.trim().toLowerCase() !== t.title.trim().toLowerCase()) await requireUniqueTitle(tx, dev.id, touched.title, testId);
     // (Batch 34 §9, owner's finding) A save made from this same browser tab is never "another tab": its own saves never stop it, and when every listing save since
     // this page loaded was this tab's own (its base is behind only because of them), there is nothing to name per field either.

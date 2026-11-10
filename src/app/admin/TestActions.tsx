@@ -22,14 +22,15 @@ export function usePauseDraftGoes(id: string, adminPaused: boolean) {
  * and Close now. Every press sends when this box was read (`seen`): another admin's change to the test since then stops it once; one no longer possible is refused
  * naming who and when.
  */
-export function TestActions({ id, seen, adminPaused, stopped, critical, closure }: { id: string; seen: string; adminPaused: boolean; stopped: boolean; critical: number; closure: string | null }) {
+export function TestActions({ id, seen, adminPaused, stopped, workEnded = false, critical, closure }: { id: string; seen: string; adminPaused: boolean; stopped: boolean; /** (§358) closed: no Pause */ workEnded?: boolean; critical: number; closure: string | null }) {
   usePauseDraftGoes(id, adminPaused);
   if (stopped) return null;
   const extra = { since: seen };
   return (
     <div className="space-y-2 text-sm" data-test-actions={id}>
       <div className="flex flex-wrap items-center gap-2">
-        {adminPaused ? <AdminButton key="lift" action="unpause-test" id={id} label="Lift the pause" extra={extra} /> : <AdminButton key="pause" action="pause-test" id={id} label="Pause" fields={[{ name: "note", label: "Why" }]} extra={extra} />}
+        {/* (Owner, Nov 9, §358) No Pause on a closed test (its work ended), like a stopped one. */}
+        {adminPaused ? <AdminButton key="lift" action="unpause-test" id={id} label="Lift the pause" extra={extra} /> : workEnded ? null : <AdminButton key="pause" action="pause-test" id={id} label="Pause" fields={[{ name: "note", label: "Why" }]} extra={extra} />}
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <AdminButton action="stop-test" id={id} label="Stop (close)" danger fields={[{ name: "note", label: "Why" }]} extra={extra} />
