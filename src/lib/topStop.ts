@@ -1,10 +1,10 @@
 "use client";
 import { ApiError } from "./client";
 import { useCarried } from "./pressCarry";
-import { mergeChanges, useLiveAppend } from "./live";
+import { liveRuleOf, mergeChanges, useLiveAppend, type LiveRule } from "./live";
 import type { Change } from "@/components/ChangesBox";
 
-export type StopBox = { changes: Change[]; tail: string; top: boolean; now: string };
+export type StopBox = { changes: Change[]; tail: string; top: boolean; now: string; /** (§373) the rule the server built it under: lines added live follow it */ rule?: LiveRule | null };
 
 /**
  * A stop-once refusal from the server. The box shows under the pressed button, scrolled into view the "nearest" way.
@@ -14,7 +14,7 @@ export type StopBox = { changes: Change[]; tail: string; top: boolean; now: stri
 export function stopBox(e: unknown): StopBox | null {
   if (!(e instanceof ApiError && e.code === "stop_once")) return null;
   // (Owner) "now": when the box was made; the next press sends it as boxAt and goes ahead only if nothing new happened since.
-  const box = { changes: (e.data.changes as Change[]) ?? [], tail: String(e.data.tail ?? "Press again to go ahead."), top: e.data.top === true, now: typeof e.data.now === "string" ? e.data.now : new Date().toISOString() };
+  const box = { changes: (e.data.changes as Change[]) ?? [], tail: String(e.data.tail ?? "Press again to go ahead."), top: e.data.top === true, now: typeof e.data.now === "string" ? e.data.now : new Date().toISOString(), rule: liveRuleOf(e.data) };
   if (box.top) {
     window.dispatchEvent(new CustomEvent("tester-top", { detail: box }));
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -28,6 +28,6 @@ export function stopBox(e: unknown): StopBox | null {
  */
 export function useStopBox(carry?: string) {
   const [box, setBox] = useCarried<StopBox | null>(carry, "stopBox", null);
-  useLiveAppend(box != null, (added) => setBox((b) => (b ? { ...b, changes: mergeChanges(b.changes, added) } : b)));
+  useLiveAppend(box != null, (added) => setBox((b) => (b ? { ...b, changes: mergeChanges(b.changes, added) } : b)), box?.rule);
   return [box, setBox] as const;
 }

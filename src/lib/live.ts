@@ -1,5 +1,7 @@
 import { useEffect, useRef } from "react";
 import type { Change } from "@/components/ChangesBox";
+import type { Press } from "@/lib/server/live";
+import { devKeeps } from "./pressForce";
 
 // The page's "seen" marker moves forward as the live top notice shows changes (owner, NEWEST+3): every button sends
 // the later of the page's own render time and the last time the notice showed everything.
@@ -130,16 +132,46 @@ export function sameMoment(c: Change) {
   return `${Math.floor(new Date(c.at).getTime() / 60_000)}|${base}`;
 }
 
-/** While a stop box is open, new changes the page picks up are added to it. */
-export function useLiveAppend(open: boolean, add: (added: Change[]) => void) {
+/**
+ * (Owner, Nov 10, §373) The rule a stop box was built under, as the server sent it with the box (`liveRule`): a tester's press with Alerts Off (`off`, and the
+ * part the press is about), or a developer's press with Alerts types ticked off (`ignored`, and what the press is about). No rule: every line stopped it.
+ */
+export type LiveRule = { off: true; part?: string } | { ignored: string[]; press: Press };
+export function liveRuleOf(data: Record<string, unknown> | null | undefined): LiveRule | null {
+  const r = data?.liveRule as Record<string, unknown> | undefined;
+  if (!r || typeof r !== "object") return null;
+  if (r.off === true) return { off: true, ...(typeof r.part === "string" && r.part ? { part: r.part } : {}) };
+  const press = r.press as Press | undefined;
+  if (Array.isArray(r.ignored) && press && Array.isArray(press.acts) && Array.isArray(press.keys)) return { ignored: r.ignored.map(String), press };
+  return null;
+}
+/**
+ * (Owner, Nov 10, §373; recording race-371 2) Whether a line the page picked up joins an open stop box: only if the server would have put it in that box, by
+ * the rule the box was built under. Tester, Alerts Off: a line that stops whatever the press (`forced`) or a payment on the press's own part (§362); a
+ * developer payment on another part never joins ("Nora Lane paid $10.00 for your recording" was added under Send Answers 1.2 s after the box). Developer:
+ * the same devKeeps the server ran. A line that doesn't join is not in the box and never moves its time (`boxAt`).
+ */
+export function boxKeeps(c: Change, rule?: LiveRule | null): boolean {
+  if (!rule) return true;
+  if ("off" in rule) return !!c.forced || (!!rule.part && c.part === rule.part);
+  if (!c.alert || !rule.ignored.includes(c.alert)) return true;
+  return !!c.facts && devKeeps({ ...c.facts, text: c.text, createdAt: new Date(c.at) }, new Set(rule.ignored), rule.press);
+}
+
+/** While a stop box is open, new changes the page picks up are added to it. (§373) `rule`: the rule that box was built under (boxKeeps). */
+export function useLiveAppend(open: boolean, add: (added: Change[]) => void, rule?: LiveRule | null) {
   const cb = useRef(add);
   cb.current = add;
+  const ruleNow = useRef(rule);
+  ruleNow.current = rule;
   useEffect(() => {
     if (!open) return;
     // (Batch 20 section 25) Quiet live-box lines (a tester's Switch, …) never join a stop box.
     const on = (e: Event) => {
       const added = ((e as CustomEvent<Change[]>).detail ?? []).filter((c) => !c.quiet);
-      if (added.length) cb.current(added);
+      // (§373) Only the lines the box's own rule keeps.
+      const kept = added.filter((c) => boxKeeps(c, ruleNow.current));
+      if (kept.length) cb.current(kept);
     };
     window.addEventListener(LIVE_EVENT, on);
     return () => window.removeEventListener(LIVE_EVENT, on);

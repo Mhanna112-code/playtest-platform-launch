@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { displayName, fmtDateTime, money } from "@/lib/server/dateFormat";
 import { DEV_QUIET_KINDS, DEV_STOP_KINDS, delayedPayLine, partWhen, switchedLine, type TestEventLike } from "@/lib/rules";
 import { alertOf } from "@/lib/alerts";
+import { PAY_ACTS, alwaysStops, devKeeps, payContractOf } from "@/lib/pressForce";
 import { INFO_FIELDS, LISTING_SAVE, SAVED_ELSEWHERE_LINE, editedLine, ndaAgainLine, parseSave, saveLine } from "@/lib/listingSave";
 import { LISTING_SAVED, panelKeysOf, parseSaved } from "@/lib/listingPanel";
 import { callMinutesOf } from "@/lib/callMeasure";
@@ -82,7 +83,6 @@ export type OwnEvent = TestEventLike & { about?: OwnAbout; live?: string };
 export const CALL_ACTS = ["request-time", "answer-request", "cancel-call", "cancel-set", "no-show"] as const;
 /** The call changes (request, withdraw, accept, decline, cancel). (Batch 16 section 26: no Lower the length.) */
 export const CALL_CHANGE_ACTS = ["request-time", "answer-request", "cancel-call", "cancel-set"] as const;
-export const PAY_ACTS = ["pay", "pay-more"] as const;
 /**
  * (Owner, Oct 29, batch 26 section 9) The ONE press description Pay, Pay more and "Confirm with your bank" on a piece share, so Confirm stops for exactly what Pay on
  * that piece stops for (the same devGate call, the same Alerts types): another tab's Pay or Pay more on the piece, and a stop of the test or of that tester's work.
@@ -258,53 +258,15 @@ export async function devChanges(devId: string, testId: string, since: Date, tab
   // Same-part work, ordinary payments and call details follow Alerts. Departures,
   // disputes and charges retain the separate forced checks in alwaysStops.
   // An open bank window still shows all updates about its tester (wholeTester).
-  const press = opts.press;
-  const keep = (c: TestEventLike & { contractId?: string | null }) => {
-    const a = alertOf(c.kind);
-    return !a || !ignored.has(a) || alwaysStops(c, press) || (!!press?.wholeTester && !!press.stopCheck && c.contractId === press.stopCheck);
-  };
-  return ignored.size ? loud.filter(keep) : loud;
+  // (§373) The rule itself is devKeeps (lib/pressForce.ts): an open stop box applies it to the lines it takes in live.
+  return ignored.size ? loud.filter((c) => devKeeps(c, ignored, opts.press)) : loud;
 }
 
 /** (§284) The kinds whose stored place (`link`) has always named their item (a request, an application, a dispute) or their part (`piece`). */
 const LINK_TAG_KINDS = new Set(["requested", "applied", "dispute", "sent", "sentpaid", "choice", "rejected", "paid"]);
 
-/** (Owner, Nov 4, §171 A2) The testers (contracts) a developer press is about: a payment press's `stopCheck`, and every "c:<contract>" it touches (End early, call requests and their answers or cancels). */
-export const pressContracts = (press?: Press) => (press ? [...(press.stopCheck ? [press.stopCheck] : []), ...press.keys.filter((k) => k.startsWith("c:")).map((k) => k.slice(2))] : []);
-/** A payment press (Pay, Pay more, Confirm with your bank: `payPressOf`): its tester's contract, else null. */
-const payContractOf = (press?: Press) => (press?.stopCheck && press.acts.some((x) => (PAY_ACTS as readonly string[]).includes(x)) ? press.stopCheck : null);
-/** (§171 A1) The line is about the very part a payment press pays ("sub:<id>" / "call:<id>" among its keys). */
-const onPart = (c: TestEventLike, press?: Press) => {
-  const id = c.piece ?? (c.kind === "sent" ? c.item : undefined);
-  return !!id && !!press && (press.keys.includes(`sub:${id}`) || press.keys.includes(`call:${id}`));
-};
-
-/** Forced checks for departures, disputes, team decisions and tester charges.
- * Ordinary same-part work and payments follow Alerts, except (§362) work on the part a Needs you Pay / Pay more pays (`fromNeeds`).
- */
-/** (§362) Work sent, updated or added (the "sent" line; "sentpaid" at the cap) on a part this payment press pays. */
-const sentOnPart = (c: TestEventLike, press?: Press) => (c.kind === "sent" || c.kind === "sentpaid") && !!c.item && !!press && (press.keys.includes(`sub:${c.item}`) || press.keys.includes(`call:${c.item}`));
-export function alwaysStops(c: TestEventLike & { contractId?: string | null }, press?: Press) {
-  if (press?.awayCharge) {
-    // (§171 item 7) As before §171: the team's decision about that tester. (Owner, Nov 9, §340) That tester leaving no longer forces it: it follows the
-    // developer's "Testers leaving" Alerts tick, as any other leave does.
-    const pc = payContractOf(press);
-    // (Owner, Nov 4, §193) And a charge about that same tester, except a charge on a part this press itself confirms (`confirms`: the waiting charge's own line,
-    // which the box already shows as its row; Confirm all: every part it covers): stopping for it could only show the press what it is paying.
-    const ownCharge = !!c.piece && (onPart(c, press) || !!press.confirms?.includes(c.piece));
-    // (Owner, Nov 5) A dispute by that tester forces it too, like the team's decision and a charge (it followed the Disputes tick before).
-    return !!pc && ((c.kind === "dispute" || isTeamDecision(c) || (!!c.charge && !ownCharge)) && c.contractId === pc);
-  }
-  // (Owner, Nov 4, §193) A charge about the tester (their Charge on any part, an automatic call charge, the team's dispute-decision charge) stops every press about
-  // that tester once, exactly like a dispute (§171 A2). Presses about the whole test and about other testers follow the Payments tick.
-  if ((c.kind === "dispute" || isTeamDecision(c) || !!c.charge) && !!c.contractId && pressContracts(press).includes(c.contractId)) return true;
-  const payContract = payContractOf(press);
-  if (!payContract) return false;
-  // (Owner, Nov 9, §362) Needs you's Pay / Pay more: work on the very part being paid always stops it once (forced). Other payments on it, its call problem /
-  // length lines, other parts and other testers follow Alerts.
-  if (press?.fromNeeds && sentOnPart(c, press)) return true;
-  return c.kind === "left" && c.contractId === payContract;
-}
+// (§373) The always-stop checks (pressContracts, alwaysStops, …) live in lib/pressForce.ts: an open stop box on the page runs the same ones on lines added live.
+export { PAY_ACTS, alwaysStops, isTeamDecision, pressContracts } from "@/lib/pressForce";
 
 /**
  * (Owner, Nov 4, §171 A1) A payment press on a call: what changed on that call itself that no test event says: the tester reported a problem with it, or its
@@ -332,9 +294,20 @@ export const callProblemLine = (name: string, when: string, note: string) => `${
 export const callLengthLine = (name: string, when: string, minutes: number) => `The length of the call with ${name} on ${when} is final: ${minutes} minute${minutes === 1 ? "" : "s"}`;
 /** (Owner, Nov 3, §160) A developer's stop line that no Alerts tick could switch off: one with no Alerts type (own other-tab actions, a stop, a listing change…) or one that always stops this press. */
 export const devForced = (c: TestEventLike & { contractId?: string | null }, press?: Press) => !alertOf(c.kind) || alwaysStops(c, press);
+/**
+ * (Owner, Nov 10, §373) The rule a developer's stop box was built under, sent with it (`liveRule`): this test's Alerts ticks and what the press is about. A line
+ * the page picks up while the box is open joins it only if devKeeps (lib/pressForce.ts) would have kept it for this press: a type ticked off in Alerts joins
+ * only when it always stops this press (a charge or dispute about its tester, …). Nothing ticked off: no rule, every line joins, as before.
+ */
+export async function devBoxRule(testId: string, press: Press | undefined, tx: Tx | typeof db = db) {
+  const ignored = (await tx.test.findUnique({ where: { id: testId }, select: { ignoredAlerts: true } }))?.ignoredAlerts ?? [];
+  if (!ignored.length) return {};
+  // What the press answers never matters here (a line it answers was never a live line's question).
+  const { answers: _answers, ...about } = press ?? { acts: [], keys: [] };
+  void _answers;
+  return { liveRule: { ignored, press: about } };
+}
 
-/** (Owner, Nov 3) A line recording the team's dispute decision ("The team decided Ana Silva's dispute: …"). */
-export const isTeamDecision = (c: { kind: string; text: string }) => c.kind === "admin" && c.text.startsWith("The team decided ");
 
 /** (Batch 35 §34) A listing Save's consequence as its own line: "You re-sent fbbb's invite (the listing changed)". */
 export const consequenceLine = (x: string) => `You ${x}${/\)$/.test(x) ? "" : " (the listing changed)"}`;

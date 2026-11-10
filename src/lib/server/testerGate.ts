@@ -160,6 +160,18 @@ export const ALERTS_OFF_KINDS = new Set([...CONTRACT_KINDS, "own"]);
  * Dispute, Leave, call requests, Rate). Excerpt requests keep their own rules (their own route).
  */
 export const disputeChange = (e: TestEventLike) => e.kind === "dispute" || (e.kind === "admin" && !!e.piece);
+/**
+ * (Owner, Nov 10, §373) With Alerts Off, the lines that still stop a tester's press whatever it is about: changes to their contract, their own other-tab actions
+ * and dispute changes. (§362) A developer payment on the part the press is about stops it too: that one is matched on the part (`liveRuleOf`).
+ */
+export const stopsWithAlertsOff = (e: TestEventLike) => ALERTS_OFF_KINDS.has(e.kind) || disputeChange(e);
+/**
+ * (Owner, Nov 10, §373; recording race-371 2) The rule a tester's stop box was built under, sent with it (`liveRule`): with Alerts Off, a line the page picks up
+ * while the box is open joins it only if it would have stopped this press (marked `forced` in the live feed, or a payment line on the press's own part); a
+ * developer payment on another part never joins (it used to: "Nora Lane paid $10.00 for your recording" was added under Send Answers 1.2 s after the box).
+ * Alerts On: no rule, every line joins, as before.
+ */
+export const liveRuleOf = (off: boolean, part?: string) => (off ? { liveRule: { off: true, ...(part ? { part } : {}) } } : {});
 
 // (Owner, Nov 5, §267) "nda": the NDA changed (its own notice), an ordinary kind (Alerts on).
 const KINDS = ["terms", "paid", "rejected", "cancelled", "booked", "requested", "info", "payment", "admin", "own", "dispute", "nda"];
@@ -191,8 +203,10 @@ export async function testerGate(testerId: string, contractId: string, testId: s
   const boxAt = seenOf(body.boxAt);
   // (§269) A stale page's questions: the stop is never skipped (its box tells the page to take the new questions, `questions`).
   const stale = (opts.staleQuestions ?? []).map((e) => ({ ...e, forced: true }));
-  const staleStop = async () => new HttpError(409, "stop_once", tail, { changes: asLines(stale), tail, top: false, questions: true,
-    alertsOff: !!(await db.user.findUnique({ where: { id: testerId }, select: { testerAlertsOff: true } }))?.testerAlertsOff });
+  const staleStop = async () => {
+    const off = !!(await db.user.findUnique({ where: { id: testerId }, select: { testerAlertsOff: true } }))?.testerAlertsOff;
+    return new HttpError(409, "stop_once", tail, { changes: asLines(stale), tail, top: false, questions: true, alertsOff: off, ...liveRuleOf(off, opts.sendPiece ?? opts.piece) });
+  };
   if (body.confirmed === true && !boxAt) { if (stale.length) throw await staleStop(); return; }
   const seenAt = body.confirmed === true ? boxAt : seenOf(body.seenAt);
   if (!seenAt) { if (stale.length) throw await staleStop(); return; }
@@ -229,7 +243,7 @@ export async function testerGate(testerId: string, contractId: string, testId: s
   const part = opts.sendPiece ?? opts.piece;
   const onPart = (e: TestEventLike) => !!part && e.piece === part;
   const off = (await db.user.findUnique({ where: { id: testerId }, select: { testerAlertsOff: true } }))?.testerAlertsOff;
-  const rest = r.go ? [] : off ? r.changes.filter((e) => ALERTS_OFF_KINDS.has(e.kind) || disputeChange(e) || onPart(e)) : r.changes;
+  const rest = r.go ? [] : off ? r.changes.filter((e) => stopsWithAlertsOff(e) || onPart(e)) : r.changes;
   // (§268) Rate and Leave with Alerts Off: an offer never stops them (it's an ordinary line for them).
   const termsShown = off && opts.ordinaryTerms ? [] : terms;
   // (Batch 35 §79) Never the line about the very thing this press answers (Accept on the developer's call request that just arrived).
@@ -241,7 +255,7 @@ export async function testerGate(testerId: string, contractId: string, testId: s
   // (§171 A2) And the team's decision on her dispute, or the developer's side added to it, on every press.
   const forced = (e: TestEventLike) => (ALERTS_OFF_KINDS.has(e.kind) && !(opts.ordinaryTerms && e.kind === "terms")) || e.kind === "stop" || disputeChange(e) || onPart(e);
   // (§269) `questions`: the box lists a questions change, so the page redraws and its form takes the new questions in place (typed text kept by words).
-  if (list.length) throw new HttpError(409, "stop_once", tail, { changes: asLines(list.map((e) => (forced(e) ? { ...e, forced: true } : e))), tail, top: termsShown.some((t) => list.includes(t)) /* (§250) a listed offer line no longer sends the page up */, alertsOff: !!off, ...(stale.length || list.some(isQuestionLine) ? { questions: true } : {}) });
+  if (list.length) throw new HttpError(409, "stop_once", tail, { changes: asLines(list.map((e) => (forced(e) ? { ...e, forced: true } : e))), tail, top: termsShown.some((t) => list.includes(t)) /* (§250) a listed offer line no longer sends the page up */, alertsOff: !!off, ...liveRuleOf(!!off, part), ...(stale.length || list.some(isQuestionLine) ? { questions: true } : {}) });
 }
 
 /** (Owner, Nov 4, §183) "Nora Lane paid $0 more for what you added to your written answers" (the bell's words), when she closed the tester's update at $0 since `since`. */

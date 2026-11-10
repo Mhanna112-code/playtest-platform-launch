@@ -3,7 +3,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { api, ApiError, errOf } from "./client";
 import type { Change } from "@/components/ChangesBox";
-import { mergeChanges, useLiveAppend } from "./live";
+import { liveRuleOf, mergeChanges, useLiveAppend, type LiveRule } from "./live";
 import { reloadKeepingPlace } from "./keepPlace";
 import { useHoldOpen } from "@/components/HoldFold";
 import { useCarried, useCarriedLive } from "./pressCarry";
@@ -90,6 +90,8 @@ export function usePress(seenAt: string, onStop?: (data: Record<string, unknown>
   // (Owner) When the box last updated (the stop, or a line added live): the next press goes ahead only if nothing new
   // happened since. Leave and Block (opts.once) still stop just once.
   const [boxAt, setBoxAt] = useCarried(carry, "boxAt", "");
+  // (Owner, Nov 10, §373) The rule the server built the box under (Alerts Off, Alerts types ticked off): lines added live follow it.
+  const [rule, setRule] = useCarried<LiveRule | null>(carry, "liveRule", null);
 
   async function press<T>(path: string, body: Record<string, unknown> = {}, key = ""): Promise<T | null> {
     setBusy(true);
@@ -110,6 +112,7 @@ export function usePress(seenAt: string, onStop?: (data: Record<string, unknown>
         // A stop after a stop adds its new lines to the box.
         setChanges((c) => (c && again ? mergeChanges(c, (e.data.changes as Change[]) ?? []) : ((e.data.changes as Change[]) ?? [])));
         if (typeof e.data.now === "string") setBoxAt(e.data.now);
+        setRule(liveRuleOf(e.data));
         onStop?.(e.data);
       } else {
         setChanges(null);
@@ -121,12 +124,12 @@ export function usePress(seenAt: string, onStop?: (data: Record<string, unknown>
       setBusy(false);
     }
   }
-  // The open box stays live: changes the page picks up meanwhile are added to it.
+  // The open box stays live: changes the page picks up meanwhile are added to it. (§373) Only those its rule keeps: a line left out never moves boxAt.
   useLiveAppend(changes != null, (added) => {
     setChanges((c) => (c ? mergeChanges(c, added) : c));
     const newest = added.map((a) => a.at).sort().pop();
     if (newest) setBoxAt((b) => (b && b > newest ? b : newest));
-  });
+  }, rule);
   // (Batch 35 §40, §41) A press that went through: `finish(line)` redraws the page in place; until it has, the panel stays busy (its buttons greyed) and `done`.
   const fin = useFinished(opts.onFresh);
   // (§371) A press whose panel was swapped meanwhile finishes in the panel shown now.

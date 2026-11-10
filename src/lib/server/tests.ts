@@ -7,7 +7,7 @@ import { dateZone } from "./dateZone";
 import { TEAM_LIFTED_EVENT, TEAM_PAUSED_EVENT, devLiftSince, devPauseMoments, devPauseSince, devStopSince, loadedOf } from "./stopMoment";
 import { replaceLine, takesTheirs } from "@/lib/editMerge";
 import { FIELD_NAMES, INFO_FIELDS, editedLine, saveText } from "@/lib/listingSave";
-import { CALL_ACTS, PAY_ACTS, unanswered, answersIt, devChanges, devForced, logEvent, seenOf, tabOf, withRenamed, type Press } from "./live";
+import { CALL_ACTS, PAY_ACTS, unanswered, answersIt, devBoxRule, devChanges, devForced, logEvent, seenOf, tabOf, withRenamed, type Press } from "./live";
 import { notListed, sidOf } from "./shownLines";
 import { ANSWER_ONE, NOT_REQUIRED, answerChars, answerMin, answerShortLine, answersMissing, qText, sameQuestionSet, sameQuestionWords } from "@/lib/questions";
 import { answerUnit, NOTES_UNIT } from "@/lib/draftUnits";
@@ -416,7 +416,7 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     // an invite…); another tab's Save becomes the per-field lines below.
     // (Owner, Nov 5, §250) Minus what a stop box on this page already listed. Edit's own per-field and key lines (below: what THIS Save holds against what's saved)
     // are not updates but this Save's consequences: they always show.
-    const dc = seen ? withRenamed(notListed(await devChanges(dev.id, testId, seen, tabOf(body), tx, { press: { acts: ["edit"], keys: ["*"] } }), body), body) : [];
+    const dc = seen ? withRenamed(notListed(await devChanges(dev.id, testId, seen, tabOf(body), tx, { press: EDIT_PRESS }), body), body) : [];
     // The "fields you didn't touch keep the newer values" tail only when the listing itself was saved elsewhere.
     const listingEdited = events.some((e) => e.kind === "edited" || e.kind === "edited_spots");
     const current = asListing(t);
@@ -495,6 +495,8 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
       // Both together: the blue stop and any red mistakes (red wins: the next press still saves nothing while red remains).
       throw new HttpError(409, body.ndaOnly === true ? "stop_once" : "changed", dcN.length ? "Press Save again to save." : "This test changed since you opened Edit. Press Save again to save your changes on top.", {
         changes: stop, version: t.version, criticalCounts: counts, current, listingEdited, errors: errs, keys: await keysState(tx, testId), critical: critical.length ? critical : undefined,
+        // (§373) The rule its developer lines were picked under (Save's press): the lines Edit picks up while the box is open follow it.
+        ...(await devBoxRule(testId, EDIT_PRESS, tx)),
       });
     }
     if (errs.length) throw new HttpError(400, "bad_listing", errs[0], { errors: errs, critical: lockedNow.length ? lockedNow : undefined, criticalCounts: counts });
@@ -803,9 +805,12 @@ export async function devGate(tx: Tx, testId: string, body: Record<string, unkno
   const changes = withRenamed(keep ? raw.filter((e) => e.kind === "renamed" || e.kind === "stop" || keep(e)) : raw, body);
   if (changes.length) {
     // (Owner, Nov 3, §160) Each line says whether any Alerts tick could have switched it off (`forced`): the box offers to turn off only the ones that could.
-    throw new HttpError(409, "stop_once", "Press again to go ahead.", { changes: changes.map((c) => devLine({ ...c, forced: devForced(c, press) })), ...extra });
+    // (§373) With the rule it was built under: the lines the page picks up while the box is open follow it.
+    throw new HttpError(409, "stop_once", "Press again to go ahead.", { changes: changes.map((c) => devLine({ ...c, forced: devForced(c, press) })), ...extra, ...(await devBoxRule(testId, press, tx)) });
   }
 }
+/** (§373) Edit's Save, as its developer lines are picked: it touches the whole test. */
+const EDIT_PRESS: Press = { acts: ["edit"], keys: ["*"] };
 /** The developer's own Stop made in another tab, as its line reads. */
 const OWN_STOP_LINE = "You stopped the test in another tab";
 

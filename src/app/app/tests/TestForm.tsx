@@ -7,7 +7,7 @@ import { TERMS_UPDATED_CODE } from "@/lib/termsOfUse";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChangesBox, type Change } from "@/components/ChangesBox";
 import { Err } from "@/components/Err";
-import { mergeChanges, useLiveAppend } from "@/lib/live";
+import { liveRuleOf, mergeChanges, useLiveAppend, type LiveRule } from "@/lib/live";
 import { QUESTIONS_RULE_LINE, qRequired, qStored, qText, questionLimitLine, capQuestions, sameQuestionSet } from "@/lib/questions";
 import { MistakeList, focusFirstMistake, markServerMistakes, useLocalMin } from "@/components/FieldChecks";
 import { BUILD_URL_LINE, BUILD_URL_PATTERN, fieldOfMistake, isCriticalLine, type ListingField } from "@/lib/listingFields";
@@ -181,11 +181,13 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
   // (Owner, Oct 27) "I confirm this part pays more than $200." per part.
   const [high, setHigh] = useState<Record<string, boolean>>({});
   const confirmHigh = () => (["written", "recording"] as const).filter((k) => high[k]);
+  // (Owner, Nov 10, §373) The rule the server built the box under (this test's Alerts ticks): a line Edit picks up joins the box, and moves boxAt, only if it keeps it.
+  const [liveRule, setLiveRule] = useState<LiveRule | null>(null);
   useLiveAppend(changes != null, (added) => {
     setChanges((c) => (c ? mergeChanges(c, added) : c));
     const newest = added.map((a) => a.at).sort().pop();
     if (newest) setBoxAt((b) => (b && b > newest ? b : newest));
-  });
+  }, liveRule);
   const [saved, setSaved] = useState("");
   const [refusal, setRefusal] = useState("");
   // (§156) The refusal names the press: Save / Post the test, or the draft's Delete.
@@ -590,6 +592,7 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
         // The blue stop (what changed since Edit opened), and any red mistakes with it. Fields saved elsewhere take their new value here.
         setChanges((c) => (c ? mergeChanges(c, (err.data.changes as Change[]) ?? []) : (err.data.changes as Change[])));
         if (typeof err.data.now === "string") setBoxAt(err.data.now);
+        setLiveRule(liveRuleOf(err.data));
         setListingEdited(err.data.listingEdited === true);
         showServer(Array.isArray(err.data.errors) ? (err.data.errors as string[]) : []);
         if (typeof err.data.version === "number") setVersion(err.data.version);

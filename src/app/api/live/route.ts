@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 import { lineLinks, linkPool } from "@/lib/server/lineLinks";
 import { displayName, fmtDate } from "@/lib/server/dateFormat";
-import { DEV_QUIET_KINDS, ratedYouLiveLine } from "@/lib/rules";
+import { DEV_QUIET_KINDS, ratedYouLiveLine, type TestEventLike } from "@/lib/rules";
 import { handle, HttpError, ok } from "@/lib/server/http";
 import { joinPageChanges } from "@/lib/server/joining";
 import { invitesSentSince } from "@/lib/server/invites";
@@ -9,7 +9,8 @@ import { asLines, devChanges } from "@/lib/server/live";
 import { requireUser } from "@/lib/server/session";
 import { outageLines } from "@/lib/server/outages";
 import { renderTimes } from "@/lib/tz";
-import { ALERTS_OFF_KINDS, testerChanges } from "@/lib/server/testerGate";
+import { ALERTS_OFF_KINDS, stopsWithAlertsOff, testerChanges } from "@/lib/server/testerGate";
+import { alertOf } from "@/lib/alerts";
 import { ownTest } from "@/lib/server/tests";
 import { inviteClosedLine } from "@/lib/server/invites";
 import { DROP_KINDS } from "@/lib/requestDrop";
@@ -87,6 +88,11 @@ export async function GET(req: Request) {
     if (kind === "test") lines.forEach((l, i) => { if ((DEV_QUIET_KINDS as readonly string[]).includes(shown[i].kind)) Object.assign(l, { quiet: true }); });
     // (Owner, Nov 4, §184) The tester's own requests dropped by a booking: a quiet live-box line too.
     if (kind === "session") lines.forEach((l, i) => { if (shown[i].kind === DROP_KINDS.devQuiet) Object.assign(l, { quiet: true }); });
+    // (Owner, Nov 10, §373) What an open stop box under a button needs to follow the rule it was built under (its `liveRule`, lib/live.ts boxKeeps): on the
+    // tester's page, whether the line stops a press with Alerts Off whatever the press (`forced`: also the stop or end of their work) and the part it is about
+    // (`part`: a payment on the part the press is about stops it too); on the developer's, what devKeeps reads (`facts`) on a line an Alerts tick could switch off.
+    if (kind === "session") lines.forEach((l, i) => { const e = shown[i] as TestEventLike; Object.assign(l, { ...(stopsWithAlertsOff(e) || e.kind === "ended" ? { forced: true } : {}), ...(e.piece ? { part: e.piece } : {}) }); });
+    if (kind === "test") lines.forEach((l, i) => { const e = shown[i] as TestEventLike & { contractId?: string | null }; if (alertOf(e.kind)) Object.assign(l, { facts: { kind: e.kind, ...(e.contractId ? { contractId: e.contractId } : {}), ...(e.piece ? { piece: e.piece } : {}), ...(e.item ? { item: e.item } : {}), ...(e.charge ? { charge: true } : {}) } }); });
     // (Batch 15 section 26) A tester with Alerts Off: everything but their contract's changes shows greyed (it won't stop a press).
     if (kind === "session" && u.testerAlertsOff) lines.forEach((l, i) => { if (!ALERTS_OFF_KINDS.has(shown[i].kind)) Object.assign(l, { ignored: true }); });
     // (Owner, Nov 5, §270) Each line's people and tests, each drawn as its own green link in the top box (and in a stop box that takes the line in).

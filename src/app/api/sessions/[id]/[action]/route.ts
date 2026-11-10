@@ -96,7 +96,8 @@ async function stateMoment(contractId: string, action: string, body: Record<stri
     } catch (e) {
       if (e instanceof HttpError && e.code === "stop_once" && Array.isArray(e.data?.changes)) {
         more = e.data.changes as typeof more;
-        extra = { top: e.data.top === true, alertsOff: e.data.alertsOff === true };
+        // (§373) And the rule that box was built under: the lines the page picks up while it is open follow it (lib/live.ts boxKeeps).
+        extra = { top: e.data.top === true, alertsOff: e.data.alertsOff === true, ...(e.data.liveRule ? { liveRule: e.data.liveRule } : {}) };
       } else throw e;
     }
   }
