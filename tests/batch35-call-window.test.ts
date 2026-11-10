@@ -380,10 +380,11 @@ describe("§132 the forms offer only what's inside the window, and follow it liv
 
 describe("§132 the Terms of Use say when a call can be booked", () => {
   it("section 7 states the window (in version 2's What changed) and nothing says a call can be booked after a deadline", async () => {
-    expect(CALL_WINDOW_TERMS).toBe("A call can be booked at least 24 hours ahead, and no later than when testers' work on the test ends (the latest tester's deadline, or Open until if later); daily and weekly calls stop there.");
+    // (Owner, Nov 9, §361, in place) Worded as test close: the later of Open until and the last tester's deadline, not each tester's own.
+    expect(CALL_WINDOW_TERMS).toBe("A call can be booked at least 24 hours ahead, and up to when the test closes: the later of Open until and the last tester's deadline, not each tester's own deadline (a tester still working after their own deadline can book until the test closes). Daily, weekly and ongoing calls stop there.");
     expect(TERMS_VERSION).toBe(2);
     const v2 = WHAT_CHANGED.find((w) => w.version === 2)!;
-    expect(v2.points).toContain("A call can be booked at least 24 hours ahead, and no later than when testers' work on the test ends (the latest tester's deadline, or Open until if later); daily and weekly calls stop there (section 7).");
+    expect(v2.points).toContain(`${CALL_WINDOW_TERMS.replace(/\.$/, "")} (section 7).`);
     const { default: TermsPage } = await import("@/app/terms/page");
     const page = TermsPage() as React.ReactElement<{ children: React.ReactNode }>;
     const html = unescape(render(h(React.Fragment, null, page.props.children)));
