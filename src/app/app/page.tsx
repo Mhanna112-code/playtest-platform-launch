@@ -214,7 +214,7 @@ async function DeveloperDashboard({ user, now, category, restricted }: { user: V
   // (Batch 17 §19) A piece whose Pay closed (its own closing date) has nothing left to pay: it leaves Needs review (and the count); in its last 7 days the test's row
   // says when Pay closes (the soonest such piece).
   const unpaidKeys: { submissionId?: string; callId?: string }[] = allTests.flatMap((t) => t.contracts.flatMap((c) => [...c.submissions.filter((x) => !x.review).map((x) => ({ submissionId: x.id })), ...c.calls.filter((y) => y.status === "booked" && callMinutesOf(y) != null && !y.review).map((y) => ({ callId: y.id }))]));
-  const payCloses = new Map(await Promise.all(unpaidKeys.map(async (k) => [k.submissionId ?? k.callId!, await pieceCloseOut(k, "developer", now)] as const)));
+  const payCloses = new Map(await Promise.all(unpaidKeys.map(async (k) => [k.submissionId ?? k.callId!, await pieceCloseOut(k, now)] as const)));
   const payShut = (pieceId: string) => closedOut(payCloses.get(pieceId) ?? null, now);
   const [apps, reqs, spent, unreadList, invites, owedPays, freeKeys, nextCalls] = await Promise.all([
     db.application.findMany({ where: { testId: { in: allTests.filter((t) => t.status !== "stopped").map((t) => t.id) }, status: "pending" }, orderBy: { createdAt: "desc" } }).then(answerable), // (batch 34 §16) not an invited applicant
@@ -246,7 +246,7 @@ async function DeveloperDashboard({ user, now, category, restricted }: { user: V
       if (!testerPayable(c.tester)) continue;
       for (const s of c.submissions.filter((x) => !x.review && !payShut(x.id))) items.push({ key: `s-${s.id}`, at: s.sentAt, href: `/app/tests/${t.id}#piece-${s.id}`, who, whoHref, text: <>sent {poss} {s.kind === "recording" ? "recording" : "written answers"} for <b className="text-white"><NameLink text={t.title} kind="test" href={`/app/tests/${t.id}`} /></b></>, cta: "Review" });
       // (Batch 30 §2; batch 35 §136) Something added to a piece after it was paid, while it can still be paid more: in Needs review too (it opens its row).
-      for (const s of c.submissions.filter((x) => updateWaiting(x))) if (await updateRoomLeft(s.id, t.id)) items.push({ key: `s-u-${s.id}`, at: s.paidUpdateAt!, href: `/app/tests/${t.id}#update-${s.id}`, who, whoHref, text: <>added to {poss} {s.kind === "recording" ? "recording" : "written answers"} for <b className="text-white"><NameLink text={t.title} kind="test" href={`/app/tests/${t.id}`} /></b> after you paid</>, cta: "Review" });
+      for (const s of c.submissions.filter((x) => updateWaiting(x))) if (await updateRoomLeft(s.id)) items.push({ key: `s-u-${s.id}`, at: s.paidUpdateAt!, href: `/app/tests/${t.id}#update-${s.id}`, who, whoHref, text: <>added to {poss} {s.kind === "recording" ? "recording" : "written answers"} for <b className="text-white"><NameLink text={t.title} kind="test" href={`/app/tests/${t.id}`} /></b> after you paid</>, cta: "Review" });
       // (Batch 15 section 40) A call that took place, once its measured length is final: pay it.
       for (const x of c.calls.filter((y) => y.status === "booked" && callMinutesOf(y) != null && !y.review && !payShut(y.id))) items.push({ key: `c-${x.id}`, at: x.startsAt, href: `/app/tests/${t.id}#call-${x.id}`, who, whoHref, text: <>had a live call for <b className="text-white"><NameLink text={t.title} kind="test" href={`/app/tests/${t.id}`} /></b>: pay it</>, cta: "Review" });
     }
@@ -421,13 +421,13 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
   const byEnd = (a: (typeof contracts)[number], b: (typeof contracts)[number]) => (b.endedAt ?? b.joinedAt).getTime() - (a.endedAt ?? a.joinedAt).getTime();
   // Sent and waiting for the developer's review.
   // (Batch 17 §19) Work unpaid when its Charge closed (its own closing date, for the tester) stays unpaid: it leaves "Waiting for review" and "Charge or cancel".
-  const chargeCloses = new Map(await Promise.all(contracts.flatMap((c) => c.submissions.filter((s) => !s.review)).map(async (s) => [s.id, await pieceCloseOut({ submissionId: s.id }, "tester", now)] as const)));
+  const chargeCloses = new Map(await Promise.all(contracts.flatMap((c) => c.submissions.filter((s) => !s.review)).map(async (s) => [s.id, await pieceCloseOut({ submissionId: s.id }, now)] as const)));
   const chargeShut = (pieceId: string) => closedOut(chargeCloses.get(pieceId) ?? null, now);
   const waiting = contracts.flatMap((c) => c.submissions.filter((s) => !s.review && !chargeShut(s.id)).map((s) => ({ c, s }))).sort((a, b) => b.s.sentAt.getTime() - a.s.sentAt.getTime());
   // (Owner, Nov 2, batch 35 §118) A call that took place and waits for the developer's Pay counts too: measured, still booked, no review, Pay not closed. A listed
   // call's amount is the tester's share of its rate × the measured minutes; an unlisted call shows no amount.
   const measuredCalls = (await db.call.findMany({ where: { contractId: { in: ids }, status: "booked", review: { is: null }, startsAt: { lte: now } }, orderBy: { startsAt: "desc" } })).filter((x) => callMinutesOf(x) != null);
-  const callPayShut = new Map(await Promise.all(measuredCalls.map(async (x) => [x.id, closedOut(await pieceCloseOut({ callId: x.id }, "developer", now), now)] as const)));
+  const callPayShut = new Map(await Promise.all(measuredCalls.map(async (x) => [x.id, closedOut(await pieceCloseOut({ callId: x.id }, now), now)] as const)));
   const waitingCalls = measuredCalls.filter((x) => !callPayShut.get(x.id) && byId.has(x.contractId)).map((x) => ({ c: byId.get(x.contractId)!, x, minutes: callMinutesOf(x)!, cents: x.rateCents != null ? testerShare(callCharge(x.rateCents, callMinutesOf(x)!)) : null }));
   const pendingCents = waiting.reduce((n, { s }) => n + (s.agreedCents != null ? testerShare(s.agreedCents) : 0), 0) + waitingCalls.reduce((n, w) => n + (w.cents ?? 0), 0);
   // "To do": every part not sent yet (newest test first), each with a Send work button that opens the part. A test can be here and in Charge or cancel at once.

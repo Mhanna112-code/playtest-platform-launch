@@ -1670,7 +1670,7 @@ async function saveAddition(tx: Tx, tester: U, contractId: string, existing: Sen
 
 /** (Batch 35 §136) The developer's live line for a send or an addition (after a Pay: below the cap a stop-once "sent" line, at the cap a quiet one). */
 export async function tellSent(tx: Tx, p: { testId: string; contractId: string; subId: string; name: string; poss: string; part: "written answers" | "recording"; added: boolean; paid: boolean; n?: number; /** (§167) the question added to */ question?: string }) {
-  const afterPaid = p.paid ? await paidUpdateRoom(tx, p.subId, p.testId) : null;
+  const afterPaid = p.paid ? await paidUpdateRoom(tx, p.subId) : null;
   const text = afterPaid ? (afterPaid.atCap ? updatedAtCapLive : updatedAfterPaidLive)(p.name, p.poss, p.part, p.n, p.question) : p.added ? `${p.name} ${addedWhat(p.poss, p.part, p.n, p.question)}` : `${p.name} sent ${p.poss} ${p.part}`;
   await recordEvent(tx, p.testId, afterPaid?.atCap ? "sentpaid" : "sent", text, false, {}, p.contractId, "", `part-${p.subId}`);
   return afterPaid;

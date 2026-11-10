@@ -2,7 +2,6 @@ import { db } from "@/lib/db";
 import { workEndOf } from "@/lib/pause";
 import { CLOSE_OUT_DAYS, RATED_NO_DISPUTE, closeOutBase, disputeClosedLine, pieceDueAt, reviewDateOf } from "@/lib/rules";
 import { fmtDate } from "@/lib/server/dateFormat";
-import { callMinutesOf } from "@/lib/callMeasure";
 
 /**
  * (Owner, Oct 28, batch 17 section 19, final) Each test's CLOSE-OUT date: 14 days after the last tester's deadline (closeOutBase), moved later by every pause after that
@@ -147,40 +146,13 @@ export async function testerRatingClosesAt(contractId: string, now = new Date())
 }
 
 /**
- * (Owner, final; Batch 17 §19) When Pay more closes: together with the last Pay / Charge on the test. One date per test: the test's close-out, or, when a piece's own
- * window runs later (14 days after its Charge opened, the developer's side as pieceCloseOut: the later of its tester's deadline and 7 days after sending), that later
- * date. Over the test's sent pieces (parts, and calls that took place), moved by the same pauses and outages. null while the close-out isn't known.
+ * (Owner, final) When one piece (a part or a listed call) closes. The test's close-out, except that each piece gets at least 14 days of Charge from when its Charge
+ * opened (the later of its tester's deadline and 7 days after sending), moved by the same pauses and outages. A tester whose tester side was suspended gets that time
+ * added (their Charge is hidden while suspended). null while the test's close-out isn't known.
+ * (Owner, Nov 11, §378; replaces batch 17 §19's one Pay more date per test and the developer side's own date) ONE date per piece for all of them: the tester's
+ * Charge / Let it go, the developer's Pay AND Pay more on that piece close together, on this date (the tester's suspension time included).
  */
-export async function payMoreClosesAt(testId: string, now = new Date()) {
-  const t = await db.test.findUnique({
-    where: { id: testId },
-    include: {
-      developer: true,
-      contracts: {
-        select: {
-          status: true, dueAt: true, endedAt: true,
-          submissions: { select: { payBy: true, stintDueAt: true } },
-          calls: { where: { status: "booked" }, select: { payBy: true, stintDueAt: true, actualMinutes: true, measuredMinutes: true, measuredAt: true } },
-        },
-      },
-    },
-  });
-  if (!t) return null;
-  const base = closeOutBase(t, t.contracts, now);
-  if (!base) return null;
-  const opens = t.contracts.flatMap((c) => [...c.submissions, ...c.calls.filter((x) => callMinutesOf(x) != null)].flatMap((x) => (x.payBy ? [reviewDateOf(x.payBy, pieceDueAt(x, c)).getTime()] : [])));
-  const spans = await testSpans(t, new Date(Math.min(base.getTime(), ...opens)), now);
-  const ends = [base.getTime(), ...opens].map((from) => windowEnd(new Date(from), spans, now, CLOSE_OUT_DAYS).end.getTime());
-  return new Date(Math.max(...ends));
-}
-
-/**
- * (Owner, final) When one piece (a part or a listed call) closes: Charge / Let it go for the tester (`side` "tester") and Pay for the developer ("developer"). The test's
- * close-out, except that each piece gets at least 14 days of Charge from when its Charge opened (the later of its tester's deadline and 7 days after sending), moved by
- * the same pauses and outages. A tester whose tester side was suspended gets that time added to their pieces' Charge windows (their Charge is hidden while suspended).
- * null while the test's close-out isn't known.
- */
-export async function pieceCloseOut(where: { submissionId?: string | null; callId?: string | null }, side: "tester" | "developer", now = new Date()) {
+export async function pieceCloseOut(where: { submissionId?: string | null; callId?: string | null }, now = new Date()) {
   const piece = where.submissionId
     ? await db.submission.findUnique({ where: { id: where.submissionId }, select: { payBy: true, contractId: true, stintDueAt: true } })
     : where.callId
@@ -194,11 +166,8 @@ export async function pieceCloseOut(where: { submissionId?: string | null; callI
   const base = closeOutBase(t, t.contracts, now);
   if (!base) return null;
   const opens = piece.payBy ? reviewDateOf(piece.payBy, pieceDueAt(piece, c)) : null; // (§313c) an earlier stint's work keeps its deadline
-  let spans = await testSpans(t, new Date(Math.min(base.getTime(), opens?.getTime() ?? Infinity)), now);
-  if (side === "tester") {
-    const tEvents = await db.accountEvent.findMany({ where: { userId: c.tester.id, kind: { in: ["suspended", "reinstated"] } }, select: { kind: true, side: true, createdAt: true } });
-    spans = mergeSpans([...spans, ...testerPauseSpans(tEvents, c.tester.testerSuspendedAt, now)]);
-  }
+  const tEvents = await db.accountEvent.findMany({ where: { userId: c.tester.id, kind: { in: ["suspended", "reinstated"] } }, select: { kind: true, side: true, createdAt: true } });
+  const spans = mergeSpans([...(await testSpans(t, new Date(Math.min(base.getTime(), opens?.getTime() ?? Infinity)), now)), ...testerPauseSpans(tEvents, c.tester.testerSuspendedAt, now)]);
   const testEnd = windowEnd(base, spans, now, CLOSE_OUT_DAYS).end;
   const own = opens ? windowEnd(opens, spans, now, CLOSE_OUT_DAYS).end : null;
   return own && own > testEnd ? own : testEnd;
@@ -220,7 +189,7 @@ export async function disputesClosed(contractId: string, pieces: { submissionId?
   for (const k of keys) {
     const id = (k.submissionId ?? k.callId)!;
     if (rated) { out.set(id, RATED_NO_DISPUTE); continue; }
-    const at = await pieceCloseOut(k, "tester", now);
+    const at = await pieceCloseOut(k, now);
     if (closedOut(at, now)) out.set(id, disputeClosedLine(fmtDate(at!)));
   }
   return out;

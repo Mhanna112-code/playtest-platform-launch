@@ -1985,9 +1985,9 @@ export function closeOutBase(t: { status: string; stoppedAt: Date | null; openUn
 export const ratingClosedLine = (date: string) => `Rating closed on ${date}.`;
 
 // ---------- (Owner, Oct 28, Batch 17 §19, final) Close-out, the money half: Pay more with the test's last Pay / Charge; Pay, Charge and Let it go per piece ----------
-// (Batch 17 §19 replaces batch 16 section 22: Pay more no longer closes 30 days after the test ended, but together with the last Pay / Charge on the test: server/closeOut payMoreClosesAt.)
-// Each piece's Charge / Let it go and the developer's Pay close on that piece's own date (server/closeOut pieceCloseOut: the test's close-out, or 14 days after its Charge
-// opened if later; the tester's side adds the time their tester side was suspended). Unpaid work stays unpaid. Disputes are unchanged.
+// (Owner, Nov 11, §378; replaces batch 17 §19's one Pay more date per test) Each piece's Charge / Let it go, the developer's Pay and Pay more on it all close on that piece's
+// own date (server/closeOut pieceCloseOut: the test's close-out, or 14 days after its Charge opened if later, plus the time the tester's tester side was suspended).
+// Unpaid work stays unpaid. Disputes are unchanged.
 
 /** The last days before close-out in which the boxes and Needs you rows say when they close. */
 export const CLOSE_OUT_WARN_DAYS = 7;

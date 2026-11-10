@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { expect, it, vi } from "vitest";
 import { db } from "@/lib/db";
-import { closeOutOf, disputeClosedFor, payMoreClosesAt, pieceCloseOut, testerRatingClosesAt } from "@/lib/server/closeOut";
+import { closeOutOf, disputeClosedFor, pieceCloseOut, testerRatingClosesAt } from "@/lib/server/closeOut";
 import { devRateStates } from "@/lib/server/ratings";
 import { pauseTest, unpauseTest } from "@/lib/server/restrictions";
 import { joined, setup } from "./fixtures";
@@ -45,8 +45,8 @@ it("BlockTest rehearsal: lifting a two-day team pause shifts working and settlem
   const piece = { submissionId: submission.id };
   const windows = (now: Date) => Promise.all([
     closeOutOf(closed.testId, now), testerRatingClosesAt(finished.sessionId, now),
-    pieceCloseOut(piece, "developer", now), pieceCloseOut(piece, "tester", now),
-    pieceCloseOut({ callId: call.id }, "tester", now), payMoreClosesAt(closed.testId, now),
+    pieceCloseOut(piece, now), pieceCloseOut(piece, now),
+    pieceCloseOut({ callId: call.id }, now), pieceCloseOut(piece, now), // (Owner, Nov 11, §378) Pay more: the piece's own date
     devRateStates([rated.sessionId], now).then((states) => states.get(rated.sessionId)?.endsAt ?? null),
   ]);
   vi.useFakeTimers({ toFake: ["Date"] });

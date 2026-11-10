@@ -31,12 +31,12 @@ async function openPieces(scope: TeamCloseScope, now = new Date()): Promise<Piec
   for (const c of contracts) {
     const base = { contractId: c.id, testId: c.testId, title: c.test.title, tester: displayName(c.tester), testerId: c.testerId, testerEmail: c.tester.email };
     for (const s of c.submissions) {
-      if (closedOut(await pieceCloseOut({ submissionId: s.id }, "developer", now), now)) continue; // already closed unpaid at its closing date
+      if (closedOut(await pieceCloseOut({ submissionId: s.id }, now), now)) continue; // already closed unpaid at its closing date
       out.push({ ...base, kind: "submission", id: s.id, part: s.kind === "recording" ? "recording" : "written answers", at: s.sentAt });
     }
     for (const x of c.calls) {
       if (callMinutesOf(x) == null) continue; // still being measured: not a piece yet
-      if (closedOut(await pieceCloseOut({ callId: x.id }, "developer", now), now)) continue;
+      if (closedOut(await pieceCloseOut({ callId: x.id }, now), now)) continue;
       out.push({ ...base, kind: "call", id: x.id, part: "live call", at: x.startsAt });
     }
   }

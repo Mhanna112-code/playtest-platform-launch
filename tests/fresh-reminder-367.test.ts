@@ -80,7 +80,7 @@ describe("§367 (fake clock) each reminder series", () => {
 
   it("the developer's Closing soon reminders", async () => {
     const w = await sentWork();
-    const at = (await pieceCloseOut({ submissionId: w.sub.id }, "developer", LATER()))!;
+    const at = (await pieceCloseOut({ submissionId: w.sub.id }, LATER()))!;
     const day = (d: number) => new Date((Math.floor(at.getTime() / DAY) + d) * DAY + 3_600_000); // 1 AM UTC on a day relative to the closing day
     const lines = async () => (await db.notification.findMany({ where: { userId: w.dev.user.id, reminderKey: { startsWith: "closesoon:" } }, orderBy: { createdAt: "asc" } })).map((l) => l.text);
     await runDaily(new Date(at.getTime() - 10 * DAY)); // Charge opens: the countdown's 1 week, 3 days and 1 day are all ahead
@@ -89,7 +89,7 @@ describe("§367 (fake clock) each reminder series", () => {
     expect(before).toHaveLength(1);
     expect(before[0]).toContain(D(at));
     await outageBefore(at);
-    const at2 = (await pieceCloseOut({ submissionId: w.sub.id }, "developer", day(0)))!;
+    const at2 = (await pieceCloseOut({ submissionId: w.sub.id }, day(0)))!;
     expect(at2.getTime() - at.getTime()).toBe(2 * DAY);
     await runDaily(day(0));
     const fresh = (await lines()).slice(1);
@@ -106,7 +106,7 @@ describe("§367 (fake clock) each reminder series", () => {
 
   it("the tester's Charge closing reminders (the daily Charge or let go line)", async () => {
     const w = await sentWork();
-    const atC = (await pieceCloseOut({ submissionId: w.sub.id }, "tester", LATER()))!;
+    const atC = (await pieceCloseOut({ submissionId: w.sub.id }, LATER()))!;
     const lines = async () => (await db.notification.findMany({ where: { userId: w.tester.user.id, reminderKey: "chargeday" }, orderBy: { createdAt: "asc" } })).map((l) => l.text);
     const t1 = new Date(atC.getTime() - 0.5 * DAY);
     await at(new Date(atC.getTime() - 3 * DAY), runDaily); // Charge opens
@@ -115,7 +115,7 @@ describe("§367 (fake clock) each reminder series", () => {
     expect(before.length).toBeGreaterThanOrEqual(1);
     expect(before[before.length - 1]).toContain(D(atC));
     await outageBefore(atC);
-    const at2 = (await pieceCloseOut({ submissionId: w.sub.id }, "tester", t1))!;
+    const at2 = (await pieceCloseOut({ submissionId: w.sub.id }, t1))!;
     expect(at2.getTime() - atC.getTime()).toBe(2 * DAY);
     await at(new Date(t1.getTime() + 3_600_000), runDaily); // within the day: the daily line alone would wait
     const fresh = (await lines()).slice(before.length);

@@ -79,7 +79,7 @@ describe("§358 a closed test isn't paused by what starts after its work ended",
     const a = await makeUser({ name: "Admin" });
     await db.user.update({ where: { id: a.user.id }, data: { isAdmin: true } });
     const before = await closeOutOf(x.testId);
-    const piece0 = await pieceCloseOut({ submissionId: x.sub.id }, "tester");
+    const piece0 = await pieceCloseOut({ submissionId: x.sub.id });
     const events0 = await db.testEvent.count({ where: { testId: x.testId } });
     const bells0 = await db.notification.count({ where: { userId: x.j.tester.user.id } });
     await suspendAccount(a.user.id, x.dev.user.id, "Checking the account", "developer");
@@ -89,7 +89,7 @@ describe("§358 a closed test isn't paused by what starts after its work ended",
     expect(await db.testEvent.count({ where: { testId: x.testId, kind: "paused" } })).toBe(0);
     await db.user.update({ where: { id: x.dev.user.id }, data: { devSuspendedAt: new Date(Date.now() - HOUR) } });
     expect((await closeOutOf(x.testId))?.getTime()).toBe(before?.getTime());
-    expect((await pieceCloseOut({ submissionId: x.sub.id }, "tester"))?.getTime()).toBe(piece0?.getTime());
+    expect((await pieceCloseOut({ submissionId: x.sub.id }))?.getTime()).toBe(piece0?.getTime());
     await reinstateAccount(x.dev.user.id, "developer");
     expect(await db.testEvent.count({ where: { testId: x.testId, kind: { in: ["paused", "resumed"] } } })).toBe(0);
     expect(await db.testEvent.count({ where: { testId: x.testId } })).toBe(events0);

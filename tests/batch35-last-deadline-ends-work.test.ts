@@ -150,7 +150,7 @@ describe("work ends at the last tester deadline, with financial windows continui
     const pay = await json(await reviewPOST(req("/api/review", { cookie: f.dev.cookie, body: { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000, payKey: randomUUID(), seenAt: seen(), confirmed: true } })));
     expect(pay.status, JSON.stringify(pay.body)).toBe(200);
     expect(await closeOutOf(f.testId)).toEqual(new Date(f.deadline.getTime() + 14 * DAY));
-    expect(await pieceCloseOut({ submissionId: sub.id }, "tester")).toEqual(new Date(sub.payBy!.getTime() + 14 * DAY));
+    expect(await pieceCloseOut({ submissionId: sub.id })).toEqual(new Date(sub.payBy!.getTime() + 14 * DAY));
     const g = await fixture(); const unpaid = await sent(g);
     vi.setSystemTime(new Date(unpaid.payBy!.getTime() + 1000));
     await runDaily(new Date());

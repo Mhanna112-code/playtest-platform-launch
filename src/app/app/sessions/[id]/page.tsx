@@ -18,7 +18,6 @@ import { PartBadges } from "@/components/Ui";
 import { TesterPaymentTag } from "@/components/TesterPaymentTag";
 import { IN_PROGRESS_TESTER, limitedTermsDiff, callJoinable, bookedLateLabel, isBookedLate, chargeAmount, choiceLine, cancelNeedsReason, canDispute, NOTHING_TO_DISPUTE, RATE_CLOSES_DISPUTES, closesInLine, isLate, pausedForTesters, callListed, termsLine, testPaused, testerShare, leftText, PAID_ZERO_LABEL } from "@/lib/rules";
 import { disputeRoom, paidAndCap } from "@/lib/server/payments";
-import { payMoreClosesAt } from "@/lib/server/closeOut";
 import { payClosedLine, testerPaidMostLine, testerPayMoreLine } from "@/lib/rules";
 import { callIsOver, callLengthLine, callMinutesOf, callOverBadge, callsLeftWarning, MEASURING_LINE } from "@/lib/callMeasure";
 import { callsLeftCents } from "@/lib/server/callMoney";
@@ -272,7 +271,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
   // (Batch 17 §19) Each unpaid piece's own closing date for the tester (the test's close-out, or 14 days after its Charge opened if later, plus the time their tester side
   // was suspended): Charge and Let it go end then and the piece reads "Not paid (closed on <date>)"; its Charge box says when in its last 7 days.
   const openKeys: { submissionId?: string; callId?: string }[] = [...c.submissions.filter((x) => !x.review).map((x) => ({ submissionId: x.id })), ...c.calls.filter((x) => !x.review && x.status === "booked").map((x) => ({ callId: x.id }))];
-  const chargeCloses = new Map(await Promise.all(openKeys.map(async (k) => [k.submissionId ?? k.callId!, await pieceCloseOut(k, "tester", now)] as const)));
+  const chargeCloses = new Map(await Promise.all(openKeys.map(async (k) => [k.submissionId ?? k.callId!, await pieceCloseOut(k, now)] as const)));
   const chargeShut = (pieceId?: string) => !!pieceId && closedOut(chargeCloses.get(pieceId) ?? null, now);
   const shutOn = (pieceId: string) => fmtDate(chargeCloses.get(pieceId)!);
   const chargeSoon = (pieceId?: string) => (pieceId && closeOutSoon(chargeCloses.get(pieceId) ?? null, now) ? chargeClosesLine(fmtDate(chargeCloses.get(pieceId)!)) : "");
@@ -328,10 +327,12 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
   // (a dispute already open stays as it is). Nothing left to award isn't looked up for a closed part.
   const shutLines = await disputesClosed(c.id, undisputed, now);
   const room = await disputeRoom(undisputed.filter((k) => !shutLines.has(k.submissionId ?? k.callId!)));
-  // (Batch 28 §14) Each paid piece: what it was paid and what Pay more can still bring it to in all; and when Pay more closed (close-out).
-  const caps = await paidAndCap([...[written, recording].filter((x) => x?.review && !x.review.rejected).map((x) => ({ submissionId: x!.id })), ...c.calls.filter((x) => x.review && !x.review.rejected).map((x) => ({ callId: x.id }))]);
-  const payMoreAt = await payMoreClosesAt(c.testId, now);
-  const payMoreShut = closedOut(payMoreAt, now) ? fmtDate(payMoreAt!) : null;
+  // (Batch 28 §14) Each paid piece: what it was paid and what Pay more can still bring it to in all; and when Pay more closed. (Owner, Nov 11, §378; replaces
+  // batch 17 §19's one date per test) Pay more on a piece closes on that piece's own date, with its Pay and Charge (pieceCloseOut).
+  const paidKeys: { submissionId?: string; callId?: string }[] = [...[written, recording].filter((x) => x?.review && !x.review.rejected).map((x) => ({ submissionId: x!.id })), ...c.calls.filter((x) => x.review && !x.review.rejected).map((x) => ({ callId: x.id }))];
+  const caps = await paidAndCap(paidKeys);
+  const payMoreCloses = new Map(await Promise.all(paidKeys.map(async (k) => [k.submissionId ?? k.callId!, await pieceCloseOut(k, now)] as const)));
+  const payMoreShut = (id: string) => (closedOut(payMoreCloses.get(id) ?? null, now) ? fmtDate(payMoreCloses.get(id)!) : null);
   // (Owner, Oct 31, batch 35 §88) "has paid" counts only money that went through: a payment waiting for the developer's bank, or owed during a hold, is left out
   // (the cap still counts it, so "up to … in all" doesn't move).
   const notYetPaid = new Map<string, number>();
@@ -344,7 +345,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
     if (p.kind === "review" || p.kind === "call") pendingBase.add(k);
   }
   const paymentDelayed = (id: string) => (!confirmingBase.has(id) && notYetPaid.has(id)) || delayedSubs.has(id) || chargedOwed.has(id) || disputeOwed.has(id) || owedCalls.has(id);
-  const moreOf = (id: string) => (caps.has(id) ? { ...caps.get(id)!, paidCents: Math.max(0, caps.get(id)!.paidCents - (notYetPaid.get(id) ?? 0)), closedOn: payMoreShut } : null);
+  const moreOf = (id: string) => (caps.has(id) ? { ...caps.get(id)!, paidCents: Math.max(0, caps.get(id)!.paidCents - (notYetPaid.get(id) ?? 0)), closedOn: payMoreShut(id) } : null);
   const disputable = (r: { amountCents: number; agreedCents: number | null; reason: string; teamClosedById?: string | null } | null | undefined, d: unknown, id = "") => !!r && !r.teamClosedById && canAct && canDispute(r.amountCents, r.agreedCents, !!d, byTesterChoice(r.reason), room.get(id) ?? null, shutLines.get(id) ?? null).ok;
   // (Batch 30 §2) A part can be sent again after it's paid (not an old rejection or the team's $0 closure).
   const unpaidPart = canSendAgain(written) || canSendAgain(recording);

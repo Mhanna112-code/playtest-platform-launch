@@ -1583,15 +1583,18 @@ export async function reviewReminders(now: Date, co: CloseOuts = closeOutMemo(no
   }
 }
 
-/** (Batch 17 §19) Each piece's closing date for the developer's Pay and for the tester's Charge (pieceCloseOut), looked up once per daily run. */
+/**
+ * (Batch 17 §19) Each piece's closing date for the developer's Pay and for the tester's Charge (pieceCloseOut), looked up once per daily run. (Owner, Nov 11, §378)
+ * One date per piece for both (and Pay more).
+ */
 function closeOutMemo(now: Date) {
   type Piece = { submissionId?: string; callId?: string };
   const seen = new Map<string, Promise<Date | null>>();
-  const at = (k: Piece, side: "tester" | "developer") => {
-    const key = `${side}:${k.submissionId ?? k.callId}`;
-    return seen.get(key) ?? seen.set(key, pieceCloseOut(k, side, now)).get(key)!;
+  const at = (k: Piece) => {
+    const key = `${k.submissionId ?? k.callId}`;
+    return seen.get(key) ?? seen.set(key, pieceCloseOut(k, now)).get(key)!;
   };
-  return { at, payClosed: async (k: Piece) => closedOut(await at(k, "developer"), now), chargeClosed: async (k: Piece) => closedOut(await at(k, "tester"), now) };
+  return { at, payClosed: async (k: Piece) => closedOut(await at(k), now), chargeClosed: async (k: Piece) => closedOut(await at(k), now) };
 }
 type CloseOuts = ReturnType<typeof closeOutMemo>;
 /** (Batch 17 §19) The reminder mark due before a closing date: 3 (days) once within 3 days, 1 once within a day; none before, or once it passed. */
@@ -1658,7 +1661,7 @@ async function closeOutReminders(now: Date, co: CloseOuts) {
       ...c.calls.filter((x) => callMinutesOf(x) != null).map((x) => ({ k: { callId: x.id }, id: x.id, sub: false, part: "call", when: T(x.startsAt) /* (§327) */, from: x.choiceOfferedAt ?? x.payBy ?? x.startsAt, sent: x.devMarks })),
     ];
     for (const p of pieces) {
-      const at = await co.at(p.k, "developer");
+      const at = await co.at(p.k);
       if (!at || at.getTime() <= now.getTime()) continue;
       const due = closeSoonMarkDue(at, p.from, now, p.sent);
       const mark = due.send;
@@ -1725,7 +1728,7 @@ async function chargeablePieces(co: CloseOuts, where: Prisma.SubmissionWhereInpu
     const paid = (await db.payment.aggregate({ where: { submissionId: s.id, status: { in: ["charged", "not_set_up"] } }, _sum: { amountCents: true } }))._sum.amountCents ?? 0;
     const cents = chargeAmount(s.agreedCents, paid);
     if (cents <= 0) continue;
-    out.push({ id: s.id, who: firstName(c.tester), part: s.kind === "recording" ? "recording" : "written answers", title: c.test.title, testId: c.testId, cents, closes: await co.at({ submissionId: s.id }, "tester"), devId: c.test.developerId, devEmail: c.test.developer.email, testerId: c.testerId, testerEmail: c.tester.email, testerSuspended: !!c.tester.testerSuspendedAt, marks: s.devMarks });
+    out.push({ id: s.id, who: firstName(c.tester), part: s.kind === "recording" ? "recording" : "written answers", title: c.test.title, testId: c.testId, cents, closes: await co.at({ submissionId: s.id }), devId: c.test.developerId, devEmail: c.test.developer.email, testerId: c.testerId, testerEmail: c.tester.email, testerSuspended: !!c.tester.testerSuspendedAt, marks: s.devMarks });
   }
   return out;
 }
@@ -2069,7 +2072,7 @@ async function chargeRefusals(where: { submissionId: string } | { callId: string
 
 /** (Batch 17 §19) Charge and Let it go close on the piece's own closing date for the tester (final: the piece stays unpaid). */
 async function chargeCloseOutGate(where: { submissionId: string } | { callId: string }) {
-  const at = await pieceCloseOut(where, "tester");
+  const at = await pieceCloseOut(where);
   if (closedOut(at)) throw new HttpError(409, "charge_closed", chargeClosedLine(fmtDate(at!)));
 }
 

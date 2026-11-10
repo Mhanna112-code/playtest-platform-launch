@@ -65,7 +65,7 @@ describe("§366 A: a team-paused test that is then stopped reaches its close-out
     await runDaily();
     expect((await db.submission.findUniqueOrThrow({ where: { id: w.sub.id } })).choiceOfferedAt).not.toBeNull();
     // Its Charge closes at a fixed date too.
-    const c1 = await pieceCloseOut({ submissionId: w.sub.id }, "tester", now), c2 = await pieceCloseOut({ submissionId: w.sub.id }, "tester", new Date(now.getTime() + 10 * D));
+    const c1 = await pieceCloseOut({ submissionId: w.sub.id }, now), c2 = await pieceCloseOut({ submissionId: w.sub.id }, new Date(now.getTime() + 10 * D));
     expect(c2!.getTime()).toBe(c1!.getTime());
   });
 });

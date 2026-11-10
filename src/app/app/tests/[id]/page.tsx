@@ -47,7 +47,7 @@ import { ChargebackSteps } from "@/components/ChargebackSteps";
 import { chargebackSteps } from "@/lib/server/chargeback";
 import { PayBox } from "./PayBox";
 import { CONFIRM_WITH_BANK, autoChargeLine, unlistedCloseLine, bankAnchor, joinerDays, paidMostLine, pausedUntil } from "@/lib/rules";
-import { closedOut, payMoreClosesAt, pieceCloseOut } from "@/lib/server/closeOut";
+import { closedOut, pieceCloseOut } from "@/lib/server/closeOut";
 import { BankWaiting } from "@/components/BankWaiting";
 import { HoldFold } from "@/components/HoldFold";
 import type { ReactNode } from "react";
@@ -192,10 +192,14 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const expired = inviteExpired(t);
   const soon = t.openUntil && t.openUntil > new Date() && t.openUntil.getTime() - Date.now() < 3 * 86_400_000;
   const now = new Date();
-  // (Batch 17 §19, replacing batch 16 section 22) Pay more closes together with the last Pay / Charge on the test (payMoreClosesAt); in its
-  // last 7 days the box says "Pay more closes on <date>.".
-  const payMoreAt = await payMoreClosesAt(t.id, now);
-  const payMore = { open: !closedOut(payMoreAt, now), line: closeOutSoon(payMoreAt, now) ? payClosesLine(fmtDate(payMoreAt!), true) : "" };
+  // (Owner, Nov 11, §378; replaces batch 17 §19's one date per test) Pay more on a piece closes on that piece's own date, with its Pay and the tester's Charge
+  // (pieceCloseOut); in its last 7 days that piece's box says "Pay more closes on <date>.".
+  const paidKeys: { submissionId?: string; callId?: string }[] = t.contracts.flatMap((c) => [...c.submissions.filter((x) => x.review).map((x) => ({ submissionId: x.id })), ...c.calls.filter((x) => x.review).map((x) => ({ callId: x.id }))]);
+  const moreCloses = new Map(await Promise.all(paidKeys.map(async (k) => [k.submissionId ?? k.callId!, await pieceCloseOut(k, now)] as const)));
+  const payMore = (pieceId: string) => {
+    const at = moreCloses.get(pieceId) ?? null;
+    return { open: !closedOut(at, now), line: closeOutSoon(at, now) ? payClosesLine(fmtDate(at!), true) : "" };
+  };
   // (Owner, Oct 26) A chargeback hold's steps. (A paused test's closing date is told by bell and shown to the admin, not on the page.)
   const cbSteps = await chargebackSteps(u.id);
   // (Batch 17 §11) Charges made while the developer was away that their bank wants confirmed: "Confirm with your bank" under the affected piece (Payments and the bell link here).
@@ -257,7 +261,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   // (Batch 17 §19) Each unpaid piece's Pay closes on its own date (the test's close-out, or 14 days after its Charge opened if later): then it leaves Needs you and its
   // place reads "Closed on <date>: not paid."; in its last 7 days its Needs you row says "Pay closes on <date>.".
   const unpaidKeys: { submissionId?: string; callId?: string }[] = t.contracts.flatMap((c) => [...c.submissions.filter((x) => !x.review).map((x) => ({ submissionId: x.id })), ...c.calls.filter((x) => tookPlace(x) && !x.review).map((x) => ({ callId: x.id }))]);
-  const payCloses = new Map(await Promise.all(unpaidKeys.map(async (k) => [k.submissionId ?? k.callId!, await pieceCloseOut(k, "developer", now)] as const)));
+  const payCloses = new Map(await Promise.all(unpaidKeys.map(async (k) => [k.submissionId ?? k.callId!, await pieceCloseOut(k, now)] as const)));
   const payShut = (pieceId: string) => closedOut(payCloses.get(pieceId) ?? null, now);
   const shutOn = (pieceId: string) => fmtDate(payCloses.get(pieceId)!);
   const paySoon = (pieceId: string) => (closeOutSoon(payCloses.get(pieceId) ?? null, now) ? fmtDate(payCloses.get(pieceId)!) : "");
@@ -459,7 +463,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
     )) };
   };
   // (Batch 30 §2) Updated versions sent after a piece was paid, below its cap while Pay more is open: each its own Needs you row with the piece's Pay more box.
-  const updates = (restricted && !restrictedPays) || !payMore.open ? [] : t.contracts.filter((c) => testerPayable(c.tester) && !blockedEither.has(c.testerId)).flatMap((c) => c.submissions.filter((x) => updateWaiting(x) && (rooms.get(x.id)?.room ?? 0) > 0).map((x) => ({ c, s: x })))
+  const updates = restricted && !restrictedPays ? [] : t.contracts.filter((c) => testerPayable(c.tester) && !blockedEither.has(c.testerId)).flatMap((c) => c.submissions.filter((x) => updateWaiting(x) && payMore(x.id).open && (rooms.get(x.id)?.room ?? 0) > 0).map((x) => ({ c, s: x })))
     .sort((a, b) => a.s.paidUpdateAt!.getTime() - b.s.paidUpdateAt!.getTime());
   const needsCount = (await developerNeedsRows(u.id,[t.id],now))[0]?.n??0;
   // (Owner, Nov 4, §181) "the parts should have big drop down with their name then part and pay/pay more as own dropdowns": in the person's drop-down each part is a
@@ -543,7 +547,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
         </>)}
         {/* (Owner, Nov 5, §226) In Needs you the press for what's new on a paid part is "Pay" (Pay more's route, checks and stops; the Testers list keeps Pay more). */}
         <HoldFold openOn={[`update-${x.id}`]} className={PART_PANEL} summaryClassName="text-sm font-medium text-white" data={{ "data-fold": `update-pay-${x.id}`, "data-part-panel": "pay" }} summary="Pay">
-        <PayBox more={{ testId: t.id, contractId: c.id }} moreLabel="Pay" update owes={owesNow} fromNeeds kind="submission" id={x.id} name={displayName(c.tester)} seenAt={seenAt} bankWaits={waitsOf(x.id)} bankWaitsId={waitsIdOf(x.id)} bankWaitsKind={waitsKindOf(x.id)} note={payMore.line || undefined}
+        <PayBox more={{ testId: t.id, contractId: c.id }} moreLabel="Pay" update owes={owesNow} fromNeeds kind="submission" id={x.id} name={displayName(c.tester)} seenAt={seenAt} bankWaits={waitsOf(x.id)} bankWaitsId={waitsIdOf(x.id)} bankWaitsKind={waitsKindOf(x.id)} note={payMore(x.id).line || undefined}
           room={rooms.get(x.id)?.box} listingCents={x.agreedCents} listingText={`${money(x.agreedCents)} for ${x.kind === "recording" ? "a recording" : "written answers"}`} />
         </HoldFold>
       </HoldFold>
@@ -799,14 +803,14 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                         // (Batch 17 §19) Unpaid at close-out: it stays unpaid.
                         !r.sub.review && payShut(r.sub.id) && testerPayable(c.tester) && <span key="shut" className="block w-full text-sm text-slate-300" data-closed-not-paid="">{closedNotPaidLine(shutOn(r.sub.id))}</span>,
                         // (Owner, Oct 29, batch 11 section 6 / batch 12 section 3) A paid piece keeps its Pay box as "Pay more" until its cap is reached.
-                        r.sub && r.sub.review && !r.sub.review.rejected && !restricted && !blockedEither.has(c.testerId) && !r.sub.review.teamClosedById && payMore.open && (rooms.get(r.sub.id)?.room ?? 0) > 0 && (
+                        r.sub && r.sub.review && !r.sub.review.rejected && !restricted && !blockedEither.has(c.testerId) && !r.sub.review.teamClosedById && payMore(r.sub.id).open && (rooms.get(r.sub.id)?.room ?? 0) > 0 && (
                           <div key="box" className="w-full space-y-1" data-part-pay-more="">
-                          <PayBox more={{ testId: t.id, contractId: c.id }} awayInNeeds owes={owesNow} kind="submission" id={r.sub.id} name={name} seenAt={seenAt} bankWaits={waitsOf(r.sub.id)} bankWaitsId={waitsIdOf(r.sub.id)} bankWaitsKind={waitsKindOf(r.sub.id)} note={payMore.line || undefined}
+                          <PayBox more={{ testId: t.id, contractId: c.id }} awayInNeeds owes={owesNow} kind="submission" id={r.sub.id} name={name} seenAt={seenAt} bankWaits={waitsOf(r.sub.id)} bankWaitsId={waitsIdOf(r.sub.id)} bankWaitsKind={waitsKindOf(r.sub.id)} note={payMore(r.sub.id).line || undefined}
                             room={rooms.get(r.sub.id)?.box} listingCents={r.sub.agreedCents} listingText={`${money(r.sub.agreedCents)} for ${r.name === "Recording" ? "a recording" : "written answers"}`} />
                           </div>
                         ),
                         // (Owner, Oct 29, batch 28 §14) At its cap, where Pay more was (grey).
-                        r.sub.review && !r.sub.review.rejected && !restricted && !r.sub.review.teamClosedById && payMore.open && rooms.has(r.sub.id) && (rooms.get(r.sub.id)?.room ?? 0) <= 0 && <span key="most" className="block w-full text-sm text-slate-400" data-paid-most="">{paidMostLine(rooms.get(r.sub.id)!.paid)}</span>,
+                        r.sub.review && !r.sub.review.rejected && !restricted && !r.sub.review.teamClosedById && payMore(r.sub.id).open && rooms.has(r.sub.id) && (rooms.get(r.sub.id)?.room ?? 0) <= 0 && <span key="most" className="block w-full text-sm text-slate-400" data-paid-most="">{paidMostLine(rooms.get(r.sub.id)!.paid)}</span>,
                         // (Batch 30 §2) An update the tester sent at the cap: nothing more can be paid, so it isn't in Needs you.
                         r.sub.paidUpdateAt && r.sub.review && !r.sub.review.rejected && !r.sub.review.teamClosedById && rooms.has(r.sub.id) && (rooms.get(r.sub.id)?.room ?? 0) <= 0 && <span key="upd" className="badge" data-updated-at-cap="">{UPDATED_AT_CAP}</span>,
                         // (Batch 30 §5) The team closed it for $0, with its reason. (Owner, Nov 6, §281) The reason (the team's, or your note when paying $0) in the
@@ -901,15 +905,15 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                           x.review?.teamClosedById && <LabeledReason key="team" className="text-sm text-slate-300" data={{ "data-team-closed": "" }} line={TEAM_CLOSED_LABEL} id={`review-note-${x.id}`} text={x.review.reason} />, // (Owner, Nov 6, §281)
                           // (Owner, Nov 6, §311e) An unlisted call closed with $0 at its pay date is final: it says so, and has no Pay more.
                           x.review?.reason === UNLISTED_CALL_CLOSED && <p key="unlisted" className="text-sm text-slate-300" data-unlisted-closed="">{UNLISTED_CALL_CLOSED}</p>,
-                          x.review && !x.review.rejected && !restricted && !blockedEither.has(c.testerId) && !x.review.teamClosedById && x.review.reason !== UNLISTED_CALL_CLOSED && payMore.open && (rooms.get(x.id)?.room ?? 0) > 0 && (
+                          x.review && !x.review.rejected && !restricted && !blockedEither.has(c.testerId) && !x.review.teamClosedById && x.review.reason !== UNLISTED_CALL_CLOSED && payMore(x.id).open && (rooms.get(x.id)?.room ?? 0) > 0 && (
                             <div key="box" className="space-y-1" data-call-pay-more="">
-                            <PayBox more={{ testId: t.id, contractId: c.id }} awayInNeeds owes={owesNow} kind="call" id={x.id} name={name} seenAt={seenAt} bankWaits={waitsOf(x.id)} bankWaitsId={waitsIdOf(x.id)} bankWaitsKind={waitsKindOf(x.id)} note={payMore.line || undefined}
+                            <PayBox more={{ testId: t.id, contractId: c.id }} awayInNeeds owes={owesNow} kind="call" id={x.id} name={name} seenAt={seenAt} bankWaits={waitsOf(x.id)} bankWaitsId={waitsIdOf(x.id)} bankWaitsKind={waitsKindOf(x.id)} note={payMore(x.id).line || undefined}
                               room={rooms.get(x.id)?.box} minutes={m ?? x.minutes} rateCents={x.rateCents} warning={callsWarn.get(c.id)}
                               listingCents={callReference(x.rateCents, m ?? x.minutes, c.liveRateCents).cents}
                               listingText={callReference(x.rateCents, m ?? x.minutes, c.liveRateCents).text.replace(/^(Listing|Agreed): /, "")} />
                             </div>
                           ),
-                          x.review && !x.review.rejected && !restricted && !x.review.teamClosedById && x.review.reason !== UNLISTED_CALL_CLOSED && payMore.open && rooms.has(x.id) && (rooms.get(x.id)?.room ?? 0) <= 0 && (
+                          x.review && !x.review.rejected && !restricted && !x.review.teamClosedById && x.review.reason !== UNLISTED_CALL_CLOSED && payMore(x.id).open && rooms.has(x.id) && (rooms.get(x.id)?.room ?? 0) <= 0 && (
                             <p key="most" className="text-sm text-slate-400" data-paid-most="">{paidMostLine(rooms.get(x.id)!.paid)}</p>
                           ),
                         ].filter(Boolean), x.id)}

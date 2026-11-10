@@ -69,7 +69,7 @@ describe("batch 30 §2 (batch 35 §136): adding to a part after it's paid", () =
     expect(devLines[0].text).toBe("Ana Silva added to her answer to “What did you like?” for “Harbor Run”");
     expect(devLines[0].link).toBe(`/app/tests/${w.testId}#update-${w.sub.id}`);
     const { updateRoomLeft } = await import("@/lib/server/paidUpdates");
-    expect(await updateRoomLeft(w.sub.id, w.testId)).toBe(true);
+    expect(await updateRoomLeft(w.sub.id)).toBe(true);
     // $0 Pay more closes the row (no charge), with an optional note.
     const paysBefore = await db.payment.count({ where: { submissionId: w.sub.id } });
     const zero = await more(w.testId, w.dev.cookie, { contractId: w.sessionId, submissionId: w.sub.id, amount: "0", note: "Thanks, nothing new to pay for." });
@@ -104,8 +104,8 @@ describe("batch 30 §2 (batch 35 §136): adding to a part after it's paid", () =
     expect((await pay(w.dev.cookie, { kind: "submission", id: w.sub.id, amount: "500.00", tickedCents: 50000, over200: true })).status).toBe(200);
     expect((await addTo(w.sessionId, w.tester.cookie, { text: LONG2[0], seenAt: seen(), confirmed: true })).status).toBe(200);
     const { paidUpdateRoom, updateRoomLeft } = await import("@/lib/server/paidUpdates");
-    expect((await paidUpdateRoom(db, w.sub.id, w.testId)).atCap).toBe(true);
-    expect(await updateRoomLeft(w.sub.id, w.testId)).toBe(false);
+    expect((await paidUpdateRoom(db, w.sub.id)).atCap).toBe(true);
+    expect(await updateRoomLeft(w.sub.id)).toBe(false);
     const ev = await db.testEvent.findFirstOrThrow({ where: { testId: w.testId, kind: "sentpaid" } });
     expect(ev.text).toBe("Ana Silva added to her answer to “What did you like?” (already paid the most)");
     expect(await db.testEvent.count({ where: { testId: w.testId, kind: "sent", text: { contains: "after you paid" } } })).toBe(0);
@@ -115,8 +115,8 @@ describe("batch 30 §2 (batch 35 §136): adding to a part after it's paid", () =
     // The page: the at-cap tag on the tester's row; the update row only below the cap while Pay more is open.
     const page = src("app/app/tests/[id]/page.tsx");
     expect(page).toContain("{UPDATED_AT_CAP}");
-    expect(page).toContain("updateWaiting(x) && (rooms.get(x.id)?.room ?? 0) > 0");
-    expect(page).toContain("(restricted && !restrictedPays) || !payMore.open ? []");
+    expect(page).toContain("updateWaiting(x) && payMore(x.id).open && (rooms.get(x.id)?.room ?? 0) > 0"); // (Owner, Nov 11, §378) Pay more open on this piece's own date
+    expect(page).toContain("restricted && !restrictedPays ? []"); // (§378) Pay more is checked per piece below
   });
 
   it("Pay more closed (the close-out passed): the update doesn't wait in Needs you", async () => {
@@ -124,12 +124,12 @@ describe("batch 30 §2 (batch 35 §136): adding to a part after it's paid", () =
     expect((await pay(w.dev.cookie, { kind: "submission", id: w.sub.id, amount: "10.00", tickedCents: 1000 })).status).toBe(200);
     expect((await addTo(w.sessionId, w.tester.cookie, { text: LONG2[0], seenAt: seen(), confirmed: true })).status).toBe(200);
     const { updateRoomLeft } = await import("@/lib/server/paidUpdates");
-    expect(await updateRoomLeft(w.sub.id, w.testId)).toBe(true);
+    expect(await updateRoomLeft(w.sub.id)).toBe(true);
     // The last deadline 20 days ago: the close-out (14 days after it) passed.
     await db.contract.update({ where: { id: w.sessionId }, data: { dueAt: new Date(Date.now() - 20 * DAY) } });
     await db.test.update({ where: { id: w.testId }, data: { openUntil: new Date(Date.now() - 21 * DAY) } });
     await db.submission.update({ where: { id: w.sub.id }, data: { payBy: new Date(Date.now() - 20 * DAY) } }); // its own window too
-    expect(await updateRoomLeft(w.sub.id, w.testId)).toBe(false);
+    expect(await updateRoomLeft(w.sub.id)).toBe(false);
   });
 
   it("a paid recording can be added to (new uploads aren't refused); an old rejection and a team closure stay locked", async () => {
@@ -224,7 +224,7 @@ describe("batch 30 §3: late listed work never opens Charge", () => {
     await db.test.update({ where: { id: s.testId }, data: { openUntil: new Date(Date.now() - 21 * DAY) } });
     await db.submission.update({ where: { id: sub.id }, data: { payBy: new Date(Date.now() - 20 * DAY) } });
     const { closedOut, pieceCloseOut } = await import("@/lib/server/closeOut");
-    expect(closedOut(await pieceCloseOut({ submissionId: sub.id }, "developer"))).toBe(true);
+    expect(closedOut(await pieceCloseOut({ submissionId: sub.id }))).toBe(true);
     const r = await pay(s.dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 });
     expect(r.status).toBe(409);
     expect(r.body.error.code).toBe("pay_closed");

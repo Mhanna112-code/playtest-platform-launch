@@ -5,7 +5,7 @@ import { POST as reviewPOST } from "@/app/api/review/route";
 import { POST as confirmPOST } from "@/app/api/payments/confirm/route";
 import { POST as allPOST } from "@/app/api/payments/confirm-all/route";
 import { awayAction } from "@/lib/server/confirm";
-import { pieceCloseOut, payMoreClosesAt } from "@/lib/server/closeOut";
+import { pieceCloseOut } from "@/lib/server/closeOut";
 import { startHold } from "@/lib/server/holds";
 import { deleteAccount, pauseTest } from "@/lib/server/restrictions";
 import { fmtDate } from "@/lib/server/dateFormat";
@@ -145,7 +145,7 @@ describe("§365 money refusals: Pay", () => {
   it("the window closed: Pay closed on the part's closing date", async () => {
     const w = await world();
     await closedOut(w);
-    const at = (await pieceCloseOut({ submissionId: w.sub.id }, "developer"))!;
+    const at = (await pieceCloseOut({ submissionId: w.sub.id }))!;
     await refused(w, () => pay(w, {}), R.payClosedLine(fmtDate(at)));
   });
 
@@ -213,10 +213,10 @@ describe("§365 money refusals: Pay more", () => {
     await refused(w, () => payMore(w), TEAM_CLOSED_NO_PAY);
   });
 
-  it("the window closed: Pay more closed with the test's last Pay / Charge", async () => {
+  it("the window closed: (Owner, Nov 11, §378) Pay more closed on the piece's own date", async () => {
     const w = await paid();
     await closedOut(w);
-    const at = (await payMoreClosesAt(w.testId))!;
+    const at = (await pieceCloseOut({ submissionId: w.sub.id }))!;
     await refused(w, () => payMore(w), R.payClosedLine(fmtDate(at), true));
   });
 
@@ -342,7 +342,7 @@ describe("§365 money refusals: Charge and Let it go", () => {
         const v = await world();
         await closedOut(v, 30);
         await db.submission.update({ where: { id: v.sub.id }, data: { choiceOfferedAt: ago(20), choiceBy: ago(6) } });
-        const at = (await pieceCloseOut({ submissionId: v.sub.id }, "tester"))!;
+        const at = (await pieceCloseOut({ submissionId: v.sub.id }))!;
         await refused(v, () => choose(v, choice), R.chargeClosedLine(fmtDate(at)));
       });
 
@@ -416,7 +416,7 @@ describe("§365 money refusals: Dispute", () => {
     const v = await world();
     expect((await pay(v, { amount: "4.00", tickedCents: 400, reason: "Only half of it was useful", confirmed: true })).status).toBe(200);
     await closedOut(v, 30);
-    const at = (await pieceCloseOut({ submissionId: v.sub.id }, "tester"))!;
+    const at = (await pieceCloseOut({ submissionId: v.sub.id }))!;
     await refused(v, () => dispute(v), R.disputeClosedLine(fmtDate(at)));
   });
 });

@@ -5,7 +5,7 @@ import { db } from "@/lib/db";
 import * as R from "@/lib/rules";
 import { fmtDate } from "@/lib/format";
 import { GET as cronGET } from "@/app/api/cron/daily/route";
-import { closeOutOf, payMoreClosesAt, pieceCloseOut } from "@/lib/server/closeOut";
+import { closeOutOf, pieceCloseOut } from "@/lib/server/closeOut";
 import { closeOutMark } from "@/lib/server/holds";
 import { decideDispute } from "@/lib/server/payments";
 import { makeUser } from "./helpers";
@@ -81,7 +81,8 @@ describe("the close-out date (section 19)", () => {
     expect((await closeOutOf(testId, now))!.getTime()).toBe(now.getTime() + left);
   });
 
-  it("a tester whose tester side was suspended gets that time added to their pieces' Charge (not to the developer's Pay, nor the test's close-out)", async () => {
+  // (Owner, Nov 11, §378) The developer's Pay (and Pay more) close with the tester's Charge: the suspension time counts for all of them.
+  it("a tester whose tester side was suspended gets that time added to their pieces' Charge, Pay and Pay more (not to the test's close-out)", async () => {
     const w = await sentWork("10.00", { spots: 5 });
     const b = await joined(w.testId, "Ben Carter", "he");
     await sact(b.sessionId, "written", b.tester.cookie, { answers: ["a", "b"] });
@@ -93,15 +94,14 @@ describe("the close-out date (section 19)", () => {
     await db.accountEvent.create({ data: { userId: w.tester.user.id, kind: "suspended", side: "tester", createdAt: new Date(base.getTime() + DAY) } });
     await db.accountEvent.create({ data: { userId: w.tester.user.id, kind: "reinstated", side: "tester", createdAt: new Date(base.getTime() + 4 * DAY) } });
     expect((await closeOutOf(w.testId, now))!.getTime()).toBe(base.getTime() + 14 * DAY);
-    expect((await pieceCloseOut({ submissionId: w.sub.id }, "tester", now))!.getTime()).toBe(base.getTime() + 17 * DAY);
-    expect((await pieceCloseOut({ submissionId: w.sub.id }, "developer", now))!.getTime()).toBe(base.getTime() + 14 * DAY);
-    expect((await pieceCloseOut({ submissionId: subB.id }, "tester", now))!.getTime()).toBe(base.getTime() + 14 * DAY);
+    expect((await pieceCloseOut({ submissionId: w.sub.id }, now))!.getTime()).toBe(base.getTime() + 17 * DAY);
+    expect((await pieceCloseOut({ submissionId: subB.id }, now))!.getTime()).toBe(base.getTime() + 14 * DAY);
     // Their developer side's suspension doesn't count for their Charge.
     await db.accountEvent.create({ data: { userId: b.tester.user.id, kind: "suspended", side: "developer", createdAt: new Date(base.getTime() + DAY) } });
-    expect((await pieceCloseOut({ submissionId: subB.id }, "tester", now))!.getTime()).toBe(base.getTime() + 14 * DAY);
+    expect((await pieceCloseOut({ submissionId: subB.id }, now))!.getTime()).toBe(base.getTime() + 14 * DAY);
   });
 
-  it("a late piece whose Charge opened less than 14 days before close-out keeps Charge and Pay until 14 days after its Charge opened; Pay more runs as long", async () => {
+  it("a late piece whose Charge opened less than 14 days before close-out keeps Charge, Pay and (§378) Pay more until 14 days after its Charge opened", async () => {
     const w = await sentWork();
     const c = await joined(w.testId, "Cara Diaz", "she");
     await sact(c.sessionId, "written", c.tester.cookie, { answers: ["a", "b"] });
@@ -114,10 +114,9 @@ describe("the close-out date (section 19)", () => {
     await db.submission.update({ where: { id: subC.id }, data: { payBy: openedC, choiceOfferedAt: openedC, choiceBy: new Date(openedC.getTime() + 7 * DAY), remindedAt: openedC } });
     const now = new Date();
     expect((await closeOutOf(w.testId, now))!.getTime()).toBe(base.getTime() + 14 * DAY);
-    expect((await pieceCloseOut({ submissionId: w.sub.id }, "developer", now))!.getTime()).toBe(openedA.getTime() + 14 * DAY);
-    expect((await pieceCloseOut({ submissionId: w.sub.id }, "tester", now))!.getTime()).toBe(openedA.getTime() + 14 * DAY);
-    // Pay more closes with the last of them (Cara's).
-    expect((await payMoreClosesAt(w.testId, now))!.getTime()).toBe(openedC.getTime() + 14 * DAY);
+    // (Owner, Nov 11, §378) One date per piece: Ana's Charge, Pay and Pay more on Ana's piece; Cara's on hers (no longer the test's last).
+    expect((await pieceCloseOut({ submissionId: w.sub.id }, now))!.getTime()).toBe(openedA.getTime() + 14 * DAY);
+    expect((await pieceCloseOut({ submissionId: subC.id }, now))!.getTime()).toBe(openedC.getTime() + 14 * DAY);
     // Ana's Charge and the developer's Pay (and Pay more) of Cara's piece still go through.
     const charge = await sact(w.sessionId, "choose", w.tester.cookie, { submissionId: w.sub.id, choice: "charge", seenAt: seen() });
     expect(charge.status).toBe(200);
@@ -127,29 +126,29 @@ describe("the close-out date (section 19)", () => {
   });
 });
 
-describe("Pay more closes together with the last Pay / Charge on the test", () => {
-  it("unknown while testers can still work; then the close-out, or a later piece's own window (calls that took place too); the grey line; open before, refused after", async () => {
+describe("(Owner, Nov 11, §378; replaces batch 17 §19's one date per test) Pay more closes per piece, on the piece's own date", () => {
+  it("unknown while testers can still work; then each paid piece's own date (the close-out, or its own later window); the grey line; open before, refused after", async () => {
     const w = await sentWork("10.00", { spots: 5 });
     expect((await pay(w.dev.cookie, { kind: "submission", id: w.sub.id, amount: "5.00", tickedCents: 500, reason: "Partly useful" })).status).toBe(200);
     const b = await joined(w.testId, "Ben Carter", "he");
     const booked = await bookCall(w.testId, w.dev.cookie, b.sessionId, b.tester.cookie);
-    expect(await payMoreClosesAt(w.testId, new Date())).toBeNull(); // the deadlines are ahead
+    expect(await pieceCloseOut({ submissionId: w.sub.id }, new Date())).toBeNull(); // the deadlines are ahead
     const base = await deadlinesAt(w.testId, 20);
     await db.submission.update({ where: { id: w.sub.id }, data: { payBy: ago(25) } });
-    const now = new Date();
-    expect((await payMoreClosesAt(w.testId, now))!.getTime()).toBe(base.getTime() + 14 * DAY); // the close-out (6 days ago)
-    // Ben's call took place late: its Charge opened 10 days ago, so its window (and Pay more) runs 4 more days, with the grey line.
+    // Ben's call took place late: its Charge opened 10 days ago, so its own window runs 4 more days.
     const callBy = ago(10);
     await db.call.update({ where: { id: booked.id }, data: { startsAt: ago(17), actualMinutes: 30, measuredMinutes: 30, measuredAt: ago(17), payBy: callBy } });
-    const at = await payMoreClosesAt(w.testId, now);
+    expect((await pay(w.dev.cookie, { kind: "call", id: booked.id, amount: "15.00", tickedCents: 1500 })).status).toBe(200);
+    const now = new Date();
+    // Ana's piece closed with the close-out (6 days ago): Pay more on it is refused, even though Ben's call is still open.
+    expect((await pieceCloseOut({ submissionId: w.sub.id }, now))!.getTime()).toBe(base.getTime() + 14 * DAY);
+    expect((await payMore(w.testId, w.dev.cookie, { contractId: w.sessionId, submissionId: w.sub.id, amount: "1.00", tickedCents: 100 })).body.error.message).toBe(`Pay more closed on ${fmtDate(new Date(base.getTime() + 14 * DAY))}.`);
+    // Ben's call: its own date, with the grey line; Pay more on it goes through.
+    const at = await pieceCloseOut({ callId: booked.id }, now);
     expect(at!.getTime()).toBe(callBy.getTime() + 14 * DAY);
     expect(R.closeOutSoon(at, now)).toBe(true);
     expect(R.payClosesLine(fmtDate(at!), true)).toBe(`Pay more closes on ${fmtDate(at!)}.`);
-    expect((await payMore(w.testId, w.dev.cookie, { contractId: w.sessionId, submissionId: w.sub.id, amount: "1.00", tickedCents: 100 })).status).toBe(200);
-    // A call that didn't take place (not measured) doesn't count: Pay more closed with the close-out.
-    await db.call.update({ where: { id: booked.id }, data: { actualMinutes: null, measuredAt: null } });
-    expect((await payMoreClosesAt(w.testId, new Date()))!.getTime()).toBe(base.getTime() + 14 * DAY);
-    expect((await payMore(w.testId, w.dev.cookie, { contractId: w.sessionId, submissionId: w.sub.id, amount: "1.00", tickedCents: 100 })).body.error.message).toBe(`Pay more closed on ${fmtDate(new Date(base.getTime() + 14 * DAY))}.`);
+    expect((await payMore(w.testId, w.dev.cookie, { contractId: b.sessionId, callId: booked.id, amount: "1.00", tickedCents: 100 })).status).toBe(200);
   });
 });
 
@@ -177,10 +176,11 @@ describe("after close-out: Pay, Pay more, Charge and Let it go are refused; unpa
     expect(letgo.body.error.message).toBe(`Charge and Let it go closed on ${date}.`);
     expect(await db.review.count({ where: { submissionId: w.sub.id } })).toBe(0); // unpaid stays unpaid
     expect(await db.payment.count({ where: { submissionId: w.sub.id } })).toBe(0);
-    // Ana's tester side was suspended 3 days in the window: her own close-out is 2 days ahead, so her Charge still works (the developer's Pay stays closed).
+    // Ana's tester side was suspended 3 days in the window: her own close-out is 2 days ahead, so her Charge still works, and (Owner, Nov 11, §378) the developer's
+    // Pay reopens with it (one date per piece).
     await db.accountEvent.create({ data: { userId: w.tester.user.id, kind: "suspended", side: "tester", createdAt: new Date(base.getTime() + DAY) } });
     await db.accountEvent.create({ data: { userId: w.tester.user.id, kind: "reinstated", side: "tester", createdAt: new Date(base.getTime() + 4 * DAY) } });
-    expect((await pay(w.dev.cookie, { kind: "submission", id: w.sub.id, amount: "10.00", tickedCents: 1000 })).body.error.message).toBe(`Pay closed on ${date}.`);
+    expect((await pieceCloseOut({ submissionId: w.sub.id }))!.getTime()).toBe(base.getTime() + 17 * DAY);
     const late = await sact(w.sessionId, "choose", w.tester.cookie, { submissionId: w.sub.id, choice: "charge", seenAt: seen() });
     expect(late.status).toBe(200);
     expect(late.body).toMatchObject({ choice: "charge", amountCents: 1000 });
@@ -298,14 +298,14 @@ describe("the pages (section 19)", () => {
     expect(page).toContain("closedNotPaidLine(shutOn(r.sub.id))");
     expect(page).toContain("closedNotPaidLine(shutOn(x.id))");
     expect(page).toContain("testerPayable(c.tester) && !payShut(x.id);");
-    expect(page).toContain('await pieceCloseOut(k, "developer", now)');
+    expect(page).toContain('await pieceCloseOut(k, now)');
     expect(R.closedNotPaidLine("Dec 6, 2026")).toBe("Closed on Dec 6, 2026: not paid.");
     expect(R.payClosesLine("Dec 6, 2026")).toBe("Pay closes on Dec 6, 2026.");
   });
 
   it("the tester's session page: Not paid (closed on <date>), no Charge box after, Charge closes on <date> before", () => {
     const page = src("app/app/sessions/[id]/page.tsx");
-    expect(page).toContain('await pieceCloseOut(k, "tester", now)');
+    expect(page).toContain('await pieceCloseOut(k, now)');
     expect(page).toContain("closedOn={chargeShut(sub.id) ? shutOn(sub.id) : null}");
     expect(page).toContain("closedOn={chargeShut(x.id) ? shutOn(x.id) : null}");
     expect(page.match(/!chargeShut\((sub|x)\.id\)/g)!.length).toBeGreaterThanOrEqual(3); // (batch 28 §21) no Charge for listed calls

@@ -110,7 +110,7 @@ describe("§288 (2) at the part's closing date", () => {
     await settle();
     expect((await pay(w.dev.cookie, { kind: "submission", id: w.sub.id, amount: "5.00", tickedCents: 500, reason: "Partly useful" })).status).toBe(200);
     await closesFrom(w, 20); // closed 6 days ago
-    const at = await pieceCloseOut({ submissionId: w.sub.id }, "tester");
+    const at = await pieceCloseOut({ submissionId: w.sub.id });
     expect(at!.getTime()).toBeLessThan(Date.now());
     const line = disputeClosedLine(fmtDate(at!));
     expect(line).toMatch(/^This part closed on [A-Z][a-z]{2} \d{1,2}, \d{4}, so it can't be disputed any more\.$/);
@@ -159,7 +159,7 @@ describe("§288 on the pages", () => {
     await closesFrom(w, 20);
     const page = await sessionPage(w);
     expect(page).not.toContain(DISPUTE_FORM);
-    const line = disputeClosedLine(fmtDate((await pieceCloseOut({ submissionId: w.sub.id }, "tester"))!));
+    const line = disputeClosedLine(fmtDate((await pieceCloseOut({ submissionId: w.sub.id }))!));
     expect(page).toContain(`<p class="note">${line}</p>`);
   });
 

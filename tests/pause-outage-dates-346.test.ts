@@ -31,13 +31,13 @@ describe("§346 (1) a 48 h pause on a piece whose Charge is open moves its close
     await db.test.update({ where: { id: f.testId }, data: { openUntil: new Date(now.getTime() - 4 * D) } });
     const payBy0 = new Date(S.getTime() - 12 * H);
     await db.submission.update({ where: { id: f.sub.id }, data: { payBy: payBy0, choiceOfferedAt: payBy0, choiceBy: new Date(payBy0.getTime() + 7 * D), updatedAt: new Date(payBy0.getTime() - 7 * D) } });
-    const before = (await pieceCloseOut({ submissionId: f.sub.id }, "tester", now))!.getTime();
+    const before = (await pieceCloseOut({ submissionId: f.sub.id }, now))!.getTime();
     // The team's 48 h pause, as its events record it, then the lift's shift.
     await db.testEvent.createMany({ data: [{ testId: f.testId, kind: "paused", text: "The team paused this test", createdAt: S }, { testId: f.testId, kind: "resumed", text: "The team lifted the pause on this test", createdAt: now }] });
     const t = await db.test.findUniqueOrThrow({ where: { id: f.testId } });
     await db.$transaction((tx) => shiftAfterPause(tx, t, S, now));
     expect((await db.submission.findUniqueOrThrow({ where: { id: f.sub.id } })).payBy!.getTime()).toBe(payBy0.getTime());
-    for (const side of ["tester", "developer"] as const) expect((await pieceCloseOut({ submissionId: f.sub.id }, side, now))!.getTime() - before).toBe(48 * H);
+    expect((await pieceCloseOut({ submissionId: f.sub.id }, now))!.getTime() - before).toBe(48 * H);
   });
 });
 

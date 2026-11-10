@@ -15,15 +15,15 @@ export function resendRefusal(review: { rejected: boolean; teamClosedById?: stri
 }
 
 /**
- * (Batch 30 §2) Where an update of a paid piece stands: `atCap` when nothing more can be paid on it (its cap reached, or Pay more closed at the close-out): then it
+ * (Batch 30 §2) Where an update of a paid piece stands: `atCap` when nothing more can be paid on it (its cap reached, or Pay more closed on its own date: (Owner, Nov 11, §378) pieceCloseOut): then it
  * doesn't go into Needs you, only a quiet line.
  */
-export async function paidUpdateRoom(tx: Tx, submissionId: string, testId: string) {
+export async function paidUpdateRoom(tx: Tx, submissionId: string) {
   const { pieceOf, pieceRoom } = await import("./payments");
-  const { closedOut, payMoreClosesAt } = await import("./closeOut");
+  const { closedOut, pieceCloseOut } = await import("./closeOut");
   const piece = await pieceOf({ submissionId }, tx);
   const room = piece ? await pieceRoom(piece, tx) : null;
-  const shut = closedOut(await payMoreClosesAt(testId));
+  const shut = closedOut(await pieceCloseOut({ submissionId })); // (Owner, Nov 11, §378) this piece's own date
   return { atCap: !room || room.roomCents <= 0 || shut, paidCents: room?.paidCents ?? 0, roomCents: room?.roomCents ?? 0 };
 }
 
@@ -51,7 +51,7 @@ export async function notifyPaidUpdate(
 }
 
 /** (Batch 30 §2) Whether a waiting update can still be paid more (below its cap, Pay more open): the dashboard's Needs review counts it then. */
-export async function updateRoomLeft(submissionId: string, testId: string) {
+export async function updateRoomLeft(submissionId: string) {
   const { db } = await import("@/lib/db");
-  return !(await paidUpdateRoom(db, submissionId, testId)).atCap;
+  return !(await paidUpdateRoom(db, submissionId)).atCap;
 }

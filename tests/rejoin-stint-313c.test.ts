@@ -51,9 +51,9 @@ describe("§313c work from an earlier stint keeps its deadline", () => {
     expect((await db.submission.findUniqueOrThrow({ where: { id: sub.id } })).choiceOfferedAt).not.toBeNull();
     // Its closing date counts from that deadline too (here the test's work ended now: the test's own close-out, not 14 days after the new deadline).
     await db.test.update({ where: { id: s.testId }, data: { workEndedAt: new Date() } });
-    const closes = (await pieceCloseOut({ submissionId: sub.id }, "tester"))!;
+    const closes = (await pieceCloseOut({ submissionId: sub.id }))!;
     await db.submission.update({ where: { id: sub.id }, data: { stintDueAt: null } });
-    const unstamped = (await pieceCloseOut({ submissionId: sub.id }, "tester"))!;
+    const unstamped = (await pieceCloseOut({ submissionId: sub.id }))!;
     expect(closes.getTime()).toBeLessThan(unstamped.getTime());
     await db.submission.update({ where: { id: sub.id }, data: { stintDueAt: D } });
     // A piece sent after rejoining counts to the new deadline.

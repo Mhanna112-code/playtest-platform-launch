@@ -29,7 +29,7 @@ import { clientPressKey, serverKey } from "./pressKeys";
 import { amountFromRate, callMinutesOf, overCeilingLine, rateFromAmount } from "@/lib/callMeasure";
 import { callsLeftCents } from "./callMoney";
 import { ownOtherTabAction, payPressOf, seenOf, tabOf } from "./live";
-import { closedOut, disputeClosedFor, payMoreClosesAt, pieceCloseOut } from "./closeOut";
+import { closedOut, disputeClosedFor, pieceCloseOut } from "./closeOut";
 import { TEAM_CLOSED_NO_DISPUTE, TEAM_CLOSED_NO_PAY, paidLine, updateWaiting } from "@/lib/moneyLines";
 import { PAID_GROUP } from "@/lib/bell";
 import { devPartRow } from "@/lib/lineAnchors";
@@ -133,9 +133,9 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0] & { hold
     }
     if (await tx.payment.count({ where: { ...piece.where, kind: { in: ["review", "call"] }, status: { in: ["pending", "needs_action"] } } })) throw new HttpError(409, "locked", "A payment for this part is being confirmed. Wait for it to finish before paying again.");
     // (Batch 17 §19) Pay closes on the piece's own closing date (the test's close-out, or 14 days after its Charge opened if later; final: it stays unpaid).
-    // Until then Pay works, also after the tester's Charge opened.
+    // Until then Pay works, also after the tester's Charge opened. (Owner, Nov 11, §378) The same date as the tester's Charge (their suspension time included).
     {
-      const at = await pieceCloseOut(piece.where, "developer");
+      const at = await pieceCloseOut(piece.where);
       if (closedOut(at)) throw new HttpError(409, "pay_closed", payClosedLine(fmtDate(at!)));
     }
     if (await devOwes(dev.id)) throw new HttpError(409, "owed_first", PAY_WAITS);
@@ -734,9 +734,9 @@ export async function payExtra(dev: U & Parameters<typeof cardRefusal>[0], testI
   if (paidReview.teamClosedById) throw new HttpError(409, "team_closed", TEAM_CLOSED_NO_PAY);
   // (Owner, Nov 6, §311e) An unlisted call closed with $0 at its pay date is final too.
   if (paidReview.reason === UNLISTED_CALL_CLOSED) throw new HttpError(409, "closed", unlistedCallClosedLine(`${displayName(c.tester)}'s call`));
-  // (Batch 17 §19, replacing batch 16 section 22) Pay more closes together with the last Pay / Charge on the test (payMoreClosesAt).
+  // (Owner, Nov 11, §378; replaces batch 17 §19's one date per test) Pay more on a piece closes on that piece's own date, with its Pay and Charge (pieceCloseOut).
   {
-    const at = await payMoreClosesAt(testId);
+    const at = await pieceCloseOut(piece.where);
     if (closedOut(at)) throw new HttpError(409, "pay_more_closed", payClosedLine(fmtDate(at!), true));
   }
   // (Owner, Oct 27) Unavailable during a payment or chargeback hold (the route refuses first; this is the backstop). (Owner, Nov 9, §368) A suspension or the team's

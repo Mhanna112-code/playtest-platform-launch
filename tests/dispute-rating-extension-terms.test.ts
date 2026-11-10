@@ -25,7 +25,7 @@ it("a dispute pending past the original rating end preserves remaining time afte
  expect((await testerRateState(s.sessionId,s.at(23))).kind).toBe("open");
  expect((await testerRateState(s.sessionId,s.at(24))).kind).toBe("closed");
  expect((await closeOutOf(s.testId,s.at(23)))?.getTime()).toBe(s.at(14).getTime());
- expect((await pieceCloseOut({submissionId:s.sub.id},"tester",s.at(23)))?.getTime()).toBe(s.at(14).getTime());
+ expect((await pieceCloseOut({submissionId:s.sub.id},s.at(23)))?.getTime()).toBe(s.at(14).getTime());
  await ratingReminders(s.at(23));
  const reminder=await db.notification.findFirstOrThrow({where:{userId:s.tester.user.id,text:{startsWith:"Reminder: rate "}}});
  expect(reminder.mustEmail).toBe(true);expect(reminder.text).toContain("rating closes on");

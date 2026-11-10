@@ -55,9 +55,10 @@ describe("Pay more closes with the test's last Pay / Charge (Batch 17 §19 repla
     const r = await act(w.testId, "pay-extra", w.dev.cookie, { ...body, amount: "0.50", tickedCents: 50 });
     expect(r.body.error.message).toBe(`Pay more closed on ${fmtDate(new Date(payBy.getTime() + 14 * DAY))}.`);
     const page = src("app/app/tests/[id]/page.tsx");
-    expect(page).toContain("const payMoreAt = await payMoreClosesAt(t.id, now);");
-    expect(page.match(/payMore\.open && \(rooms\.get/g)).toHaveLength(2);
-    expect(page.match(/note=\{payMore\.line \|\| undefined\}/g)).toHaveLength(3); // (batch 30 §2) and the update row's Pay more
+    // (Owner, Nov 11, §378) Each piece's own date (pieceCloseOut), no longer one date per test.
+    expect(page).toContain("const moreCloses = new Map(await Promise.all(paidKeys.map(async (k) => [k.submissionId ?? k.callId!, await pieceCloseOut(k, now)] as const)));");
+    expect(page.match(/payMore\((r\.sub\.id|x\.id)\)\.open && \(rooms\.get/g)).toHaveLength(3); // the two rows and Needs you's update rows
+    expect(page.match(/note=\{payMore\((r\.sub\.id|x\.id)\)\.line \|\| undefined\}/g)).toHaveLength(3); // (batch 30 §2) and the update row's Pay more
   });
 });
 
