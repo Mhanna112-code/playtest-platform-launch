@@ -471,7 +471,7 @@ describe("follow-up 2, 3) the team stopping a test", () => {
     expect(ac).toContain("adminStopped");
     expect(ac).toContain("window.location.href = `/app/tests/${testId}`");
     expect(src("app/app/tests/[id]/edit/page.tsx")).toContain("<AutoRefresh");
-    expect(src("app/app/tests/[id]/edit/page.tsx")).toContain(") : ndaOnly ? ("); // (Codex 2033b106) a stopped test's Edit is its NDA-only view (was the red "This test was stopped.")
+    expect(src("app/app/tests/[id]/edit/page.tsx")).toContain("{ndaOnly ? ("); // (Codex 2033b106) a stopped test's Edit is its NDA-only view (was the red "This test was stopped."); (§358) a closed one's too, so it comes first
     expect(alertOf("stopped")).toBeNull();
   });
 });
