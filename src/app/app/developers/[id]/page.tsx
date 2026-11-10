@@ -13,7 +13,7 @@ import { termsLine } from "@/lib/rules";
 import { requireOpenPage } from "@/lib/server/page-auth";
 import { DeveloperTiles } from "@/components/ProfileTiles";
 import { BlockButton, UnblockButton } from "@/components/BlockButton";
-import { blockedTestsLine, ProfileUnavailable } from "@/components/ProfileUnavailable";
+import { ACCOUNT_WAS_DELETED, blockedTestsLine, ProfileUnavailable } from "@/components/ProfileUnavailable";
 import { ScrollList } from "@/components/ScrollList";
 import { ReportButton } from "@/components/ReportButton";
 import { AdminPersonBoxes, AdminTestBoxes } from "@/app/admin/AdminBoxes";
@@ -46,6 +46,8 @@ export default async function DeveloperProfilePage({ params }: { params: Promise
   const watch = <AutoRefresh query={`fresh=publicProfile&person=${encodeURIComponent(id)}`} v={freshV} />;
   const p = await db.user.findUnique({ where: { id } });
   if (!p || !p.isDeveloper) notFound();
+  // (Owner, Nov 9, §360) A deleted account: "This account was deleted." instead of its profile (no Report, Block or Chat with); the team still sees its admin boxes.
+  if (p.deletedAt && !isAdmin(viewer)) return <>{watch}<ProfileUnavailable line={ACCOUNT_WAS_DELETED} /></>;
   const mine = viewer.id === p.id;
   // (Owner, Oct 28, batch 20 section 17) They blocked you: a plain "This profile isn't available." (never says why). You blocked them: their profile as usual, with
   // Unblock where Block was, no Chat with or invite, and their Open tests hidden with a line.

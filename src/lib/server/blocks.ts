@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { displayName, fmtTime } from "@/lib/format";
+import { ACCOUNT_WAS_DELETED, displayName, fmtTime } from "@/lib/format";
 import { joinCallRefusal, testPaused } from "@/lib/rules";
 import { HttpError } from "./http";
 import { isUniqueClash } from "./passwords";
@@ -51,6 +51,8 @@ export async function blockUser(me: { id: string; email: string; name: string },
   if (!otherId || otherId === me.id) throw new HttpError(400, "bad_user", "Choose someone to block.");
   const other = await db.user.findUnique({ where: { id: otherId } });
   if (!other) throw new HttpError(404, "not_found", "That person doesn't exist.");
+  // (Owner, Nov 9, §360) A deleted account (an old profile tab's Block): nothing to block.
+  if (other.deletedAt) throw new HttpError(409, "deleted", ACCOUNT_WAS_DELETED);
   // (Owner, Oct 27) The only stop: already blocked (in another tab).
   if (await iBlocked(me.id, otherId)) throw new HttpError(409, "already", `You already blocked ${displayName(other)}.`);
   // (Owner, Nov 5, §271) A tester blocking a developer whose test she works on: a pause of that test since the profile loaded (or the team's lift) stops it once.
@@ -170,8 +172,9 @@ export async function callStatus(user: { id: string }, callId: string) {
   const fresh = state?.ended || closedNow ? await db.call.findUniqueOrThrow({ where: { id: callId } }) : call;
   const both = call.devJoinedAt && call.testerJoinedAt ? new Date(Math.max(call.devJoinedAt.getTime(), call.testerJoinedAt.getTime())) : null;
   const amTester = c.testerId === user.id;
-  const tester = amTester ? null : await db.user.findUnique({ where: { id: c.testerId }, select: { name: true, email: true, pronoun: true } });
-  const otherName = amTester ? (c.test.developer.name || c.test.developer.email.split("@")[0]) : (tester?.name || tester?.email.split("@")[0] || "");
+  const tester = amTester ? null : await db.user.findUnique({ where: { id: c.testerId }, select: { name: true, email: true, pronoun: true, deletedAt: true } });
+  // (Owner, Nov 9, §360) A deleted account reads "Deleted account" here too.
+  const otherName = amTester ? displayName(c.test.developer) : tester ? displayName(tester) : "";
   const tz = await db.user.findUnique({ where: { id: user.id }, select: { timeZone: true } });
   const side = amTester ? "tester" : "developer";
   const closed = fresh.status === "booked" && !fresh.endedAt && !fresh.measuredAt ? await callClosedLine(call, side) : "";

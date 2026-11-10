@@ -7,7 +7,7 @@ import { renderTimes, safeZone } from "@/lib/tz";
 import { bellKeyIn, bellStacks, stackHeading } from "@/lib/bell";
 import { appUrl } from "./auth";
 import { sendEmail } from "./email";
-import { NON_REMINDER_NOTICE, REMINDER_ONLY_GROUPS } from "@/lib/reminderPolicy";
+import { REMINDER_ONLY_GROUPS } from "@/lib/reminderPolicy";
 
 // Every update goes to the person's bell. Email follows their setting: each update (default), one daily summary,
 // or none. Sign-in links (sent elsewhere) and payment receipts (always: true) always send.
@@ -65,6 +65,11 @@ export async function notify(to: string, subject0: string, lines0: string[], pat
   // (Batch 15 section 11) Times in the line are written in the recipient's own time zone (unknown: UTC).
   const subject = renderTimes(subject0, user?.timeZone), lines = lines0.map((l) => renderTimes(l, user?.timeZone));
   if (!user && opts.recipientId) return; // A known account never falls back to a non-account email.
+  // (Owner, Nov 9, §360) A deleted account is never emailed (no summary, end-of-day or immediate email): the line is kept in its bell as already emailed.
+  if (user?.deletedAt) {
+    await client.notification.create({ data: { side: lineSide(user.id, path, opts.side), userId: user.id, text: subject, link: path, testId: opts.testId ?? (await testIdOfLink(path)), mustEmail: false, summarizedAt: new Date(), reminderKey: opts.reminder ?? null, ...flags(opts) } });
+    return;
+  }
   if (!user) {
     // Not an account (nowhere for a bell or a summary to go): the one email goes at once.
     try {
@@ -99,10 +104,12 @@ export async function notify(to: string, subject0: string, lines0: string[], pat
  * person's Daily / Weekly / Monthly summary; with `always` or `payment` it also reaches the end-of-day email with email Off.
  */
 export async function bell(userId: string, text0: string, link: string, about?: string, opts: Pick<Opts, "own" | "testId" | "group" | "payment" | "reminder" | "always" | "side"> = {}) {
-  if ((opts.reminder || REMINDER_ONLY_GROUPS.includes(opts.group ?? "")) && (await db.user.findUnique({ where: { id: userId }, select: { deletedAt: true } }))?.deletedAt) return;
+  const deleted = !!(await db.user.findUnique({ where: { id: userId }, select: { deletedAt: true } }))?.deletedAt;
+  if ((opts.reminder || REMINDER_ONLY_GROUPS.includes(opts.group ?? "")) && deleted) return;
   if (about && !opts.payment && !(await inReach(userId, about))) return; // (Owner, Nov 6, §299) payment lines always reach
   const text = await renderFor(userId, text0);
-  await db.notification.create({ data: { side: lineSide(userId, link, opts.side), userId, text, link, testId: opts.testId ?? (await testIdOfLink(link)), mustEmail: !!opts.always, reminderKey: opts.reminder ?? null, ...flags(opts) } });
+  // (Owner, Nov 9, §360) A deleted account's line is never emailed: written as already emailed.
+  await db.notification.create({ data: { side: lineSide(userId, link, opts.side), userId, text, link, testId: opts.testId ?? (await testIdOfLink(link)), mustEmail: !deleted && !!opts.always, reminderKey: opts.reminder ?? null, ...(deleted ? { summarizedAt: new Date() } : {}), ...flags(opts) } });
 }
 
 /** (Batch 15 section 11) A line's time tokens, in this person's time zone. */
@@ -255,6 +262,8 @@ export async function sendSummaries(now = new Date(), only?: string[]) {
   const users = await db.user.findMany({
     where: {
       ...(only ? { id: { in: only } } : {}),
+      deletedAt: null, // (Owner, Nov 9, §360) a deleted account gets no summary or end-of-day email
+
       OR: [{ notifications: { some: { summarizedAt: null, ...({ OR: [{ mustEmail: true }, { payment: true }, { user: { emailPref: { in: ["daily", "weekly", "monthly"] } } }] } as object) } } }, ...(admins.size ? [{ id: { in: [...admins] } }] : [])],
     },
     select: { id: true, email: true, emailPref: true, lastSummaryAt: true, isDeveloper: true, isTester: true, timeZone: true, deletedAt: true },
@@ -272,7 +281,7 @@ export async function sendSummaries(now = new Date(), only?: string[]) {
     const t = due ? team.get(u.id) : undefined;
     // (Owner, Nov 7, §328) The NEWEST 200 unsent lines (it was the oldest 200, so a backlog came as a flood over the next days); the older ones are marked emailed
     // too and the email ends with "And N older updates — see your bell".
-    const fetched = (await db.notification.findMany({ where: { userId: u.id, summarizedAt: null, ...only, ...(u.deletedAt ? { AND: [NON_REMINDER_NOTICE] } : {}) }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: SUMMARY_MAX })).reverse();
+    const fetched = (await db.notification.findMany({ where: { userId: u.id, summarizedAt: null, ...only }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: SUMMARY_MAX })).reverse();
     const olderIds = fetched.length === SUMMARY_MAX
       ? (await db.notification.findMany({ where: { userId: u.id, summarizedAt: null, ...only, id: { notIn: fetched.map((n) => n.id) }, createdAt: { lte: fetched[0].createdAt } }, select: { id: true } })).map((n) => n.id)
       : [];
@@ -326,15 +335,4 @@ export async function unreadEntryCount(userId: string) {
   const unread = await db.notification.findMany({ where: { userId, readAt: null, ...await notificationScopeFor(userId) }, orderBy: { createdAt: "desc" }, take: 500, select: { id: true, testId: true, own: true, groupKey: true, createdAt: true } });
   const zone = (await db.user.findUnique({ where: { id: userId }, select: { timeZone: true } }))?.timeZone;
   return new Set(unread.map((n) => bellKeyIn(n, zone))).size;
-}
-
-/** Rebuild a queued summary after deletion, keeping actual updates and receipts but removing reminders. */
-export async function queuedSummaryWithoutReminders(userId: string, ids: string[], heading: string) {
-  const u = await db.user.findUnique({ where: { id: userId } });
-  if (!u) return null;
-  const items = await db.notification.findMany({ where: { id: { in: ids }, userId, ...NON_REMINDER_NOTICE }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] });
-  if (!items.length) return null;
-  const line = (n: { text: string; link: string }) => `• ${n.text}${n.link ? ` ${appUrl()}${n.link}` : ""}`;
-  const own = sidedEmailLines(items, line, hasBoth(u), u.timeZone, await testTitlesOf(items));
-  return { subject: `Your Playtest ${items.some((n) => !n.payment) ? "account" : "payment"} updates: ${items.length}`, text: [heading, "", ...own].join("\n"), heading, button: { label: "Open Playtest", url: `${appUrl()}/app/notifications` }, notificationIds: items.map((n) => n.id) };
 }

@@ -4,6 +4,8 @@ import { pronouns } from "@/lib/format";
 /** (Owner, Oct 28, batch 20 section 17) Shown in the normal shell instead of the bare 404: "This profile isn't available." (they blocked you; never says so) or "This page doesn't exist.". */
 export const PROFILE_UNAVAILABLE = "This profile isn't available.";
 export const PAGE_MISSING = "This page doesn't exist.";
+/** (Owner, Nov 9, §360) A deleted account's profile (a fresh link, or an old tab after its refresh): only this line, no Report or Block. */
+export { ACCOUNT_WAS_DELETED } from "@/lib/format";
 /** (Batch 35 §162) In the developer's own pronoun ("her tests"). */
 export const blockedTestsLine = (name: string, pronoun?: string | null) => `You blocked ${name}, so ${pronouns(pronoun).poss} tests are hidden.`;
 

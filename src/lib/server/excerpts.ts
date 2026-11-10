@@ -46,6 +46,10 @@ export const deniedLine = (dev: string, test: string) => `${dev} prefers that wo
 export const ONLY_TESTER_REMOVES = "Only the tester can remove an excerpt from their profile.";
 /** (Batch 35 §162) In the developer's recorded pronoun ("deleted her account"). */
 export const devDeletedClosedLine = (test: string, pronoun?: string | null) => `${test}'s developer deleted ${pronouns(pronoun).poss} account, so this request was closed`;
+/** (Owner, Nov 9, §360) A new request on a test whose developer deleted their account: nobody is left to allow it. */
+export const devDeletedNoExcerpt = (test: string, pronoun?: string | null) => `${test}'s developer deleted ${pronouns(pronoun).poss} account, so nobody can allow an excerpt from it.`;
+/** (§360) A request by an account that was deleted (an old tab). */
+export const DELETED_NO_EXCERPT = "This account was deleted, so it can't ask to show excerpts.";
 export const ndaHiddenLine = (test: string) => `Hidden while ${test} has an NDA`;
 
 /** How the quote names its source: the product's name, or (an older excerpt whose tester ticked "Don't name the product") the kind of test it was. */
@@ -81,9 +85,12 @@ export async function excerptChoices(sub: { id: string; kind: string; answers: u
 
 /** A tester asks to show an excerpt. No stop-once; refused only for the rules above. */
 export async function requestExcerpt(tester: { id: string; name: string; email: string; pronoun?: string; deletedAt?: Date | null }, body: Record<string, unknown>) {
-  const sub = await db.submission.findUnique({ where: { id: String(body.submissionId ?? "") }, include: { review: true, dispute: true, contract: { include: { test: true } } } });
+  const sub = await db.submission.findUnique({ where: { id: String(body.submissionId ?? "") }, include: { review: true, dispute: true, contract: { include: { test: { include: { developer: { select: { deletedAt: true, pronoun: true } } } } } } } });
   if (!sub || sub.contract.testerId !== tester.id) throw new HttpError(404, "not_found", "That part doesn't exist or isn't yours.");
   const t = sub.contract.test;
+  // (Owner, Nov 9, §360) Never to or for a deleted account: a deleted tester's old tab, or a test whose developer deleted their account (nobody can decide it).
+  if (tester.deletedAt || (await db.user.findUnique({ where: { id: tester.id }, select: { deletedAt: true } }))?.deletedAt) throw new HttpError(409, "deleted", DELETED_NO_EXCERPT);
+  if (t.developer.deletedAt) throw new HttpError(409, "developer_deleted", devDeletedNoExcerpt(t.title, t.developer.pronoun));
   if (t.ndaText) throw new HttpError(409, "nda", NDA_NO_EXCERPT);
   const choices = await excerptChoices(sub);
   if (!choices.length) throw new HttpError(409, "not_paid", "Only written answers the developer paid for can be shown as excerpts.");

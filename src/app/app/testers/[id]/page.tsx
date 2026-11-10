@@ -16,7 +16,7 @@ import { anySuspended, devRestricted } from "@/lib/restricted";
 import { sideFor } from "@/lib/sides";
 
 import { BlockButton, UnblockButton } from "@/components/BlockButton";
-import { ProfileUnavailable } from "@/components/ProfileUnavailable";
+import { ACCOUNT_WAS_DELETED, ProfileUnavailable } from "@/components/ProfileUnavailable";
 import { ReportButton } from "@/components/ReportButton";
 import { MyExcerpts, ShownExcerpts } from "@/components/ExcerptList";
 import { myExcerpts, shownExcerpts } from "@/lib/server/excerpts";
@@ -46,6 +46,8 @@ export default async function TesterProfilePage({ params }: { params: Promise<{ 
   const watch = <AutoRefresh query={`fresh=publicProfile&person=${encodeURIComponent(id)}`} v={freshV} />;
   const p = await db.user.findUnique({ where: { id }, include: { profile: true } });
   if (!p || !p.isTester) notFound();
+  // (Owner, Nov 9, §360) A deleted account: "This account was deleted." instead of its profile (no Report, Block or Chat with); the team still sees its admin boxes.
+  if (p.deletedAt && !isAdmin(viewer)) return <>{watch}<ProfileUnavailable line={ACCOUNT_WAS_DELETED} /></>;
   const mine = viewer.id === p.id;
   // (Owner, Oct 27) A suspended or held developer can read this page, but Chat with, Report, Block and Edit profile are hidden.
   const off = viewer.isDeveloper && devRestricted(viewer, sideFor(viewer, "/app/testers"));

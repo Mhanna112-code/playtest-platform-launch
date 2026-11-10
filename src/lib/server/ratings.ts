@@ -197,6 +197,19 @@ export async function maybeOpenDevRating(contractId: string, now = new Date()) {
   return true;
 }
 
+/**
+ * (Owner, Nov 9, §360) An account was deleted: rating between it and anyone it worked with is unavailable ("Rating is unavailable because an account was
+ * deleted."), so the other side's bell no longer offers it: their "Rate <name> on …" prompt, "Reminder: rate …" lines and the developer's "<tester> finished …
+ * You can rate them" line for each contract between them are removed (new ones are never made: rateBlocker).
+ */
+export async function dropRateLinesFor(userId: string) {
+  const cs = await db.contract.findMany({ where: { OR: [{ testerId: userId }, { test: { developerId: userId } }] }, select: { id: true, testerId: true, test: { select: { developerId: true } } } });
+  for (const c of cs) {
+    const other = c.testerId === userId ? c.test.developerId : c.testerId;
+    await db.notification.deleteMany({ where: { userId: other, reminderKey: { in: [`rate-open-tester:${c.id}`, `rate:${c.id}`, `rate-dev:${c.id}`, `rate-open:${c.id}`] } } });
+  }
+}
+
 /** The tester's in-page warning lines (what rating will end): contract parts not sent yet, and one calls line. */
 export async function rateWarning(contractId: string) {
   const c = await db.contract.findUniqueOrThrow({ where: { id: contractId }, include: { submissions: true, calls: true } });

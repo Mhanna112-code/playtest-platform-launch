@@ -17,7 +17,8 @@ const transport = (ok: boolean) => {
   return send;
 };
 
-it("stops new reminders and payout-problem reminders after deletion while retaining actual payment notices", async () => {
+// (Owner, Nov 9, §360; replaces the Nov 7 rule that still emailed a deleted account its receipts and updates) Nothing is emailed to a deleted account any more.
+it("stops new reminders and payout-problem reminders after deletion, and (§360) no payment notice is emailed either", async () => {
   const { user } = await makeUser({ tester: true });
   await db.user.update({ where: { id: user.id }, data: { deletedAt: new Date(), emailPref: "off", stripeAccountId: `acct_${user.id}`, payoutProblemAt: new Date(Date.now() - 4 * 86_400_000) } });
   await bell(user.id, "Review reminder", "/app", undefined, { reminder: "review", always: true });
@@ -29,7 +30,7 @@ it("stops new reminders and payout-problem reminders after deletion while retain
   expect(await db.notification.count({ where: { userId: user.id } })).toBe(0);
   await notify(user.email, "Payment received: $10.00", ["Actual receipt"], "/app/payments", { payment: true });
   await sendSummaries(new Date(), [user.id]);
-  expect((await db.outboxEmail.findFirstOrThrow({ where: { to: user.email } })).text).toContain("Payment received: $10.00");
+  expect(await db.outboxEmail.count({ where: { to: user.email } })).toBe(0);
 });
 
 it("does not open a tester rating prompt after deletion, even when the submitted work is settled", async () => {
@@ -57,7 +58,8 @@ it("cancels an immediate reminder already queued before deletion without trying 
   expect((await db.emailQueue.findUniqueOrThrow({ where: { id: queued.id } })).status).toBe("cancelled");
 });
 
-it("removes reminders from a queued mixed summary, retaining the receipt and removing the reminder from HTML too", async () => {
+// (§360; was: the receipt was re-sent without the reminder) A queued summary of an account deleted since is cancelled whole.
+it("cancels a queued mixed summary (a reminder and a receipt) whole once the account is deleted", async () => {
   const { user } = await makeUser({ dev: true });
   await db.user.update({ where: { id: user.id }, data: { emailPref: "off" } });
   await bell(user.id, "Review this sample tomorrow", "/app", undefined, { reminder: "review", always: true });
@@ -69,14 +71,9 @@ it("removes reminders from a queued mixed summary, retaining the receipt and rem
   await db.user.update({ where: { id: user.id }, data: { deletedAt: new Date() } });
   const send = transport(true);
   await retryEmails(new Date(Date.now() + 20 * 60_000));
-  expect(send).toHaveBeenCalledTimes(1);
+  expect(send).not.toHaveBeenCalled();
   expect((await db.emailQueue.findUniqueOrThrow({ where: { id: queued.id } })).status).toBe("cancelled");
-  expect(send.mock.calls[0][1]).not.toBe(queued.id);
-  const after = await db.emailQueue.findFirstOrThrow({ where: { to: user.email, status: "sent" } });
-  expect(after.status).toBe("sent");
-  expect(after.text).toContain("Payment receipt: $10.00");
-  expect(after.text).not.toContain("Review this sample tomorrow");
-  expect(after.html).not.toContain("Review this sample tomorrow");
+  expect(await db.emailQueue.count({ where: { to: user.email, status: "sent" } })).toBe(0);
 });
 
 it("recovers an older queued reminder's source notice when it predates queue metadata", async () => {

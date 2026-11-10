@@ -177,7 +177,8 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
   };
   // (Batch 13) "Show an excerpt on your profile": paid written answers, never while the test has an NDA, one pending request per part.
   const excerptPending = written ? (await db.excerpt.count({ where: { submissionId: written.id, status: "pending" } })) > 0 : false;
-  const excerptPicks = written && !c.test.ndaText && !excerptPending && !u.testerSuspendedAt ? await excerptChoices(written) : [];
+  // (Owner, Nov 9, §360) Not on a test whose developer deleted their account (a request there is refused: nobody can allow it).
+  const excerptPicks = written && !c.test.ndaText && !excerptPending && !u.testerSuspendedAt && !devGone ? await excerptChoices(written) : [];
   const now = new Date();
   const seenAt = now.toISOString();
   const offer = await openOffer(c.id);

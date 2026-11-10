@@ -3,7 +3,6 @@ import { T, safeZone } from "@/lib/tz";
 import { appUrl } from "./auth";
 import { emailHtml, type EmailButton } from "./emailLayout";
 import { originalEmail } from "./reuseEmail";
-import { REMINDER_ONLY_GROUPS } from "@/lib/reminderPolicy";
 
 /**
  * (Batch 30 §19) Every email is sent as HTML in the shared branded layout (emailLayout.ts) with its plain text alongside. `button`: the email's main link as a button
@@ -149,15 +148,15 @@ async function capUntil(now: Date) {
  * the missing key as its error, so it goes out once the key is set. Never throws for a failed send: the email waits instead.
  */
 export async function sendEmail(e0: Email, now = new Date()) {
-  if (e0.reminderKey && e0.recipientId && (await db.user.findUnique({ where: { id: e0.recipientId }, select: { deletedAt: true } }))?.deletedAt) return { via: "suppressed" as const };
-  // (§114) A deleted account whose email was freed for a new sign-up keeps the original inside its tombstone: what is still emailed about the old account goes to it.
-  let e = { ...e0, to: originalEmail(e0.to) };
+  // (Owner, Nov 9, §360) Nothing is ever emailed to a deleted account's address: no summary, no end-of-day email, no immediate email (receipts included).
+  if (e0.recipientId && (await db.user.findUnique({ where: { id: e0.recipientId }, select: { deletedAt: true } }))?.deletedAt) return { via: "suppressed" as const };
+  // (§114) A deleted account whose email was freed for a new sign-up keeps the original inside its tombstone: (§360) an email addressed to the tombstone is about the
+  // deleted account, so it never goes (the address now belongs to someone else, or to nobody).
+  if (originalEmail(e0.to) !== e0.to) return { via: "suppressed" as const };
+  if (!e0.recipientId && (await db.user.findUnique({ where: { email: e0.to }, select: { deletedAt: true } }))?.deletedAt) return { via: "suppressed" as const };
+  const e = e0;
   const k = key();
-  let html = htmlOf(e);
-  const prepared = await withoutDeletedReminders({ ...e, id: "", html }, now);
-  if (!prepared) return { via: "suppressed" as const };
-  e = { ...e, subject: prepared.subject, text: prepared.text, notificationIds: prepared.notificationIds };
-  html = prepared.html;
+  const html = htmlOf(e);
   // (Owner, Nov 6, §318) Local testing with the real email key: only addresses on EMAIL_LOCAL_ONLY_TO go out; every other one lands in the dev outbox.
   if ((!k || !localSendAllowed(e.to)) && outboxEnabled()) {
     await db.outboxEmail.create({ data: { to: e.to, subject: e.subject, text: e.text, html } });
@@ -180,9 +179,12 @@ export async function sendEmail(e0: Email, now = new Date()) {
 }
 
 type ReminderContext = { recipientId?: string | null; notificationIds?: string[]; reminderKey?: string | null; createdAt?: Date; giveUpAt?: Date };
-/** Recheck at delivery, not just when the reminder was generated. Already-sent messages cannot be recalled. */
-async function withoutDeletedReminders<R extends Row & ReminderContext>(row: R, now: Date): Promise<R | null> {
-  let recipientId = row.recipientId, ids = row.notificationIds ?? [], reminder = row.reminderKey;
+/**
+ * Rechecked at delivery, not just when the email was made: (Owner, Nov 9, §360; replaces the Nov 7 rule that kept a deleted account's receipts and updates) an
+ * email whose account was deleted since is cancelled whole. Already-sent messages cannot be recalled.
+ */
+async function toLiveRecipient<R extends Row & ReminderContext>(row: R, now: Date): Promise<R | null> {
+  let recipientId = row.recipientId;
   if (!recipientId) {
     // Queue rows from before context was stored: recover their source notices, including freed-email tombstones.
     const people = await db.user.findMany({ where: { deletedAt: { not: null }, OR: [{ email: row.to }, { email: { startsWith: `${row.to} (deleted ` } }] }, select: { id: true } });
@@ -191,37 +193,15 @@ async function withoutDeletedReminders<R extends Row & ReminderContext>(row: R, 
     const matched = source.filter((n) => n.text === row.subject || row.text.includes(`• ${n.text}${n.link ? ` ${siteBase()}${n.link}` : ""}`));
     if (!matched.length || new Set(matched.map((n) => n.userId)).size !== 1) return row;
     recipientId = matched[0].userId;
-    ids = matched.map((n) => n.id);
-    const direct = matched.find((n) => n.text === row.subject);
-    reminder = direct?.reminderKey ?? (direct?.groupKey && REMINDER_ONLY_GROUPS.includes(direct.groupKey) ? `legacy:${direct.groupKey}` : null);
   }
   if (!(await db.user.findUnique({ where: { id: recipientId }, select: { deletedAt: true } }))?.deletedAt) return row;
-  const cancel = async () => {
-    if (row.id) await db.emailQueue.updateMany({ where: { id: row.id, status: "pending" }, data: { status: "cancelled", lastError: "", errorKind: "", clearedAt: now } });
-    return null;
-  };
-  if (reminder) return cancel();
-  if (!ids.length) return row; // An actual receipt or other message, not a reminder summary.
-  const reminderCount = await db.notification.count({ where: { id: { in: ids }, userId: recipientId, OR: [{ reminderKey: { not: null } }, { groupKey: { in: REMINDER_ONLY_GROUPS } }] } });
-  if (!reminderCount) return row;
-  const mail = await (await import("./notify")).queuedSummaryWithoutReminders(recipientId, ids, row.text.split("\n")[0]);
-  if (!mail) return cancel();
-  const html = htmlOf({ ...mail, to: row.to });
-  if (row.id) {
-    // A changed body needs a new transport idempotency key; retrying the original key with different content can be refused by the provider.
-    const replacement = await db.$transaction(async (tx) => {
-      const stopped = await tx.emailQueue.updateMany({ where: { id: row.id, status: "pending" }, data: { status: "cancelled", lastError: "", errorKind: "", clearedAt: now } });
-      if (!stopped.count) return null;
-      return tx.emailQueue.create({ data: { to: row.to, subject: mail.subject, text: mail.text, html, recipientId, notificationIds: mail.notificationIds, giveUpAt: row.giveUpAt ?? new Date(now.getTime() + EMAIL_RETRY_HOURS * HOUR), nextTryAt: new Date(now.getTime() + CLAIM_MS) } });
-    });
-    return replacement ? { ...row, ...replacement } : null;
-  }
-  return { ...row, subject: mail.subject, text: mail.text, html, notificationIds: mail.notificationIds };
+  if (row.id) await db.emailQueue.updateMany({ where: { id: row.id, status: "pending" }, data: { status: "cancelled", lastError: "", errorKind: "", clearedAt: now } });
+  return null;
 }
 
 /** One try of a claimed row: sent, or the failure recorded (a next try, the daily limit's wait, or failed for good). True when it went. */
 async function deliver(row0: Row & { attempts?: number; giveUpAt: Date; recipientId?: string | null; notificationIds?: string[]; reminderKey?: string | null; createdAt?: Date }, k: string, now: Date) {
-  const row = await withoutDeletedReminders(row0, now);
+  const row = await toLiveRecipient(row0, now);
   if (!row) return false;
   const r: Answer = k ? await post(row, k) : { ok: false, status: 0, body: NO_EMAIL_KEY };
   if (r.ok) {

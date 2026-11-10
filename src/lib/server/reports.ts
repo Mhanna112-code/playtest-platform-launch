@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { displayName, fmtDate } from "@/lib/server/dateFormat";
 import { HttpError } from "./http";
+import { ACCOUNT_WAS_DELETED } from "@/lib/format";
 import { adminUsers, notify } from "./notify";
 
 // (Owner, Oct 27) "Report <name>" on a profile (tester profile on the developer side, developer profile on the tester side): a reason and Send to the team.
@@ -13,7 +14,8 @@ export async function reportPerson(me: { id: string }, body: Record<string, unkn
   const otherId = String(body.userId ?? "");
   if (!otherId || otherId === me.id) throw new HttpError(400, "bad_user", "Choose someone to report.");
   const other = await db.user.findUnique({ where: { id: otherId } });
-  if (!other || other.deletedAt) throw new HttpError(404, "not_found", "That person doesn't exist.");
+  if (!other) throw new HttpError(404, "not_found", "That person doesn't exist.");
+  if (other.deletedAt) throw new HttpError(409, "deleted", ACCOUNT_WAS_DELETED); // (Owner, Nov 9, §360) an old profile tab's Report
   const note = typeof body.note === "string" ? body.note.trim().slice(0, 2000) : "";
   const had = await db.report.findUnique({ where: { reporterId_reportedId: { reporterId: me.id, reportedId: otherId } } });
   if (had) throw new HttpError(409, "already", `You already reported ${displayName(other)} on ${fmtDate(had.createdAt)}.`);

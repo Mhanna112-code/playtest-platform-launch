@@ -61,6 +61,8 @@ export const isEmail = (s: string) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(s) && s.
 export const normEmail = (s: string) => s.trim().toLowerCase();
 
 /** A person's name for others to read: their name, or the part of their email before the @. */
+/** (Owner, Nov 9, §360) A deleted account's profile, and an old tab's Report or Block of it. */
+export const ACCOUNT_WAS_DELETED = "This account was deleted.";
 export const displayName = (u: { name?: string | null; email: string; deletedAt?: Date | null }) => (u.deletedAt ? "Deleted account" : u.name?.trim() ? u.name.trim() : u.email.split("@")[0]);
 
 /**

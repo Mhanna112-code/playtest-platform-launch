@@ -289,7 +289,8 @@ export async function deleteAccount(userId: string, by: "self" | "admin", reason
     return r.count === 1;
   });
   if (!claimed) throw new HttpError(409, "deleted", "That account was already deleted.");
-  await db.notification.updateMany({ where: { userId, reminderKey: { not: null }, summarizedAt: null }, data: { summarizedAt: new Date() } });
+  // (Owner, Nov 9, §360) Nothing waiting is emailed any more (it was only the reminders): a deleted account gets no summary or end-of-day email.
+  await db.notification.updateMany({ where: { userId, summarizedAt: null }, data: { summarizedAt: new Date() } });
   // (Owner, Oct 29, batch 12 section 1) A developer can always delete their account (the warning lists what is left; nothing blocks it).
   // (Batch 8) The subscription ends at once, with no refund.
   if (u.isDeveloper) await (await import("./subscription")).endOnDelete(userId);
@@ -326,6 +327,8 @@ export async function deleteAccount(userId: string, by: "self" | "admin", reason
   }
   // (Owner, Oct 29, batch 13) A tester's excerpt requests and shown excerpts are removed; a developer's pending requests close (shown excerpts stay).
   await (await import("./excerpts")).excerptsOnDelete(userId);
+  // (Owner, Nov 9, §360) The other side's "Rate <name> on …" lines go: rating with a deleted account is unavailable.
+  await (await import("./ratings")).dropRateLinesFor(userId);
   return { ok: true };
 }
 
