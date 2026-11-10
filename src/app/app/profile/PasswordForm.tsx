@@ -36,7 +36,10 @@ export function PasswordForm({ hasPassword, seenAt: seen0 }: { hasPassword: bool
       if (e instanceof ApiError && e.code === "stop_once") {
         setChanges((c) => (c ? mergeChanges(c, (e.data.changes as Change[]) ?? []) : ((e.data.changes as Change[]) ?? [])));
         if (typeof e.data.now === "string") setBoxAt(e.data.now);
-      } else setErr(errOf(e));
+      } else {
+        setChanges(null); // (§4 small fixes) a refusal replaces an older stop box: only the refusal shows
+        setErr(errOf(e));
+      }
     } finally {
       setBusy(false);
     }

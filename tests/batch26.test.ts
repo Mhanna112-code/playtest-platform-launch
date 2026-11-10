@@ -188,7 +188,7 @@ describe("batch 26 sections 3 and 4: the team's Stop never names the developer; 
     expect(banner).toBe(`This test was stopped at ${time}. You can still chat. Work you sent is still reviewed.`);
     expect(endedLine({ ...c, title: "Harbor Run" }, "Nora Lane", () => "Oct 29, 2026")).toBe("This test was stopped on Oct 29, 2026. Work you sent is still reviewed.");
     const refused = await sact(j.sessionId, "written", j.tester.cookie, { answers: ["a", "b"] });
-    expect(refused.body.error.message).toBe("This test was stopped, so your Send didn't go through."); // (Owner, Nov 9, §363: the refusal has no time; the banner keeps it)
+    expect(refused.body.error.message).toBe("This test was stopped, so your Send Answers didn't go through."); // (Owner, Nov 9, §363: the refusal has no time; the banner keeps it)
     // The live box (it says when itself).
     const live = await json(await liveGET(req(`/api/live?scope=session:${j.sessionId}&since=${encodeURIComponent(loaded.toISOString())}`, { cookie: j.tester.cookie, method: "GET" })));
     const texts = (live.body.changes as { text: string }[]).map((x) => x.text);

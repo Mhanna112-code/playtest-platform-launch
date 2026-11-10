@@ -10,14 +10,14 @@ rows (contracts, parts, requests, calls, payments, invites, applications, excerp
 
 | Cause | Side | Buttons covered | Case |
 |---|---|---|---|
-| This test was stopped (developer's Stop) | tester | Send, Add, Send (recording), upload, Request a time, Accept, Decline, Leave | "stopped (the developer's Stop)" |
+| This test was stopped (developer's Stop) | tester | Send Answers, Add, Send (recording), upload, Request a time, Accept, Decline, Leave | "stopped (the developer's Stop)" |
 | This test was stopped (developer's Stop) | developer | Stop the test, End early, Request a time, Invite | same |
 | This test was stopped (team's Stop) | developer | Invite, Next round, Request a time | "stopped (the team's Stop)" |
-| This test was stopped (developer deleted) | tester | Send, Rate, Ask the developer (excerpt) | "stopped (the developer deleted their account)" |
-| This test ended | tester | Send, Add, Send (recording), upload, Request a time, Accept, Decline | "ended (the work window)" |
-| Your part in this test has ended | tester | Send, Add, Send (recording), upload, Request a time, Leave | "part ended (she left)" |
+| This test was stopped (developer deleted) | tester | Send Answers, Rate, Ask the developer (excerpt) | "stopped (the developer deleted their account)" |
+| This test ended | tester | Send Answers, Add, Send (recording), upload, Request a time, Accept, Decline | "ended (the work window)" |
+| Your part in this test has ended | tester | Send Answers, Add, Send (recording), upload, Request a time, Leave | "part ended (she left)" |
 | {name}'s session has ended | developer | End early, Request a time | same |
-| This test is paused right now | tester | Send, Request a time, Accept | "paused (the developer's hold)" |
+| This test is paused right now | tester | Send Answers, Request a time, Accept | "paused (the developer's hold)" |
 | Your tests are paused | developer | Next round, Invite, Pay, Subscribe for $7/month | same |
 | The team paused this test | developer | Invite, Next round, Send (chat) (§368: Pay and Pay more go through) | "team paused" |
 | Your account is paused | tester | Send Answers, Rate | "account paused / suspended" |

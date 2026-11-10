@@ -73,7 +73,10 @@ export function ConfirmAll({ ids, totalCents, leftOut, open, seenAt: rendered = 
         setChanges((c) => (c ? mergeChanges(c, (e.data.changes as Change[]) ?? []) : ((e.data.changes as Change[]) ?? [])));
         if (typeof e.data.totalCents === "number" && Array.isArray(e.data.ids)) setShown({ ids: e.data.ids as string[], totalCents: e.data.totalCents });
         if (typeof e.data.now === "string") setBoxAt(e.data.now);
-      } else setErr(errOf(e));
+      } else {
+        setChanges(null); // (§4 small fixes) a refusal replaces an older stop box: only the refusal shows
+        setErr(errOf(e));
+      }
       setBusy(false);
     }
   }

@@ -30,7 +30,7 @@ describe("§355 the tester's top line after the developer deleted their account"
     // (Owner, Nov 9, §363; was the deletion's line naming the press) An old page's Send: the one stopped line; the banner above keeps the deletion's line.
     const r = await sact(j.sessionId, "written", j.tester.cookie, { answers: ["The harbour level was clear and the boats handled well.", "Fine."], seenAt: seen(), confirmed: true });
     expect(r.status).toBe(409);
-    expect(r.body.error.message).toBe("This test was stopped, so your Send didn't go through.");
+    expect(r.body.error.message).toBe("This test was stopped, so your Send Answers didn't go through.");
     expect(workOverLine(c, "Deleted user", fmtDate, "Send")).toBe("This test was stopped, so your Send didn't go through.");
     expect(stillWorksLine(c, "Deleted user", fmtDate, { chat: true }, "Send")).toMatch(LINE); // the banner: the full deletion line
   });

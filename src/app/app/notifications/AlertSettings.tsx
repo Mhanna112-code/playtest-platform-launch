@@ -51,7 +51,10 @@ export function AlertSettings({ emailPref, side = null, seenAt: seen0 }: { email
             if (x instanceof ApiError && x.code === "stop_once") {
               setChanges((c) => (c ? mergeChanges(c, (x.data.changes as Change[]) ?? []) : ((x.data.changes as Change[]) ?? [])));
               if (typeof x.data.now === "string") setBoxAt(x.data.now);
-            } else setErr(errOf(x));
+            } else {
+              setChanges(null); // (§4 small fixes) a refusal replaces an older stop box: only the refusal shows
+              setErr(errOf(x));
+            }
           } finally {
             setBusy(false);
           }

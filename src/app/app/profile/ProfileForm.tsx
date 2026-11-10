@@ -93,7 +93,10 @@ export function ProfileForm({ init, first, admin = false, side = "tester", seenA
       if (err instanceof ApiError && err.code === "stop_once") {
         setChanges((c) => (c ? mergeChanges(c, (err.data.changes as Change[]) ?? []) : ((err.data.changes as Change[]) ?? [])));
         if (typeof err.data.now === "string") setBoxAt(err.data.now);
-      } else setMsg({ ok: false, text: errOf(err) });
+      } else {
+        setChanges(null); // (§4 small fixes) a refusal replaces an older stop box: only the refusal shows
+        setMsg({ ok: false, text: errOf(err) });
+      }
     } finally {
       setBusy(false);
     }

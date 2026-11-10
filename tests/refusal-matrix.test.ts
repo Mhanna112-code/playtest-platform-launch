@@ -68,7 +68,7 @@ type W = Awaited<ReturnType<typeof world>>;
 const testerPresses = (w: W): Press[] => {
   const t = (action: string, body: Record<string, unknown>, button: string): Press => ({ side: "tester", button, go: () => sact(w.ana.sessionId, action, w.ana.tester.cookie, { seenAt: seen(), ...body }) });
   return [
-    t("written", { answers: ["The harbour level was clear and the boats handled well.", "Fine."] }, "Send"),
+    t("written", { answers: ["The harbour level was clear and the boats handled well.", "Fine."] }, "Send Answers"), // (Nov 9 small fixes) the button's real label
     t("written-add", { text: "One more thing.", question: "x" }, "Add"),
     t("recording-send", {}, "Send"),
     t("recording-start", { filename: "a.webm", size: 10, contentType: "video/webm" }, "upload"),

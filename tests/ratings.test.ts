@@ -68,7 +68,7 @@ describe("the tester rates the developer", () => {
     const c = await db.contract.findUniqueOrThrow({ where: { id: sessionId } });
     expect(c).toMatchObject({ status: "left", endKind: "rated" });
     expect(await db.call.count({ where: { contractId: sessionId, status: "booked", startsAt: { gt: new Date() } } })).toBe(0);
-    expect((await sact(sessionId, "written", tester.cookie, { answers: ["c", "d"] })).body.error.message).toBe("Your part in this test has ended, so your Send didn't go through."); // (§364 item 3)
+    expect((await sact(sessionId, "written", tester.cookie, { answers: ["c", "d"] })).body.error.message).toBe("Your part in this test has ended, so your Send Answers didn't go through."); // (§364 item 3)
     // No rejoin, ever.
     expect((await act(testId, "join", tester.cookie, { listingVersion: c.listingVersion })).body.error.message).toBe("You rated this test, so you can't join it again.");
     // (Owner, Nov 6, §288; was "Dispute stays available after rating") Rating closes the tester's disputes on the test.

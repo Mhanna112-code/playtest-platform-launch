@@ -30,7 +30,7 @@ describe("session page after the test is stopped or the work is ended", () => {
       expect(r.body.error.code, action).toBe("work_over");
       expect(r.body.error.message, action).toMatch(STOPPED(press));
     };
-    await refused("written", { answers: ["a", "b"] }, "Send");
+    await refused("written", { answers: ["a", "b"] }, "Send Answers");
     // (Batch 35 §118) Switch / Keep after the part ended: the offer closed, one plain line (not the stopped line naming the press).
     for (const choice of ["switch", "keep"]) {
       const t = await sact(sessionId, "terms", tester.cookie, { seenAt: opened, offerId: offer.id, choice });
@@ -41,7 +41,7 @@ describe("session page after the test is stopped or the work is ended", () => {
     await refused("request-time", { startsAt: atHours(80) }, "Request a time");
     await refused("recording-start", { filename: "a.webm", size: 10, contentType: "video/webm" }, "upload");
     // Pressing again never "goes ahead": it's final.
-    await refused("written", { answers: ["a", "b"], confirmed: true }, "Send");
+    await refused("written", { answers: ["a", "b"], confirmed: true }, "Send Answers");
   });
 
   it("ended early: the live line says so, later presses refuse with the ended line", async () => {
@@ -52,6 +52,6 @@ describe("session page after the test is stopped or the work is ended", () => {
     expect((await live(tester.cookie, `session:${sessionId}`, opened)).body.changes.map((c: { text: string }) => c.text)).toContain("Nora Lane ended your work");
     const r = await sact(sessionId, "written", tester.cookie, { seenAt: opened, answers: ["a", "b"] });
     expect(r.status).toBe(409);
-    expect(r.body.error.message).toBe("Your part in this test has ended, so your Send didn't go through."); // (§364 item 3; the banner keeps who and when)
+    expect(r.body.error.message).toBe("Your part in this test has ended, so your Send Answers didn't go through."); // (§364 item 3; the banner keeps who and when)
   });
 });

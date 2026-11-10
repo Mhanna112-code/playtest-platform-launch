@@ -68,7 +68,7 @@ describe("payment hold", () => {
     expect((await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] })).status).toBe(200);
     await startHold(dev.user.id, "unpaid");
     // (Owner, Oct 28 afternoon) Sending waits for the tester too; joining, booking, posting, Pay, Reject and Next round wait.
-    expect((await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] })).body.error.message).toBe("This test is paused right now, so your Send didn't go through."); // (§364 item 5)
+    expect((await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] })).body.error.message).toBe("This test is paused right now, so your Send Answers didn't go through."); // (§364 item 5)
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
     // (Owner, Oct 27) Pay and Reject are unavailable during ANY hold: refused, and the refusal names the press for the dashboard box.
     const waits = await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 });

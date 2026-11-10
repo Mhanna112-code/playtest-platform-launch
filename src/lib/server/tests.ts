@@ -1200,7 +1200,7 @@ export async function leaveTest(tester: U, contractId: string, body: Record<stri
 export async function sendWritten(tester: U, contractId: string, body: Record<string, unknown>) {
   const c0 = await ownContract(tester.id, contractId);
   const ended = sessionRefusal(c0, c0.test, displayName(c0.test.developer));
-  if (ended) throw new HttpError(409, "closed", overPressLine(c0, "Send")); // (§363 / §364)
+  if (ended) throw new HttpError(409, "closed", overPressLine(c0, "Send Answers")); // (§363 / §364)
   // (Batch 27 section 1) An open new-terms offer blocks Send until it's answered (Switch or Keep): nothing is checked or sent before.
   await answerTermsFirst(contractId);
   const qs = writtenQuestions(c0);
@@ -1248,7 +1248,7 @@ export async function sendWritten(tester: U, contractId: string, body: Record<st
   const long = checkWrittenLength([...answers, notes]);
   if (!long.ok) throw new HttpError(400, "too_long", long.message);
   // (Owner, Oct 28 afternoon) No sending while the test is paused (the typed answers stay kept as a draft).
-  if (!sessionRefusal(c0, c0.test, displayName(c0.test.developer)) && testerPaused(c0.test.developer, c0.test)) throw new HttpError(409, "paused", RF.pressRefused(RF.PAUSED_CAUSE, "Send")); // (§364 item 5)
+  if (!sessionRefusal(c0, c0.test, displayName(c0.test.developer)) && testerPaused(c0.test.developer, c0.test)) throw new HttpError(409, "paused", RF.pressRefused(RF.PAUSED_CAUSE, "Send Answers")); // (§364 item 5; the button's real label, §235)
   // (Owner, Nov 4, §183) A Send that adds to sent answers (the answers to changed questions) stops once for a developer payment on them since the page loaded,
   // whatever the tester's Alerts. One that could only be refused (locked, or the team's $0 closure) is refused at once, never after a stop (checked again below).
   const sent = await db.submission.findUnique({ where: { contractId_kind: { contractId, kind: "written" } }, include: { review: true } });
@@ -1259,9 +1259,9 @@ export async function sendWritten(tester: U, contractId: string, body: Record<st
   const { sub, updated, afterPaid } = await db.$transaction(async (tx) => {
     const t = await lockTest(tx, c0.testId);
     const c = await tx.contract.findUniqueOrThrow({ where: { id: contractId } });
-    await (await import("./workWindow")).assertWorkOpen(tx, t.id, new Date(), "Send");
+    await (await import("./workWindow")).assertWorkOpen(tx, t.id, new Date(), "Send Answers");
     const refusal = sessionRefusal(c, t, displayName(c0.test.developer));
-    if (refusal) throw new HttpError(409, "closed", overPressLine(c, "Send")); // (§363 / §364)
+    if (refusal) throw new HttpError(409, "closed", overPressLine(c, "Send Answers")); // (§363 / §364)
     // (§269) The questions changed between the checks and this lock: nothing is sent (refused before anything is written; the page keeps what it typed and
     // redraws, and its next press meets the stop above).
     if (!sameQuestionWords(writtenQuestions(c), qs)) throw new HttpError(409, "questions_changed", QUESTIONS_CHANGED_MEANWHILE);

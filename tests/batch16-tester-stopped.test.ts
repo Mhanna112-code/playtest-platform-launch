@@ -24,7 +24,7 @@ describe("the stopped line and the press names (section 24)", () => {
     expect(R.stillWorksLine({ ...stopped, endKind: "closed" }, "Nora Lane", fmt, { chat: true }, "Send")).toBe("This test ended on Nov 3, so your Send didn't go through. You can still chat. Work you sent is still reviewed.");
     expect(R.workOverLine({ ...stopped, endKind: "early" }, "Nora Lane", fmt, "Cancel call")).toBe("Your part in this test has ended, so your Cancel call didn't go through."); // (§364 item 3)
     expect(R.workOverPress("key-broken")).toBe(""); // (Owner, Nov 6, §304) "This key doesn't work" is gone
-    expect(["terms", "written", "recording-send", "answer-request", "cancel-set"].map((a) => R.workOverPress(a, a === "terms" ? { choice: "keep" } : a === "answer-request" ? { action: "withdraw" } : {}))).toEqual(["Keep", "Send", "Send", "Withdraw", "Cancel call"]);
+    expect(["terms", "written", "recording-send", "answer-request", "cancel-set"].map((a) => R.workOverPress(a, a === "terms" ? { choice: "keep" } : a === "answer-request" ? { action: "withdraw" } : {}))).toEqual(["Keep", "Send Answers", "Send", "Withdraw", "Cancel the remaining calls"]); // (Nov 9 small fixes) the buttons' real labels
     // A block, a rating or a leave aren't "the work is over" here (a block keeps its neutral line).
     expect(R.workOver({ status: "ended", endKind: "blocked", endedAt: at })).toBe(false);
     expect(R.workOver({ status: "left", endKind: "", endedAt: at })).toBe(false);
@@ -54,7 +54,7 @@ describe("after a stop: what's gone is refused and names the press; what still w
       expect(r.body.error.changes, action).toBeUndefined(); // never a stop box
       expect(r.body.error.message, action).toBe(`This test was stopped, so your ${press} didn't go through.`); // (Owner, Nov 9, §363; no name, date or tail)
     };
-    await refused("written", { answers: ["a", "b"] }, "Send");
+    await refused("written", { answers: ["a", "b"] }, "Send Answers");
     await refused("recording-send", {}, "Send");
     await refused("recording-start", { filename: "a.webm", size: 10, contentType: "video/webm" }, "upload");
     await refused("recording-done", { recordingId: "x" }, "upload");
@@ -72,10 +72,10 @@ describe("after a stop: what's gone is refused and names the press; what still w
     // (Batch 17 section 12; Owner, Nov 9, §363) Cancel call: the stop already cancelled the calls ahead; the one stopped line names the press.
     for (const [action, body] of [["cancel-call", { callId: call.id }], ["cancel-set", { setId: "x" }]] as const) {
       const r = await sact(sessionId, action, tester.cookie, { seenAt: opened, ...body });
-      expect(r.body.error, action).toMatchObject({ code: "work_over", message: "This test was stopped, so your Cancel call didn't go through." });
+      expect(r.body.error, action).toMatchObject({ code: "work_over", message: `This test was stopped, so your ${action === "cancel-set" ? "Cancel the remaining calls" : "Cancel call"} didn't go through.` }); // (Nov 9 small fixes) each button's real label
     }
     // Final: pressing again never goes ahead.
-    await refused("written", { answers: ["a", "b"], confirmed: true }, "Send");
+    await refused("written", { answers: ["a", "b"], confirmed: true }, "Send Answers");
   });
 
   // (Batch 29 section 11) The stop itself is a change like any other: Dispute stops once naming it (never for the stop's own cancellations), then goes through.

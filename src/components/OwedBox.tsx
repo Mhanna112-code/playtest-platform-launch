@@ -197,6 +197,7 @@ export function OwedBox({ onHold, owed: drawn, chargeback = false, review = fals
           } catch (e) {
             if (e instanceof ApiError && e.code === "nothing_owed") {
               // Paid meanwhile (another tab): nothing is charged; the page redraws without the box.
+              setChanges(null);
               setErr(errOf(e));
               fin.finish();
             } else if (e instanceof ApiError && e.code === "stop_once") {
@@ -208,7 +209,10 @@ export function OwedBox({ onHold, owed: drawn, chargeback = false, review = fals
                 setStopLines({ base: drawn, lines: next });
                 setShownAmounts(Object.fromEntries(next.filter((o) => o.retry).map((o) => [o.id, o.amountCents])));
               }
-            } else setErr(errOf(e));
+            } else {
+              setChanges(null); // (§4 small fixes) a refusal replaces an older stop box: only the refusal shows
+              setErr(errOf(e));
+            }
             if (!(e instanceof ApiError && e.code === "nothing_owed")) setBusy(false);
           }
         }}

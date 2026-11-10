@@ -49,7 +49,7 @@ describe("block", () => {
     expect(await db.notification.count({ where: { userId: tester.user.id, text: "Your session on Harbor Run ended." } })).toBe(1);
     expect(await db.notification.count({ where: { userId: tester.user.id, text: { contains: "block" } } })).toBe(0); // never revealed
     expect((await db.call.findFirstOrThrow({ where: { contractId: sessionId } })).status).toBe("cancelled");
-    expect((await sact(sessionId, "written", tester.cookie, { answers: ["x", "y"] })).body.error.message).toBe("Your part in this test has ended, so your Send didn't go through."); // (§364 item 3: neutral, never says block)
+    expect((await sact(sessionId, "written", tester.cookie, { answers: ["x", "y"] })).body.error.message).toBe("Your part in this test has ended, so your Send Answers didn't go through."); // (§364 item 3: neutral, never says block)
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
     expect((await reviewPOST(req("/api/review", { cookie: dev.cookie, body: { payKey: randomUUID(), seenAt: seen(), confirmed: true, kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 } }))).status).toBe(200);
     expect((await sact(sessionId, "message", tester.cookie, { body: "Hello?" })).body.error.message).toBe("This chat is closed.");

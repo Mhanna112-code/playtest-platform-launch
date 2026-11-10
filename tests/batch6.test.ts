@@ -209,7 +209,7 @@ describe("batch 6 item 4: a paused test, what testers can do", () => {
       if (kind === "team") await db.test.update({ where: { id: testId }, data: { adminPausedAt: new Date() } });
       const w = await sact(sessionId, "written", tester.cookie, { answers: ["c", "d"] });
       expect(w.status).toBe(409);
-      expect(w.body.error.message).toBe("This test is paused right now, so your Send didn't go through."); // (§364 item 5)
+      expect(w.body.error.message).toBe("This test is paused right now, so your Send Answers didn't go through."); // (§364 item 5)
       expect((await sact(sessionId, "recording-send", tester.cookie, { seenAt: seen(), confirmed: true })).body.error.message).toBe("This test is paused right now, so your Send didn't go through."); // (§364 item 5)
       // Drafts: a recording can still be uploaded (sent later).
       expect((await sact(sessionId, "recording-start", tester.cookie, { size: 1000, contentType: "video/mp4", filename: "a.mp4" })).status).toBe(200);

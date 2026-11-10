@@ -797,12 +797,12 @@ function overHalf(c: StopCtx, devName: string, fmt: (d: Date) => string) {
 }
 /** The presses that go once the work is over (hidden on the page, refused on the server); WORK_OVER_PRESSES are the names the refusal gives them. */
 export const WORK_OVER_ACTIONS = ["terms", "written", "written-add", "recording-start", "recording-done", "recording-send", "recording-remove", "request-time", "answer-request", "cancel-call", "cancel-set"] as const; // (Owner, Nov 6, §304) no "key-broken"
-export const WORK_OVER_PRESSES = ["Switch", "Keep", "Send", "Add", "upload", "Remove", "Request a time", "Accept", "Decline", "Withdraw", "Cancel call"] as const;
+export const WORK_OVER_PRESSES = ["Switch", "Keep", "Send Answers", "Send", "Add", "upload", "Remove", "Request a time", "Accept", "Decline", "Withdraw", "Cancel call", "Cancel the remaining calls"] as const;
 /** The press's name in the refusal: "Send", "Switch", "Request a time", "Cancel call"… ("" for a press that isn't one of them). */
 export function workOverPress(action: string, body: Record<string, unknown> = {}): string {
   switch (action) {
     case "terms": return body.choice === "keep" ? "Keep" : "Switch";
-    case "written": return "Send";
+    case "written": return "Send Answers"; // (Owner, Nov 9, §4 small fixes) the button's real label (pressLabels SEND_ANSWERS, §235), as a suspended tester's refusal names it
     // (Batch 35 §136) Adding to sent work: "Add" (the recording part's Add sends `add: true`).
     case "written-add": return "Add";
     case "recording-send": return body.add === true ? "Add" : "Send";
@@ -810,7 +810,8 @@ export function workOverPress(action: string, body: Record<string, unknown> = {}
     case "recording-remove": return "Remove";
     case "request-time": return "Request a time";
     case "answer-request": return body.action === "decline" ? "Decline" : body.action === "withdraw" ? "Withdraw" : "Accept";
-    case "cancel-call": case "cancel-set": return "Cancel call";
+    case "cancel-call": return "Cancel call";
+    case "cancel-set": return "Cancel the remaining calls"; // (§4 small fixes) the button's real label
   }
   return "";
 }
