@@ -78,7 +78,9 @@ export function PayBox(p: {
   const [ticked, setTicked] = useState(false);
   const [over200, setOver200] = useState(false);
   // (Batch 35 §41) The redraw after a payment landed: a Pay more still here starts empty again (a new attempt, a new key).
-  const { press, changes, error, busy, at, done, doneLine, finish } = usePress(p.seenAt, undefined, { onFresh: () => { emptyBox(); setPayKey(newPressId()); } });
+  // (Owner, Nov 10, §371) Kept by the box's place and piece (lib/pressCarry.ts): Needs you keys a call's Pay by its length, and a call's row moves into the Had
+  // panel once there are more than 3, so a redraw mid-press can draw a new box; the server's stop box or refusal shows under ITS Pay.
+  const { press, changes, error, busy, at, done, doneLine, finish } = usePress(p.seenAt, undefined, { onFresh: () => { emptyBox(); setPayKey(newPressId()); }, carry: `pay:${p.fromNeeds ? "needs" : p.awayInNeeds ? "away" : "list"}:${more ? "more" : "pay"}:${p.kind}:${p.id}` });
   const [bankErr, setBankErr] = useState("");
   // (Batch 17 §11) The bank's check opens inline, under the button; the button stays disabled while it is open.
   const bank = useBankCheck();

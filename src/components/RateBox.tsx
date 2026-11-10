@@ -23,7 +23,9 @@ import { lockText, useSending } from "@/lib/sendLock";
 export function RateBox(p: { path: string; seenAt: string; name: string; body?: Record<string, unknown>; headline: string; lines: string[]; working: boolean; disabledLine?: string; anchor?: string; /** (Owner, Nov 5, §268) in the pop-up: the open-terms notice (information only) */ notice?: ReactNode }) {
   const [stars, setStars] = useState("");
   const [comment, setComment] = useState("");
-  const { press, changes, error, busy, done, doneLine, finish } = usePress(p.seenAt, undefined, { onFresh: () => { setStars(""); setComment(""); } });
+  // (Owner, Nov 10, §371) Kept by the box (lib/pressCarry.ts): the session page is keyed by its status, so a redraw mid-press can draw a new box; the server's
+  // stop box or refusal shows under ITS Rate.
+  const { press, changes, error, busy, done, doneLine, finish } = usePress(p.seenAt, undefined, { onFresh: () => { setStars(""); setComment(""); }, carry: `rate:${p.path}:${String(p.body?.contractId ?? "")}` });
   // (NEXT-UI 10) The note typed and not sent is kept on the server ("Draft"; batch 35 §8: after signing in, with "Use saved").
   const keep = useKept(`rate:${p.path.replace(/[^A-Za-z0-9]+/g, "-")}${p.body?.contractId ? ":" + String(p.body.contractId) : ""}`, { comment }, comment === "", (v) => setComment(v.comment ?? ""));
   const box = useRef<HTMLDivElement>(null);

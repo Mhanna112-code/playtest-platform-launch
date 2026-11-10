@@ -8,6 +8,7 @@ import { api, errOf, FIELD } from "@/lib/client";
 import { money, toCents } from "@/lib/format";
 import { CHARGE_TICK_CENTS, chargeTickLabel, letGoTickLabel } from "@/lib/rules";
 import { stopBox, useStopBox } from "@/lib/topStop";
+import { useCarried, useCarriedLive } from "@/lib/pressCarry";
 import { ChangesBox } from "@/components/ChangesBox";
 import { PressDone } from "@/components/PressDone";
 import { useFinished } from "@/lib/usePress";
@@ -28,17 +29,21 @@ function ChargeLabel({ devName, cents }: { devName: string; cents: number | null
  * (Batch 35 §40, §41) Once it goes through, the page redraws in place (the scroll stays here); until it has, only the pressed button (greyed) and its line show.
  */
 export function ChoiceBox({ paused = false, sessionId, submissionId, callId, line, devName, cents, seenAt }: { paused?: boolean; sessionId: string; submissionId?: string; callId?: string; line: string; devName: string; cents: number; seenAt: string }) {
+  // (Owner, Nov 10, §371) The press's state is kept by the piece (lib/pressCarry.ts): the session page is keyed by its status, so a redraw while Charge / Let it go
+  // is on its way (the work ended, the test closed) draws a new box; it shows "busy", and the server's stop box or refusal, under its buttons.
+  const carry = `choice:${submissionId ?? callId}`;
   // (Owner) When the box was made: the next press goes ahead only if nothing new happened since.
-  const [boxAt, setBoxAt] = useState("");
+  const [boxAt, setBoxAt] = useCarried(carry, "boxAt", "");
   const confirmed = !!boxAt;
-  const [box, setBox] = useStopBox();
-  const [err, setErr] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [box, setBox] = useStopBox(carry);
+  const [err, setErr] = useCarried(carry, "err", "");
+  const [busy, setBusy] = useCarried(carry, "busy", false);
   const fin = useFinished(() => setBusy(false));
+  const shown = useCarriedLive(carry, fin);
   const [ticked, setTicked] = useState(false);
   const [letGo, setLetGo] = useState(false);
   // (Batch 19 section 5) The stop box names the press that was made: "Your Let it go didn't go through." / "Your Charge didn't go through."
-  const [pressed, setPressed] = useState<"Charge" | "Let it go">("Charge");
+  const [pressed, setPressed] = useCarried<"Charge" | "Let it go">(carry, "pressed", "Charge");
   const [amount, setAmount] = useState((cents / 100).toFixed(2));
   // (Batch 16 section 36) What will be charged: the typed amount rounded to the cent (the box shows it rounded once it's left).
   const typed = toCents(amount);
@@ -49,7 +54,7 @@ export function ChoiceBox({ paused = false, sessionId, submissionId, callId, lin
     setBusy(true);
     setErr("");
     api(`/api/sessions/${sessionId}/choose`, { ...(callId ? { callId } : { submissionId }), choice, amount, tickedCents: choice === "charge" && over && ticked ? typed : undefined, seenAt, confirmed, boxAt })
-      .then(() => fin.finish(choice === "letgo" ? "You let it go." : `Charged ${devName} ${money(typed ?? cents)}.`))
+      .then(() => shown().finish(choice === "letgo" ? "You let it go." : `Charged ${devName} ${money(typed ?? cents)}.`))
       .catch((e) => {
         const sb = stopBox(e); if (sb) { setBox(sb); setBoxAt(sb.now); }
         else {

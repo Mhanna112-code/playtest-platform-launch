@@ -28,6 +28,7 @@ import { attachmentTag, hasMarkerFor, removeAttachmentMarker, tagMarker, type An
 import { AnswerWithAttachments } from "@/components/AnswerSets";
 import { fileSize } from "@/lib/format";
 import { useFinished } from "@/lib/usePress";
+import { peekCarried, setCarried, useCarried, useCarriedLive } from "@/lib/pressCarry";
 import { SendingScope, lockPick, lockText } from "@/lib/sendLock";
 import { PressDone } from "@/components/PressDone";
 import { OwnPanel, ResizeBox } from "@/components/Panel";
@@ -141,16 +142,22 @@ export function WrittenForm({ sessionId, questions, newQs = [], initial, initial
   /** (Owner, Nov 5, §235) after a send: `questions` are only the current ones with no answer yet (sent with `for`); no notes box (Anything else has its Add) */ only?: boolean;
   /** (§235) at least one answer is needed (not after a switch to changed questions: that Send moves the part onto them) */ needOne?: boolean;
   /** (Owner, Nov 6, §283) the questions (their words) that came after the tester's sends: "new question" beside them */ newQs?: string[] }) {
+  // (Owner, Nov 10, §371; recordings race-369 1 and 2) The page keys this form "first" / "open": a redraw while Send Answers is on its way (another tab sent,
+  // the questions changed) can swap it for the other one. The press's state is kept by the written part (lib/pressCarry.ts), not by this component: the form
+  // shown after the redraw is "Sending…" too, and the server's stop box or refusal shows under ITS Send Answers. What was typed comes along by the questions'
+  // words, as in an in-place switch (§269).
+  const carry = `written-form:${sessionId}`;
+  const [typedBefore] = useState(() => peekCarried<{ qs: string[]; answers: string[]; notes: string }>(carry, "typed"));
   // (Owner) When the box was made: the next press goes ahead only if nothing new happened since.
-  const [boxAt, setBoxAt] = useState("");
+  const [boxAt, setBoxAt] = useCarried(carry, "boxAt", "");
   const confirmed = !!boxAt;
-  const [box, setBox] = useStopBox();
-  const [pausedNow, setPausedNow] = useState("");
-  const [answers0, setAnswers] = useState<string[]>(questions.map((_, i) => initial[i] ?? ""));
+  const [box, setBox] = useStopBox(carry);
+  const [pausedNow, setPausedNow] = useCarried(carry, "pausedNow", "");
+  const [answers0, setAnswers] = useState<string[]>(() => typedBefore?.answers ?? questions.map((_, i) => initial[i] ?? ""));
   // (Owner, Nov 5, §269) The questions the boxes are for. A redraw with other questions (a change, a reorder, one answered meanwhile) switches the form in
   // place: each box keeps its text by the question's words, a new question is an empty box, a removed question's box goes (the server kept its text: in the
-  // draft snapshot of its Terms history entry when a Send stopped for it).
-  const [shownQs, setShownQs] = useState(questions);
+  // draft snapshot of its Terms history entry when a Send stopped for it). (§371) A form that took over from a swapped one starts from ITS questions and text.
+  const [shownQs, setShownQs] = useState(() => typedBefore?.qs ?? questions);
   // (§269) The boxes it just gained: a draft the server kept for one (a question that came back) is put back (keep.reload, below).
   const [gained, setGained] = useState<string[]>([]);
   if (JSON.stringify(shownQs) !== JSON.stringify(questions)) {
@@ -162,10 +169,12 @@ export function WrittenForm({ sessionId, questions, newQs = [], initial, initial
   // (Batch 20 section 28, bug found by the owner) Always one answer per question shown, each a string: a shorter or holed list made a box uncontrolled (what was typed
   // showed but never reached the press), so the server got fewer answers than questions and refused "Answer every required question" with nothing red on the page.
   const answers = questions.map((_, i) => answers0[i] ?? "");
-  const [missingAt, setMissingAt] = useState<number | null>(null);
+  const [missingAt, setMissingAt] = useCarried<number | null>(carry, "missingAt", null);
   // (Batch 32 §4) "Answer at least one question…": a line above the questions (no box red), gone once any answer has text.
-  const [needOne, setNeedOne] = useState(false);
-  const [notes, setNotes] = useState(initialNotes);
+  const [needOne, setNeedOne] = useCarried(carry, "needOne", false);
+  const [notes, setNotes] = useState(() => typedBefore?.notes ?? initialNotes);
+  // (§371) What's typed, for a form that takes over from this one mid-press.
+  useEffect(() => setCarried<unknown>(carry, "typed", { qs: shownQs, answers: answers0, notes }, undefined), [carry, shownQs, answers0, notes]);
   const [attachments, setAttachments] = useState(initialAttachments);
   /**
    * (Owner, Oct 31, batch 35 §38) No "Files and recordings" box under the answers: files go in an answer with 📎 (its preview shows them, × removes one; the server
@@ -193,10 +202,12 @@ export function WrittenForm({ sessionId, questions, newQs = [], initial, initial
     setNotes((cur) => (cur === was.notes ? initialNotes : cur));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(initial), initialNotes]);
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  // (§371) On its way (kept by the part: a form swapped in meanwhile shows "Sending…" too).
+  const [sending, setSending] = useCarried(carry, "sending", false);
+  const [msg, setMsg] = useCarried<{ ok: boolean; text: string } | null>(carry, "msg", null);
   // (Batch 35 §40, §41) Sent: the page redraws in place (the scroll stays at the answers); until it has, Send stays greyed with its line under it.
-  const fin = useFinished(() => { setBusy(false); setBox(null); setBoxAt(""); });
+  const fin = useFinished(() => { setBox(null); setBoxAt(""); });
+  const busy = sending || fin.done;
   // (NEXT-UI 10) Typed and not sent: kept on the server, back after a reload or on another device, with "Draft" (batch 35 §8: after signing in, with "Use saved": the saved answers, or empty).
   const same = answers.every((a, i) => a === (initial[i] ?? "")) && notes === initialNotes;
   // The draft says which questions it was typed for: after a switch to changed questions, an answer never lands under a different question.
@@ -209,6 +220,8 @@ export function WrittenForm({ sessionId, questions, newQs = [], initial, initial
     setAnswers((cur) => questions.map((q, i) => { const v = u[answerUnit(q)]; return typeof v === "string" ? v : cur[i] ?? ""; }));
     if (typeof u[NOTES_UNIT] === "string") setNotes(u[NOTES_UNIT] as string);
   }, { questions: typedFor });
+  // (§371) A Send that outlived this form ends in the form shown now: its draft is forgotten and its "Sent your answers." shows there.
+  const shown = useCarriedLive(carry, { clear: keep.clear, finish: fin.finish });
 
   useEffect(() => {
     if (!gained.length) return;
@@ -247,7 +260,7 @@ export function WrittenForm({ sessionId, questions, newQs = [], initial, initial
       // (Batch 30 §14) Too short: "Write at least 50 characters (12 so far)." at that answer.
       return setMsg({ ok: false, text: FIELD + (missing.message === ANSWER_SHORT ? answerShortLine(missing.chars ?? 0) : missing.message) });
     }
-    setBusy(true);
+    setSending(true);
     setMsg(null);
     try {
       setMissingAt(null);
@@ -257,20 +270,23 @@ export function WrittenForm({ sessionId, questions, newQs = [], initial, initial
       setBox(null);
       setBoxAt("");
       setPausedNow("");
-      await keep.clear();
-      fin.finish("Sent your answers.");
+      // (§371) The form shown now (this one, or the one a redraw swapped in meanwhile).
+      const now = shown();
+      await now.clear();
+      setSending(false);
+      now.finish("Sent your answers.");
     } catch (err) {
       const sb = stopBox(err); if (sb) { setBox(sb); setBoxAt(sb.now); if (questionsChanged(err)) redrawNow(); }
       else if (err instanceof ApiError && err.code === "paused") { rememberPaused(sessionId, sendPress, err.message); setPausedNow(err.message); }
       else {
         // (Batch 20 section 28) Which required question the server found empty: the red goes AT it.
-        if (err instanceof ApiError && err.message === ANSWER_ONE) { setNeedOne(true); setBusy(false); return; }
+        if (err instanceof ApiError && err.message === ANSWER_ONE) { setNeedOne(true); setSending(false); return; }
         if (err instanceof ApiError && typeof err.data.missing === "number") setMissingAt(err.data.missing);
         // (Batch 30 §14) The server found an answer too short: the same red line at it as the page's own check.
         if (err instanceof ApiError && err.message === ANSWER_SHORT && typeof err.data.chars === "number") setMsg({ ok: false, text: FIELD + answerShortLine(err.data.chars) });
         else setMsg({ ok: false, text: errOf(err) });
       }
-      setBusy(false);
+      setSending(false);
     }
   }
 
@@ -520,20 +536,31 @@ export function LeaveButton({ sessionId, seenAt, title, notice }: { sessionId: s
 
 /** Dispute once, on any part the developer reviewed (batch 10). `limit`: how far a decision can raise the pay (batch 28 §15: "up to $20.00 more", to the piece's cap). */
 export function DisputeForm({ sessionId, kind, id, seenAt, disabledNote = "", limit = "up to the piece's cap" }: { disabledNote?: string; sessionId: string; kind: "submission" | "call"; id: string; seenAt?: string; limit?: string }) {
-  const [box, setBox] = useStopBox();
+  // (Owner, Nov 10, §371) The press's state (and the reason typed) is kept by the piece (lib/pressCarry.ts): a redraw while Send the dispute is on its way can draw
+  // a new form (the session page is keyed by its status; a call's row moves into the Had panel once there are more than 3), and the server's stop box or refusal
+  // shows under ITS button, the fold open.
+  const carry = `dispute:${kind}:${id}`;
+  const [box, setBox] = useStopBox(carry);
   // (Owner) When the box was made: the next press goes ahead only if nothing new happened since.
-  const [boxAt, setBoxAt] = useState("");
+  const [boxAt, setBoxAt] = useCarried(carry, "boxAt", "");
   const confirmed = !!boxAt;
-  const [reason, setReason] = useState("");
-  const [err, setErr] = useState("");
-  const [meanwhile, setMeanwhile] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [reason, setReason] = useCarried(carry, "reason", "");
+  const [err, setErr] = useCarried(carry, "err", "");
+  const [meanwhile, setMeanwhile] = useCarried(carry, "meanwhile", "");
+  const [busy, setBusy] = useCarried(carry, "busy", false);
   // (Batch 35 §41) Sent: the box and its lines go, Send the dispute stays greyed with its line until the page has redrawn (then the dispute shows on the page).
   const fin = useFinished(() => { setBusy(false); setReason(""); setBox(null); setBoxAt(""); });
   const keep = useKept(`dispute:${kind}:${id}`, { reason }, reason === "", (v) => setReason(v.reason ?? ""));
+  const shown = useCarriedLive(carry, { clear: keep.clear, finish: fin.finish });
+  // (§371) A form drawn while its press is on its way, or with its box or refusal: the fold is open, so they show.
+  const fold = useRef<HTMLDetailsElement>(null);
+  const showing = busy || !!box || !!err || !!meanwhile;
+  useEffect(() => {
+    if (showing && fold.current && !fold.current.open) fold.current.open = true;
+  }, [showing]);
   // The full app's fold (no separate mode): "Dispute the pay" opens the form in place.
   return (
-    <details className="space-y-2" data-mistakes-root="">
+    <details ref={fold} className="space-y-2" data-mistakes-root="">
       <summary className="cursor-pointer text-sm text-volt-300">Dispute the pay</summary>
       {!fin.done && <>
       <label className="label req" htmlFor={`d-${id}`}>Why should the pay be higher? (the team and the developer read it)</label>
@@ -550,10 +577,11 @@ export function DisputeForm({ sessionId, kind, id, seenAt, disabledNote = "", li
           setErr("");
           try {
             await api(`/api/sessions/${sessionId}/dispute`, { kind, id, reason, seenAt, confirmed, boxAt });
-            await keep.clear();
+            const now = shown(); // (§371) the form shown now
+            await now.clear();
             setBox(null);
             setReason(""); // sent: nothing left to discard
-            fin.finish("Your dispute is sent to the team.");
+            now.finish("Your dispute is sent to the team.");
           } catch (e) {
             const sb = stopBox(e);
             if (sb) {

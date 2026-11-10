@@ -3,6 +3,7 @@ import { Err } from "@/components/Err";
 import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { api, errOf } from "@/lib/client";
+import { useCarried } from "@/lib/pressCarry";
 import { jumpTo } from "@/lib/markJump";
 import { NDA_INFO } from "@/lib/lineAnchors";
 import { NDA_ACK_PRESS, NDA_BLOCK_EVENT, NDA_NOTICE, ndaNoticeLine } from "@/lib/ndaNotice";
@@ -24,7 +25,9 @@ export function NdaNotice({ sessionId, dev, kind, open, block }: { sessionId: st
   const [busy, setBusy] = useState(false);
   const sending = useRef(false); // (§314) a double press sends once
   const [gone, setGone] = useState(false); // (§314) acknowledged here: the notice leaves the page at once
-  const [err, setErr] = useState("");
+  // (Owner, Nov 10, §371) Kept by the session (lib/pressCarry.ts): a newer NDA change while Acknowledge is on its way brings a new notice (keyed by the change's
+  // time); a refusal of the press shows under it.
+  const [err, setErr] = useCarried(`nda:${sessionId}`, "err", "");
   // (§302) An older link that still carries `?nda=open` (§267's bells): navigation only now, to the notice (the NDA line once acknowledged).
   useEffect(() => {
     if (typeof window === "undefined" || new URLSearchParams(window.location.search).get("nda") !== "open") return;

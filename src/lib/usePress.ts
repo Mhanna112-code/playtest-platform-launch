@@ -6,6 +6,9 @@ import type { Change } from "@/components/ChangesBox";
 import { mergeChanges, useLiveAppend } from "./live";
 import { reloadKeepingPlace } from "./keepPlace";
 import { useHoldOpen } from "@/components/HoldFold";
+import { useCarried, useCarriedLive } from "./pressCarry";
+
+const NO_DATA: Record<string, unknown> = {};
 
 /** (Batch 35 §41) How long a finished press's result line shows at least (the page's redraw may land sooner): the old reloads waited about as long. */
 export const DONE_HOLD_MS = 900;
@@ -75,20 +78,23 @@ export function useFinished(onFresh?: () => void) {
  * the pressed button (its key) and the next press is sent as confirmed. A refusal shows in the same place.
  */
 export function usePress(seenAt: string, onStop?: (data: Record<string, unknown>) => void, opts: { once?: boolean; /** (batch 35 §41) the redraw after a finished press landed: empty the box */ onFresh?: () => void; /** (batch 35 §75) each key is its own press: another
-  key's box never confirms (or merges into) this one, and pressing another key clears it */ perKey?: boolean } = {}) {
-  const [changes, setChanges] = useState<Change[] | null>(null);
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [at, setAt] = useState("");
-  const [errData, setErrData] = useState<Record<string, unknown>>({});
+  key's box never confirms (or merges into) this one, and pressing another key clears it */ perKey?: boolean;
+  /** (§371) the button's part (lib/pressCarry.ts): a redraw that swaps this panel for a new one mid-press still shows the press's box or refusal (and its
+   * "done" line) under the button of the panel shown now */ carry?: string } = {}) {
+  const carry = opts.carry;
+  const [changes, setChanges] = useCarried<Change[] | null>(carry, "changes", null);
+  const [error, setError] = useCarried(carry, "error", "");
+  const [busy, setBusy] = useCarried(carry, "busy", false);
+  const [at, setAt] = useCarried(carry, "at", "");
+  const [errData, setErrData] = useCarried<Record<string, unknown>>(carry, "errData", NO_DATA);
   // (Owner) When the box last updated (the stop, or a line added live): the next press goes ahead only if nothing new
   // happened since. Leave and Block (opts.once) still stop just once.
-  const [boxAt, setBoxAt] = useState("");
+  const [boxAt, setBoxAt] = useCarried(carry, "boxAt", "");
 
   async function press<T>(path: string, body: Record<string, unknown> = {}, key = ""): Promise<T | null> {
     setBusy(true);
     setError("");
-    setErrData({});
+    setErrData(NO_DATA);
     setAt(key);
     // (Owner bug, Oct 31, batch 35 §75) With `perKey`, only this key's own box makes this press its second one.
     const again = changes != null && (!opts.perKey || key === at);
@@ -123,6 +129,9 @@ export function usePress(seenAt: string, onStop?: (data: Record<string, unknown>
   });
   // (Batch 35 §40, §41) A press that went through: `finish(line)` redraws the page in place; until it has, the panel stays busy (its buttons greyed) and `done`.
   const fin = useFinished(opts.onFresh);
+  // (§371) A press whose panel was swapped meanwhile finishes in the panel shown now.
+  const shown = useCarriedLive(carry, fin);
+  const finish: typeof fin.finish = (...a) => shown().finish(...a);
   // (Owner, Nov 4, §181) A press under way, its stop box or its refusal keeps the Needs you drop-downs around it open (outside one: nothing).
   useHoldOpen(busy || fin.done || changes != null || !!error);
   /** (Batch 35 §75) Another button opened its panel or dialog: the box (and refusal) under the earlier press goes. */
@@ -131,5 +140,5 @@ export function usePress(seenAt: string, onStop?: (data: Record<string, unknown>
     setError("");
     setAt("");
   };
-  return { press, changes, setChanges, error, busy: busy || fin.done, setError, at, errData, done: fin.done, doneLine: fin.line, finish: fin.finish, clear };
+  return { press, changes, setChanges, error, busy: busy || fin.done, setError, at, errData, done: fin.done, doneLine: fin.line, finish, clear };
 }

@@ -1,6 +1,6 @@
 "use client";
-import { useState } from "react";
 import { ApiError } from "./client";
+import { useCarried } from "./pressCarry";
 import { mergeChanges, useLiveAppend } from "./live";
 import type { Change } from "@/components/ChangesBox";
 
@@ -22,9 +22,12 @@ export function stopBox(e: unknown): StopBox | null {
   return box;
 }
 
-/** A panel's stop box that stays live while open: changes the page picks up meanwhile are added to it. */
-export function useStopBox() {
-  const [box, setBox] = useState<StopBox | null>(null);
+/**
+ * A panel's stop box that stays live while open: changes the page picks up meanwhile are added to it. (§371) `carry`: kept by the button's part, so a redraw
+ * that swaps the panel for a new one mid-press still shows the box under the button (lib/pressCarry.ts).
+ */
+export function useStopBox(carry?: string) {
+  const [box, setBox] = useCarried<StopBox | null>(carry, "stopBox", null);
   useLiveAppend(box != null, (added) => setBox((b) => (b ? { ...b, changes: mergeChanges(b.changes, added) } : b)));
   return [box, setBox] as const;
 }
