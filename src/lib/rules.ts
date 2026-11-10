@@ -959,30 +959,31 @@ export const PAUSE_DEFAULTS = {
 /** (Design doc 8) The tester is never told why a test is paused (no "hold", "suspended" ...). */
 export const PAUSED_RIGHT_NOW = "This test is paused right now.";
 /** What a tester can do on a paused test's session page right now (batch 10: the banner lists only these), and what comes back when it resumes. */
-export type PausedCan = { drafts: boolean; charge: boolean; dispute: boolean; rate: boolean; leave: boolean; cancelCalls: boolean; send: boolean; requestCalls: boolean; /** (Batch 11) the tester has a deadline and it moves with the pause */ deadline?: boolean };
+export type PausedCan = { drafts: boolean; charge: boolean; dispute: boolean; rate: boolean; leave: boolean; cancelCalls: boolean; send: boolean; requestCalls: boolean; /** (Batch 11) the tester has a deadline and it moves with the pause */ deadline?: boolean; /** (Owner, Nov 11, §376) "Ask to show an excerpt" is on the page */ excerpt?: boolean; /** (§376) the tester can chat (not while their own account is restricted) */ chat?: boolean };
 /** (Owner, Oct 29, batch 11) The banner's deadline line, when the tester has a deadline and PAUSE_DEFAULTS.shiftDeadlines is on. */
 export const PAUSED_DEADLINE_LINE = "Your deadline is paused too: it moves later by however long the pause lasts.";
 const listAnd = (xs: string[], oxford: boolean) => (xs.length <= 1 ? xs.join("") : xs.length === 2 ? `${xs[0]} and ${xs[1]}` : `${xs.slice(0, -1).join(", ")}${oxford ? "," : ""} and ${xs[xs.length - 1]}`);
 /**
  * (Owner, Oct 29, batch 10) The blue banner at the top of a paused test's session page (never "hold", "suspended", "failed" or "chargeback"), built from what is actually
  * available, so it never offers a button that isn't there. With everything available:
- * "This test is paused right now. For now you can save drafts of your parts, charge or let go of work left unreviewed, dispute, rate, leave the test, and cancel booked calls.
- * Sending work and requesting calls come back when it resumes." (Batch 15 section 1: a paused test no longer closes the chat, so the banner never mentions it.)
+ * "This test is paused right now. For now you can save drafts of your parts, charge or let go of work left unreviewed, dispute, rate, leave the test, cancel booked calls,
+ * ask to show an excerpt, and chat. Sending work and requesting calls come back when it resumes." (Owner, Nov 11, §376; reverses §172) Chat and "Ask to show an
+ * excerpt" go on during every pause (the team's, a payment or chargeback hold, the developer's suspension): the banner offers them when they are on the page.
  */
 export function pausedForTesters(can: PausedCan) {
-  const now = [can.drafts && "save drafts of your parts", can.charge && "charge or let go of work left unreviewed", can.dispute && "dispute", can.rate && "rate", can.leave && "leave the test", can.cancelCalls && "cancel booked calls"].filter((x): x is string => !!x);
+  const now = [can.drafts && "save drafts of your parts", can.charge && "charge or let go of work left unreviewed", can.dispute && "dispute", can.rate && "rate", can.leave && "leave the test", can.cancelCalls && "cancel booked calls", can.excerpt && "ask to show an excerpt", can.chat && "chat"].filter((x): x is string => !!x);
   const back = [can.send && "sending work", can.requestCalls && "requesting calls"].filter((x): x is string => !!x);
   const backLine = back.length ? ` ${listAnd(back, false).replace(/^./, (c) => c.toUpperCase())} ${back.length === 1 ? "comes" : "come"} back when it resumes.` : "";
   return `${PAUSED_RIGHT_NOW}${now.length ? ` For now you can ${listAnd(now, true)}.` : ""}${backLine}${can.deadline && PAUSE_DEFAULTS.shiftDeadlines ? ` ${PAUSED_DEADLINE_LINE}` : ""}`;
 }
 /** The full banner (everything available). */
-export const PAUSED_FOR_TESTERS = pausedForTesters({ drafts: true, charge: true, dispute: true, rate: true, leave: true, cancelCalls: true, send: true, requestCalls: true });
+export const PAUSED_FOR_TESTERS = pausedForTesters({ drafts: true, charge: true, dispute: true, rate: true, leave: true, cancelCalls: true, send: true, requestCalls: true, excerpt: true, chat: true });
 /** (Owner, Oct 28 afternoon) Send (written answers, recordings) while the test is paused. */
 export const PAUSED_SEND = `${PAUSED_RIGHT_NOW} You can send this once it resumes.`;
 /**
- * (Owner, Oct 30, batch 15 section 1) Chat is closed only while a PERSON is restricted (owner, Nov 4, §172: and while the team paused the test, which counts as the
- * developer being restricted in that test's chats). The other person can still open and read the chat;
- * the message box is replaced by this neutral note (never "suspended", "hold" or "failed" about the other person).
+ * (Owner, Oct 30, batch 15 section 1) Chat is closed only while a PERSON is restricted. (Owner, Nov 11, §376; reverses §172 for the tester) A tester's chat stays open
+ * during every pause (the team's, the developer's hold or suspension): it closes only while the tester's own account is restricted. The developer's chat with a
+ * restricted tester shows this neutral note instead of the message box (never "suspended", "hold" or "failed" about the other person).
  */
 export const CHAT_PAUSED_NOTE = "Messages are paused for now. You can still read this chat.";
 /** The blue notice under Send when the other person became restricted after the page loaded (the typed text is kept). */

@@ -125,11 +125,15 @@ describe("batch 10 item 1: every reviewed part can be disputed", () => {
 
 describe("batch 10 item 2: a paused test hides what doesn't work, with a banner that says what still does", () => {
   const all = { drafts: true, charge: true, dispute: true, rate: true, leave: true, cancelCalls: true, send: true, requestCalls: true };
-  it("the banner text, built from what is available (never hold, suspended, failed or chargeback); (batch 15 section 1) it never mentions chat", () => {
+  it("the banner text, built from what is available (never hold, suspended, failed or chargeback); (Owner, Nov 11, §376) chat and excerpts when available", () => {
     expect(R.pausedForTesters(all)).toBe(
       "This test is paused right now. For now you can save drafts of your parts, charge or let go of work left unreviewed, dispute, rate, leave the test, and cancel booked calls. Sending work and requesting calls come back when it resumes.",
     );
-    expect(R.PAUSED_FOR_TESTERS).toBe(R.pausedForTesters(all));
+    // (§376; reverses §172) Chat and "Ask to show an excerpt" go on during every pause: listed when they are on the page.
+    expect(R.pausedForTesters({ ...all, excerpt: true, chat: true })).toBe(
+      "This test is paused right now. For now you can save drafts of your parts, charge or let go of work left unreviewed, dispute, rate, leave the test, cancel booked calls, ask to show an excerpt, and chat. Sending work and requesting calls come back when it resumes.",
+    );
+    expect(R.PAUSED_FOR_TESTERS).toBe(R.pausedForTesters({ ...all, excerpt: true, chat: true }));
     const noCharge = R.pausedForTesters({ ...all, charge: false });
     expect(noCharge).not.toContain("charge or let go");
     expect(noCharge).toContain("For now you can save drafts of your parts, dispute, rate, leave the test, and cancel booked calls.");
@@ -139,7 +143,7 @@ describe("batch 10 item 2: a paused test hides what doesn't work, with a banner 
     expect(R.pausedForTesters({ ...all, drafts: false, charge: false, dispute: false, cancelCalls: false, send: false, requestCalls: false })).toBe(
       "This test is paused right now. For now you can rate and leave the test.",
     );
-    for (const can of [all, { ...all, leave: false, send: false }]) expect(R.pausedForTesters(can)).not.toMatch(/hold|suspend|fail|chargeback|chat/i);
+    for (const can of [all, { ...all, leave: false, send: false }, { ...all, chat: true, excerpt: true }]) expect(R.pausedForTesters(can)).not.toMatch(/hold|suspend|fail|chargeback/i);
   });
 
   it("the session page: the banner at the top; Send, the call-request tools, Join call and chat's message box hidden while paused", () => {
@@ -168,8 +172,8 @@ describe("batch 10 item 2: a paused test hides what doesn't work, with a banner 
     // (Owner, Nov 11, §375) A re-send of what was sent is "already sent" first (a refusal for good, before the soft ones); an addition is the paused one.
     expect((await sact(sessionId, "written", tester.cookie, { answers: ["c", "d"] })).body.error.code).toBe("locked");
     expect((await addTo(sessionId, tester.cookie, { text: "one more thing" })).body.error.message).toBe("This test is paused right now, so your Add didn't go through."); // (§364 item 5)
-    // (Batch 15 section 1) The developer on a hold is the restricted person: the tester's Send is turned back neutrally.
-    expect((await sact(sessionId, "message", tester.cookie, { body: "Hello?" })).body.error.message).toBe(R.CHAT_NOT_SENT);
+    // (Owner, Nov 11, §376; replaces batch 15 section 1 here) Chat goes on during the developer's hold: the tester's message is sent.
+    expect((await sact(sessionId, "message", tester.cookie, { body: "Hello?" })).status).toBe(200);
   });
 
   it("a tester's session page keeps refreshing while the developer is on a hold, and a suspension or the team's pause shows live", async () => {

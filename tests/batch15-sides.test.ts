@@ -21,7 +21,7 @@ const aact = (cookie: string, action: string, body: Record<string, unknown>) => 
 const msg = (testId: string, cookie: string, contractId: string, body: string, clientId?: string) => act(testId, "message", cookie, { contractId, body, clientId });
 
 describe("chat (section 1)", () => {
-  it("a developer-side suspension: the developer's Send is refused and routed; the tester reads the chat and gets the neutral notice; lifting brings the box back", async () => {
+  it("a developer-side suspension: the developer's Send is refused and routed; (Owner, Nov 11, §376) the tester's chat stays open", async () => {
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
     const a = await admin();
@@ -31,8 +31,9 @@ describe("chat (section 1)", () => {
     expect(mine.status).toBe(403);
     expect(mine.body.error.code).toBe("suspended");
     expect(typeof mine.body.error.failed).toBe("string"); // routed to the dashboard top, like Rate
+    // (Owner, Nov 11, §376; replaces section 1 here) The developer's suspension is a pause: the tester's Send goes through.
     const theirs = await sact(sessionId, "message", tester.cookie, { body: "Are you there?" });
-    expect(theirs.body.error).toMatchObject({ code: "chat_paused", message: R.CHAT_NOT_SENT });
+    expect(theirs.status).toBe(200);
     expect(R.CHAT_PAUSED_NOTE).toBe("Messages are paused for now. You can still read this chat.");
     for (const t of [R.CHAT_NOT_SENT, R.CHAT_PAUSED_NOTE]) expect(t).not.toMatch(/suspend|hold|fail/i);
     expect((await chatRestriction(testId, tester.user.id)).developer).toBe(true);
@@ -45,14 +46,15 @@ describe("chat (section 1)", () => {
     expect((await sact(sessionId, "message", tester.cookie, { body: "Back?" })).status).toBe(200);
   });
 
-  // (Owner, Nov 4, §172; replaces "a team pause never closes chat") A team pause closes that test's chat as a developer suspension does.
-  it("a tester-side suspension pauses the tester's chats only; a team pause pauses that test's chat as a developer suspension does", async () => {
+  // (Owner, Nov 4, §172) A team pause closes that test's chat to the developer as a developer suspension does. (Owner, Nov 11, §376; reverses §172 for the tester)
+  // The tester's chat stays open during the team's pause.
+  it("a tester-side suspension pauses the tester's chats only; a team pause closes the developer's side only", async () => {
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
     const a = await admin();
     await db.test.update({ where: { id: testId }, data: { adminPausedAt: new Date() } });
     expect((await msg(testId, dev.cookie, sessionId, "Paused but chatting")).body.error.code).toBe("admin_paused");
-    expect((await sact(sessionId, "message", tester.cookie, { body: "Me too" })).body.error).toMatchObject({ code: "chat_paused", message: R.CHAT_NOT_SENT });
+    expect((await sact(sessionId, "message", tester.cookie, { body: "Me too" })).status).toBe(200);
     await db.test.update({ where: { id: testId }, data: { adminPausedAt: null } });
     await suspendAccount(a.user.id, tester.user.id, "Checking");
     expect((await sact(sessionId, "message", tester.cookie, { body: "Hi" })).body.error.code).toBe("suspended");

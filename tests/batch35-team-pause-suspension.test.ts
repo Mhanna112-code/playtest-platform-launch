@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { POST as testsPOST } from "@/app/api/tests/route";
 import { RATE_TEAM_PAUSED, RESTRICTED_OK_ACTIONS, TEAM_PAUSED_OK_ACTIONS } from "@/lib/restricted";
-import { CHAT_NOT_SENT } from "@/lib/rules";
 import { cancelLatePauseCalls, pauseTest, TEAM_PAUSED_EMAIL_LINE, unpauseTest } from "@/lib/server/restrictions";
 import { chatRestriction, openTesterChat, CHAT_UNABLE } from "@/lib/server/messages";
 import { devRateStates } from "@/lib/server/ratings";
@@ -117,13 +116,13 @@ describe("§172: the developer's presses on a test the team paused are a suspend
 });
 
 describe("§172: chat on a test the team paused pauses as under a developer suspension", () => {
-  it("the tester's Send is turned back with the neutral line; the developer's chat is closed; the developer's other test's chat is open", async () => {
+  it("(Owner, Nov 11, §376; reverses §172 for the tester) the tester's Send goes through; the developer's chat is closed; the developer's other test's chat is open", async () => {
     const s = await setup();
     const a = await joined(s.testId);
     await pauseTest(await admin(), s.testId, "Checking");
     expect(await chatRestriction(s.testId, a.tester.user.id)).toMatchObject({ developer: true, teamPaused: true, tester: false });
     const t = await sact(a.sessionId, "message", a.tester.cookie, { body: "Hello?" });
-    expect(t.body.error).toMatchObject({ code: "chat_paused", message: CHAT_NOT_SENT });
+    expect(t.status).toBe(200);
     const dev = await db.user.findUniqueOrThrow({ where: { id: s.dev.user.id } });
     await expect(openTesterChat(dev, { contractId: a.sessionId })).rejects.toMatchObject({ message: CHAT_UNABLE });
     const other = await secondTest(s.dev.cookie);

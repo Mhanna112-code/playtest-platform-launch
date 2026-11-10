@@ -367,7 +367,9 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
     cancelCalls: aheadCalls.length > 0 && !blockedPair && !meOff,
     send: !refusal && !meOff && unpaidPart,
     requestCalls: !refusal && !meOff && !blockedPair && c.test.status !== "stopped",
-
+    // (Owner, Nov 11, §376; reverses §172) Chat and "Ask to show an excerpt" go on during every pause; chat closes only while the tester's own account is restricted.
+    excerpt: excerptPicks.length > 0,
+    chat: !meOff && !blockedPair && !devGone,
     deadline: c.status === "working", // (batch 11) a working tester's deadline moves with the pause
   }) : "";
   // (Batch 16 section 24) What still works once the work is over, built from what is actually on the page (as the paused banner does).

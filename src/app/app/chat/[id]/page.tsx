@@ -46,10 +46,11 @@ export default async function ChatPage({ params }: { params: Promise<{ id: strin
   // (Batch 35 §124) The other person's name (header and their messages) has the session page's profile hover.
   const otherUser = dev ? c.tester : c.test.developer;
   const otherHover = await personHoverFor(u.id, dev ? "developer" : "tester", otherUser);
-  // (Owner, Oct 30, batch 15 section 1) Paused only while the OTHER person is restricted (owner, Nov 4, §172: or, for the tester, while the team paused this test),
-  // and then it can still be read. (The restricted person's own chat pages are closed: leaveIfClosed above.)
+  // (Owner, Oct 30, batch 15 section 1) Paused only while the OTHER person is restricted, and then it can still be read. (The restricted person's own chat pages
+  // are closed: leaveIfClosed above.) (Owner, Nov 11, §376; reverses §172 for the tester) The tester's chat is never paused by a pause (the team's, the developer's
+  // hold or suspension): only the developer's chat with a restricted tester is.
   const r = await chatRestriction(c.testId, c.testerId);
-  const paused = dev ? r.tester : r.developer;
+  const paused = dev && r.tester;
   await markChatRead(u.id, c.testId, c.testerId);
   return (
     <div className="mx-auto max-w-3xl space-y-4">

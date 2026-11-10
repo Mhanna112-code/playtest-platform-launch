@@ -192,16 +192,17 @@ describe("batch 6 item 3: the 3-change limit is per field", () => {
 describe("batch 6 item 4: a paused test, what testers can do", () => {
   it("the paused notice says what still works (never why); the DEFAULTs live in one place", () => {
     // (Batch 10) The banner's wording: what works now, and what comes back when it resumes.
-    expect(R.PAUSED_FOR_TESTERS).toContain("For now you can save drafts of your parts, charge or let go of work left unreviewed, dispute, rate, leave the test, and cancel booked calls.");
-    expect(R.PAUSED_FOR_TESTERS).toContain("Sending work and requesting calls come back when it resumes."); // (batch 15 section 1: chat isn't paused by a paused test)
-    expect(R.PAUSED_FOR_TESTERS).not.toMatch(/hold|suspend|fail|chargeback|chat/i);
+    // (Owner, Nov 11, §376) Chat and "Ask to show an excerpt" go on during every pause: the full banner offers them.
+    expect(R.PAUSED_FOR_TESTERS).toContain("For now you can save drafts of your parts, charge or let go of work left unreviewed, dispute, rate, leave the test, cancel booked calls, ask to show an excerpt, and chat.");
+    expect(R.PAUSED_FOR_TESTERS).toContain("Sending work and requesting calls come back when it resumes.");
+    expect(R.PAUSED_FOR_TESTERS).not.toMatch(/hold|suspend|fail|chargeback/i);
     expect(R.PAUSE_DEFAULTS).toEqual({ draftsEditable: true, teamPauseSameRules: true, shiftDeadlines: true });
     expect(R.testerPaused({}, { adminPausedAt: new Date() })).toBe(true);
     expect(src("app/app/sessions/[id]/page.tsx")).toContain("{pausedBanner}");
   });
 
   for (const kind of ["hold", "chargeback", "suspension", "team"] as const) {
-    it(`(${kind}) Send is refused, drafts still upload; (§172) chat pauses for a restricted person or the team's pause; dispute, rate and leave still work`, async () => {
+    it(`(${kind}) Send is refused, drafts still upload; (§376) the tester's chat goes on; dispute, rate and leave still work`, async () => {
       const { dev, testId, tester, sessionId } = await chargeOpen({ recordingCents: "5.00" });
       if (kind === "hold") await startHold(dev.user.id, "unpaid");
       if (kind === "chargeback") await startHold(dev.user.id, "chargeback");
@@ -219,10 +220,9 @@ describe("batch 6 item 4: a paused test, what testers can do", () => {
       expect((await sact(sessionId, "recording-done", tester.cookie, { recordingId: up.body.recordingId })).status).toBe(200);
       expect((await sact(sessionId, "recording-send", tester.cookie, { seenAt: seen(), confirmed: true })).body.error.message).toBe("This test is paused right now, so your Send didn't go through."); // (§364 item 5)
       const m = await sact(sessionId, "message", tester.cookie, { body: "Hello?" });
-      // (Owner, Nov 4, §172; replaces batch 15 section 1 for the team's pause) The developer is restricted, or the team paused this test (the same rules as a
-      // developer suspension): the tester's Send is turned back neutrally (never why).
-      expect(m.body.error.message).toBe(R.CHAT_NOT_SENT);
-      expect(m.body.error.message).not.toMatch(/hold|suspend|fail/i);
+      // (Owner, Nov 11, §376; reverses §172 for the tester) Chat goes on during every pause (the team's, a hold, the developer's suspension): the tester's
+      // message is sent. The developer's own side stays closed during the team's pause (§172).
+      expect(m.status).toBe(200);
       if (kind === "team") expect((await act(testId, "message", dev.cookie, { contractId: sessionId, body: "Hi" })).body.error.code).toBe("admin_paused");
       expect(src("app/app/chat/[id]/page.tsx")).toContain("closedNote={!blocked && paused ? CHAT_PAUSED_NOTE : undefined}");
       // Leave still works.

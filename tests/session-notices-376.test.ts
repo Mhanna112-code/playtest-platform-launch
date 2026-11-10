@@ -3,7 +3,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { User } from "@prisma/client";
 import { describe, expect, it, vi } from "vitest";
 import { db } from "@/lib/db";
-import { joined, sact, seen, settle, setup } from "./fixtures";
+import { randomUUID } from "node:crypto";
+import { act, joined, sact, seen, settle, setup } from "./fixtures";
+import { json, req } from "./helpers";
 
 // (Owner, Nov 11, §376) The session page's top notices and the paused rules for chat and excerpts.
 
@@ -50,5 +52,48 @@ describe("§376 item 1: a tester whose part is over reads only the ended notice"
     const html = await sessionHtml(j.sessionId, j.tester.user.id);
     expect(html).toContain('data-paused=""');
     expect(html).not.toContain('data-stopped-line=""');
+  });
+});
+
+describe("§376 item 2: chat and Ask to show an excerpt go on during every pause", () => {
+  const ANSWER = "The harbour level felt great, but the second boss was far too hard for me.";
+  const pay = async (cookie: string, body: Record<string, unknown>) => (await import("@/app/api/review/route")).POST(req("/api/review", { cookie, body: { payKey: randomUUID(), seenAt: seen(), confirmed: true, ...body } })).then(json);
+  const ex = async (cookie: string, body: Record<string, unknown>) => (await import("@/app/api/excerpts/route")).POST(req("/api/excerpts", { cookie, body })).then(json);
+
+  for (const kind of ["team", "hold", "chargeback", "suspension"] as const) {
+    it(`(${kind}) the tester's chat Send and excerpt request go through; the paused notice offers both`, async () => {
+      const f = await setup();
+      const j = await joined(f.testId);
+      await sact(j.sessionId, "written", j.tester.cookie, { answers: [ANSWER, "Nowhere, it was smooth."], seenAt: seen(), confirmed: true });
+      const sub = await db.submission.findFirstOrThrow({ where: { contractId: j.sessionId } });
+      expect((await pay(f.dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 })).status).toBe(200);
+      if (kind === "team") await pause(f.testId);
+      if (kind === "hold") await db.user.update({ where: { id: f.dev.user.id }, data: { holdStartedAt: new Date(), holdReason: "unpaid" } });
+      if (kind === "chargeback") await db.user.update({ where: { id: f.dev.user.id }, data: { holdStartedAt: new Date(), holdReason: "chargeback" } });
+      if (kind === "suspension") await db.user.update({ where: { id: f.dev.user.id }, data: { devSuspendedAt: new Date() } });
+      const html = await sessionHtml(j.sessionId, j.tester.user.id);
+      expect(html).toContain('data-paused=""');
+      expect(html).toMatch(/This test is paused right now\. For now you can [^<]*ask to show an excerpt, and chat\./);
+      expect((await sact(j.sessionId, "message", j.tester.cookie, { body: "Hello?" })).status).toBe(200);
+      expect((await ex(j.tester.cookie, { action: "request", submissionId: sub.id, index: 0, text: "the second boss was far too hard" })).status).toBe(200);
+    });
+  }
+
+  it("the tester's own restriction still closes their chat (batch 15 §1)", async () => {
+    const f = await setup();
+    const j = await joined(f.testId);
+    await db.user.update({ where: { id: j.tester.user.id }, data: { testerSuspendedAt: new Date() } });
+    expect((await sact(j.sessionId, "message", j.tester.cookie, { body: "Hi" })).status).not.toBe(200);
+    // The developer's message to a restricted tester is turned back with the neutral line.
+    expect((await act(f.testId, "message", f.dev.cookie, { contractId: j.sessionId, body: "Hi" })).body.error.code).toBe("chat_paused");
+  });
+
+  it("the ended notice offers chat during a pause too", async () => {
+    const f = await setup();
+    const j = await joined(f.testId);
+    await db.contract.update({ where: { id: j.sessionId }, data: { status: "ended", endKind: "early", endedAt: new Date() } });
+    await pause(f.testId);
+    const html = await sessionHtml(j.sessionId, j.tester.user.id);
+    expect(html).toMatch(/data-stopped-line=""[^]*You can still [^<]*chat\./);
   });
 });

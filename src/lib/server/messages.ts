@@ -33,7 +33,8 @@ export const CHAT_UNABLE = "Unable to chat with this tester.";
  * payment or chargeback hold; the tester when their tester side is suspended. Only chats where the person is on the restricted side are paused.
  */
 // (Owner, Nov 4, §172; replaces batch 15 section 1 for a team pause) The team's pause of THIS test counts as the developer being restricted in its chats (exactly as
-// a developer suspension: the developer's Send is refused, the tester reads the neutral paused note); the developer's other tests' chats are unaffected.
+// a developer suspension: the developer's Send is refused); the developer's other tests' chats are unaffected. (Owner, Nov 11, §376; reverses §172 for the tester)
+// The tester's side is never closed by the developer's restriction or any pause: only by their own (`tester`).
 export async function chatRestriction(testId: string, testerId: string) {
   const test = await db.test.findUniqueOrThrow({ where: { id: testId }, select: { status: true, adminPausedAt: true, developer: { select: { devSuspendedAt: true, holdStartedAt: true, holdReason: true } } } });
   const tester = await db.user.findUniqueOrThrow({ where: { id: testerId }, select: { testerSuspendedAt: true } });
@@ -88,12 +89,13 @@ export async function sendChat(user: { id: string; name: string; email: string }
   }
   // (Owner, Oct 30, batch 15 section 1) Closed while a person is restricted (and, owner, Nov 4, §172, while the team paused this test: as a developer suspension). The
   // restricted person's own press is refused like Rate (the route's requireActive sends them to the dashboard top; a team pause's adminRefusal back to the test's
-  // banner); the other person's Send is turned back with a neutral notice and the text is kept.
+  // banner); the developer's Send to a restricted tester is turned back with a neutral notice and the text is kept. (Owner, Nov 11, §376; reverses §172 for the
+  // tester) The tester's Send goes through during every pause (the team's, the developer's hold or suspension): only their own restriction closes it.
   const r = await chatRestriction(testId, testerId);
   const iAmDev = user.id === a.test.developerId;
   if (iAmDev && r.teamPaused && !r.dev.devSuspendedAt && !r.dev.holdStartedAt) throw new HttpError(409, "admin_paused", RF.pressRefused(RF.TEAM_PAUSED_CAUSE, "Send"), { failed: `Your Send on ${a.test.title} didn't go through`, testId });
   if (iAmDev ? r.developer : r.tester) throw new HttpError(403, iAmDev && !r.dev.devSuspendedAt ? "held" : "suspended", RF.pressRefused(iAmDev ? (r.dev.devSuspendedAt ? RF.ACCOUNT_SUSPENDED_CAUSE : RF.HELD_CAUSE) : RF.ACCOUNT_PAUSED_CAUSE, "Send"), /* (§364) */ { failed: `Your Send on ${a.test.title} didn't go through`, [iAmDev && !r.dev.devSuspendedAt ? "held" : "suspended"]: true });
-  if (iAmDev ? r.tester : r.developer) throw new HttpError(409, "chat_paused", CHAT_NOT_SENT);
+  if (iAmDev && r.tester) throw new HttpError(409, "chat_paused", CHAT_NOT_SENT);
   const body = typeof raw === "string" ? raw.trim() : "";
   if (!body) throw new HttpError(400, "empty", "Type a message first.");
   const recent = { senderId: user.id, createdAt: { gt: new Date(Date.now() - 60_000) } };
