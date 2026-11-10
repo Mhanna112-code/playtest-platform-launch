@@ -1,5 +1,5 @@
 "use client";
-import { ApiError } from "./client";
+import { ApiError, isFieldError } from "./client";
 import { useCarried } from "./pressCarry";
 import { liveRuleOf, mergeChanges, useLiveAppend, type LiveRule } from "./live";
 import type { Change } from "@/components/ChangesBox";
@@ -21,6 +21,12 @@ export function stopBox(e: unknown): StopBox | null {
   }
   return box;
 }
+
+/**
+ * (Owner, Nov 11, §376) A press refused (pressing again can't help: paused, part over, closed …), never a form mistake (red, 400), a "too fast" or a server
+ * error (pressing again can help): one press ends in one outcome, so a stop-once box still open under that button goes with it.
+ */
+export const pressRefusal = (e: unknown) => e instanceof ApiError && e.code !== "stop_once" && !isFieldError(e) && e.status < 500 && e.status !== 429;
 
 /**
  * A panel's stop box that stays live while open: changes the page picks up meanwhile are added to it. (§371) `carry`: kept by the button's part, so a redraw

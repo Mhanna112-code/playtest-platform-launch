@@ -4,6 +4,8 @@ import type { User } from "@prisma/client";
 import { describe, expect, it, vi } from "vitest";
 import { db } from "@/lib/db";
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { act, joined, sact, seen, settle, setup } from "./fixtures";
 import { json, req } from "./helpers";
 
@@ -95,5 +97,35 @@ describe("§376 item 2: chat and Ask to show an excerpt go on during every pause
     await pause(f.testId);
     const html = await sessionHtml(j.sessionId, j.tester.user.id);
     expect(html).toMatch(/data-stopped-line=""[^]*You can still [^<]*chat\./);
+  });
+});
+
+describe("§376 item 3: one outcome per button (Send Answers / Add / a recording's Send)", () => {
+  const src = (f: string) => readFileSync(path.resolve(__dirname, "../src", f), "utf8");
+  it("a refusal (paused or any other) is a refusal; a box, a form mistake, a too-fast or a server error is not", async () => {
+    const { pressRefusal } = await import("@/lib/topStop");
+    const { ApiError } = await import("@/lib/client");
+    expect(pressRefusal(new ApiError(409, "paused", "This test is paused right now, so your Send Answers didn't go through."))).toBe(true);
+    expect(pressRefusal(new ApiError(409, "gone", "Your part in this test has ended, so your Add didn't go through."))).toBe(true);
+    expect(pressRefusal(new ApiError(409, "stop_once", "Press again to go ahead."))).toBe(false);
+    expect(pressRefusal(new ApiError(400, "bad_answers", "Answer every required question."))).toBe(false);
+    expect(pressRefusal(new ApiError(429, "too_fast", "Wait a minute."))).toBe(false);
+    expect(pressRefusal(new ApiError(500, "error", "Something went wrong."))).toBe(false);
+    expect(pressRefusal(new Error("offline"))).toBe(false);
+  });
+
+  it("a refused press takes away the box under its button; the test pausing takes it away too (kept through redraws by §371's pressCarry)", () => {
+    const s = src("app/app/sessions/[id]/SessionActions.tsx");
+    const form = s.split("export function WrittenForm")[1].split("export function WrittenAddForm")[0];
+    const add = s.split("export function WrittenAddForm")[1].split("export function LeaveButton")[0];
+    const rec = src("app/app/sessions/[id]/RecordingUpload.tsx");
+    for (const part of [form, add, rec]) {
+      expect(part).toMatch(/if \(pressRefusal\((err|e)\)\) \{ setBox\(null\); setBoxAt\(""\); \}\s*(\/\/[^\n]*\n\s*)?const sb = stopBox/);
+    }
+    expect(form).toContain('useEffect(() => { if (!canSend) { setBox(null); setBoxAt(""); } }, [canSend, setBox, setBoxAt]);');
+    expect(add).toContain('useEffect(() => { if (!canSend) { setBox(null); setBoxAt(""); } }, [canSend, setBox]);');
+    expect(rec).toContain('useEffect(() => { if (!sendable) { setBox(null); setBoxAt(""); } }, [sendable, setBox]);');
+    // The Send Answers box is the part's carried box (§371): clearing it clears it for the form a redraw swapped in too.
+    expect(form).toContain("const [box, setBox] = useStopBox(carry);");
   });
 });

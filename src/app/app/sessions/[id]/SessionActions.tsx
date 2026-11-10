@@ -10,7 +10,7 @@ import { checkFields } from "@/components/FieldChecks";
 import { useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { api, ApiError, errOf, FIELD, offerShown, PRESS_REFUSED_EVENT } from "@/lib/client";
-import { stopBox, useStopBox } from "@/lib/topStop";
+import { pressRefusal, stopBox, useStopBox } from "@/lib/topStop";
 import { DISCARD_ALL_LABEL, DraftButton, DraftTag, USE_SAVED_ALL_LABEL, useKept, useKeptUnits } from "@/lib/useKept";
 import { NOTES_UNIT, answerUnit, type Units } from "@/lib/draftUnits";
 import { ConfirmButton } from "@/components/ConfirmButton";
@@ -212,6 +212,8 @@ export function WrittenForm({ sessionId, questions, newQs = [], initial, initial
   // (Batch 35 §40, §41) Sent: the page redraws in place (the scroll stays at the answers); until it has, Send stays greyed with its line under it.
   const fin = useFinished(() => { setBox(null); setBoxAt(""); });
   const busy = sending || fin.done;
+  // (Owner, Nov 11, §376) The test paused while a box is open under Send Answers: pressing again can't help, so the box goes (kept by the part through redraws, §371).
+  useEffect(() => { if (!canSend) { setBox(null); setBoxAt(""); } }, [canSend, setBox, setBoxAt]);
   // (NEXT-UI 10) Typed and not sent: kept on the server, back after a reload or on another device, with "Draft" (batch 35 §8: after signing in, with "Use saved": the saved answers, or empty).
   const same = answers.every((a, i) => a === (initial[i] ?? "")) && notes === initialNotes;
   // The draft says which questions it was typed for: after a switch to changed questions, an answer never lands under a different question.
@@ -280,6 +282,8 @@ export function WrittenForm({ sessionId, questions, newQs = [], initial, initial
       setSending(false);
       now.finish("Sent your answers.");
     } catch (err) {
+      // (Owner, Nov 11, §376) One outcome per press: a refusal (paused or any other) takes away a stop-once box still open under Send Answers.
+      if (pressRefusal(err)) { setBox(null); setBoxAt(""); }
       const sb = stopBox(err); if (sb) { setBox(sb); setBoxAt(sb.now); if (questionsChanged(err)) redrawNow(); }
       else if (err instanceof ApiError && err.code === "paused") { rememberPaused(sessionId, sendPress); setPausedNow(true); }
       else {
@@ -396,6 +400,8 @@ export function WrittenAddForm({ sessionId, seenAt, canSend = true, known = [], 
   const full = !first && made >= ADDITIONS_MAX;
   const opener = first ? ANSWER_PRESS : ADD_OPEN, sender = first ? ANSWER_PRESS : ADD_PRESS;
   const fin = useFinished(() => { setBusy(false); setText(""); setOpen(false); setBox(null); setBoxAt(""); });
+  // (Owner, Nov 11, §376) The test paused while a box is open under Add: pressing again can't help, so the box goes.
+  useEffect(() => { if (!canSend) { setBox(null); setBoxAt(""); } }, [canSend, setBox]);
   const keep = useKept(`add:${sessionId}:${questionKey}`, { text }, text === "", (v) => {
     if (typeof v.text === "string" && v.text) {
       setText(v.text);
@@ -429,6 +435,8 @@ export function WrittenAddForm({ sessionId, seenAt, canSend = true, known = [], 
       await keep.clear();
       fin.finish(first ? "Your answer was sent." : "Added to your answer.");
     } catch (e) {
+      // (Owner, Nov 11, §376) One outcome per press: a refusal (paused or any other) takes away a stop-once box still open under Add.
+      if (pressRefusal(e)) { setBox(null); setBoxAt(""); }
       const sb = stopBox(e);
       if (sb) { setBox(sb); setBoxAt(sb.now); if (questionsChanged(e)) redrawNow(); }
       else if (e instanceof ApiError && e.code === "paused") { rememberPaused(sessionId, `Add:${questionKey}`); setPausedNow(true); }

@@ -3,9 +3,9 @@ import { VIDEO_ACCEPT } from "@/lib/videoFormats";
 import { Err } from "@/components/Err";
 import { checkFields } from "@/components/FieldChecks";
 import { FormMistakes } from "@/components/FormMistakes";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api, errOf, FIELD, offerShown } from "@/lib/client";
-import { stopBox, useStopBox } from "@/lib/topStop";
+import { pressRefusal, stopBox, useStopBox } from "@/lib/topStop";
 import { uploadToSession } from "@/lib/upload";
 import { ScreenRecorder } from "@/components/ScreenRecorder";
 import { RecordingVideo } from "@/components/RecordingVideo";
@@ -73,6 +73,8 @@ export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, se
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const fin = useFinished(() => { setBusy(false); setProgress(null); setBox(null); setBoxAt(""); });
+  // (Owner, Nov 11, §376) The test paused while a box is open under Send / Add (`sendable` false): pressing again can't help, so the box goes.
+  useEffect(() => { if (!sendable) { setBox(null); setBoxAt(""); } }, [sendable, setBox]);
   const uploaded = recordings.filter((r) => r.uploaded);
   const sent = uploaded.filter((r) => r.sent);
   const fresh = uploaded.filter((r) => !r.sent);
@@ -160,6 +162,8 @@ export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, se
               setAdding(false);
               fin.finish(sentBefore ? `Added your recording${n === 1 ? "" : "s"}.` : `Sent your recording${n === 1 ? "" : "s"}.`);
             } catch (e) {
+              // (Owner, Nov 11, §376) One outcome per press: a refusal (paused or any other) takes away a stop-once box still open under Send / Add.
+              if (pressRefusal(e)) { setBox(null); setBoxAt(""); }
               const sb = stopBox(e); if (sb) { setBox(sb); setBoxAt(sb.now); }
               else setErr(errOf(e));
               setBusy(false);
