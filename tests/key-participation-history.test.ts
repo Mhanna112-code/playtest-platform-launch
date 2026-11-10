@@ -28,7 +28,7 @@ describe("released keys and participation dates in Terms history", () => {
     if (action === "leave") expect((await sact(j.sessionId, "leave", j.tester.cookie, { seenAt: seen(), confirmed: true })).status).toBe(200);
     else if (action === "end early") expect((await act(testId, "end-early", dev.cookie, { contractId: j.sessionId, reason: "The sample work is complete.", seenAt: seen(), confirmed: true })).status).toBe(200);
     else if (action === "stop") expect((await act(testId, "stop", dev.cookie, {reason:"The sample test is complete.",seenAt:seen(),confirmed:true})).status).toBe(200);
-    else if (action === "block") await blockUser(j.tester.user,dev.user.id,{seenAt:seen(),confirmed:true});
+    else if (action === "block") await blockUser(j.tester.user,dev.user.id);
     else await deleteAccount(j.tester.user.id, "self");
     const key = await db.accessKey.findFirstOrThrow({ where: { testId, value: "HISTORY-K1" } });
     expect(key).toMatchObject({ status: "unassigned", contractId: null, assignedAt: null });
