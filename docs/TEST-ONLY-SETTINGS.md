@@ -14,6 +14,7 @@ None of these should be set in Vercel. The admin page's settings box (`src/lib/c
 | `CALL_MIN_AHEAD_MINUTES` | How far ahead a call can be booked (1 minute by default when testing) | Always 24 hours (batch 35 §132); flagged |
 | `DISPUTE_WAIT_MS` | How long a chargeback notice waits for its payment to be recorded (tests use 0) | 8 seconds; flagged |
 | `UPLOAD_DIR` | Uploads go to the computer's own disk | Uploads go to R2; flagged |
+| `RACE_HOLDS=1` | (§369) A press whose body names a `raceHold` waits at that point until `/api/test/race-release` lets it go, so a race can be recorded in one exact order | Off in production whatever it says (`raceHoldsOn`), the release route is 404; flagged (§372) |
 | `TEST_DATABASE_URL` | The test suite's own database schema | Not used |
 | `STRIPE_ALLOW_LIVE` | Not testing-only: the safety switch. With live keys and without `1`, every payment action says "Payments are switched off right now." | Set to `1` only when going live on purpose |
 

@@ -1228,7 +1228,7 @@ export async function sendWritten(tester: U, contractId: string, body: Record<st
       if (forQs) await keepStaleTyped(tester.id, c, forQs, sentAnswers, formQs, !existing && typeof body.notes === "string" ? body.notes : "");
       stale = await questionChangeLines(c.testId, seenOf(body.pageSeenAt) ?? seenOf(body.seenAt), displayName(c.test.developer));
     }
-    await testerSendGate(contractId, body, existing?.id, { stale });
+    await testerSendGate(contractId, body, existing?.id, { stale }, "Send Answers");
     // Nothing to show (the change was listed already, or made in this same tab): the press as a later one would make it, once.
     if (body.__moved !== true) return sendWritten(tester, contractId, { ...body, __moved: true });
     throw e.what === "questions" ? new HttpError(409, "questions_changed", QUESTIONS_CHANGED_MEANWHILE) : new HttpError(409, "locked", SENT_ANSWERS_LOCKED);
@@ -1280,7 +1280,7 @@ async function sendWrittenOnce(tester: U, contractId: string, body: Record<strin
       // No record since the page (it loaded without a time): what its form differs by (never an answered question it still shows).
       const formWords = new Set(formQs.map(qText));
       const stale = lines.length ? lines : questionChangeTexts(dev, forQs.filter((q) => !nowWords.has(qText(q)) || formWords.has(qText(q))), formQs).map((text) => ({ kind: "info", text, createdAt: new Date(), listing: true, keys: ["questions"] }));
-      await testerSendGate(contractId, body, before?.id, { stale });
+      await testerSendGate(contractId, body, before?.id, { stale }, "Send Answers");
     }
   }
   // (Batch 30 §14) Each answer given is at least 50 characters (answerMin): "Each answer needs at least 50 characters." with which question (and how long it is).
@@ -1293,7 +1293,7 @@ async function sendWrittenOnce(tester: U, contractId: string, body: Record<strin
     : forQs && missing0 ? { ...missing0, at: Math.max(0, forQs.findIndex((q) => qText(q) === qText(qs[missing0.at] ?? ""))) } /* (§269) its place in the page's form */ : missing0;
   if (missing) throw new HttpError(400, "bad_answers", missing.message, { missing: missing.at, ...(missing.chars != null ? { chars: missing.chars } : {}) });
   const notes = typeof body.notes === "string" ? body.notes.trim() : "";
-  // (Owner, Oct 29, batch 11) At most 10,000 characters for the whole written part (all its answers and notes together).
+  // (Owner, Oct 29, batch 11) A length limit for the whole written part (WRITTEN_MAX_CHARS in rules.ts: 20,000 characters; §372 comment fix) (all its answers and notes together).
   const long = checkWrittenLength([...answers, notes]);
   if (!long.ok) throw new HttpError(400, "too_long", long.message);
   // (Owner, Oct 28 afternoon) No sending while the test is paused (the typed answers stay kept as a draft).
@@ -1308,7 +1308,7 @@ async function sendWrittenOnce(tester: U, contractId: string, body: Record<strin
   if (before && forQs) await keepTypedForAnswered(tester.id, contractId, before, qs, typed);
   // (§369) What this press saw: its questions and the saved part (or none). Under the lock either moving gives the stop-once below (sendWritten), not a refusal.
   const saw = { questions: qs, savedAt: sent?.updatedAt.getTime() ?? null, paid: await paidOn(db, sent?.id) };
-  await testerSendGate(contractId, body, sent?.id, { stale: [] });
+  await testerSendGate(contractId, body, sent?.id, { stale: [] }, "Send Answers");
   const name = displayName(tester), poss = pronouns(tester.pronoun).poss;
   await beforeLock("written");
   await (await import("./raceHold")).raceHold(body); // (§369) test-only pause point (RACE_HOLDS=1), no lock held
@@ -1477,7 +1477,7 @@ export async function addWritten(tester: U, contractId: string, body: Record<str
     if (text && key) await setKept(tester.id, `add:${contractId}:${key}`, { text });
     const existing = await db.submission.findUnique({ where: { contractId_kind: { contractId, kind: "written" } } });
     const stale = e.what === "questions" ? await questionChangeLines(c.testId, seenOf(body.pageSeenAt) ?? seenOf(body.seenAt), displayName(c.test.developer)) : [];
-    await testerSendGate(contractId, body, existing?.id, { stale });
+    await testerSendGate(contractId, body, existing?.id, { stale }, "Add");
     if (body.__moved !== true) return addWritten(tester, contractId, { ...body, __moved: true });
     throw new HttpError(409, "changed", "Your answers changed just now: nothing was added. Press Add again.");
   }
@@ -1514,13 +1514,13 @@ async function addWrittenOnce(tester: U, contractId: string, body: Record<string
     const stale = removedSince ? notListed(await questionChangeLines(c0.testId, pageAt, displayName(c0.test.developer)), body) : [];
     if (stale.length) {
       if (text) await setKept(tester.id, `add:${contractId}:${key}`, { text });
-      await testerSendGate(contractId, body, before?.id, { stale });
+      await testerSendGate(contractId, body, before?.id, { stale }, "Add");
     }
   }
   if (beforeRefusal) throw beforeRefusal;
   // (§369) What this press saw: the questions, the saved answers, what was paid on them.
   const saw = { questions: writtenQuestions(c0), savedAt: before?.updatedAt.getTime() ?? null, paid: await paidOn(db, before?.id) };
-  await testerSendGate(contractId, body, before?.id, { stale: [] });
+  await testerSendGate(contractId, body, before?.id, { stale: [] }, "Add");
   const name = displayName(tester), poss = pronouns(tester.pronoun).poss;
   await beforeLock("written-add");
   await (await import("./raceHold")).raceHold(body); // (§369) test-only pause point (RACE_HOLDS=1), no lock held

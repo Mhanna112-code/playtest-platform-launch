@@ -179,7 +179,7 @@ export async function sendRecording(tester: U, contractId: string, body: Record<
     const shut = resendRefusal(sent?.review, "recording");
     if (shut) throw new HttpError(409, "paid", shut);
     if (sent && !(await db.recording.count({ where: { contractId, part: "recording", submissionId: null, OR: [{ uploadedAt: { not: null } }, stillUploading("recording")] } }))) throw new HttpError(400, "none", NO_RECORDING_TO_ADD);
-    await testerSendGate(contractId, body, sent?.id);
+    await testerSendGate(contractId, body, sent?.id, undefined, body.add === true ? "Add" : "Send");
     if (body.__moved !== true) return sendRecording(tester, contractId, { ...body, __moved: true });
     throw new HttpError(400, "none", NO_RECORDING_TO_ADD);
   }
@@ -202,7 +202,7 @@ async function sendRecordingOnce(tester: U, contractId: string, body: Record<str
   if (sent && !(await db.recording.count({ where: { contractId, part: "recording", submissionId: null, OR: [{ uploadedAt: { not: null } }, stillUploading("recording")] } }))) throw new HttpError(400, "none", NO_RECORDING_TO_ADD);
   // (§369) What this press saw: the sent part (or none) and what was paid on it.
   const saw = { savedAt: sent?.updatedAt.getTime() ?? null, paid: await (await import("./tests")).paidOn(db, sent?.id) };
-  await testerSendGate(contractId, body, sent?.id);
+  await testerSendGate(contractId, body, sent?.id, undefined, press);
 
   const name = displayName(tester), poss = pronouns(tester.pronoun).poss;
   await beforeLock("recording-send");

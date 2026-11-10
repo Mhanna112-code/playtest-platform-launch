@@ -54,7 +54,7 @@ function PausedSend({ sessionId, press, label = press, canSend, now }: { session
     } catch { /* storage off */ }
   }, [sessionId, press, canSend, now]);
   if (!message && !now) return null;
-  return <p role="status" className="rounded-lg border border-sky-300/40 bg-sky-300/[0.08] p-2.5 text-sm text-sky-100" data-paused-send=""><strong className="font-semibold text-sky-50">Your {label} didn&apos;t go through:</strong> {now || message}</p>;
+  return <p role="status" className="rounded-lg border border-sky-300/40 bg-sky-300/[0.08] p-2.5 text-sm text-sky-100" data-paused-send="">{/* (§372) A line that already names the press ("This test is paused, so your Send Answers didn't go through.") shows alone, never named twice. */}{/didn['’]t go through/.test(now || message) ? null : <><strong className="font-semibold text-sky-50">Your {label} didn&apos;t go through:</strong>{" "}</>}{now || message}</p>;
 }
 
 /** (Owner, Oct 29, batch 11) Bold, Italic and Code block for a written answer (stored as Markdown; the developer sees it formatted). */

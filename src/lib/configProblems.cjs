@@ -71,7 +71,7 @@ function configProblems(env, now = new Date()) {
     if (!turnRelaySetUp(env))
       add("No TURN relay is set up: calls can't connect on some strict networks (some offices, mobile carriers, VPNs). Set CLOUDFLARE_TURN_KEY_ID and CLOUDFLARE_TURN_API_TOKEN (a Cloudflare Realtime TURN key), or TURN_URL, TURN_USERNAME and TURN_CREDENTIAL from another TURN provider.");
     // (Nov 2) Testing-only settings left on the live site: each is ignored there, but shouldn't be set.
-    for (const k of ["SKIP_EMAIL_CONFIRM", "ANSWER_MIN_CHARS", "LISTING_MIN_CHARS", "CALL_MIN_AHEAD_MINUTES", "DISPUTE_WAIT_MS", "UPLOAD_DIR"]) if (v(k)) add(`${k} is a testing setting: remove it from the live site.`);
+    for (const k of ["SKIP_EMAIL_CONFIRM", "ANSWER_MIN_CHARS", "LISTING_MIN_CHARS", "CALL_MIN_AHEAD_MINUTES", "DISPUTE_WAIT_MS", "UPLOAD_DIR", "RACE_HOLDS"]) if (v(k)) add(`${k} is a testing setting: remove it from the live site.`);
     if (placeholder(v("ADMIN_EMAILS"))) add(`ADMIN_EMAILS still has a placeholder ("${v("ADMIN_EMAILS")}"): put the real admins' emails.`, true);
     if (!v("EMAIL_FROM") || placeholder(v("EMAIL_FROM")) || /resend\.dev/i.test(v("EMAIL_FROM"))) add("EMAIL_FROM is missing or a placeholder: set an address on your verified Resend domain.", true);
     if (v("HEALTH_KEY") && weakKey(v("HEALTH_KEY"))) add("HEALTH_KEY is a placeholder or too short: use a long random value (at least 24 characters).", true);
