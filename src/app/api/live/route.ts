@@ -94,7 +94,10 @@ export async function GET(req: Request) {
     if (kind === "session") lines.forEach((l, i) => { const e = shown[i] as TestEventLike; Object.assign(l, { ...(stopsWithAlertsOff(e) || e.kind === "ended" ? { forced: true } : {}), ...(e.piece ? { part: e.piece } : {}) }); });
     if (kind === "test") lines.forEach((l, i) => { const e = shown[i] as TestEventLike & { contractId?: string | null }; if (alertOf(e.kind)) Object.assign(l, { facts: { kind: e.kind, ...(e.contractId ? { contractId: e.contractId } : {}), ...(e.piece ? { piece: e.piece } : {}), ...(e.item ? { item: e.item } : {}), ...(e.charge ? { charge: true } : {}) } }); });
     // (Batch 15 section 26) A tester with Alerts Off: everything but their contract's changes shows greyed (it won't stop a press).
-    if (kind === "session" && u.testerAlertsOff) lines.forEach((l, i) => { if (!ALERTS_OFF_KINDS.has(shown[i].kind)) Object.assign(l, { ignored: true }); });
+    // (Owner, Nov 10, §374) Never a line that stops every press whatever the Alerts (`forced` above: dispute changes, the end of her work, her own other-tab
+    // actions): greying it said "won't stop a press" of a line that always does. A developer payment stays greyed: it stops only a press about that same part
+    // (§362), and this box is about no one press.
+    if (kind === "session" && u.testerAlertsOff) lines.forEach((l, i) => { if (!ALERTS_OFF_KINDS.has(shown[i].kind) && !(l as { forced?: boolean }).forced) Object.assign(l, { ignored: true }); });
     // (Owner, Nov 5, §270) Each line's people and tests, each drawn as its own green link in the top box (and in a stop box that takes the line in).
     const pool = lines.length ? await linkPool(u.id, [id]) : null;
     const linked = pool ? lines.map((l) => ({ ...l, links: lineLinks(pool, l.text, kind === "test" ? id : null) })) : lines;

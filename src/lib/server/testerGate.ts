@@ -172,6 +172,15 @@ export const stopsWithAlertsOff = (e: TestEventLike) => ALERTS_OFF_KINDS.has(e.k
  * Alerts On: no rule, every line joins, as before.
  */
 export const liveRuleOf = (off: boolean, part?: string) => (off ? { liveRule: { off: true, ...(part ? { part } : {}) } } : {});
+/**
+ * (Owner, Nov 10, §374) What every tester stop box carries, whoever builds it (the gate, the session route's stop-moment box, Switch / Keep's "changed the terms
+ * again" box): her Alerts (`alertsOff`, batch 17 §13) and the rule the box was built under (`liveRule`, with the part the press is about). A box thrown without
+ * it took in every live line with Alerts Off, a developer payment on another part included.
+ */
+export async function testerBoxRule(testerId: string, part?: string) {
+  const off = !!(await db.user.findUnique({ where: { id: testerId }, select: { testerAlertsOff: true } }))?.testerAlertsOff;
+  return { alertsOff: off, ...liveRuleOf(off, part) };
+}
 
 // (Owner, Nov 5, §267) "nda": the NDA changed (its own notice), an ordinary kind (Alerts on).
 const KINDS = ["terms", "paid", "rejected", "cancelled", "booked", "requested", "info", "payment", "admin", "own", "dispute", "nda"];
@@ -203,10 +212,8 @@ export async function testerGate(testerId: string, contractId: string, testId: s
   const boxAt = seenOf(body.boxAt);
   // (§269) A stale page's questions: the stop is never skipped (its box tells the page to take the new questions, `questions`).
   const stale = (opts.staleQuestions ?? []).map((e) => ({ ...e, forced: true }));
-  const staleStop = async () => {
-    const off = !!(await db.user.findUnique({ where: { id: testerId }, select: { testerAlertsOff: true } }))?.testerAlertsOff;
-    return new HttpError(409, "stop_once", tail, { changes: asLines(stale), tail, top: false, questions: true, alertsOff: off, ...liveRuleOf(off, opts.sendPiece ?? opts.piece) });
-  };
+  const staleStop = async () =>
+    new HttpError(409, "stop_once", tail, { changes: asLines(stale), tail, top: false, questions: true, ...(await testerBoxRule(testerId, opts.sendPiece ?? opts.piece)) });
   if (body.confirmed === true && !boxAt) { if (stale.length) throw await staleStop(); return; }
   const seenAt = body.confirmed === true ? boxAt : seenOf(body.seenAt);
   if (!seenAt) { if (stale.length) throw await staleStop(); return; }

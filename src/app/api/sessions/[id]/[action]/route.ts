@@ -14,7 +14,7 @@ import { displayName, fmtDate, stopTimeIn } from "@/lib/format";
 import { PAUSE_DEFAULTS, WORK_OVER_ACTIONS, testerPaused, testerRefusal, workOver, workOverLine, workOverPress } from "@/lib/rules";
 import { loadedOf, stopBox, testerStopSince } from "@/lib/server/stopMoment";
 import { requireUser } from "@/lib/server/session";
-import { testerGate } from "@/lib/server/testerGate";
+import { testerBoxRule, testerGate } from "@/lib/server/testerGate";
 import { addWritten, leaveTest, sendWritten } from "@/lib/server/tests";
 import { requireActive, requireConfirmed } from "@/lib/server/users";
 
@@ -88,11 +88,14 @@ async function stateMoment(contractId: string, action: string, body: Record<stri
   if (!found.length) return;
   // (Batch 30, Oct 29 addition) ONE box: the stop with every other change the page hadn't shown (the press's own reasons), oldest first; the second press goes ahead.
   const c = await db.contract.findUnique({ where: { id: contractId }, select: { testerId: true, testId: true } });
+  // (Owner, Nov 10, §374) The part the press is about: Dispute's piece (submission or call id). Its own gate stops for a developer payment on that part whatever
+  // the Alerts (§362, lib/server/payments.ts), so this box lists one too, and its rule lets one picked up live join it; a payment on another part never does.
+  const part = action === "dispute" && typeof body.id === "string" && body.id ? body.id : undefined;
   let more: { text: string; at: Date | string }[] = [];
   let extra: Record<string, unknown> = {};
   if (c) {
     try {
-      await testerGate(c.testerId, contractId, c.testId, body, undefined, { skipTerms: action === "terms" });
+      await testerGate(c.testerId, contractId, c.testId, body, undefined, { skipTerms: action === "terms", ...(part ? { piece: part } : {}) });
     } catch (e) {
       if (e instanceof HttpError && e.code === "stop_once" && Array.isArray(e.data?.changes)) {
         more = e.data.changes as typeof more;
@@ -101,7 +104,9 @@ async function stateMoment(contractId: string, action: string, body: Record<stri
       } else throw e;
     }
   }
-  if (!more.length) stopBox(found);
+  // (§374) The gate added no lines: the box is the stop alone, and still carries her Alerts and its rule (it used to carry neither, so with Alerts Off it took in
+  // every live line, a payment on another part included).
+  if (!more.length) stopBox(found, c ? await testerBoxRule(c.testerId, part) : {});
   const lines = [...found.map((m) => ({ text: m.text, at: m.createdAt, ...sidOf(m), kind: "stop", forced: true })), ...more].sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
   throw new HttpError(409, "stop_once", "Press again to go ahead.", { changes: lines, tail: "Press again to go ahead.", ...extra });
 }

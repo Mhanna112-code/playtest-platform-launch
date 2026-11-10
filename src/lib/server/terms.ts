@@ -5,7 +5,7 @@ import { overPressLine, newDueAt, switchedLine, termsDiff, testerRefusal, type C
 import { ANSWER_TERMS_CODE, ANSWER_TERMS_FIRST, SENT_WORK_PRICE_EXPLANATION } from "@/lib/answerTerms";
 import { HttpError } from "./http";
 import { bell, notify } from "./notify";
-import { testerGate } from "./testerGate";
+import { testerBoxRule, testerGate } from "./testerGate";
 import { logEvent } from "./live";
 import { carryOver, itemsFor, prevSetsOf, pushPrev, restoreDraft } from "@/lib/answerSets";
 import { carriedAnswers } from "@/lib/additions";
@@ -178,7 +178,10 @@ export async function decideTerms(tester: { id: string }, contractId: string, bo
     throw new HttpError(409, "gone", NO_LONGER_ON_OFFER);
   }
   if ((!offer || offer.id !== newest.id) && body.confirmed !== true) {
-    throw new HttpError(409, "stop_once", "Press again to go ahead.", { top: true, changes: [{ text: `${displayName(c.test.developer)} changed the terms again: ${newest.diff}`, at: newest.createdAt }], offerId: newest.id, tail: "Press again to decide on these newest terms.", alertsOff: !!(await db.user.findUnique({ where: { id: tester.id }, select: { testerAlertsOff: true } }))?.testerAlertsOff }); // (batch 17 section 13)
+    throw new HttpError(409, "stop_once", "Press again to go ahead.", { top: true, changes: [{ text: `${displayName(c.test.developer)} changed the terms again: ${newest.diff}`, at: newest.createdAt }], offerId: newest.id, tail: "Press again to decide on these newest terms.",
+      // (Batch 17 section 13) Her Alerts (`alertsOff`); (Owner, Nov 10, §374) and the rule the box was built under, so with Alerts Off a line picked up live joins it only if it
+      // always stops (Switch / Keep are about no part).
+      ...(await testerBoxRule(tester.id)) });
   }
   const target = newest;
   body.offerId = target.id;
