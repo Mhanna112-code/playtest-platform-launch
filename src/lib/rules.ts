@@ -1654,7 +1654,7 @@ export function reviewMarksFor(sentAt: Date, reviewDate: Date): ReviewMark[] {
  * recorded, and its latest passed mark is sent only when it was never sent for an earlier date (so a move never repeats a line). `mine`: this countdown's records
  * (keyed, plus any bare legacy mark); "seen" marks a date the job has looked at.
  */
-export function datedMarkDue<M extends { mark: string; at: Date }>(key: string, mine: string[], marks: M[], date: Date, now: Date): { send: M | null; record: string[] } {
+export function datedMarkDue<M extends { mark: string; at: Date }>(key: string, mine: string[], marks: M[], date: Date, now: Date, /** (§367) the series' last mark ("1d") */ lastMark?: string): { send: M | null; record: string[] } {
   const here = mine.filter((x) => x.startsWith(key)).map((x) => x.slice(key.length));
   const firstLook = here.length ? [] : [`${key}seen`];
   if (now.getTime() >= date.getTime()) return { send: null, record: [] };
@@ -1662,11 +1662,22 @@ export function datedMarkDue<M extends { mark: string; at: Date }>(key: string, 
   const behind = passed.filter((m) => !here.includes(m.mark)).map((m) => `${key}${m.mark}`);
   const last = passed[passed.length - 1];
   if (!here.length && mine.length) {
+    // (Owner, Nov 9, §367) The date moved LATER after the series' last reminder already went out for an earlier date (a pause or its lift, an outage, Open until
+    // extended, a rejoin, the dispute rating extension): ONE fresh reminder now, naming the new date (the latest mark passed for it: "within 3 days (Nov 22)"),
+    // then the series goes on for the new date. Its marks are keyed by the new date, so it is never sent twice; nothing more comes for the old one.
+    if (lastMark && last && finishedBefore(mine, lastMark, date)) return { send: last, record: [...firstLook, ...behind] };
     const sentBefore = new Set(mine.map((x) => x.slice(x.lastIndexOf(":") + 1)));
     return { send: last && !sentBefore.has(last.mark) ? last : null, record: [...firstLook, ...behind] };
   }
   if (!last || here.includes(last.mark)) return { send: null, record: firstLook };
   return { send: last, record: [...firstLook, ...behind] };
+}
+/** (§367) Did the series' last mark go out for a date EARLIER than `date` ("r:<ms>:1d" with ms before it)? A bare legacy mark has no date: no. */
+function finishedBefore(mine: string[], lastMark: string, date: Date) {
+  return mine.some((x) => {
+    const m = /:(\d+):([^:]+)$/.exec(x);
+    return !!m && m[2] === lastMark && Number(m[1]) < date.getTime();
+  });
 }
 /** (§311g) The key prefix of a piece's review marks for one review date (a call's: its pay date), kept in its devMarks beside the Closing soon "co:" marks. */
 export const reviewMarkKey = (reviewDate: Date) => `r:${reviewDate.getTime()}:`;
@@ -1677,7 +1688,7 @@ export const reviewMarkKey = (reviewDate: Date) => `r:${reviewDate.getTime()}:`;
  */
 export function reviewMarkDue(sentAt: Date, reviewDate: Date, now: Date, recorded: string[]): { send: ReviewMark | null; record: string[] } {
   const mine = recorded.filter((x) => x.startsWith("r:") || REVIEW_MARKS.some((m) => m.mark === x));
-  return datedMarkDue(reviewMarkKey(reviewDate), mine, reviewMarksFor(sentAt, reviewDate), reviewDate, now);
+  return datedMarkDue(reviewMarkKey(reviewDate), mine, reviewMarksFor(sentAt, reviewDate), reviewDate, now, REVIEW_MARKS[REVIEW_MARKS.length - 1].mark); // (§367)
 }
 /** (§311g) The key prefix of Open until's heads-up marks for one Open until, kept in Test.notifiedMarks (beside the testers' "due:" marks). */
 export const openUntilMarkKey = (openUntil: Date) => `open:${openUntil.getTime()}:`;

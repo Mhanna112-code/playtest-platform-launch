@@ -346,6 +346,9 @@ export async function devRate(dev: { id: string; name: string; email: string }, 
  * suspended; when it opens again the next one comes once 3 days have passed since the last. Reminders name the close-out once it is known. The LAST one ignores email Off. Developer (batch 17 section 16): from when their Rate opened, until they
  * rate or their 14 days end, paused while they can't rate.
  */
+/** (§367) The close-out date the tester's last rating reminder on this contract named ("ratec:<contract>:<ms>" in the test's marks), or null. */
+const ratingNamed = (marks: string[], contractId: string) => { const t = marks.filter((x) => x.startsWith(`ratec:${contractId}:`)).pop(); return t ? Number(t.slice(t.lastIndexOf(":") + 1)) : null; };
+
 export async function ratingReminders(now = new Date()) {
   const every = 3 * DAY - 3_600_000;
   let n = 0;
@@ -358,12 +361,18 @@ export async function ratingReminders(now = new Date()) {
   const rated = new Set((await db.rating.findMany({ where: { contractId: { in: prompted.map((c) => c.id) }, side: "tester" }, select: { contractId: true } })).map((r) => r.contractId));
   for (const c of prompted) {
     if (rated.has(c.id) || c.tester.testerSuspendedAt) continue;
-    if (now.getTime() - (await sinceLast(c.testerId, c.testId, c.ratePromptedAt!)).getTime() < every) continue;
+    // (Owner, Nov 9, §367) The close-out moved LATER than the date her last reminder named (a pause or its lift, an outage, Open until extended, a rejoin, the
+    // dispute rating extension): ONE fresh reminder now naming the new date, whatever the 3 days (a move of under 3 days after the last one got none before),
+    // then every 3 days again. The date each reminder named is kept in the test's marks ("ratec:<contract>:<ms>").
+    const closes = await testerRatingClosesAt(c.id, now);
+    const named = ratingNamed(c.test.notifiedMarks, c.id);
+    const moved = !!closes && named != null && closes.getTime() > named;
+    if (!moved && now.getTime() - (await sinceLast(c.testerId, c.testId, c.ratePromptedAt!)).getTime() < every) continue;
     if ((await rateBlocker(c.id, "tester", now)) !== "") continue; // disabled, or (§331) closed at the close-out: no reminder
     // (Owner, Nov 7, §331) The last one before the close-out (the next 3-day slot would fall after it) ignores email Off.
-    const closes = await testerRatingClosesAt(c.id, now);
     const last = !!closes && now.getTime() + every >= closes.getTime();
     await bell(c.testerId, `Reminder: rate ${displayName(c.test.developer)} on “${c.test.title}”${closes ? `: rating closes on ${T(closes, "date")}` : ""}`, RATINGS_HREF, undefined, { side: "tester", ...RATINGS, testId: c.testId, reminder: `rate:${c.id}`, ...(last ? { always: true } : {}) });
+    if (closes && named !== closes.getTime()) await db.test.update({ where: { id: c.testId }, data: { notifiedMarks: { push: `ratec:${c.id}:${closes.getTime()}` } } });
     n++;
   }
   // Developer: once their Rate opened (the tester rated and everything is settled, or (section 19) a never-rated tester at the close-out); every 3 days until they

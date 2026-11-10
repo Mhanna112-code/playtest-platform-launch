@@ -1615,7 +1615,7 @@ export function closeSoonMarkDue(at: Date | null, from: Date, now: Date, recorde
   const marks = CLOSE_SOON_MARKS
     .filter((m) => dayNo(at) - m >= dayNo(from) && (m !== 30 || at.getTime() - from.getTime() > 30 * 86_400_000))
     .map((m) => ({ mark: String(m), at: new Date((dayNo(at) - m) * 86_400_000) }));
-  const due = datedMarkDue(closeSoonKey(at), recorded.filter((x) => x.startsWith("co:")), marks, at, now);
+  const due = datedMarkDue(closeSoonKey(at), recorded.filter((x) => x.startsWith("co:")), marks, at, now, String(CLOSE_SOON_MARKS[CLOSE_SOON_MARKS.length - 1])); // (§367)
   return { send: due.send ? Number(due.send.mark) : null, record: due.record };
 }
 /**
@@ -1716,17 +1716,19 @@ async function chargeablePieces(co: CloseOuts, where: Prisma.SubmissionWhereInpu
     orderBy: { choiceOfferedAt: "asc" },
     take: 5000,
   });
-  const out: (OpenPiece & { devId: string; devEmail: string; testerId: string; testerEmail: string; testerSuspended: boolean })[] = [];
+  const out: (OpenPiece & { devId: string; devEmail: string; testerId: string; testerEmail: string; testerSuspended: boolean; marks: string[] })[] = [];
   for (const s of subs) {
     const c = s.contract;
     if (c.tester.deletedAt || (await co.chargeClosed({ submissionId: s.id }))) continue;
     const paid = (await db.payment.aggregate({ where: { submissionId: s.id, status: { in: ["charged", "not_set_up"] } }, _sum: { amountCents: true } }))._sum.amountCents ?? 0;
     const cents = chargeAmount(s.agreedCents, paid);
     if (cents <= 0) continue;
-    out.push({ id: s.id, who: firstName(c.tester), part: s.kind === "recording" ? "recording" : "written answers", title: c.test.title, testId: c.testId, cents, closes: await co.at({ submissionId: s.id }, "tester"), devId: c.test.developerId, devEmail: c.test.developer.email, testerId: c.testerId, testerEmail: c.tester.email, testerSuspended: !!c.tester.testerSuspendedAt });
+    out.push({ id: s.id, who: firstName(c.tester), part: s.kind === "recording" ? "recording" : "written answers", title: c.test.title, testId: c.testId, cents, closes: await co.at({ submissionId: s.id }, "tester"), devId: c.test.developerId, devEmail: c.test.developer.email, testerId: c.testerId, testerEmail: c.tester.email, testerSuspended: !!c.tester.testerSuspendedAt, marks: s.devMarks });
   }
   return out;
 }
+/** (§367) The Charge closing date the tester's last daily line named for this piece ("tc:<ms>" in its marks), or null. */
+const chargeNamed = (marks: string[]) => { const t = marks.filter((x) => x.startsWith("tc:")).pop(); return t ? Number(t.slice(3)) : null; };
 /** At most one such line a day per person: none with this reminder key in the last ~day. */
 const lineDue = async (userId: string, key: string, now: Date) => !(await db.notification.findFirst({ where: { userId, reminderKey: key, createdAt: { gt: new Date(now.getTime() - 23 * 3_600_000) } }, select: { id: true } }));
 
@@ -1758,7 +1760,7 @@ async function payNowLines(now: Date, co: CloseOuts) {
  * waits while the tester side is suspended. Never names a hold, a suspension or a failure.
  */
 async function testerChargeLines(now: Date, co: CloseOuts) {
-  const byTester = new Map<string, OpenPiece[]>();
+  const byTester = new Map<string, (OpenPiece & { marks: string[] })[]>();
   const emails = new Map<string, string>();
   for (const p of await chargeablePieces(co, {})) {
     if (p.testerSuspended) continue;
@@ -1766,9 +1768,13 @@ async function testerChargeLines(now: Date, co: CloseOuts) {
     emails.set(p.testerId, p.testerEmail);
   }
   for (const [testerId, list] of byTester) {
-    if (!(await lineDue(testerId, "chargeday", now))) continue;
+    // (Owner, Nov 9, §367) A piece's Charge closing date moved LATER than the date her last line named (a pause or its lift, an outage, Open until extended, a
+    // rejoin): ONE fresh line now naming the new date, even within the day; then the daily line goes on. Each piece keeps the date its last line named ("tc:<ms>").
+    const moved = list.some((p) => { const n = chargeNamed(p.marks); return n != null && !!p.closes && p.closes.getTime() > n; });
+    if (!moved && !(await lineDue(testerId, "chargeday", now))) continue;
     const line = chargeDayLine(list);
     await notify(emails.get(testerId)!, line, [line + "."], "/app#charge-or-cancel", { side: "tester", always: true, payment: true, group: "charge", reminder: "chargeday" });
+    for (const p of list) if (p.closes && chargeNamed(p.marks) !== p.closes.getTime()) await db.submission.update({ where: { id: p.id }, data: { devMarks: { push: `tc:${p.closes.getTime()}` } } });
   }
 }
 
