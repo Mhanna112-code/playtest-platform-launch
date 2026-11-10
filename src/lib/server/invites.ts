@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import type { Prisma } from "@prisma/client";
 import { displayName, fmtDate, pronouns } from "@/lib/server/dateFormat";
 import { andList, inviteTesterRefusal, inviteTestRefusal, MAX_ACTIVE_TESTS, TEST_LIMIT_LINE, termsLine, type TestEventLike } from "@/lib/rules";
+import { stoppedPressLine } from "@/lib/refusal";
 import { HttpError } from "./http";
 import { noFreeKeyFor } from "@/lib/keys";
 import { notify } from "./notify";
@@ -318,7 +319,7 @@ export async function inviteTesters(dev: U & { holdStartedAt?: Date | null }, te
     const testersIn = await tx.contract.count({ where: { testId, status: "working" } });
     const now = new Date();
     const refusal = inviteTestRefusal({ ...t, testersIn, paused: !!me.holdStartedAt, chargeback: me.holdReason === "chargeback" }, now, fmtDate);
-    if (refusal) throw new HttpError(409, "refused", refusal, { clearTicks: true });
+    if (refusal) throw new HttpError(409, "refused", t.status === "stopped" ? stoppedPressLine("Invite") : refusal, { clearTicks: true }); // (§363)
     // In the order the developer ticked them, so the "Invited A and B." line is stable.
     const ticked = (await tx.user.findMany({ where: { id: { in: ids } }, include: { profile: true } })).sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id));
     // (Owner, Oct 31, batch 35 §94) Someone who rated this test can't join it again, so they can't be invited to it (an old page's tick is refused).

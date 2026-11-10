@@ -1,4 +1,5 @@
 import { assertWorkOpen, finishWorkIfDue, workEndOf } from "./workWindow";
+import { stoppedPressLine } from "@/lib/refusal";
 import { randomBytes } from "node:crypto";
 import { T } from "@/lib/tz";
 import { db } from "@/lib/db";
@@ -492,11 +493,11 @@ async function claimRequest(id: string, status: string, other: Parameters<typeof
 function pausedRefusal(c: Ctx["c"], side: Side) {
   if (testPaused(c.test.developer, c.test)) throw new HttpError(409, "paused", side === "tester" ? `${PAUSED_RIGHT_NOW} You can request calls once it resumes.` : c.test.developer.devSuspendedAt ? DEV_SUSPENDED : c.test.developer.holdStartedAt ? "Pay what you owe first." : "The team paused this test.");
 }
-async function refusals(c: Ctx["c"], side: Side) {
+async function refusals(c: Ctx["c"], side: Side, /** (§363) the press refused: "Request a time", "Accept" */ press: string) {
   if (c.status !== "working") throw new HttpError(409, "closed", side === "tester" ? "Your session has ended." : `${displayName(c.tester)}'s session has ended.`);
   pausedRefusal(c, side);
   // (Owner) "Closed" only means no NEW testers: testers already in carry on, so calls work. Only a stopped test refuses.
-  if (c.test.status === "stopped") throw new HttpError(409, "closed", "This test was stopped.");
+  if (c.test.status === "stopped") throw new HttpError(409, "closed", stoppedPressLine(press)); // (§363)
   await assertWorkOpen(db, c.testId);
   // (Owner, Oct 28 afternoon) Calls are allowed whether or not a live call is a listed part: one that isn't reads "Not listed" and its pay is up to the developer.
   if (await db.block.count({ where: { OR: [{ blockerId: c.testerId, blockedId: c.test.developerId }, { blockerId: c.test.developerId, blockedId: c.testerId }] } })) throw new HttpError(409, "gone", "This time isn't available.");
@@ -583,10 +584,10 @@ export async function devRequestTime(dev: U, testId: string, body: Record<string
     const x = await ctx(dev.id, id);
     if (x.side !== "developer" || x.c.testId !== testId) throw new HttpError(404, "not_found", "That tester isn't in this test.");
     if (x.c.status !== "working") { out.push(x); continue; }
-    await refusals(x.c, "developer");
+    await refusals(x.c, "developer", "Request a time");
     all.push(x);
   }
-  if (!all.length) await refusals(out[0].c, "developer");
+  if (!all.length) await refusals(out[0].c, "developer", "Request a time");
   const gone = out.map((x) => ({ contractId: x.c.id, text: requestTesterGoneLine(displayName(x.c.tester)) }));
   // (Batch 16 section 21) A time of this press already requested with them (e.g. in another tab meanwhile): already done, said plainly after the gate.
   const starts = kind.rows.map((r) => r.startsAt);
@@ -738,7 +739,7 @@ export async function testerRequestTime(user: U, contractId: string, body: Recor
   const x = await ctx(user.id, contractId);
   const { c, side } = x;
   if (side !== "tester") throw new HttpError(404, "not_found", "That session doesn't exist.");
-  await refusals(c, "tester");
+  await refusals(c, "tester", "Request a time");
   await answerTermsFirst(contractId);
   // (Batch 35 §132) Every time inside the call window: at least the lead ahead, and no later than when testers' work on this test ends.
   const end = await workEndOf(db, c.testId);
@@ -850,7 +851,7 @@ export async function answerRequest(user: U, contractId: string, body: Record<st
   if (side === "developer") await db.$transaction((tx) => devGate(tx, c.testId, body, {}, [], undefined, { acts: CALL_ACTS, keys: [`req:${r.id}`, `c:${contractId}`], answers: { item: r.id, kinds: ["requested"], contractId } }));
   else await testerGate(c.testerId, contractId, c.testId, body, undefined, { ...CALL_PRESS, answers: { item: r.id } });
   if (action === "accept") {
-    await refusals(c, side);
+    await refusals(c, side, "Accept");
     // (Owner, Nov 3, §157) Claimed before anything is checked or booked: of two Accepts (two tabs), or an Accept and a Withdraw / Decline at the same moment,
     // exactly one goes through; the other reads what happened (refusalFor), never the first one's booking as a clash. A check or a booking that fails afterwards
     // puts the request back as it was.

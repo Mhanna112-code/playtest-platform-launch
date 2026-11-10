@@ -8,6 +8,7 @@ import { LIMITS } from "./limits";
 import { qText, sameQuestionSet } from "./questions";
 import { T, safeZone } from "./tz";
 import { startedBeforeWorkEnd } from "./pause";
+import { stoppedPressLine } from "./refusal";
 
 // ---------- Money ----------
 
@@ -756,9 +757,12 @@ export const endedByDevDeletion = (c: StopCtx) => {
   const gone = c.test?.developer?.deletedAt;
   return c.endKind === "stopped" && !c.test?.adminStoppedAt && !!gone && !!c.endedAt && c.endedAt.getTime() >= gone.getTime();
 };
-/** (§355) The tester's top line then (never "You can still ask to show an excerpt and chat"). */
+/**
+ * (§355) The tester's top line then (never "You can still ask to show an excerpt and chat"). (Owner, Nov 9, §363) Unreviewed work is NOT paid automatically (nobody
+ * can review it, and its Charge never opens: openCharges skips a deleted developer); work whose Charge was already open can still be charged (their saved card).
+ */
 export const devDeletedStopLine = (endedAt: Date, fmt: (d: Date) => string) =>
-  `The developer deleted their account, so this test was stopped on ${fmt(endedAt)}. Work you sent that's listed is paid automatically when it's due; chat and excerpt requests are closed.`;
+  `The developer deleted their account, so this test was stopped on ${fmt(endedAt)}. You can still charge for work whose Charge is already open; chat and excerpt requests are closed.`;
 /** (Batch 26 section 3) Was this tester's work ended by the team's Stop (never named)? */
 export const teamStopped = (c: StopCtx) => c.endKind === "stopped" && !!c.test?.adminStoppedAt;
 /** "This test was stopped at 3:10 PM" (or "…on Oct 29, 2026" when no time was given). */
@@ -810,19 +814,20 @@ export function workOverPress(action: string, body: Record<string, unknown> = {}
   }
   return "";
 }
-/** An old page's press after the work ended: "Nora Lane stopped the test on Nov 3, so your Send didn't go through. Work you sent is still reviewed." */
+/**
+ * An old page's press after the work ended: "Nora Lane ended your session early on Nov 3, so your Send didn't go through. Work you sent is still reviewed."
+ * (Owner, Nov 9, §363; replaces batch 16 §24's stopped line and §355's deleted-developer press line) A stopped test (the developer's Stop, the team's, or the
+ * developer deleting their account) reads only "This test was stopped, so your Send didn't go through.": no date, no name, no tail (the banner has them).
+ */
 export const workOverLine = (c: StopCtx, devName: string, fmt: (d: Date) => string, press: string) =>
-  endedByDevDeletion(c) ? devDeletedPressLine(c, fmt, press) : `${overHalf(c, devName, fmt)}, so your ${press} didn't go through. Work you sent is still reviewed.`;
-/** (§355) The deletion's line with the refused press named: "…stopped on Nov 9: your Send didn't go through. Work you sent that's listed …". */
-const devDeletedPressLine = (c: StopCtx, fmt: (d: Date) => string, press: string) =>
-  press ? devDeletedStopLine(c.endedAt!, fmt).replace(/\. Work you sent/, `: your ${press} didn't go through. Work you sent`) : devDeletedStopLine(c.endedAt!, fmt);
+  c.endKind === "stopped" ? stoppedPressLine(press) : `${overHalf(c, devName, fmt)}, so your ${press} didn't go through. Work you sent is still reviewed.`;
 /**
  * The stopped line at the top of the session page, listing what still works (built from what is actually on the page, as the paused banner does):
  * "Nora Lane stopped the test on Nov 3. You can still charge or let go of unreviewed work, dispute, rate and chat. Work you sent is still reviewed."
  * With `press` (an old page's press was refused), it names it: "Nora Lane stopped the test on Nov 3, so your Send didn't go through. You can still …".
  */
 export function stillWorksLine(c: StopCtx, devName: string, fmt: (d: Date) => string, can: { charge?: boolean; dispute?: boolean; rate?: boolean; chat?: boolean; excerpt?: boolean }, press = "") {
-  if (endedByDevDeletion(c)) return devDeletedPressLine(c, fmt, press); // (§355) no "You can still …" list
+  if (endedByDevDeletion(c)) return devDeletedStopLine(c.endedAt!, fmt); // (§355) the banner's full line, no "You can still …" list (§363: the refusal names the press)
   const list = [can.charge && "charge or let go of unreviewed work", can.dispute && "dispute", can.rate && "rate", can.excerpt && "ask to show an excerpt", can.chat && "chat"].filter((x): x is string => !!x);
   return `${overHalf(c, devName, fmt)}${press ? `, so your ${press} didn't go through` : ""}.${list.length ? ` You can still ${andList(list)}.` : ""} Work you sent is still reviewed.`;
 }
@@ -895,7 +900,7 @@ export type JoinState = { status: string; listingVersion: number; spots: number;
  * (the page shows the new terms); the second press joins on the new terms.
  */
 export function joinCheck(t: JoinState, seenListingVersion: number, confirmed: boolean, now = new Date(), date: (d: Date) => string = (d) => d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })): { result: "go" } | { result: "refused"; message: string } | { result: "changed" } {
-  if (t.status === "stopped") return { result: "refused", message: "This test was stopped." };
+  if (t.status === "stopped") return { result: "refused", message: stoppedPressLine("Join") }; // (§363)
   // (Batch 15 section 18) Open until is the last day to join.
   if (t.openUntil && t.openUntil.getTime() < now.getTime()) return { result: "refused", message: closedToNewLine(t.openUntil, date) };
   if (t.status !== "open") return { result: "refused", message: "This test isn't taking new testers any more." };

@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, fmtTime, pronouns } from "@/lib/server/dateFormat";
 import { PAUSED_RIGHT_NOW, closedToNewLine, canAskToRejoin, leftText, movedDue, MAX_ACTIVE_TESTS, termsLine, testPaused, TEST_LIMIT_LINE, type TestEventLike } from "@/lib/rules";
 import { HttpError } from "./http";
+import { asPressRefusal } from "@/lib/refusal";
 import { NO_FREE_KEY, noKeyWaitingLine } from "@/lib/keys";
 import { LIMITS } from "@/lib/limits";
 import { bell, notify } from "./notify";
@@ -168,7 +169,7 @@ async function closedInvite(testerId: string, body: Record<string, unknown>) {
   if (typeof body.inviteId !== "string" || !body.inviteId) return;
   const inv = await db.invite.findUnique({ where: { id: body.inviteId } });
   if (!inv || inv.testerId !== testerId || inv.status !== "cancelled") return;
-  throw new HttpError(409, "invite_closed", await inviteClosedLine(inv.testId));
+  throw new HttpError(409, "invite_closed", asPressRefusal(await inviteClosedLine(inv.testId), "Join")); // (§363)
 }
 
 /** (Batch 34 §10) The refusal for a press on an invite a listing change replaced, when the tester has the new one: one sentence, never a dangling colon. */
@@ -243,7 +244,7 @@ export async function join(tester: U, testId: string, rawBody: Record<string, un
   if (!t) throw new HttpError(404, "not_found", "That test doesn't exist.");
   await closedInvite(tester.id, body); // (batch 16 section 32) the invite closed meanwhile: refused with the reason
   const refusal = await joinRefusal(tester.id, testId);
-  if (refusal) throw new HttpError(409, "refused", refusal);
+  if (refusal) throw new HttpError(409, "refused", asPressRefusal(refusal, "Join")); // (§363)
   // (Design doc 7.3) Coming back is always an ask the developer accepts, unless they invited the tester back. (§352) An accepted ask never comes through here.
   const gone = await db.contract.findUnique({ where: { testId_testerId: { testId, testerId: tester.id } } });
   if (gone && gone.status !== "working" && !(await db.invite.findFirst({ where: { testId, testerId: tester.id, status: "sent" } })))
@@ -283,7 +284,7 @@ export async function apply(tester: U, testId: string, body: Record<string, unkn
   if (!t) throw new HttpError(404, "not_found", "That test doesn't exist.");
   await closedInvite(tester.id, body); // (batch 16 section 32)
   const refusal = await joinRefusal(tester.id, testId);
-  if (refusal) throw new HttpError(409, "refused", refusal);
+  if (refusal) throw new HttpError(409, "refused", asPressRefusal(refusal, "Apply")); // (§363)
   // (Batch 34 §16, owner, Oct 30) Apply while holding a sent invite the page hadn't shown yet: it joins at once, as the invite's Join does (any waiting application
   // of theirs closes as joined), instead of filing an application next to the invite. A page that showed the invite is refused ("… invited you: press Join").
   if (await inviteBeforePress(tester, testId, body, displayName(t.developer))) return { joined: true, sessionId: (await join(tester, testId, body)).id };
@@ -405,7 +406,7 @@ export async function decideApplication(dev: U, testId: string, body: Record<str
   }
   const isRejoin = a.kind === "rejoin";
   const refusal = await joinRefusal(tester.id, testId, { rejoin: isRejoin, byDeveloper: true }); // (§341) no free key: refused below with the key line
-  if (refusal) throw new HttpError(409, "refused", refusal.replace("You've already joined", `${name} already joined`).replace(TEST_LIMIT_LINE, `${name} can't join more tests right now.`));
+  if (refusal) throw new HttpError(409, "refused", asPressRefusal(refusal, "Accept").replace("You've already joined", `${name} already joined`).replace(TEST_LIMIT_LINE, `${name} can't join more tests right now.`)); // (§363)
   const t = await db.test.findUniqueOrThrow({ where: { id: testId } });
   // (Nov 2, §119) The join claims the still-pending application inside its own lock (as "accepted"): a Withdraw a moment ago wins, and the refusal says so.
   const c = await joinTest({ ...tester, isTester: true }, testId, { listingVersion: t.listingVersion, confirmed: true, anyway: true, acceptedByDeveloper: true, rejoinAccepted: isRejoin, ndaAcceptedAt: a.ndaAcceptedAt?.toISOString(), ndaAccepted: !!a.ndaAcceptedAt }, { applicationId: a.id, applicationStatus: "accepted" })
@@ -514,7 +515,7 @@ export async function askToRejoin(tester: U, testId: string, body: Record<string
   if (await blocks.blockedEitherWay(tester.id, t.developerId)) throw new HttpError(409, "refused", blocks.NOT_TAKING_LINE);
   if (!canAskToRejoin(old, rated)) throw new HttpError(409, "not_again", rated || old.endKind === "rated" ? "You rated this test, so you can't join it again." : "You can't ask to rejoin this test.");
   const refusal = await joinRefusal(tester.id, testId, { rejoin: true });
-  if (refusal) throw new HttpError(409, "refused", refusal);
+  if (refusal) throw new HttpError(409, "refused", asPressRefusal(refusal, "Ask to rejoin")); // (§363)
   // (Batch 34 §16) An invite the page already showed: Join, not an ask. One it hadn't shown: the ask meets it below and they're back at once.
   await inviteBeforePress(tester, testId, body, displayName(t.developer));
   await alreadyWaiting(tester.id, testId);

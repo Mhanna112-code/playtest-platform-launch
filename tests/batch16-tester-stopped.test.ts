@@ -52,7 +52,7 @@ describe("after a stop: what's gone is refused and names the press; what still w
       expect(r.body.error.failed, action).toBe(press);
       expect(r.body.error.top, action).toBe(true);
       expect(r.body.error.changes, action).toBeUndefined(); // never a stop box
-      expect(r.body.error.message, action).toMatch(new RegExp(`^Nora Lane stopped the test on [A-Z][a-z]{2} \\d{1,2}, \\d{4}, so your ${press.replace(/[“”]/g, ".")} didn't go through\\. Work you sent is still reviewed\\.$`));
+      expect(r.body.error.message, action).toBe(`This test was stopped, so your ${press} didn't go through.`); // (Owner, Nov 9, §363; no name, date or tail)
     };
     await refused("written", { answers: ["a", "b"] }, "Send");
     await refused("recording-send", {}, "Send");
@@ -69,10 +69,10 @@ describe("after a stop: what's gone is refused and names the press; what still w
     await refused("answer-request", { requestId: reqRow.id, action: "accept" }, "Accept");
     await refused("answer-request", { requestId: reqRow.id, action: "decline" }, "Decline");
     await refused("answer-request", { requestId: reqRow.id, action: "withdraw" }, "Withdraw");
-    // (Batch 17 section 12) Cancel call: the stop already cancelled the calls ahead.
+    // (Batch 17 section 12; Owner, Nov 9, §363) Cancel call: the stop already cancelled the calls ahead; the one stopped line names the press.
     for (const [action, body] of [["cancel-call", { callId: call.id }], ["cancel-set", { setId: "x" }]] as const) {
       const r = await sact(sessionId, action, tester.cookie, { seenAt: opened, ...body });
-      expect(r.body.error, action).toMatchObject({ code: "call_cancelled", message: "This call was cancelled when the test stopped." });
+      expect(r.body.error, action).toMatchObject({ code: "work_over", message: "This test was stopped, so your Cancel call didn't go through." });
     }
     // Final: pressing again never goes ahead.
     await refused("written", { answers: ["a", "b"], confirmed: true }, "Send");

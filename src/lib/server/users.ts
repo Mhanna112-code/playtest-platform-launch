@@ -27,6 +27,17 @@ export const DEV_CHARGEBACK = "Your tests are paused after a chargeback. Open Pa
  * the team, Save profile, No thanks, Dismiss selected, Remove …) and to say "Stop", "Message", "Rating", "Call request", "Dispute reply" and "Open" for buttons
  * that read otherwise.
  */
+/** (§363) The press's button label, as failedLine names it ("" when it can't tell). */
+export async function pressVerbOf(req: Request, what?: string) {
+  if (what) return what;
+  try {
+    const body = Number(req.headers.get("content-length") || 0) > 100_000 ? null : await req.clone().json().catch(() => null);
+    return pressLabelOf(new URL(req.url).pathname, body);
+  } catch {
+    return "";
+  }
+}
+
 export async function failedLine(req: Request, what?: string, piece?: { kind: string; id: string }) {
   const url = new URL(req.url);
   const path = url.pathname.split("/").filter(Boolean); // api, tests, <id>, <action>

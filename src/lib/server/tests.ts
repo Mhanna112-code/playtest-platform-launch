@@ -1,4 +1,5 @@
 import { ndaOnlyEdit, NDA_ONLY_EDIT } from "@/lib/ndaEditing";
+import { stoppedPressLine } from "@/lib/refusal";
 import { additionTerms } from "./submissionAdditions";
 import { dateZone } from "./dateZone";
 import { TEAM_LIFTED_EVENT, TEAM_PAUSED_EVENT, devLiftSince, devPauseMoments, devPauseSince, devStopSince, loadedOf } from "./stopMoment";
@@ -299,7 +300,7 @@ async function requireCardToPost(devId: string) {
 /** (Owner, Oct 28 evening) A draft (a next round not opened yet) opens in Post a test: "Post the test" saves the typed details and opens it for testers. */
 export async function postDraft(dev: U, testId: string, body: Record<string, unknown>) {
   const t0 = await ownTest(dev.id, testId);
-  if (t0.status !== "draft") throw new HttpError(409, "not_draft", t0.status === "stopped" ? "This test was stopped." : "This test is already open.");
+  if (t0.status !== "draft") throw new HttpError(409, "not_draft", t0.status === "stopped" ? stoppedPressLine("Post the test") : "This test is already open."); // (§363)
   const { l, keys } = await checkPost(dev, body);
   await requireCardToPost(dev.id);
   await postPerks(dev.id, l.joinMode, testId);
@@ -329,7 +330,7 @@ export async function deleteDraft(dev: U, testId: string) {
   });
   if (!gone) {
     if (await draftDeletedBy(dev.id, testId)) throw new HttpError(409, "deleted", DRAFT_ALREADY_DELETED);
-    throw new HttpError(409, "not_draft", (await db.test.findUnique({ where: { id: testId }, select: { status: true } }))?.status === "stopped" ? "This test was stopped." : "Only a draft can be deleted.");
+    throw new HttpError(409, "not_draft", (await db.test.findUnique({ where: { id: testId }, select: { status: true } }))?.status === "stopped" ? stoppedPressLine("Delete") : "Only a draft can be deleted."); // (§363)
   }
   await db.keptForm.deleteMany({ where: { userId: dev.id, key: `test:draft:${testId}` } }).catch(() => null);
   return { deleted: true };
@@ -658,13 +659,13 @@ export const CLOSING_FIELDS: (keyof Listing)[] = ["ndaText", "writtenCents", "re
 export async function openDraft(dev: U, testId: string, body: Record<string, unknown> = {}) {
   const t = await ownTest(dev.id, testId);
   await devGateIfSeen(testId, body, { acts: ["open"], keys: ["test"] });
-  if (t.status !== "draft") throw new HttpError(409, "not_draft", t.status === "stopped" ? "This test was stopped." : "This test is already open.");
+  if (t.status !== "draft") throw new HttpError(409, "not_draft", t.status === "stopped" ? stoppedPressLine("Accept testers again") : "This test is already open."); // (§363)
   await postPerks(dev.id, t.joinMode, testId);
   // (Owner, Nov 3, batch 35 §157) Checked again under the test's lock: of two Opens at once (two tabs) one opens it and records "opened"; the other reads
   // "This test is already open."
   return db.$transaction(async (tx) => {
     const now = await lockTest(tx, testId);
-    if (now.status !== "draft") throw new HttpError(409, "not_draft", now.status === "stopped" ? "This test was stopped." : "This test is already open.");
+    if (now.status !== "draft") throw new HttpError(409, "not_draft", now.status === "stopped" ? stoppedPressLine("Accept testers again") : "This test is already open."); // (§363)
     return recordEvent(tx, testId, "opened", "The test opened for testers", true, { status: "open", testerDays: testerDaysFor(t.openUntil, dev) });
   });
 }
@@ -850,7 +851,7 @@ export async function stopTest(dev: U, testId: string, body: Record<string, unkn
     // (Batch 16 section 21) Stopped in another tab: this Stop stops once naming it ("You stopped the test in another tab"), then it's already done.
     if (t.status === "stopped") {
       await topPanelGate(tx, testId, body, {}, [], undefined, { acts: ["stop"], keys: ["test"], inState: true });
-      throw new HttpError(409, "stopped", "This test was stopped.");
+      throw new HttpError(409, "stopped", stoppedPressLine("Stop the test")); // (§363)
     }
     // (Owner, Oct 29, batch 29 section 11; replaces batch 15 sections 23, 29 and 37) While the test is paused (any cause) Stop follows the same stop-once rules.
     await topPanelGate(tx, testId, body, {}, [], undefined, { acts: ["stop"], keys: ["test"] });
@@ -898,7 +899,7 @@ export async function endEarly(dev: U, testId: string, body: Record<string, unkn
   const ended = await db.$transaction(async (tx) => {
     const lockedTest = await lockTest(tx, testId);
     // (Owner) After a stop, a stale press fails and names the stop.
-    if (lockedTest.status === "stopped") throw new HttpError(409, "stopped", "This test was stopped.");
+    if (lockedTest.status === "stopped") throw new HttpError(409, "stopped", stoppedPressLine("End early")); // (§363)
     const list = [];
     // (Owner, Oct 28, batch 16 section 21) Testers this developer already ended early in another tab: this press stops once ("You ended Ana Silva's work early
     // in another tab"); on the second press they're dropped and the rest go through.
@@ -1166,6 +1167,8 @@ export async function leaveTest(tester: U, contractId: string, body: Record<stri
   const c0 = await ownContract(tester.id, contractId);
   const refused = (c: Parameters<typeof sessionRefusal>[0]) => {
     const refusal = sessionRefusal(c, { openUntil: null }, displayName(c0.test.developer));
+    // (Owner, Nov 9, §363) A stopped test: the one stopped line, naming Leave.
+    if (refusal && c.status === "ended" && c.endKind === "stopped") throw new HttpError(409, "gone", stoppedPressLine("Leave"));
     if (refusal) throw new HttpError(409, "gone", refusal === "You left this test." ? "You already left this test." : refusal);
   };
   // (Owner, Oct 31, batch 35 §59; replaces batch 15 §25 for Leave) Leave goes through the tester's one gate like their other presses: the first press stops once

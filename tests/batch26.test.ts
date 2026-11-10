@@ -188,7 +188,7 @@ describe("batch 26 sections 3 and 4: the team's Stop never names the developer; 
     expect(banner).toBe(`This test was stopped at ${time}. You can still chat. Work you sent is still reviewed.`);
     expect(endedLine({ ...c, title: "Harbor Run" }, "Nora Lane", () => "Oct 29, 2026")).toBe("This test was stopped on Oct 29, 2026. Work you sent is still reviewed.");
     const refused = await sact(j.sessionId, "written", j.tester.cookie, { answers: ["a", "b"] });
-    expect(refused.body.error.message).toBe(`This test was stopped at ${time}, so your Send didn't go through. Work you sent is still reviewed.`);
+    expect(refused.body.error.message).toBe("This test was stopped, so your Send didn't go through."); // (Owner, Nov 9, §363: the refusal has no time; the banner keeps it)
     // The live box (it says when itself).
     const live = await json(await liveGET(req(`/api/live?scope=session:${j.sessionId}&since=${encodeURIComponent(loaded.toISOString())}`, { cookie: j.tester.cookie, method: "GET" })));
     const texts = (live.body.changes as { text: string }[]).map((x) => x.text);
@@ -296,7 +296,7 @@ describe("batch 26 section 9: Confirm with your bank stops for exactly what Pay 
     expect(lines(confirmErr.data!.changes).some((t) => t.startsWith("You paid Cam Lee $10.00"))).toBe(true);
     // The code: one press description for Pay, Pay more and Confirm.
     expect(src("lib/server/confirm.ts")).toContain("payPressOf(c.id, piece)");
-    expect(src("lib/server/payments.ts")).toContain("const payPress = payPressOf(c.id, piece.where);");
+    expect(src("lib/server/payments.ts")).toContain("const payPress = { ...payPressOf(c.id, piece.where), fromNeeds: body.from === \"needs\" };"); // (§362) plus Needs you's own stop
   });
 });
 

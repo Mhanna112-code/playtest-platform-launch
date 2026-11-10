@@ -22,7 +22,8 @@ describe("session page after the test is stopped or the work is ended", () => {
     const lines = (await live(tester.cookie, `session:${sessionId}`, opened)).body.changes.map((c: { text: string }) => c.text);
     expect(lines).toContain("Nora Lane stopped the test");
     // (Batch 16 section 24) The refusal names the press, and sends the page to its top ("work_over").
-    const STOPPED = (press: string) => new RegExp(`^Nora Lane stopped the test on .+, so your ${press} didn't go through\. Work you sent is still reviewed\.$`);
+    // (Owner, Nov 9, §363; replaces this section's dated line) One line, no name, date or tail.
+    const STOPPED = (press: string) => new RegExp(`^This test was stopped, so your ${press} didn't go through\.$`);
     const refused = async (action: string, body: Record<string, unknown>, press: string) => {
       const r = await sact(sessionId, action, tester.cookie, { seenAt: opened, ...body });
       expect(r.status, action).toBe(409);

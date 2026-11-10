@@ -92,7 +92,7 @@ describe("join and contract snapshots", () => {
     const s = await setup({ devices: ["Mac"] });
     expect((await act(s.testId, "join", ben.cookie, { listingVersion: 1 })).body.error.message).toContain("Your profile doesn't list a device this test needs (Mac)."); // (batch 20 section 3)
     await act(s.testId, "stop", s.dev.cookie, { reason: "We have what we need.", seenAt: seen() });
-    expect((await act(s.testId, "join", ben.cookie, { listingVersion: 1, confirmed: true })).body.error.message).toBe("This test was stopped.");
+    expect((await act(s.testId, "join", ben.cookie, { listingVersion: 1, confirmed: true })).body.error.message).toBe("This test was stopped, so your Join didn't go through."); // (§363)
   });
 });
 
@@ -137,7 +137,7 @@ describe("top panel stops once", () => {
     expect(r.body.error.message).toBe("Ana Silva already left the test.");
     await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true });
     await later();
-    expect((await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: seen() })).body.error.message).toBe("This test was stopped.");
+    expect((await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: seen() })).body.error.message).toBe("This test was stopped, so your Stop the test didn't go through."); // (§363)
   });
 });
 
@@ -157,7 +157,7 @@ describe("tester session", () => {
     const { tester, sessionId } = await joined(testId);
     await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true });
     const r = await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
-    expect(r.body.error.message).toMatch(/^Nora Lane stopped the test on .+, so your Send didn't go through\. Work you sent is still reviewed\.$/); // (batch 16 section 24)
+    expect(r.body.error.message).toBe("This test was stopped, so your Send didn't go through."); // (Owner, Nov 9, §363; replaces batch 16 section 24's line)
   });
 
   it("late work is accepted within the test work window; once the last deadline passes it is refused", async () => {

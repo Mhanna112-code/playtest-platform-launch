@@ -119,7 +119,7 @@ describe("big changes from another tab stop every press once (section 21)", () =
     const b = await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: loaded, tab: "B" });
     expect(texts(b)).toEqual(["You stopped the test in another tab"]);
     const b2 = await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: loaded, tab: "B", ...again() });
-    expect(b2.body.error.message).toMatch(/^This test was stopped\./);
+    expect(b2.body.error.message).toBe("This test was stopped, so your Stop the test didn't go through."); // (§363)
   });
 
   it("End early: an End early elsewhere stops it once; testers already ended there are dropped on the second press", async () => {

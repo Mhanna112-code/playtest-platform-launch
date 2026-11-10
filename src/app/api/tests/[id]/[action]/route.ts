@@ -10,7 +10,8 @@ import { sendChat, sendMessage } from "@/lib/server/messages";
 import { countingState, asListing, deleteDraft, editTest, endEarly, nextRound, openDraft, ownTest, postDraft, stopTest } from "@/lib/server/tests";
 import { keyBoxes } from "@/lib/server/accessKeys";
 import { getUserFromRequest } from "@/lib/server/session";
-import { failedLine, requireActive, requireConfirmed, requireCurrentTerms } from "@/lib/server/users";
+import { failedLine, pressVerbOf, requireActive, requireConfirmed, requireCurrentTerms } from "@/lib/server/users";
+import { stoppedPressLine } from "@/lib/refusal";
 import { RESTRICTED_OK_ACTIONS, TEAM_PAUSED_LINE, TEAM_PAUSED_OK_ACTIONS, teamPausedNow } from "@/lib/restricted";
 import { bodyPressVerb } from "@/lib/pressLabels";
 
@@ -75,7 +76,8 @@ async function adminRefusal(req: Request, userId: string, testId: string, action
   if (!t || t.developerId !== userId) return;
   // (Owner, Oct 28) A team stop is a HARD refusal for every press a stopped test does not allow (no stop-once); what a stopped test allows (chat, rate, a dispute reply, extra pay, a call's length
   // and problem report) goes on under its own rules.
-  if (t.adminStoppedAt && !STOPPED_ALLOWS.has(action) && action !== "edit") throw new HttpError(409, "admin_stopped", "The team stopped this test.", { failed: await failedLine(req, what) });
+  // (Owner, Nov 9, §363/§364) The one stopped line, naming the press (the banner still says the team stopped it, why, and which press failed).
+  if (t.adminStoppedAt && !STOPPED_ALLOWS.has(action) && action !== "edit") throw new HttpError(409, "admin_stopped", stoppedPressLine(await pressVerbOf(req, what)), { failed: await failedLine(req, what) });
   if (t.adminStoppedAt) return;
   // (Owner, Nov 4, §172; replaces batch 15 sections 1, 23 and 37) A test the team paused follows a developer suspension's rules: Stop, End early, Cancel call and the
   // side of a dispute go on; Rate goes on to its own refusal (as a suspended developer's does: batch 17 section 2); every other press, chat included, goes to the

@@ -7,10 +7,10 @@ import { fmtDate } from "@/lib/server/dateFormat";
 import { act, joined, sact, seen, settle, setup } from "./fixtures";
 
 // (Owner, Nov 9, §355) When the developer deletes their account, the deletion stops their tests. A tester whose session it ended reads ONE top line:
-// "The developer deleted their account, so this test was stopped on {date}. Work you sent that's listed is paid automatically when it's due; chat and excerpt
-// requests are closed." Sessions that had already ended (left, ended early, closed, rated, an earlier Stop) keep their own line.
+// "The developer deleted their account, so this test was stopped on {date}. You can still charge for work whose Charge is already open; chat and excerpt
+// requests are closed." (§363 corrected its middle: unreviewed work is not paid automatically.) Sessions that had already ended (left, ended early, closed, rated, an earlier Stop) keep their own line.
 
-const LINE = /^The developer deleted their account, so this test was stopped on .+\. Work you sent that's listed is paid automatically when it's due; chat and excerpt requests are closed\.$/;
+const LINE = /^The developer deleted their account, so this test was stopped on .+\. You can still charge for work whose Charge is already open; chat and excerpt requests are closed\.$/;
 const contract = (id: string) => db.contract.findUniqueOrThrow({ where: { id }, include: { test: { include: { developer: true } }, tester: true } });
 
 describe("§355 the tester's top line after the developer deleted their account", () => {
@@ -25,13 +25,14 @@ describe("§355 the tester's top line after the developer deleted their account"
     expect(sessionRefusal(c, c.test, "Deleted user")).toMatch(LINE);
     const top = stillWorksLine(c, "Deleted user", fmtDate, { excerpt: true, chat: true, dispute: true });
     expect(top).toMatch(LINE);
-    expect(top).not.toContain("You can still");
+    expect(top).not.toContain("You can still ask"); // (§363) only its own "You can still charge for work whose Charge is already open"
     expect(top).not.toContain("Work you sent is still reviewed");
-    // An old page's Send: the same line, naming the press.
+    // (Owner, Nov 9, §363; was the deletion's line naming the press) An old page's Send: the one stopped line; the banner above keeps the deletion's line.
     const r = await sact(j.sessionId, "written", j.tester.cookie, { answers: ["The harbour level was clear and the boats handled well.", "Fine."], seenAt: seen(), confirmed: true });
     expect(r.status).toBe(409);
-    expect(r.body.error.message).toMatch(/^The developer deleted their account, so this test was stopped on .+: your Send didn't go through\. Work you sent that's listed is paid automatically when it's due; chat and excerpt requests are closed\.$/);
-    expect(workOverLine(c, "Deleted user", fmtDate, "")).toMatch(LINE);
+    expect(r.body.error.message).toBe("This test was stopped, so your Send didn't go through.");
+    expect(workOverLine(c, "Deleted user", fmtDate, "Send")).toBe("This test was stopped, so your Send didn't go through.");
+    expect(stillWorksLine(c, "Deleted user", fmtDate, { chat: true }, "Send")).toMatch(LINE); // the banner: the full deletion line
   });
 
   it("sessions that had already ended keep their own line", async () => {

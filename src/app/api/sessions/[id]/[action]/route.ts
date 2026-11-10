@@ -51,7 +51,8 @@ async function finalRefusal(userId: string, contractId: string, action: string, 
   const ctx = { ...c, teamTime: c.endedAt ? stopTimeIn(c.endedAt, tz) : undefined };
   if (workOver(c)) {
     // (Batch 17 section 12) Cancel call from a page opened before the stop: the stop already cancelled the calls ahead.
-    if (action === "cancel-call" || action === "cancel-set") throw new HttpError(409, "call_cancelled", CALL_CANCELLED_BY_STOP);
+    // (Owner, Nov 9, §363) After a stop: the one stopped line, naming Cancel call.
+    if ((action === "cancel-call" || action === "cancel-set") && c.endKind !== "stopped") throw new HttpError(409, "call_cancelled", CALL_CANCELLED_BY_STOP);
     const press = workOverPress(action, body);
     throw new HttpError(409, "work_over", workOverLine(ctx, dev, fmtDate, press), { failed: press, top: true });
   }

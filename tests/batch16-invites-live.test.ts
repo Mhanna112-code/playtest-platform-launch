@@ -122,7 +122,7 @@ describe("tester invitations follow every close (section 32)", () => {
   it("stopped, and Open until passed", async () => {
     const x = await invited();
     expect((await act(x.testId, "stop", x.dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true })).status).toBe(200);
-    expect((await join(x.testId, x.ana.cookie, x.inv.id)).body.error.message).toBe("This test was stopped.");
+    expect((await join(x.testId, x.ana.cookie, x.inv.id)).body.error.message).toBe("This test was stopped, so your Join didn't go through."); // (§363)
     const y = await invited();
     const ou = new Date(Date.now() - 60_000);
     await db.test.update({ where: { id: y.testId }, data: { openUntil: ou } });

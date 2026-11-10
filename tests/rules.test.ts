@@ -257,7 +257,7 @@ describe("join check", () => {
     expect(joinCheck(open, 1, true)).toEqual({ result: "go" });
   });
   it("closed, stopped or full refuses for good, even when confirmed", () => {
-    expect(joinCheck({ ...open, status: "stopped" }, 2, true)).toEqual({ result: "refused", message: "This test was stopped." });
+    expect(joinCheck({ ...open, status: "stopped" }, 2, true)).toEqual({ result: "refused", message: "This test was stopped, so your Join didn't go through." }); // (§363)
     expect(joinCheck({ ...open, status: "closed" }, 2, true).result).toBe("refused");
     expect(joinCheck({ ...open, testersIn: 3 }, 2, true)).toEqual({ result: "refused", message: "This test is full." });
     expect(joinCheck({ ...open, openUntil: new Date(Date.now() - 1000) }, 2, true).result).toBe("refused");

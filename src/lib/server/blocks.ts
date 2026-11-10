@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { ACCOUNT_WAS_DELETED, displayName, fmtTime } from "@/lib/format";
 import { joinCallRefusal, testPaused } from "@/lib/rules";
 import { HttpError } from "./http";
+import { stoppedPressLine } from "@/lib/refusal";
 import { isUniqueClash } from "./passwords";
 import { fmtFor } from "@/lib/tz";
 import { notify } from "./notify";
@@ -146,6 +147,8 @@ export async function joinCall(user: { id: string }, callId: string, body: Recor
     const by = call.cancelledBy === "developer" ? displayName(c.test.developer) : call.cancelledBy === "tester" ? displayName(await db.user.findUniqueOrThrow({ where: { id: c.testerId } })) : "";
     const mine = (call.cancelledBy === "developer" && side === "developer") || (call.cancelledBy === "tester" && side === "tester");
     const why = call.status !== "cancelled" ? refusal[0].toLowerCase() + refusal.slice(1).replace(/.$/, "") : by ? `${mine ? "you" : by} cancelled this call${call.cancelledAt ? ` at ${fmtFor(await db.user.findUnique({ where: { id: user.id }, select: { timeZone: true } }), call.cancelledAt, "time")}` : ""}` : call.cancelNote ? `this call was cancelled: ${call.cancelNote.replace(/[.s]+$/, "")}` : "this call was cancelled";
+    // (Owner, Nov 9, §363) A stopped test: the one stopped line.
+    if (call.status !== "cancelled" && c.test.status === "stopped") throw new HttpError(409, "cant_join", stoppedPressLine("Join call"), { cancelled: false });
     throw new HttpError(409, "cant_join", `Your Join call didn't go through: ${why}.`, { cancelled: call.status === "cancelled" });
   }
   // (Batch 27 section 1) The tester's Join call waits while new terms are open: Switch or Keep first.
