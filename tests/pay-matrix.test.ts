@@ -254,7 +254,8 @@ describe("§362 Needs you's Pay / Pay more: work on that part always stops once"
 
   it("the page marks only Needs you's boxes (Pay, a call's Pay, an update's Pay); the Testers list's Pay more boxes don't send it", () => {
     const page = fs.readFileSync(path.resolve(__dirname, "../src/app/app/tests/[id]/page.tsx"), "utf8");
-    expect(page.match(/<PayBox fromNeeds /g)?.length).toBe(3);
+    expect(page.match(/<PayBox [^
+]*fromNeeds/g)?.length).toBe(3);
     expect(page.match(/<PayBox more=\{\{ testId: t\.id, contractId: c\.id \}\} awayInNeeds /g)?.length).toBe(2);
   });
 });

@@ -183,7 +183,7 @@ describe("§188 A: Anything else, the tester's side", () => {
     expect((await addElse(j.sessionId, j.tester.cookie, "y".repeat(20_000))).status).toBe(200);
   });
 
-  // (Codex 343018a9, docs/NOV8-SAME-PART-ALERTS.md: same-part payment stops follow the tester's Alerts; no longer forced with Alerts Off)
+  // (Codex 343018a9 made it follow Alerts; the owner restored it on Nov 9, §362: a payment on the part she adds to always stops once, forced)
   it("stops once for the developer's payment on the written answers since her page loaded (Alerts On), then goes", async () => {
     const s = await setup();
     const j = await joined(s.testId);
@@ -198,7 +198,7 @@ describe("§188 A: Anything else, the tester's side", () => {
     const first = await sact(j.sessionId, "written-add", j.tester.cookie, { text: "More about the cave.", question: ANYTHING_ELSE_KEY, seenAt: loaded, loadedAt: loaded });
     expect(first.body.error?.code, JSON.stringify(first.body)).toBe("stop_once");
     expect(first.body.error.changes).toEqual([expect.objectContaining({ text: "Nora Lane paid you $2.00 more for your written answers" })]);
-    expect(first.body.error.changes.every((l: { forced?: boolean }) => !l.forced)).toBe(true);
+    expect(first.body.error.changes.every((l: { forced?: boolean }) => l.forced)).toBe(true); // (Owner, Nov 9, §362) a payment on the part she adds to is forced
     await settle();
     const second = await sact(j.sessionId, "written-add", j.tester.cookie, { text: "More about the cave.", question: ANYTHING_ELSE_KEY, seenAt: loaded, boxAt: seen(), confirmed: true });
     expect(second.status, JSON.stringify(second.body)).toBe(200);
