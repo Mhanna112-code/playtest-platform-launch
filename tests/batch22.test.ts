@@ -29,7 +29,7 @@ const withCard = (userId: string) => db.user.update({ where: { id: userId }, dat
 
 /** A Stripe stand-in recording charges and transfers. */
 function fakeStripe(opts: { decline?: boolean; account?: { payouts_enabled: boolean; capabilities: { transfers: string } } } = {}) {
-  const charges: { amount: number; transfer_data?: { destination: string } }[] = [];
+  const charges: { amount: number; transfer_data?: { destination: string }; metadata?: { developerId?: string } }[] = [];
   const transfers: { amount: number; destination: string; metadata: { paymentId: string } }[] = [];
   setStripeForTests({
     paymentIntents: {
@@ -72,7 +72,8 @@ describe("batch 22 section 1: no automatic retries during a chargeback hold", ()
     await owedOn(s, "chargeback");
     const f = fakeStripe();
     await runDaily(new Date());
-    expect(f.charges).toEqual([]);
+    // (§368) Only this developer's charges count: the daily job also makes other developers' waiting charges (a suspension no longer holds them back).
+    expect(f.charges.filter((c) => c.metadata?.developerId === s.dev.user.id)).toEqual([]);
     // (§148) Saving a card charges nothing of what's owed on any hold (stripe.saveCardFromCheckout has no such charge any more).
     expect(src("lib/server/stripe.ts")).not.toContain("retryOwed");
     expect(src("lib/server/holds.ts")).not.toMatch(/retryOwed/);
