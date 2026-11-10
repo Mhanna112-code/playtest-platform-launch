@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { carriedAnswers, questionKeys } from "@/lib/additions";
 import { itemsFor } from "@/lib/answerSets";
 import { QUESTIONS_CHANGED_MEANWHILE, sendWritten } from "@/lib/server/tests";
+import { SENT_ANSWERS_LOCKED } from "@/lib/rules";
 import { act, addTo, joined, sact, seen, settle, setup } from "./fixtures";
 import { payMore } from "./b15";
 
@@ -28,6 +29,13 @@ function pauseAt(name: string, during: () => Promise<unknown>) {
 }
 afterEach(() => { delete (globalThis as { __pressHooks?: unknown }).__pressHooks; });
 const texts = (r: Res) => (r.body.error?.changes ?? []).map((c) => c.text);
+/** ONE stop-once box, never a refusal caused by timing. */
+function oneBox(r: Res) {
+  expect(r.body.error?.code, JSON.stringify(r.body)).toBe("stop_once");
+  expect(r.body.error?.message).not.toBe(QUESTIONS_CHANGED_MEANWHILE);
+  expect(r.body.error?.message).not.toBe(SENT_ANSWERS_LOCKED);
+  expect(r.body.error?.changes?.length).toBeGreaterThan(0);
+}
 const editQuestions = async (testId: string, cookie: string, questions: string[]) => {
   const v = (await db.test.findUniqueOrThrow({ where: { id: testId } })).version;
   const r = await act(testId, "edit", cookie, { version: v, fields: { questions }, seenAt: seen(), confirmed: true });
@@ -55,7 +63,7 @@ describe("§369 Send Answers in two tabs, and a questions Save, never depend on 
     const w = await world();
     pauseAt("written", async () => expect((await sendA(w)).status).toBe(200));
     const b = await sendB(w);
-    expect(b.body.error?.code, JSON.stringify(b.body)).toBe("stop_once");
+    oneBox(b);
     expect(texts(b)).toEqual([OWN_SENT]);
     // A's answers were saved once and untouched; nothing of B's was written.
     const sub = (await written(w))!;
@@ -77,7 +85,7 @@ describe("§369 Send Answers in two tabs, and a questions Save, never depend on 
     await editQuestions(w.testId, w.dev.cookie, [Q[0], Q[1], Q3b, Q[3]]);
     await settle();
     const b = await sendB(w);
-    expect(b.body.error?.code, JSON.stringify(b.body)).toBe("stop_once");
+    oneBox(b);
     expect(b.body.error?.questions).toBe(true);
     expect(texts(b)).toEqual(expect.arrayContaining([OWN_SENT, `Nora Lane added the question “${Q3b}”`, `Nora Lane removed the question “${Q[2]}”`]));
     expect(carriedAnswers((await written(w))!, Q)).toEqual([A1, A1, null, null]);
@@ -91,8 +99,7 @@ describe("§369 Send Answers in two tabs, and a questions Save, never depend on 
     const w = await world();
     pauseAt("written", () => editQuestions(w.testId, w.dev.cookie, [Q[0], Q[1], Q3b, Q[3]]));
     const b = await sendB(w);
-    expect(b.body.error?.code, JSON.stringify(b.body)).toBe("stop_once");
-    expect(b.body.error?.message).not.toBe(QUESTIONS_CHANGED_MEANWHILE);
+    oneBox(b);
     expect(b.body.error?.questions).toBe(true);
     expect(texts(b)).toEqual(expect.arrayContaining([`Nora Lane added the question “${Q3b}”`, `Nora Lane removed the question “${Q[2]}”`]));
     expect(await written(w)).toBeNull();
@@ -105,7 +112,7 @@ describe("§369 Send Answers in two tabs, and a questions Save, never depend on 
       await editQuestions(w.testId, w.dev.cookie, [Q[0], Q[1], Q3b, Q[3]]);
     });
     const b = await sendB(w);
-    expect(b.body.error?.code, JSON.stringify(b.body)).toBe("stop_once");
+    oneBox(b);
     expect(texts(b)).toEqual(expect.arrayContaining([OWN_SENT, `Nora Lane added the question “${Q3b}”`]));
     expect(carriedAnswers((await written(w))!, Q)).toEqual([A1, A1, null, null]);
     expect(await db.submission.count({ where: { contractId: w.sessionId } })).toBe(1);
@@ -136,7 +143,7 @@ describe("§369 the same race for Add to this answer and a recording's Send", ()
     const add = (tab: string, text: string, extra: Record<string, unknown> = {}) => addTo(w.sessionId, w.tester.cookie, { text, seenAt: loaded, tab, ...extra }) as Promise<Res>;
     pauseAt("written-add", async () => expect((await add("A", "A adds a little more about the first level here.")).status).toBe(200));
     const b = await add("B", "B adds a different note about the first level.");
-    expect(b.body.error?.code, JSON.stringify(b.body)).toBe("stop_once");
+    oneBox(b);
     expect(texts(b)).toEqual([`You added to your answer to “${Q[0]}” in another tab`]);
     const sub = (await written(w))!;
     expect((sub.additions as unknown[]).length).toBe(1);
@@ -176,7 +183,7 @@ describe("§369 the same race for Add to this answer and a recording's Send", ()
     await settle();
     pauseAt("recording-send", async () => expect((await payMore(w.testId, w.dev.cookie, { contractId: w.sessionId, submissionId: rec.id, amount: "2.00", tickedCents: 200 })).status).toBe(200));
     const b = await sact(w.sessionId, "recording-send", w.tester.cookie, { add: true, seenAt: loaded, loadedAt: loaded, tab: "B" }) as Res;
-    expect(b.body.error?.code, JSON.stringify(b.body)).toBe("stop_once");
+    oneBox(b);
     expect(texts(b)).toEqual(["Nora Lane paid you $2.00 more for your recording"]);
     expect(((await db.submission.findUniqueOrThrow({ where: { id: rec.id } })).additions as unknown[]).length).toBe(0);
   });
@@ -192,8 +199,27 @@ describe("§369 the same race for Add to this answer and a recording's Send", ()
     await settle();
     pauseAt("dispute", async () => expect((await payMore(w.testId, w.dev.cookie, { contractId: w.sessionId, submissionId: sub.id, amount: "2.00", tickedCents: 200 })).status).toBe(200));
     const b = await sact(w.sessionId, "dispute", w.tester.cookie, { kind: "submission", id: sub.id, reason: "I answered every question fully and in detail.", seenAt: loaded, loadedAt: loaded, tab: "B" }) as Res;
-    expect(b.body.error?.code, JSON.stringify(b.body)).toBe("stop_once");
+    oneBox(b);
     expect(texts(b)).toEqual(["Nora Lane paid you $2.00 more for your written answers"]);
     expect(await db.dispute.count({ where: { submissionId: sub.id } })).toBe(0);
+  });
+
+});
+
+describe("§369 a final refusal before the lock stays one", () => {
+  it("a too-short answer is refused before any lock (nothing reaches it)", async () => {
+    const w = await world();
+    let reached = 0;
+    hooks().written = async () => { reached++; };
+    const was = process.env.ANSWER_MIN_CHARS;
+    process.env.ANSWER_MIN_CHARS = "50";
+    try {
+      const r = await sact(w.sessionId, "written", w.tester.cookie, { answers: ["Too short.", "", "", ""], for: Q, notes: "", seenAt: w.loaded }) as Res;
+      expect(r.body.error?.code).toBe("bad_answers");
+    } finally {
+      process.env.ANSWER_MIN_CHARS = was;
+    }
+    expect(reached).toBe(0);
+    expect(await written(w)).toBeNull();
   });
 });

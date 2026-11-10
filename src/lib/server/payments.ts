@@ -1,4 +1,4 @@
-import { beforeLock, checkPrint, pressPrint, rerunOnChange } from "./pressRace";
+import { Moved, beforeLock } from "./pressRace";
 import { disputeOwnText } from "./actionText";
 import { logAction } from "./live";
 import { recordReviewDraft } from "./reviewDraft";
@@ -302,18 +302,34 @@ export async function finishReviewPay(paymentId: string, result: { status: strin
   return { reviewId: rev.id, amountCents: rev.amountCents, status: result.status, rejected: false, paidSoFarCents: await paidSoFar(c.id) };
 }
 
+/** (§369) What the developer paid on a part (its review and payments), for a press's first look. */
+async function paidOnPiece(q: Prisma.TransactionClient | typeof db, where: { submissionId: string } | { callId: string }) {
+  const [r, pays] = [await q.review.findFirst({ where, select: { id: true, amountCents: true } }), await q.payment.findMany({ where, orderBy: { id: "asc" }, select: { id: true, status: true } })];
+  return JSON.stringify({ r, pays });
+}
+
 /**
  * Tester: dispute once, on any part the developer reviewed (batch 10: listed or not, any amount, $0 included, or a Reject). (Owner, Nov 6, §288) Until the tester
  * rates the test or the part's closing date passes: RATED_NO_DISPUTE / disputeClosedLine after that.
  */
-export const openDispute = (tester: U, contractId: string, body: Record<string, unknown>) => rerunOnChange((strict) => openDisputeOnce(tester, contractId, body, strict)); // (§369)
-async function openDisputeOnce(tester: U, contractId: string, body: Record<string, unknown>, strict: boolean) {
+export async function openDispute(tester: U, contractId: string, body: Record<string, unknown>): Promise<Awaited<ReturnType<typeof openDisputeOnce>>> {
+  try {
+    return await openDisputeOnce(tester, contractId, body);
+  } catch (e) {
+    if (!(e instanceof Moved)) throw e;
+    // (Owner, Nov 10, §369) A payment on the part came between the checks and the lock: nothing was written. The press ends as a later one would: nothing left
+    // to dispute is its own refusal (checked again first); otherwise the §362 stop-once naming the payment.
+    if (body.__moved !== true) return openDispute(tester, contractId, { ...body, __moved: true });
+    throw new HttpError(409, "no_dispute", "A payment on this part came just now: nothing was disputed. Press Dispute again.");
+  }
+}
+
+async function openDisputeOnce(tester: U, contractId: string, body: Record<string, unknown>) {
   const kind = String(body.kind ?? ""), id = String(body.id ?? "");
   const reason = readText(body.reason, LIMITS.disputeText, "bad_reason");
   if (reason.length < 10) throw new HttpError(400, "bad_reason", "Say why you think the pay should be higher (at least a sentence).");
   const c = await db.contract.findUnique({ where: { id: contractId }, include: { test: { include: { developer: true } } } });
   if (!c || c.testerId !== tester.id) throw new HttpError(404, "not_found", "That session doesn't exist or isn't yours.");
-  const print = await pressPrint(db, { testId: c.testId, contractId, userId: tester.id }); // (§369) the first look
   const where = kind === "call" ? { callId: id } : { submissionId: id };
   // (Owner, Nov 6, §288) The tester rated the test, or the part's closing date passed: closed, decided before anything else (never after a terms block or a
   // stop-once that could only end in this refusal, §159). A part already disputed keeps its own line ("You already disputed this payment").
@@ -344,6 +360,8 @@ async function openDisputeOnce(tester: U, contractId: string, body: Record<strin
     return { existing, roomCents: bounds ? bounds.max - bounds.min : 0 };
   };
   const first = await disputable();
+  // (§369) What this press saw: what was paid on the part.
+  const sawPaid = await paidOnPiece(db, where);
   // (Batch 35 §68) A payment on this piece since the page loaded stops it once even with Alerts Off.
   // A payment landing between that check and this stop: what's left is checked again, so a stop that couldn't go ahead is the refusal instead.
   if (!first.existing) await testerGate(tester.id, contractId, c.testId, body, undefined, { piece: id }).catch(async (e) => {
@@ -357,9 +375,9 @@ async function openDisputeOnce(tester: U, contractId: string, body: Record<strin
   await beforeLock("dispute");
   const d = await db.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${c.testId} FOR UPDATE`;
-    // (Owner, Nov 10, §369) Anything changed since the first look (a payment on the part, another tab's Dispute, …): nothing is written; the press runs again
-    // from the top, ending as a later press would (its stop-once, or a refusal that is final whatever the timing).
-    await checkPrint(tx, { testId: c.testId, contractId, userId: tester.id }, print, strict);
+    // (Owner, Nov 10, §369) A payment on the part since the first look: nothing is written (Moved rolls back; openDispute runs the press again, so it ends with
+    // the payment's stop-once, or the refusal when nothing is left). Another tab's Dispute is the final "disputed once" refusal below, whatever the timing.
+    if ((await paidOnPiece(tx, where)) !== sawPaid) throw new Moved("paid");
     roomCents = (await disputable()).roomCents;
     // (Owner, Nov 3, §157) Two Disputes at the same moment (two tabs): the piece's one dispute is the unique key; the later one reads the usual line, never a 500.
     if (await tx.dispute.findFirst({ where })) throw new HttpError(409, "no_dispute", ALREADY_DISPUTED);

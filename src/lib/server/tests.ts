@@ -12,7 +12,7 @@ import { notListed, sidOf } from "./shownLines";
 import { ANSWER_ONE, NOT_REQUIRED, answerChars, answerMin, answerShortLine, answersMissing, qText, sameQuestionSet, sameQuestionWords } from "@/lib/questions";
 import { answerUnit, NOTES_UNIT } from "@/lib/draftUnits";
 import { getKept, patchKept, setKept } from "./kept";
-import { beforeLock, checkPrint, pressPrint, rerunOnChange } from "./pressRace";
+import { Moved, beforeLock } from "./pressRace";
 import { addOwnText, writtenOwnText } from "./actionText";
 import { questionChangeTexts } from "@/lib/questionHistory";
 import { itemsFor, prevSetsOf, sameQuestions, snapshotOnlyFiles } from "@/lib/answerSets";
@@ -1199,11 +1199,55 @@ export async function leaveTest(tester: U, contractId: string, body: Record<stri
  * Send (or update, until it's paid) the written answers: one answer per question in the contract. Allowed even when
  * written answers aren't in the contract and after the deadline (shown as sent late).
  */
-export const sendWritten = (tester: U, contractId: string, body: Record<string, unknown>) => rerunOnChange((strict) => sendWrittenOnce(tester, contractId, body, strict)); // (§369)
-async function sendWrittenOnce(tester: U, contractId: string, body: Record<string, unknown>, strict: boolean) {
+export async function sendWritten(tester: U, contractId: string, body: Record<string, unknown>): Promise<Awaited<ReturnType<typeof sendWrittenOnce>>> {
+  try {
+    return await sendWrittenOnce(tester, contractId, body);
+  } catch (e) {
+    if (!(e instanceof Moved)) throw e;
+    // (Owner, Nov 10, §369) NEW-D: the transaction rolled back and the lock is released: the normal stop-once box for what moved, as a press made a moment later
+    // would get (never QUESTIONS_CHANGED_MEANWHILE or "Your answers were already sent" because of timing).
+    const c = await ownContract(tester.id, contractId);
+    const qs = writtenQuestions(c);
+    const forQs = Array.isArray(body.for) ? body.for.filter((q): q is string => typeof q === "string") : null;
+    const sentAnswers = Array.isArray(body.answers) ? body.answers.map((a) => (typeof a === "string" ? a.trim() : "")) : [];
+    const existing = await db.submission.findUnique({ where: { contractId_kind: { contractId, kind: "written" } }, include: { review: true } });
+    const typed = new Map((forQs ?? []).map((q, i) => [qText(q), sentAnswers[i] ?? ""]));
+    // What this page typed into a question answered meanwhile (another tab's Send) becomes that question's "Add to this answer" draft.
+    if (existing && forQs) await keepTypedForAnswered(tester.id, contractId, existing, qs, typed);
+    // A refusal that is final whatever the timing comes first, as for a later press (every question answered already and nothing new typed: "already sent").
+    if (e.what !== "questions" && existing && forQs) {
+      const carried = carriedAnswers(existing, qs);
+      const answersNow = qs.map((q, i) => carried[i] ?? typed.get(qText(q)) ?? "");
+      const refused = sendRefusal(existing, qs, answersNow, qs.some((q, i) => carried[i] == null && !!typed.get(qText(q))?.trim()));
+      if (refused) throw refused;
+    }
+    let stale: TestEventLike[] = [];
+    if (e.what === "questions") {
+      const carried = existing ? carriedAnswers(existing, qs) : null;
+      const formQs = carried ? qs.filter((_, i) => carried[i] == null) : qs;
+      if (forQs) await keepStaleTyped(tester.id, c, forQs, sentAnswers, formQs, !existing && typeof body.notes === "string" ? body.notes : "");
+      stale = await questionChangeLines(c.testId, seenOf(body.pageSeenAt) ?? seenOf(body.seenAt), displayName(c.test.developer));
+    }
+    await testerSendGate(contractId, body, existing?.id, { stale });
+    // Nothing to show (the change was listed already, or made in this same tab): the press as a later one would make it, once.
+    if (body.__moved !== true) return sendWritten(tester, contractId, { ...body, __moved: true });
+    throw e.what === "questions" ? new HttpError(409, "questions_changed", QUESTIONS_CHANGED_MEANWHILE) : new HttpError(409, "locked", SENT_ANSWERS_LOCKED);
+  }
+}
+
+/** (§369) Text a page typed into a question already answered (by another tab) is kept as that question's "Add to this answer" draft, never lost. */
+async function keepTypedForAnswered(testerId: string, contractId: string, sub: { answers: unknown; additions?: unknown }, qs: string[], typed: Map<string, string>) {
+  const carried = carriedAnswers(sub, qs);
+  const keys = questionKeys(itemsFor(qs));
+  for (const [i, q] of qs.entries()) {
+    const t = typed.get(qText(q))?.trim();
+    if (carried[i] == null || !t || t === carried[i]!.trim()) continue;
+    if (!(await getKept(testerId, `add:${contractId}:${keys[i]}`)).data) await setKept(testerId, `add:${contractId}:${keys[i]}`, { text: t });
+  }
+}
+
+async function sendWrittenOnce(tester: U, contractId: string, body: Record<string, unknown>) {
   const c0 = await ownContract(tester.id, contractId);
-  // (Owner, Nov 10, §369) What this press decides by, at its first look: under the lock a difference reruns it from here (pressRace.ts).
-  const print = await pressPrint(db, { testId: c0.testId, contractId, userId: tester.id });
   const ended = sessionRefusal(c0, c0.test, displayName(c0.test.developer));
   if (ended) throw new HttpError(409, "closed", overPressLine(c0, "Send Answers")); // (§363 / §364)
   // (Batch 27 section 1) An open new-terms offer blocks Send until it's answered (Switch or Keep): nothing is checked or sent before.
@@ -1261,14 +1305,9 @@ async function sendWrittenOnce(tester: U, contractId: string, body: Record<strin
   if (sentRefusal) throw sentRefusal;
   // (Owner, Nov 10, §369) Questions answered meanwhile (another tab's Send): what this page typed into them is never lost: it becomes that question's
   // "Add to this answer" draft (unless one is kept already); the answered ones stay as sent, the unanswered ones are this press's first answers (§235).
-  if (carried && forQs) {
-    const keys = questionKeys(itemsFor(qs));
-    for (const [i, q] of qs.entries()) {
-      const t = typed.get(qText(q))?.trim();
-      if (carried[i] == null || !t || t === carried[i]!.trim()) continue;
-      if (!(await getKept(tester.id, `add:${contractId}:${keys[i]}`)).data) await setKept(tester.id, `add:${contractId}:${keys[i]}`, { text: t });
-    }
-  }
+  if (before && forQs) await keepTypedForAnswered(tester.id, contractId, before, qs, typed);
+  // (§369) What this press saw: its questions and the saved part (or none). Under the lock either moving gives the stop-once below (sendWritten), not a refusal.
+  const saw = { questions: qs, savedAt: sent?.updatedAt.getTime() ?? null, paid: await paidOn(db, sent?.id) };
   await testerSendGate(contractId, body, sent?.id, { stale: [] });
   const name = displayName(tester), poss = pronouns(tester.pronoun).poss;
   await beforeLock("written");
@@ -1278,13 +1317,16 @@ async function sendWrittenOnce(tester: U, contractId: string, body: Record<strin
     await (await import("./workWindow")).assertWorkOpen(tx, t.id, new Date(), "Send Answers");
     const refusal = sessionRefusal(c, t, displayName(c0.test.developer));
     if (refusal) throw new HttpError(409, "closed", overPressLine(c, "Send Answers")); // (§363 / §364)
-    // (Owner, Nov 10, §369; replaces §269's refusal here) The questions (first), the saved answers or anything newer changed since the first look: nothing is
-    // written, and the press runs again from the top, ending as a later press would (the question-change box, "You sent your written answers in another tab",
-    // in ONE box). Only the second rerun still refuses a questions change here (QUESTIONS_CHANGED_MEANWHILE), never writing to questions the page didn't show.
-    await checkPrint(tx, { testId: c0.testId, contractId, userId: tester.id }, print, strict, new HttpError(409, "questions_changed", QUESTIONS_CHANGED_MEANWHILE));
-    if (!sameQuestionWords(writtenQuestions(c), qs)) throw new HttpError(409, "questions_changed", QUESTIONS_CHANGED_MEANWHILE);
+    // (Owner, Nov 10, §369; NEW-A replaces §269's refusal here) The questions changed between the checks and this lock: nothing is written (Moved rolls
+    // back; sendWritten gives the question-change stop-once).
+    if (!sameQuestionWords(writtenQuestions(c), saw.questions)) throw new Moved("questions");
     const now = new Date();
     const existing = await tx.submission.findUnique({ where: { contractId_kind: { contractId, kind: "written" } }, include: { review: true } });
+    // (§369 NEW-B) The saved answers moved (another tab's Send): nothing is written; the stop-once names it ("You sent your written answers in another tab").
+    if ((existing?.updatedAt.getTime() ?? null) !== saw.savedAt) throw new Moved("answers");
+    // A developer payment on them since the first look (§183 / §362: it stops this press once, whatever the Alerts).
+    if ((await paidOn(tx, existing?.id)) !== saw.paid) throw new Moved("paid");
+    // Only the final refusals (the part as checked before the lock: it can't newly fire).
     const refused = sendRefusal(existing, qs, answers, !!fresh?.some((i) => answers[i].trim()));
     if (refused) throw refused;
     const paid = !!existing?.review;
@@ -1307,7 +1349,7 @@ async function sendWrittenOnce(tester: U, contractId: string, body: Record<strin
     // (Batch 11) Files and recordings attached to the written part go with it.
     await tx.recording.updateMany({ where: { id: { in: files.map((f) => f.id) } }, data: { submissionId: sub.id } });
     const afterPaid = await tellSent(tx, { testId: c.testId, contractId: c.id, subId: sub.id, name, poss, part: "written answers", added: !!existing, paid });
-    // (§369) The own-action line commits with the save: another tab that sees these answers also sees "You sent your written answers in another tab".
+    // (§369 NEW-C) The own-action line commits with the save: another tab that sees these answers also sees "You sent your written answers in another tab".
     await (await import("./live")).logAction(tester.id, c.testId, body, writtenOwnText(!!existing), undefined, tx);
     return { sub, updated: !!existing, afterPaid };
   });
@@ -1316,6 +1358,13 @@ async function sendWrittenOnce(tester: U, contractId: string, body: Record<strin
 }
 
 type SentPart = Prisma.SubmissionGetPayload<{ include: { review: true } }>;
+
+/** (§369) What the developer paid on a sent part (its review and every payment that went through or is on its way), for a press's first look. */
+export async function paidOn(q: Tx | typeof db, submissionId: string | null | undefined) {
+  if (!submissionId) return "";
+  const [r, pays] = [await q.review.findUnique({ where: { submissionId }, select: { id: true, amountCents: true } }), await q.payment.findMany({ where: { submissionId }, orderBy: { id: "asc" }, select: { id: true, status: true } })];
+  return JSON.stringify({ r, pays });
+}
 
 /** (§269) A question's key without a repeat's "-2" (questionKeys numbers a repeated question). */
 const questionKeyOf = (key: string) => key.replace(/-\d+$/, "");
@@ -1414,10 +1463,27 @@ function addRefusal(existing: SentPart | null, c: { questions: unknown }, key: s
  * (Owner, Nov 4, §188) Or to Anything else (`question: "else"`, ANYTHING_ELSE_KEY), the fixed last spot after the questions: the same rules (its own 5, the 20,000,
  * the stop-once, the single refusals), named "added to “Anything else” in her written answers".
  */
-export const addWritten = (tester: U, contractId: string, body: Record<string, unknown>) => rerunOnChange((strict) => addWrittenOnce(tester, contractId, body, strict)); // (§369)
-async function addWrittenOnce(tester: U, contractId: string, body: Record<string, unknown>, strict: boolean) {
+export async function addWritten(tester: U, contractId: string, body: Record<string, unknown>): Promise<Awaited<ReturnType<typeof addWrittenOnce>>> {
+  try {
+    return await addWrittenOnce(tester, contractId, body);
+  } catch (e) {
+    if (!(e instanceof Moved)) throw e;
+    // (Owner, Nov 10, §369) The transaction rolled back: the normal stop-once box for what moved (another tab's addition, a developer payment on the answers, the
+    // questions), as a later press would get. The typed text stays kept under its question.
+    const c = await ownContract(tester.id, contractId);
+    const key = typeof body.question === "string" ? body.question : "";
+    const text = typeof body.text === "string" ? body.text.trim() : "";
+    if (text && key) await setKept(tester.id, `add:${contractId}:${key}`, { text });
+    const existing = await db.submission.findUnique({ where: { contractId_kind: { contractId, kind: "written" } } });
+    const stale = e.what === "questions" ? await questionChangeLines(c.testId, seenOf(body.pageSeenAt) ?? seenOf(body.seenAt), displayName(c.test.developer)) : [];
+    await testerSendGate(contractId, body, existing?.id, { stale });
+    if (body.__moved !== true) return addWritten(tester, contractId, { ...body, __moved: true });
+    throw new HttpError(409, "changed", "Your answers changed just now: nothing was added. Press Add again.");
+  }
+}
+
+async function addWrittenOnce(tester: U, contractId: string, body: Record<string, unknown>) {
   const c0 = await ownContract(tester.id, contractId);
-  const print = await pressPrint(db, { testId: c0.testId, contractId, userId: tester.id }); // (§369) the first look
   const ended = sessionRefusal(c0, c0.test, displayName(c0.test.developer));
   if (ended) throw new HttpError(409, "closed", overPressLine(c0, "Add")); // (§363 / §364)
   await answerTermsFirst(contractId);
@@ -1451,6 +1517,8 @@ async function addWrittenOnce(tester: U, contractId: string, body: Record<string
     }
   }
   if (beforeRefusal) throw beforeRefusal;
+  // (§369) What this press saw: the questions, the saved answers, what was paid on them.
+  const saw = { questions: writtenQuestions(c0), savedAt: before?.updatedAt.getTime() ?? null, paid: await paidOn(db, before?.id) };
   await testerSendGate(contractId, body, before?.id, { stale: [] });
   const name = displayName(tester), poss = pronouns(tester.pronoun).poss;
   await beforeLock("written-add");
@@ -1460,9 +1528,12 @@ async function addWrittenOnce(tester: U, contractId: string, body: Record<string
     await (await import("./workWindow")).assertWorkOpen(tx, t.id, new Date(), "Add");
     const refusal = sessionRefusal(c, t, displayName(c0.test.developer));
     if (refusal) throw new HttpError(409, "closed", overPressLine(c, "Add")); // (§363 / §364)
-    // (Owner, Nov 10, §369) Anything changed since the first look (the questions first): nothing is written; the press runs again, as a later press would.
-    await checkPrint(tx, { testId: c0.testId, contractId, userId: tester.id }, print, strict);
+    // (Owner, Nov 10, §369) The questions (first), the saved answers or a payment on them moved since the first look: nothing is written (Moved rolls back;
+    // addWritten gives the stop-once). The refusals below are the final ones.
+    if (!sameQuestionWords(writtenQuestions(c), saw.questions)) throw new Moved("questions");
     const existing = await tx.submission.findUnique({ where: { contractId_kind: { contractId, kind: "written" } }, include: { review: true } });
+    if ((existing?.updatedAt.getTime() ?? null) !== saw.savedAt) throw new Moved("answers");
+    if ((await paidOn(tx, existing?.id)) !== saw.paid) throw new Moved("paid");
     // (§222) The question's 5 (and every other refusal) counted again under the lock.
     const refused = addRefusal(existing, c, key, text);
     if (refused || !existing) throw refused ?? new HttpError(409, "not_sent", "Send your answers first.");
