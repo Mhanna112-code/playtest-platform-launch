@@ -65,7 +65,7 @@ describe("batch 35 §77 a re-send with nothing new isn't 'updated'", () => {
     expect(tests).toContain('if (existing && !existing.setUntil && !answersNew && sameQuestions(latestItems(existing, qs), itemsFor(qs, answers))) return new HttpError(409, "locked", SENT_ANSWERS_LOCKED);' /* (§235) a Send answering nothing new */);
     // (§235 / §269) The refusal still comes before the gate; the calls now carry whether the press answers anything new and the stale-question lines.
     expect(tests.indexOf("const sentRefusal = sendRefusal(sent, qs, answers, !!fresh?.some((i) => answers[i].trim()));")).toBeGreaterThan(0);
-    expect(tests.indexOf("const sentRefusal = sendRefusal(sent, qs, answers, !!fresh?.some((i) => answers[i].trim()));")).toBeLessThan(tests.indexOf("await testerSendGate(contractId, body, sent?.id, { stale: [] });"));
+    expect(tests.indexOf("const sentRefusal = sendRefusal(sent, qs, answers, !!fresh?.some((i) => answers[i].trim()));")).toBeLessThan(tests.indexOf("await testerSendGate(contractId, body, sent?.id, { stale: [] }, \"Send Answers\");"));
     expect(tests).toContain("const refused = sendRefusal(existing, qs, answers, !!fresh?.some((i) => answers[i].trim()));"); // (§235) says whether the press answers anything new
     expect(src("lib/server/recordings.ts")).toContain('throw new HttpError(400, "none", NO_RECORDING_TO_ADD);'); // §183: the recordings' nothing-to-add, before the gate too
   });
