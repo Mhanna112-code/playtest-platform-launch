@@ -72,7 +72,7 @@ describe("a suspended developer (design doc 2 and 11.4)", () => {
     const ch = await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge", amount: "10.00", tickedCents: 1000, seenAt: seen(), confirmed: true });
     expect(ch.status).toBe(200);
     expect(ch.body.status).not.toBe("owed");
-    expect((await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] })).body.error.message).toBe("This test is paused right now, so your Send didn't go through."); // (§364 item 5)
+    expect((await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] })).body.error.message).toBe("This test is paused right now, so your Send Answers didn't go through."); // (§364 item 5; §370: the button's real label)
     expect((await adm("unsuspend", a.cookie, { id: dev.user.id })).status).toBe(200);
     expect(await db.testEvent.count({ where: { testId, kind: "resumed" } })).toBe(1);
     expect(await db.notification.count({ where: { userId: tester.user.id, text: { contains: "is running again" } } })).toBe(1);
