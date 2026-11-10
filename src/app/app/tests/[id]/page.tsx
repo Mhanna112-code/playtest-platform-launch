@@ -183,6 +183,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   // (NEXT-UI 4) Chat is its own page per session: each tester's row links to it with an unread badge.
   const unread = new Map(await Promise.all(t.contracts.map(async (c) => [c.id, await unreadCount(u.id, t.id, c.testerId)] as const)));
   const blockedIds = new Set((await db.block.findMany({ where: { blockerId: u.id } })).map((b) => b.blockedId));
+  // (B16) Pay more is refused while either side blocks the other ("This payment isn't available."): the page doesn't offer it then.
+  const blockedEither = new Set((await db.block.findMany({ where: { OR: [{ blockerId: u.id }, { blockedId: u.id }] }, select: { blockerId: true, blockedId: true } })).map((b) => (b.blockerId === u.id ? b.blockedId : b.blockerId)));
   const [invitePanelData, invites, owedList] = await Promise.all([restricted || t.status === "stopped" ? null : invitePanel(u.id, id), db.invite.findMany({ where: { testId: id, status: { in: ["sent", "joined"] } }, orderBy: { createdAt: "desc" } }), owedForBox(u.id)]);
   const inviteUsers = await db.user.findMany({ where: { id: { in: invites.map((i) => i.testerId) } }, include: { profile: true } });
   const people = new Map(inviteUsers.map((x) => [x.id, displayName(x)]));
@@ -457,7 +459,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
     )) };
   };
   // (Batch 30 §2) Updated versions sent after a piece was paid, below its cap while Pay more is open: each its own Needs you row with the piece's Pay more box.
-  const updates = (restricted && !restrictedPays) || !payMore.open ? [] : t.contracts.filter((c) => testerPayable(c.tester)).flatMap((c) => c.submissions.filter((x) => updateWaiting(x) && (rooms.get(x.id)?.room ?? 0) > 0).map((x) => ({ c, s: x })))
+  const updates = (restricted && !restrictedPays) || !payMore.open ? [] : t.contracts.filter((c) => testerPayable(c.tester) && !blockedEither.has(c.testerId)).flatMap((c) => c.submissions.filter((x) => updateWaiting(x) && (rooms.get(x.id)?.room ?? 0) > 0).map((x) => ({ c, s: x })))
     .sort((a, b) => a.s.paidUpdateAt!.getTime() - b.s.paidUpdateAt!.getTime());
   const needsCount = (await developerNeedsRows(u.id,[t.id],now))[0]?.n??0;
   // (Owner, Nov 4, §181) "the parts should have big drop down with their name then part and pay/pay more as own dropdowns": in the person's drop-down each part is a
@@ -797,7 +799,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                         // (Batch 17 §19) Unpaid at close-out: it stays unpaid.
                         !r.sub.review && payShut(r.sub.id) && testerPayable(c.tester) && <span key="shut" className="block w-full text-sm text-slate-300" data-closed-not-paid="">{closedNotPaidLine(shutOn(r.sub.id))}</span>,
                         // (Owner, Oct 29, batch 11 section 6 / batch 12 section 3) A paid piece keeps its Pay box as "Pay more" until its cap is reached.
-                        r.sub && r.sub.review && !r.sub.review.rejected && !restricted && !r.sub.review.teamClosedById && payMore.open && (rooms.get(r.sub.id)?.room ?? 0) > 0 && (
+                        r.sub && r.sub.review && !r.sub.review.rejected && !restricted && !blockedEither.has(c.testerId) && !r.sub.review.teamClosedById && payMore.open && (rooms.get(r.sub.id)?.room ?? 0) > 0 && (
                           <div key="box" className="w-full space-y-1" data-part-pay-more="">
                           <PayBox more={{ testId: t.id, contractId: c.id }} awayInNeeds owes={owesNow} kind="submission" id={r.sub.id} name={name} seenAt={seenAt} bankWaits={waitsOf(r.sub.id)} bankWaitsId={waitsIdOf(r.sub.id)} bankWaitsKind={waitsKindOf(r.sub.id)} note={payMore.line || undefined}
                             room={rooms.get(r.sub.id)?.box} listingCents={r.sub.agreedCents} listingText={`${money(r.sub.agreedCents)} for ${r.name === "Recording" ? "a recording" : "written answers"}`} />
@@ -899,7 +901,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                           x.review?.teamClosedById && <LabeledReason key="team" className="text-sm text-slate-300" data={{ "data-team-closed": "" }} line={TEAM_CLOSED_LABEL} id={`review-note-${x.id}`} text={x.review.reason} />, // (Owner, Nov 6, §281)
                           // (Owner, Nov 6, §311e) An unlisted call closed with $0 at its pay date is final: it says so, and has no Pay more.
                           x.review?.reason === UNLISTED_CALL_CLOSED && <p key="unlisted" className="text-sm text-slate-300" data-unlisted-closed="">{UNLISTED_CALL_CLOSED}</p>,
-                          x.review && !x.review.rejected && !restricted && !x.review.teamClosedById && x.review.reason !== UNLISTED_CALL_CLOSED && payMore.open && (rooms.get(x.id)?.room ?? 0) > 0 && (
+                          x.review && !x.review.rejected && !restricted && !blockedEither.has(c.testerId) && !x.review.teamClosedById && x.review.reason !== UNLISTED_CALL_CLOSED && payMore.open && (rooms.get(x.id)?.room ?? 0) > 0 && (
                             <div key="box" className="space-y-1" data-call-pay-more="">
                             <PayBox more={{ testId: t.id, contractId: c.id }} awayInNeeds owes={owesNow} kind="call" id={x.id} name={name} seenAt={seenAt} bankWaits={waitsOf(x.id)} bankWaitsId={waitsIdOf(x.id)} bankWaitsKind={waitsKindOf(x.id)} note={payMore.line || undefined}
                               room={rooms.get(x.id)?.box} minutes={m ?? x.minutes} rateCents={x.rateCents} warning={callsWarn.get(c.id)}
