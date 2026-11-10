@@ -70,6 +70,7 @@ const NOT_PRESSES: Record<string, string> = {
   "/api/kept": "the drafts kept while typing",
   "/api/calls/x/room": "the call page's own connection updates",
   "/api/stripe/webhook": "Stripe's own calls",
+  "/api/test/race-release": "(§369) the test harness's release of a race hold (404 unless RACE_HOLDS=1)",
   "/api/health/alert": "the monitor's own calls",
   "/api/dev/hook": "a development tool",
 };
