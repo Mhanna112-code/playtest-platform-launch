@@ -15,5 +15,5 @@ it("clears earlier retry and pause notices as soon as Send Answers succeeds", ()
   expect(success).toContain("setBox(null);");
   expect(success).toContain('setBoxAt("");');
   expect(success).toContain('setPausedNow("");');
-  expect(success).toContain('fin.finish("Sent your answers.");');
+  expect(success).toContain('now.finish("Sent your answers.");'); // (§371) in the form shown now
 });

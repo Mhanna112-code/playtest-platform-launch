@@ -113,7 +113,7 @@ describe("batch 35 §41: a finished press stays finished until the page has redr
 
   it("the other boxes hide their inputs while finished: Charge, dispute, Add your side, Rate, the admin buttons and Decide", () => {
     expect(code("app/app/sessions/[id]/ChoiceBox.tsx")).toContain("{fin.done ? (");
-    expect(code("app/app/sessions/[id]/SessionActions.tsx")).toContain('fin.finish("Your dispute is sent to the team.");');
+    expect(code("app/app/sessions/[id]/SessionActions.tsx")).toContain('now.finish("Your dispute is sent to the team.");'); // (§371) in the form shown now
     expect(code("app/app/tests/[id]/DisputeSide.tsx")).toContain("{!sent && <textarea");
     const rate = code("components/RateBox.tsx");
     expect(rate).toContain("{!done && <select");
