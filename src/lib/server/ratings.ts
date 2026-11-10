@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { workEndOf } from "@/lib/pause";
+import * as RF from "@/lib/refusal";
 import { db } from "@/lib/db";
 import { notListed } from "./shownLines";
 import { T } from "@/lib/tz";
@@ -54,7 +55,7 @@ export async function rateBlocker(contractId: string, side: Side, now = new Date
 /** (Batch 17 sections 1 and 2) The tester's Rate box. */
 export async function testerRateState(contractId: string, now = new Date()): Promise<RateState> {
   const c = await db.contract.findUniqueOrThrow({ where: { id: contractId }, include: { tester: true, test: { include: { developer: true } }, submissions: { include: { review: true } }, calls: { include: { review: true } } } });
-  if (c.tester.deletedAt || c.test.developer.deletedAt) return { kind: "hidden", line: "Rating is unavailable because an account was deleted." };
+  if (c.tester.deletedAt || c.test.developer.deletedAt) return { kind: "hidden", line: ACCOUNT_DELETED_RATE };
   if (await db.rating.findUnique({ where: { contractId_side: { contractId, side: "tester" } } })) return { kind: "rated", line: "" };
   if (c.tester.testerSuspendedAt) return { kind: "hidden", line: RATE_INACTIVE };
   const done = c.calls.filter((x) => x.status === "booked" && x.startsAt <= now);
@@ -115,7 +116,7 @@ export async function devRateStates(contractIds: string[], now = new Date()) {
     // unsettled that long) doesn't hold it back past those 14 days.
     const revealAt = !theirs ? null : (theirs.revealedAt ?? (opensAt && w && opensAt.getTime() <= theirs.createdAt.getTime() + WINDOW_DAYS * DAY ? w.end : new Date(theirs.createdAt.getTime() + WINDOW_DAYS * DAY)));
     const base = { opensAt, endsAt: w?.end ?? null, paused: w?.paused ?? false, revealAt };
-    if (dev.deletedAt || c.tester.deletedAt) out.set(c.id, { kind: "hidden", line: "Rating is unavailable because an account was deleted.", ...base });
+    if (dev.deletedAt || c.tester.deletedAt) out.set(c.id, { kind: "hidden", line: ACCOUNT_DELETED_RATE, ...base });
     else if (mine) out.set(c.id, { kind: "rated", line: "", ...base });
     else if (dev.devSuspendedAt || dev.holdStartedAt) out.set(c.id, { kind: "hidden", line: RATE_INACTIVE, ...base });
     // (Owner, Nov 4, §172; replaces batch 17 §14) A test the team paused: hidden and refused like a suspended developer's Rate, with the team's wording.
@@ -265,26 +266,37 @@ const ratedOnce = (already: string) => (e: unknown): never => {
   if (isUniqueClash(e)) throw new HttpError(409, "rated", already);
   throw e;
 };
-function refuse(s: RateState, already: string): never {
+const ACCOUNT_DELETED_RATE = "Rating is unavailable because an account was deleted.";
+/**
+ * (Owner, Nov 9, §364) Rate refused by a state of the test or an account reads "{cause}, so your Rate didn't go through." (the Rate box keeps its own note): the
+ * other side deleted their account (`gone`: the tester's Rate after the developer deleted: the test was stopped; the developer's about a deleted tester: their
+ * session has ended); the team's pause; the rater's own suspension or hold (`own`).
+ */
+function refuse(s: RateState, already: string, why: { gone: string; own: string }): never {
   if (s.kind === "rated") throw new HttpError(409, "rated", already);
-  throw new HttpError(409, s.line === RATE_INACTIVE || s.line === RATE_TEAM_PAUSED ? "inactive" : "not_yet", s.line);
+  if (s.line === ACCOUNT_DELETED_RATE) throw new HttpError(409, "not_yet", RF.pressRefused(why.gone, "Rate"));
+  if (s.line === RATE_TEAM_PAUSED) throw new HttpError(409, "inactive", RF.pressRefused(RF.TEAM_PAUSED_CAUSE, "Rate"));
+  if (s.line === RATE_INACTIVE) throw new HttpError(409, "inactive", RF.pressRefused(why.own, "Rate"));
+  throw new HttpError(409, "not_yet", s.line);
 }
 
-async function assertRatingAccounts(tx: Prisma.TransactionClient, first: string, second: string) {
+/** (§364) The developer's own restriction as Rate's cause: suspended, else a hold. */
+const dev0Cause = (u: { devSuspendedAt: Date | null }) => (u.devSuspendedAt ? RF.ACCOUNT_SUSPENDED_CAUSE : RF.HELD_CAUSE);
+async function assertRatingAccounts(tx: Prisma.TransactionClient, first: string, second: string, /** (§364) the refusal when the other account was deleted meanwhile */ gone: string) {
  await tx.$queryRaw`SELECT id FROM "User" WHERE id IN (${first}, ${second}) ORDER BY id FOR UPDATE`;
- if(await tx.user.count({where:{id:{in:[first,second]},deletedAt:{not:null}}})) throw new HttpError(409,"deleted","Rating is unavailable because an account was deleted.");
+ if(await tx.user.count({where:{id:{in:[first,second]},deletedAt:{not:null}}})) throw new HttpError(409,"deleted",gone);
 }
 
 /** Tester rates the developer. Like Leave (no rejoin ever); Dispute stays. Hidden until revealed. */
 export async function testerRate(tester: { id: string; name: string; email: string; pronoun?: string }, contractId: string, body: Record<string, unknown>) {
   const c0 = await ownContract(tester.id, contractId);
   const state = await testerRateState(contractId);
-  if (state.kind !== "open") refuse(state, `You already rated ${displayName(c0.test.developer)}.`); // (batch 29 section 13) a Rate made in another tab: a plain refusal
+  if (state.kind !== "open") refuse(state, `You already rated ${displayName(c0.test.developer)}.`, { gone: RF.STOPPED_CAUSE, own: RF.ACCOUNT_PAUSED_CAUSE }); // (batch 29 section 13) a Rate made in another tab: a plain refusal
   const r = readRating(body);
   await testerRateGate(tester.id, contractId, c0.testId, body);
   await db.$transaction(async (tx) => {
     await lockTest(tx, c0.testId);
-    await assertRatingAccounts(tx, tester.id, c0.test.developerId);
+    await assertRatingAccounts(tx, tester.id, c0.test.developerId, RF.stoppedPressLine("Rate"));
     await tx.rating.create({ data: { testId: c0.testId, contractId, side: "tester", raterId: tester.id, rateeId: c0.test.developerId, ...r } });
     const c = await tx.contract.findUniqueOrThrow({ where: { id: contractId } });
     const wasWorking = c.status === "working";
@@ -314,13 +326,13 @@ export async function devRate(dev: { id: string; name: string; email: string }, 
   const c0 = await db.contract.findUnique({ where: { id: contractId }, include: { tester: true } });
   if (!c0 || c0.testId !== testId) throw new HttpError(404, "not_found", "Choose a tester.");
   const state = (await devRateStates([contractId])).get(contractId)!;
-  if (state.kind !== "open") refuse(state, `You already rated ${displayName(c0.tester)}.`);
+  if (state.kind !== "open") refuse(state, `You already rated ${displayName(c0.tester)}.`, { gone: RF.sessionEndedCause(displayName(c0.tester)), own: dev0Cause(await db.user.findUniqueOrThrow({ where: { id: dev.id }, select: { devSuspendedAt: true } })) });
   const r = readRating(body);
   await devRateGate(testId, contractId, body, dev.id);
   const now = new Date();
   await db.$transaction(async (tx) => {
     await lockTest(tx, testId);
-    await assertRatingAccounts(tx, dev.id, c0.testerId);
+    await assertRatingAccounts(tx, dev.id, c0.testerId, RF.pressRefused(RF.sessionEndedCause(displayName(c0.tester)), "Rate"));
     await tx.rating.create({ data: { testId, contractId, side: "developer", raterId: dev.id, rateeId: c0.testerId, ...r, revealedAt: now } });
     await tx.rating.updateMany({ where: { contractId, side: "tester", revealedAt: null }, data: { revealedAt: now } });
   }).catch(ratedOnce(`You already rated ${displayName(c0.tester)}.`));

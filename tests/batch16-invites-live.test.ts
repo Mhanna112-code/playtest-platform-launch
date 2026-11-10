@@ -114,7 +114,7 @@ describe("tester invitations follow every close (section 32)", () => {
     const v1 = await pulse(x.ana.cookie, "invites=1");
     await startHold(x.dev.user.id, "unpaid");
     expect(await pulse(x.ana.cookie, "invites=1")).not.toBe(v1);
-    expect((await join(x.testId, x.ana.cookie, x.inv.id)).body.error.message).toBe("“Harbor Run” isn't taking new testers right now, so this invite was closed.");
+    expect((await join(x.testId, x.ana.cookie, x.inv.id)).body.error.message).toBe("This test isn't taking new testers right now, so your Join didn't go through."); // (§364 item 10)
     await db.user.update({ where: { id: x.dev.user.id }, data: { holdStartedAt: null, holdReason: "" } });
     expect((await db.invite.findUniqueOrThrow({ where: { id: x.inv.id } })).status).toBe("cancelled");
   });
@@ -127,7 +127,7 @@ describe("tester invitations follow every close (section 32)", () => {
     const ou = new Date(Date.now() - 60_000);
     await db.test.update({ where: { id: y.testId }, data: { openUntil: ou } });
     await closeJoiningAfterOpenUntil();
-    expect((await join(y.testId, y.ana.cookie, y.inv.id)).body.error.message).toBe(`“Harbor Run” closed to new testers on ${fmtDate(ou)}.`);
+    expect((await join(y.testId, y.ana.cookie, y.inv.id)).body.error.message).toBe(`This test closed to new testers on ${fmtDate(ou)}, so your Join didn't go through.`); // (§364 item 10)
   });
 
   it("the card says when it was sent again on a new listing, and when the test is full", () => {

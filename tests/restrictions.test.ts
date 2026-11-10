@@ -65,7 +65,7 @@ describe("a suspended developer (design doc 2 and 11.4)", () => {
     const a = await admin();
     await adm("suspend", a.cookie, { id: dev.user.id, note: "Spam" });
     const ben = await makeUser({ tester: true });
-    expect((await act(testId, "join", ben.cookie, { listingVersion: 1 })).body.error.message).toBe("This test is paused right now.");
+    expect((await act(testId, "join", ben.cookie, { listingVersion: 1 })).body.error.message).toBe("This test isn't taking new testers right now, so your Join didn't go through."); // (§364 item 10)
     const r = await sact(sessionId, "request-time", tester.cookie, { seenAt: seen(), startsAt: atHours(80) });
     expect(r.body.error.message).not.toMatch(/suspend|hold|fail/i);
     await db.submission.update({ where: { id: sub.id }, data: { choiceOfferedAt: new Date(), choiceBy: new Date(Date.now() + 86_400_000) } });
@@ -73,7 +73,7 @@ describe("a suspended developer (design doc 2 and 11.4)", () => {
     const ch = await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge", amount: "10.00", tickedCents: 1000, seenAt: seen(), confirmed: true });
     expect(ch.status).toBe(200);
     expect(ch.body.status).not.toBe("owed");
-    expect((await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] })).body.error.message).toBe("This test is paused right now. You can send this once it resumes.");
+    expect((await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] })).body.error.message).toBe("This test is paused right now, so your Send didn't go through."); // (§364 item 5)
     expect((await adm("unsuspend", a.cookie, { id: dev.user.id })).status).toBe(200);
     expect(await db.testEvent.count({ where: { testId, kind: "resumed" } })).toBe(1);
     expect(await db.notification.count({ where: { userId: tester.user.id, text: { contains: "is running again" } } })).toBe(1);
@@ -205,7 +205,7 @@ describe("the team pausing or stopping a test (design doc 6)", () => {
     const e = await act(testId, "edit", dev.cookie, { version: 1, fields: { title: "x" } });
     expect(e.body.error).toMatchObject({ code: "nda_only" }); // (Codex 2033b106: Edit opens its NDA-only view while paused, held, suspended or stopped; other fields are refused as nda_only)
     const ben = await makeUser({ tester: true });
-    expect((await act(testId, "join", ben.cookie, { listingVersion: 1 })).body.error.message).toBe("This test is paused right now.");
+    expect((await act(testId, "join", ben.cookie, { listingVersion: 1 })).body.error.message).toBe("This test isn't taking new testers right now, so your Join didn't go through."); // (§364 item 10)
     expect((await sact(sessionId, "request-time", tester.cookie, { seenAt: seen(), startsAt: atHours(80) })).body.error.message).toMatch(/paused/);
     await adm("unpause-test", a.cookie, { id: testId });
     expect((await act(testId, "edit", dev.cookie, { version: (await db.test.findUniqueOrThrow({ where: { id: testId } })).version, fields: { title: "Back" } })).status).toBe(200);

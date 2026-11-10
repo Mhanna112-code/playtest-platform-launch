@@ -20,7 +20,7 @@ describe("blue notices identify the person and work they describe", () => {
     const lines = await testerChanges(j.tester.user.id, j.sessionId, f.testId, new Date(loaded));
     expect(lines.filter((x) => x.kind === "cancelled").map((x) => x.text)).toEqual([`Your call with Nora Lane on ${fmtDateTimeIn(call.startsAt, "UTC")} was cancelled`]);
     const refused = await sact(j.sessionId, "cancel-call", j.tester.cookie, { callId: call.id, seenAt: seen() });
-    expect(refused.body.error).toMatchObject({ code: "cancelled", message: `Your call with Nora Lane on ${fmtDateTimeIn(call.startsAt, "UTC")} was already cancelled.` });
+    expect(refused.body.error).toMatchObject({ code: "cancelled", message: "This call was already cancelled." }); // (§364 item 13; the stop box above still names who and when)
   });
 
   it("a system cancellation names the other person without attributing the cancellation to them", async () => {

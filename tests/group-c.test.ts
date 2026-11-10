@@ -18,12 +18,12 @@ describe("group C controls", () => {
     // (Owner, Nov 5, §278; replaces "one already out: nothing is ended") One already out: a refusal line for them, and the others' work ends.
     const again = await act(testId, "end-early", dev.cookie, { seenAt: seen(), confirmed: true, contractIds: [a.sessionId, c.sessionId], reason: "We have what we need" });
     expect(again.status).toBe(200);
-    expect(again.body.gone).toEqual([{ contractId: a.sessionId, text: "Your End early didn't go through for Ana Silva: Ana Silva's work already ended." }]);
+    expect(again.body.gone).toEqual([{ contractId: a.sessionId, text: "Ana Silva's session has ended, so your End early didn't go through." }]); // (§364 item 4)
     expect(await status(c.sessionId)).toBe("ended");
     // Everyone ticked already out: one refusal naming them.
     const allOut = await act(testId, "end-early", dev.cookie, { seenAt: seen(), confirmed: true, contractIds: [a.sessionId, c.sessionId], reason: "We have what we need" });
     expect(allOut.status).toBe(409);
-    expect(allOut.body.error.message).toBe("Ana Silva's work already ended. Cara Diaz's work already ended.");
+    expect(allOut.body.error.message).toBe("Ana Silva's session has ended, so your End early didn't go through. Cara Diaz's session has ended, so your End early didn't go through."); // (§364 item 4)
     // No ticks.
     expect((await act(testId, "end-early", dev.cookie, { seenAt: seen(), confirmed: true, contractIds: [], reason: "We have what we need" })).status).toBe(400);
   });

@@ -1,5 +1,6 @@
 import { HttpError, handle, ok, readJson } from "@/lib/server/http";
 import { requireUser } from "@/lib/server/session";
+import * as RF from "@/lib/refusal";
 import { logConfirmed } from "@/lib/server/actionText";
 import { db } from "@/lib/db";
 
@@ -8,7 +9,7 @@ import { db } from "@/lib/db";
 export async function POST(req: Request) {
   return handle(async () => {
     const u = await requireUser(req);
-    if (u.deletedAt) throw new HttpError(403, "deleted", "This account was deleted.");
+    if (u.deletedAt) throw new HttpError(403, "deleted", RF.ACCOUNT_NO_LONGER_EXISTS); // (§364 item 12)
     const body = await readJson(req);
     const all = await import("@/lib/server/confirmAll");
     if (typeof body.cancel === "string") return ok(await all.cancelAll(u.id, body.cancel));

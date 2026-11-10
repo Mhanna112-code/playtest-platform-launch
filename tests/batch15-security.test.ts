@@ -79,7 +79,7 @@ describe("H1: admin by a confirmed email only; a suspended admin has no access",
     const a = await makeUser({ email: `admin-${randomUUID()}@playtest.test` });
     await db.user.update({ where: { id: a.user.id }, data: { isAdmin: true, devSuspendedAt: new Date() } });
     const r = await adminPOST(req("/api/admin/stop-test", { cookie: a.cookie, body: { id: "x", note: "x" } }), { params: Promise.resolve({ action: "stop-test" }) }).then(json);
-    expect(r).toMatchObject({ status: 403, body: { error: { message: "Your account is paused." } } });
+    expect(r).toMatchObject({ status: 403, body: { error: { message: "Your account is paused, so your Stop (close) didn't go through." } } }); // (§364 item 8)
     expect((await adminUsers()).some((x) => x.id === a.user.id)).toBe(false);
   });
 });

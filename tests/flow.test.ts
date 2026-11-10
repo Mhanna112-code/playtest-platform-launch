@@ -134,7 +134,7 @@ describe("top panel stops once", () => {
     const { tester, sessionId } = await joined(testId);
     await sact(sessionId, "leave", tester.cookie);
     const r = await act(testId, "end-early", dev.cookie, { seenAt: pageLoaded, contractId: sessionId, reason: "Enough feedback", confirmed: true });
-    expect(r.body.error.message).toBe("Ana Silva already left the test.");
+    expect(r.body.error.message).toBe("Ana Silva's session has ended, so your End early didn't go through."); // (§364 item 4)
     await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true });
     await later();
     expect((await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: seen() })).body.error.message).toBe("This test was stopped, so your Stop the test didn't go through."); // (§363)
@@ -148,7 +148,7 @@ describe("tester session", () => {
     await act(testId, "end-early", dev.cookie, { seenAt: seen(), contractId: sessionId, reason: "We have enough", confirmed: true });
     const r = await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
     expect(r.status).toBe(409);
-    expect(r.body.error.message).toMatch(/^Nora Lane ended your session early on .+, so your Send didn't go through\. Work you sent is still reviewed\.$/); // (batch 16 section 24)
+    expect(r.body.error.message).toBe("Your part in this test has ended, so your Send didn't go through."); // (§364 item 3)
     expect((await db.call.count({ where: { contractId: sessionId, status: "booked" } }))).toBe(0);
   });
 
@@ -168,7 +168,7 @@ describe("tester session", () => {
     expect((await db.submission.findFirstOrThrow({ where: { contractId: sessionId } })).late).toBe(true);
     await db.test.update({ where: { id: testId }, data: { openUntil: new Date(Date.now() - 1000) } });
     const r = await sact(sessionId, "written", tester.cookie, { answers: ["c", "d"] });
-    expect(r.body.error.message).toMatch(/^This test ended on /);
+    expect(r.body.error.message).toBe("This test ended, so your Send didn't go through."); // (§364 item 2)
   });
 
   it("extra written work (not in the listing) can be sent and is marked extra", async () => {

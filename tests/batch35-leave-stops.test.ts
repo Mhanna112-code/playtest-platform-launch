@@ -73,7 +73,7 @@ describe("batch 35 §59: Leave stops once for contract changes, like the other t
     expect((await edit(testId, dev.cookie, { writtenCents: "12.00" })).status).toBe(200);
     const r = await sact(sessionId, "leave", tester.cookie, { seenAt: loaded });
     expect(r.body.error?.code).toBe("gone");
-    expect(r.body.error.message).toBe("You already left this test.");
+    expect(r.body.error.message).toBe("Your part in this test has ended, so your Leave didn't go through."); // (§364 item 3)
   });
 });
 

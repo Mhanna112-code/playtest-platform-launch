@@ -1,9 +1,10 @@
 import { recordReviewDraft } from "./reviewDraft";
 import { randomUUID } from "node:crypto";
+import * as RF from "@/lib/refusal";
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, fmtTime, money, pronouns, toCents } from "@/lib/server/dateFormat";
-import { testPaused, UNLISTED_CALL_CLOSED, unlistedCallClosedLine, LET_GO_BY_TESTER, payClosedLine, chargedByTester, byTesterChoice, callReference, checkDevSide, canDispute, ALREADY_DISPUTED, DEV_SIDE_ALREADY, checkDisputeDecision, decisionWhat, decideDoneLine, disputeLimitText, testerPayable, PAYABLE_TESTER, deletedNoPayoutsLine, delayedPayLine, declinedHoldLine, checkPay, checkExtraPay, pieceCapCents, overMaxLine, paidMostLine, pieceMaxCents, NO_LISTING_CALL_RATE_CAP_CENTS, overCallsLine, PAY_WAITS, testerShare, decideTickLine, pieceName, disputeDecisionName, decidePayChangedLine, disputeRangeLine } from "@/lib/rules";
+import { testPaused, UNLISTED_CALL_CLOSED, unlistedCallClosedLine, LET_GO_BY_TESTER, payClosedLine, chargedByTester, byTesterChoice, callReference, checkDevSide, canDispute, ALREADY_DISPUTED, DEV_SIDE_ALREADY, checkDisputeDecision, decisionWhat, decideDoneLine, disputeLimitText, testerPayable, PAYABLE_TESTER, delayedPayLine, declinedHoldLine, checkPay, checkExtraPay, pieceCapCents, overMaxLine, paidMostLine, pieceMaxCents, NO_LISTING_CALL_RATE_CAP_CENTS, overCallsLine, PAY_WAITS, testerShare, decideTickLine, pieceName, disputeDecisionName, decidePayChangedLine, disputeRangeLine } from "@/lib/rules";
 import { HttpError, readText } from "./http";
 import { LIMITS } from "@/lib/limits";
 import { adminUsers, bell, notify } from "./notify";
@@ -86,7 +87,7 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0] & { hold
 
   // (Owner, Oct 27) Pay is unavailable during ANY payment hold, chargeback hold or suspension (the route refuses first; this is the backstop).
   const devNow = await db.user.findUniqueOrThrow({ where: { id: dev.id }, select: { holdStartedAt: true, devSuspendedAt: true } });
-  if (devNow.devSuspendedAt || devNow.holdStartedAt) throw new HttpError(403, devNow.devSuspendedAt ? "suspended" : "held", devNow.devSuspendedAt ? "Your account is suspended: Pay waits until it is lifted." : PAY_WAITS);
+  if (devNow.devSuspendedAt || devNow.holdStartedAt) throw new HttpError(403, devNow.devSuspendedAt ? "suspended" : "held", devNow.devSuspendedAt ? suspendedLine("Pay") : RF.pressRefused(RF.HELD_CAUSE, "Pay")); // (§364 items 7, 8)
 
   const reserved = await reserving(() => db.$transaction(async (tx) => {
     const piece = await loadPiece(tx, kind, id);
@@ -99,7 +100,8 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0] & { hold
     const name = displayName(c.tester);
     // (Owner, Oct 29, batch 11) A tester who deleted their account: their sent work is still reviewed when their payout account was connected; without one (DEFAULT)
     // nothing can reach them, so it can't be paid (final).
-    if (!testerPayable(c.tester) && !(await tx.review.findFirst({ where: piece.where }))) throw new HttpError(409, "gone", deletedNoPayoutsLine(displayName({ ...c.tester, deletedAt: null }), c.tester.pronoun));
+    // (Owner, Nov 9, §364 item 9) The refusal is the tester-gone line; "Can't be paid" stays on the tester's row and the payment status.
+    if (!testerPayable(c.tester) && !(await tx.review.findFirst({ where: piece.where }))) throw new HttpError(409, "gone", RF.pressRefused(RF.sessionEndedCause(displayName(c.tester)), "Pay"));
     const already = await tx.review.findFirst({ where: piece.where });
     const payPress = { ...payPressOf(c.id, piece.where), fromNeeds: body.from === "needs" }; // (§362) Needs you's Pay
     // (Owner, Nov 4, batch 35 §163; replaces batch 16 section 21's "another tab's Pay on this piece stops this press once, BEFORE it is refused as already done")
@@ -239,7 +241,7 @@ export async function bankWaitsOf(tx: Prisma.TransactionClient | typeof db, at: 
 }
 
 /** (Owner, Nov 3, §159) "Your account is suspended: Pay waits until it is lifted." (Pay more: "extra pay"; Confirm with your bank, Confirm all: their names). */
-export const suspendedLine = (what: string) => `Your account is suspended: ${what} waits until it is lifted.`;
+export const suspendedLine = (what: string) => RF.pressRefused(RF.ACCOUNT_SUSPENDED_CAUSE, RF.pressOfWhat(what)); // (Owner, Nov 9, §364 item 8)
 /**
  * (Owner, Nov 3, §159) A press refused while the developer is suspended, read under the developer's row lock (FOR SHARE) inside the press's own locked step: an
  * admin's Suspend at the same moment either lands first (refused here) or waits for this step to commit (the press was first; its open check is cancelled below).
@@ -730,10 +732,10 @@ export async function payExtra(dev: U & Parameters<typeof cardRefusal>[0], testI
   }
   // (Owner, Oct 27) Unavailable during ANY payment hold, chargeback hold or suspension (the route refuses first; this is the backstop).
   const devNow = await db.user.findUniqueOrThrow({ where: { id: dev.id }, select: { devSuspendedAt: true } });
-  if (devNow.devSuspendedAt) throw new HttpError(403, "suspended", "Your account is suspended: extra pay waits until it is lifted.");
+  if (devNow.devSuspendedAt) throw new HttpError(403, "suspended", suspendedLine("extra pay")); // (§364 item 8)
   // (Owner, Nov 4, §172) The team paused this test: the same backstop, for this test (the route refuses first).
   await (await import("./teamPause")).refuseTeamPausedTest(db, testId, "extra pay");
-  await (await import("./holds")).devHoldRefusal(dev.id, "pay");
+  await (await import("./holds")).devHoldRefusal(dev.id, "pay", "Pay more");
   if ((await blockedEitherWay(dev.id, c.testerId)) || !testerPayable(c.tester)) throw new HttpError(409, "unavailable", "This payment isn't available.");
   const amount = toCents(body.amount);
   const note = readText(body.note, LIMITS.reason, "bad_note");

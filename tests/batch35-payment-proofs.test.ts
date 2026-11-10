@@ -120,7 +120,7 @@ describe("A. pause on hold (3184-like card)", () => {
     for (const body of [{ paymentId: c[1].p.id, start: true }, { paymentId: c[1].p.id }]) {
       const r = await confirm(w.dev.cookie, body);
       expect(r.status).toBe(409);
-      expect(r.body.error).toMatchObject({ code: "paused", message: "This payment is paused until your tests resume." });
+      expect(r.body.error).toMatchObject({ code: "paused", message: "Your tests are paused, so your Confirm with your bank didn't go through." }); // (§364 item 7)
     }
     expect(st.made.length).toBe(made);
     expect(st.succeeded()).toEqual([]);

@@ -38,7 +38,7 @@ describe("§278 End early with a ticked tester gone meanwhile", () => {
     const first = (await act(w.testId, "end-early", w.dev.cookie, { seenAt: w.pageLoaded, contractIds: [w.ana.sessionId, w.ben.sessionId], reason: REASON })) as Res;
     expect(first.status).toBe(409);
     expect(first.body.error?.code).toBe("stop_once");
-    expect(first.body.error?.gone).toEqual([{ contractId: w.ana.sessionId, text: "Your End early didn't go through for Ana Silva: Ana Silva already left the test." }]);
+    expect(first.body.error?.gone).toEqual([{ contractId: w.ana.sessionId, text: "Ana Silva's session has ended, so your End early didn't go through." }]); // (§364 item 4)
     const texts = (first.body.error?.changes ?? []).map((c) => c.text);
     expect(texts).toContain("Ben Okafor charged $10.00 for his written answers");
     // Ana's leaving is what her refusal line says: not a stop line too.
@@ -61,7 +61,7 @@ describe("§278 End early with a ticked tester gone meanwhile", () => {
     const r = (await act(w.testId, "end-early", w.dev.cookie, { seenAt: w.pageLoaded, contractIds: [w.ana.sessionId, w.ben.sessionId], reason: REASON })) as Res;
     expect(r.status).toBe(200);
     expect(r.body.endedIds).toEqual([w.ben.sessionId]);
-    expect(r.body.gone).toEqual([{ contractId: w.ana.sessionId, text: "Your End early didn't go through for Ana Silva: Ana Silva already left the test." }]);
+    expect(r.body.gone).toEqual([{ contractId: w.ana.sessionId, text: "Ana Silva's session has ended, so your End early didn't go through." }]); // (§364 item 4)
     expect(r.body.done).toBe("You ended Ben Okafor's work early.");
     expect((await db.contract.findUniqueOrThrow({ where: { id: w.ben.sessionId } })).status).toBe("ended");
   });
@@ -72,11 +72,11 @@ describe("§278 End early with a ticked tester gone meanwhile", () => {
     const r = (await act(w.testId, "end-early", w.dev.cookie, { seenAt: w.pageLoaded, contractIds: [w.ana.sessionId, w.ben.sessionId], reason: REASON })) as Res;
     expect(r.status).toBe(409);
     expect(r.body.error?.code).toBe("gone");
-    expect(r.body.error?.message).toBe("Ana Silva already left the test. Ben Okafor already left the test.");
+    expect(r.body.error?.message).toBe("Ana Silva's session has ended, so your End early didn't go through. Ben Okafor's session has ended, so your End early didn't go through."); // (§364 item 4)
     expect(r.body.error?.changes).toBeUndefined();
     // One tester: as before.
     const one = (await act(w.testId, "end-early", w.dev.cookie, { seenAt: w.pageLoaded, contractIds: [w.ana.sessionId], reason: REASON })) as Res;
-    expect(one.body.error?.message).toBe("Ana Silva already left the test.");
+    expect(one.body.error?.message).toBe("Ana Silva's session has ended, so your End early didn't go through."); // (§364 item 4)
   });
 });
 
@@ -87,12 +87,12 @@ describe("§278 other multi-person presses", () => {
     startsAt.setUTCSeconds(0, 0);
     const r = (await act(w.testId, "request-time", w.dev.cookie, { seenAt: w.pageLoaded, contractIds: [w.ana.sessionId, w.ben.sessionId], startsAt: startsAt.toISOString() })) as Res;
     expect(r.status).toBe(200);
-    expect(r.body.gone).toEqual([{ contractId: w.ana.sessionId, text: "Your Request a time didn't go through for Ana Silva: Ana Silva's session has ended." }]);
+    expect(r.body.gone).toEqual([{ contractId: w.ana.sessionId, text: "Ana Silva's session has ended, so your Request a time didn't go through." }]); // (§364 item 4)
     expect(await db.callRequest.count({ where: { contractId: w.ben.sessionId, status: "pending" } })).toBe(1);
     expect(await db.callRequest.count({ where: { contractId: w.ana.sessionId } })).toBe(0);
     // Everyone ticked gone: the refusal as before.
     const only = (await act(w.testId, "request-time", w.dev.cookie, { seenAt: seen(), confirmed: true, contractIds: [w.ana.sessionId], startsAt: startsAt.toISOString() })) as Res;
-    expect(only.body.error?.message).toBe("Ana Silva's session has ended.");
+    expect(only.body.error?.message).toBe("Ana Silva's session has ended, so your Request a time didn't go through."); // (§364 item 4)
   });
 
   it("Invite with a ticked tester who rated the test: their refusal line, and the others are invited; all of them raters: one refusal", async () => {

@@ -6,12 +6,12 @@ import { sendMessage } from "@/lib/server/messages";
 import { abandonUpload, finishRecording, sendRecording, removeRecording, startRecording, uploadAlive } from "@/lib/server/recordings";
 import { chooseOutcome } from "@/lib/server/holds";
 import { answerRequest, cancelCallSet, requestTime } from "@/lib/server/requests";
-import { PART_ENDED_TERMS, closeOffersOfEnded, decideTerms, ndaBlockFirst } from "@/lib/server/terms";
+import { closeOffersOfEnded, decideTerms, ndaBlockFirst } from "@/lib/server/terms";
 import { openDispute } from "@/lib/server/payments";
 import { db } from "@/lib/db";
 import { NDA_FREE } from "@/lib/ndaNotice";
 import { displayName, fmtDate, stopTimeIn } from "@/lib/format";
-import { CALL_CANCELLED_BY_STOP, LIMITED_CHOICE_REFUSAL, RATE_INACTIVE, PAUSE_DEFAULTS, PAUSED_SEND, WORK_OVER_ACTIONS, testerPaused, testerRefusal, workOver, workOverLine, workOverPress } from "@/lib/rules";
+import { PAUSE_DEFAULTS, WORK_OVER_ACTIONS, testerPaused, testerRefusal, workOver, workOverLine, workOverPress } from "@/lib/rules";
 import { loadedOf, stopBox, testerStopSince } from "@/lib/server/stopMoment";
 import { requireUser } from "@/lib/server/session";
 import { testerGate } from "@/lib/server/testerGate";
@@ -25,7 +25,10 @@ const NEEDS_CONFIRMED = new Set<string>();
 import { maybePromptRating, testerRate } from "@/lib/server/ratings";
 import { logTesterAction } from "@/lib/server/actionText";
 
+import * as RF from "@/lib/refusal";
+import { overPressLine } from "@/lib/rules";
 type Ctx = { params: Promise<{ id: string; action: string }> };
+
 
 /**
  * (Owner, Oct 26) When the test was stopped or the tester's work was ended while the page is open, every later press is a FINAL
@@ -43,7 +46,7 @@ async function finalRefusal(userId: string, contractId: string, action: string, 
   // ended) its terms offer is closed: an old page's Switch or Keep gets the one plain line, whatever ended it.
   if (action === "terms") {
     await closeOffersOfEnded(db, [contractId], c.endedAt ?? new Date());
-    throw new HttpError(409, "gone", PART_ENDED_TERMS);
+    throw new HttpError(409, "gone", overPressLine(c, workOverPress(action, body))); // (§364: "Your part in this test has ended, so your Switch …"; a stop: §363)
   }
   const dev = displayName(c.test.developer);
   // (Batch 26 section 3) A team Stop reads "This test was stopped at 3:10 PM" (the tester's own zone), never who.
@@ -51,13 +54,12 @@ async function finalRefusal(userId: string, contractId: string, action: string, 
   const ctx = { ...c, teamTime: c.endedAt ? stopTimeIn(c.endedAt, tz) : undefined };
   if (workOver(c)) {
     // (Batch 17 section 12) Cancel call from a page opened before the stop: the stop already cancelled the calls ahead.
-    // (Owner, Nov 9, §363) After a stop: the one stopped line, naming Cancel call.
-    if ((action === "cancel-call" || action === "cancel-set") && c.endKind !== "stopped") throw new HttpError(409, "call_cancelled", CALL_CANCELLED_BY_STOP);
+    // (Owner, Nov 9, §363 and §364) Cancel call too: the one line by why (stopped / ended / your part ended), naming the press.
     const press = workOverPress(action, body);
     throw new HttpError(409, "work_over", workOverLine(ctx, dev, fmtDate, press), { failed: press, top: true });
   }
-  const line = testerRefusal(ctx, { openUntil: null }, dev, fmtDate, new Date());
-  if (line) throw new HttpError(409, "gone", line);
+  // (§364 item 3) Left, rated or blocked: "Your part in this test has ended, so your Send didn't go through."
+  if (testerRefusal(ctx, { openUntil: null }, dev, fmtDate, new Date())) throw new HttpError(409, "gone", overPressLine(c, workOverPress(action, body)));
 }
 
 /**
@@ -68,11 +70,11 @@ async function finalRefusal(userId: string, contractId: string, action: string, 
  */
 const SEND_ACTIONS = new Set(["written", "written-add", "recording-send"]); // (batch 35 §136) adding follows Send's windows
 const DRAFT_ACTIONS = new Set(["recording-start", "recording-done", "recording-remove"]);
-async function pausedRefusal(userId: string, contractId: string, action: string) {
+async function pausedRefusal(userId: string, contractId: string, action: string, body: Record<string, unknown>) {
   if (!SEND_ACTIONS.has(action) && !DRAFT_ACTIONS.has(action)) return;
   const c = await db.contract.findUnique({ where: { id: contractId }, select: { testerId: true, test: { select: { adminPausedAt: true, developer: { select: { devSuspendedAt: true, holdStartedAt: true } } } } } });
   if (!c || c.testerId !== userId || !testerPaused(c.test.developer, c.test)) return;
-  if (SEND_ACTIONS.has(action) || !PAUSE_DEFAULTS.draftsEditable) throw new HttpError(409, "paused", PAUSED_SEND);
+  if (SEND_ACTIONS.has(action) || !PAUSE_DEFAULTS.draftsEditable) throw new HttpError(409, "paused", RF.pressRefused(RF.PAUSED_CAUSE, workOverPress(action, body))); // (§364 item 5)
 }
 
 /** The remaining session actions that check for an unseen end of work. */
@@ -113,7 +115,8 @@ const LIMITED_ACTIONS = new Set(["dispute"]);
 async function limitedUser(req: Request, contractId: string, action: string) {
   if (action === "choose" || action === "rate") {
     const me = await requireUser(req);
-    if (me.testerSuspendedAt) throw new HttpError(409, "inactive", action === "rate" ? RATE_INACTIVE : LIMITED_CHOICE_REFUSAL);
+    // (§364 item 8) "Your account is paused, so your Rate didn't go through." (Charge or Let it go, by the body's choice).
+    if (me.testerSuspendedAt) throw new HttpError(409, "inactive", RF.pressRefused(RF.ACCOUNT_PAUSED_CAUSE, action === "rate" ? "Rate" : (await req.clone().json().catch(() => ({})) as { choice?: unknown }).choice === "letgo" ? "Let it go" : "Charge"));
   }
   if (!LIMITED_ACTIONS.has(action)) return null;
   const u = await requireUser(req);
@@ -130,7 +133,7 @@ export async function POST(req: Request, { params }: Ctx) {
     const body = await readJson(req, 900_000); // (batch 14; batch 15) a written part of up to 20,000 characters (§186; was 50,000), with the question set it answers (20 × 20,000)
     if (NEEDS_CONFIRMED.has(action)) requireConfirmed(u);
     await finalRefusal(u.id, id, action, body);
-    await pausedRefusal(u.id, id, action);
+    await pausedRefusal(u.id, id, action, body);
     // (Owner, Nov 5, §267; Nov 6, §302: every NDA change) An NDA change not yet acknowledged blocks every press here but Rate and Leave (§268), the
     // Acknowledge button and the pill.
     if (!NDA_FREE_SET.has(action)) await ndaBlockFirst(id);

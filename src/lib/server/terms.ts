@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, pronouns } from "@/lib/server/dateFormat";
-import { newDueAt, switchedLine, termsDiff, testerRefusal, type ContractTerms, type TestEventLike } from "@/lib/rules";
+import { overPressLine, newDueAt, switchedLine, termsDiff, testerRefusal, type ContractTerms, type TestEventLike } from "@/lib/rules";
 import { ANSWER_TERMS_CODE, ANSWER_TERMS_FIRST, SENT_WORK_PRICE_EXPLANATION } from "@/lib/answerTerms";
 import { HttpError } from "./http";
 import { bell, notify } from "./notify";
@@ -54,7 +54,8 @@ export async function offerNewTerms(testId: string, changeId: string | null = nu
 }
 
 /** (Owner, Nov 2, batch 35 §118) Switch / Keep pressed after the tester's part ended (rated, left, removed, stopped, the work window ended). */
-export const PART_ENDED_TERMS = "Your part on this test has ended, so these terms no longer apply.";
+/** (§364; was batch 35 §118's own line, "Your part on this test has ended, so these terms no longer apply.") Switch / Keep on an ended part. */
+export const PART_ENDED_TERMS = "Your part in this test has ended, so your Switch didn't go through.";
 
 /**
  * (Owner, Nov 5, §267) The NDA block: an NDA change the tester hasn't acknowledged refuses every press of theirs on the test (Rate and Leave never come here, §268).
@@ -163,7 +164,7 @@ export async function decideTerms(tester: { id: string }, contractId: string, bo
   // (Owner, Nov 2, batch 35 §118) A part that ended has no terms to decide: an old page's Switch / Keep is refused plainly (and any offer still open closes).
   if (c.status !== "working") {
     await closeOffersOfEnded(db, [contractId], c.endedAt ?? new Date());
-    throw new HttpError(409, "gone", PART_ENDED_TERMS);
+    throw new HttpError(409, "gone", overPressLine(c, body.choice === "keep" ? "Keep" : "Switch")); // (Owner, Nov 9, §363 / §364 item 3)
   }
   await testerGate(c.testerId, contractId, c.testId, body, undefined, { skipTerms: true });
   // (Owner, Oct 28, batch 16 section 38A) The press names the offer its page showed. Missing, unknown or not the newest open one: the newest open offer is decided on,

@@ -275,10 +275,10 @@ describe("§185 Join or Cancel on a call already cancelled: refused once; the ro
     // The developer's old page (the tester's cancel would stop any other press there): his Cancel is refused at once.
     const dev1 = await act(f.testId, "cancel-call", f.dev.cookie, { callId: call.id, seenAt: loaded });
     expect(dev1.body.error.code).toBe("cancelled");
-    expect(dev1.body.error.message).toMatch(/^The call with Ana Silva was already cancelled\./);
+    expect(dev1.body.error.message).toBe("This call was already cancelled."); // (§364 item 13)
     const t1 = await sact(a.sessionId, "cancel-call", a.tester.cookie, { callId: call.id, seenAt: loaded, loadedAt: loaded });
     expect(t1.body.error.code).toBe("cancelled");
-    expect(t1.body.error.message).toMatch(/^Your call with Nora Lane on .+ was already cancelled\.$/);
+    expect(t1.body.error.message).toBe("This call was already cancelled."); // (§364 item 13)
     // Join: one refusal, marked cancelled (the button goes).
     const devUser = await db.user.findUniqueOrThrow({ where: { id: f.dev.user.id } });
     const e = await joinCall(devUser, call.id).catch((x: unknown) => x);

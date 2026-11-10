@@ -1,13 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { startedBeforeWorkEnd } from "@/lib/pause";
+import * as RF from "@/lib/refusal";
 import { Prisma, type Payment } from "@prisma/client";
 import { T } from "@/lib/tz";
 import { APPS_WAITING_GROUP } from "@/lib/bell";
 import { db } from "@/lib/db";
 import { callAtFor, displayName, fmtDate, fmtDateTime, money, pronouns, toCents } from "@/lib/server/dateFormat";
-import {
-  owedReceiptWhat, pressAgainLine, bankChangedLine, reviewFirstLine, CHARGEBACKS_REVIEW_FROM, OWED_ALL_WAITING, OWED_BANK_WAITING, reservedAddedLine, AUTO_CHARGED_CALL, AUTO_NOTHING_CALL, UNLISTED_CALL_CLOSED, UNLISTED_CALL_TAIL, AUTO_CHARGE_NO_CHOICE, MIN_CHARGE_CENTS, CHARGE_TICK_CENTS, chargeTickLine, chargeClosedLine, CLOSE_OUT_REMINDER_DAYS, testerPayable, HOLD_APPROVAL_AFTER, MANY_HOLDS_LABEL, autoPayFor, chargeAmount, paidMeanwhileLine, CHARGED_BY_TESTER, byTesterChoice, chargedDelayedLine, openUntilMarkDue, datedMarkDue, ownDeadlineMarkDue, reviewMarkDue, INVITE_REMIND_DAYS, failedLine, joinClosingLine, ownDeadlineLine, LET_GO_BY_TESTER, REVIEW_DAYS, chargeIsOpen, chargeOpensAt, PAUSED_RIGHT_NOW, PAY_WAITS, pauseShiftMs, PAYABLE_TESTER, PIECE_LOCKED, ownChargeWaitingLine, chargedByTester, chargebackWonRefundLine, chargebackWonLine, CHARGEBACK_FEE_CENTS, chargebackOwedLine, chargebackReversedLine, bankLoweredLine, bankRaisedLine, raiseNote, raiseOf, raiseName, RAISE_NOTE,
-} from "@/lib/rules";
+import { owedReceiptWhat, pressAgainLine, bankChangedLine, reviewFirstLine, CHARGEBACKS_REVIEW_FROM, OWED_ALL_WAITING, OWED_BANK_WAITING, reservedAddedLine, AUTO_CHARGED_CALL, AUTO_NOTHING_CALL, UNLISTED_CALL_CLOSED, UNLISTED_CALL_TAIL, AUTO_CHARGE_NO_CHOICE, MIN_CHARGE_CENTS, CHARGE_TICK_CENTS, chargeTickLine, chargeClosedLine, CLOSE_OUT_REMINDER_DAYS, testerPayable, HOLD_APPROVAL_AFTER, MANY_HOLDS_LABEL, autoPayFor, chargeAmount, paidMeanwhileLine, CHARGED_BY_TESTER, byTesterChoice, chargedDelayedLine, openUntilMarkDue, datedMarkDue, ownDeadlineMarkDue, reviewMarkDue, INVITE_REMIND_DAYS, failedLine, joinClosingLine, ownDeadlineLine, LET_GO_BY_TESTER, REVIEW_DAYS, chargeIsOpen, chargeOpensAt, pauseShiftMs, PAYABLE_TESTER, PIECE_LOCKED, ownChargeWaitingLine, chargedByTester, chargebackWonRefundLine, chargebackWonLine, CHARGEBACK_FEE_CENTS, chargebackOwedLine, chargebackReversedLine, bankLoweredLine, bankRaisedLine, raiseNote, raiseOf, raiseName, RAISE_NOTE } from "@/lib/rules";
 import { HttpError } from "./http";
 import { adminUsers, bell, notify, renderFor, sendSummaries, teamEmails } from "./notify";
 import { appUrl } from "./auth";
@@ -45,16 +44,16 @@ export async function onHold(devId: string) {
 }
 
 /** Refusal for developer actions that wait during a hold. */
-export async function devHoldRefusal(devId: string, what: "pay" | "post" | "round" | "invite") {
+export async function devHoldRefusal(devId: string, what: "pay" | "post" | "round" | "invite", press?: string) {
   if (!(await onHold(devId))) return;
-  if (what === "pay") throw new HttpError(409, "on_hold", PAY_WAITS);
-  if (what === "post") throw new HttpError(409, "on_hold", `${PAY_WAITS} New tests can't be posted while payments are on hold.`);
-  throw new HttpError(409, "on_hold", `${PAY_WAITS} Your tests are paused until then.`);
+  // (Owner, Nov 9, §364 item 7) "Your tests are paused, so your Pay didn't go through." (the dashboard's blue box and Payments say why and what to do).
+  const name = press ?? (what === "pay" ? "Pay" : what === "post" ? "Post the test" : what === "round" ? "Next round" : "Invite");
+  throw new HttpError(409, "on_hold", RF.pressRefused(RF.HELD_CAUSE, name));
 }
 
 /** Refusal for tester actions on a paused test (joining, booking calls). */
-export async function testerHoldRefusal(devId: string) {
-  if (await onHold(devId)) throw new HttpError(409, "paused", PAUSED_RIGHT_NOW);
+export async function testerHoldRefusal(devId: string, press = "") {
+  if (await onHold(devId)) throw new HttpError(409, "paused", RF.pressRefused(RF.PAUSED_CAUSE, press)); // (§364 item 5)
 }
 
 /**

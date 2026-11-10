@@ -22,7 +22,7 @@ describe("the stopped line and the press names (section 24)", () => {
     expect(R.stillWorksLine(stopped, "Nora Lane", fmt, { rate: true, chat: true })).toBe("Nora Lane stopped the test on Nov 3. You can still rate and chat. Work you sent is still reviewed.");
     expect(R.stillWorksLine(stopped, "Nora Lane", fmt, {})).toBe("Nora Lane stopped the test on Nov 3. Work you sent is still reviewed.");
     expect(R.stillWorksLine({ ...stopped, endKind: "closed" }, "Nora Lane", fmt, { chat: true }, "Send")).toBe("This test ended on Nov 3, so your Send didn't go through. You can still chat. Work you sent is still reviewed.");
-    expect(R.workOverLine({ ...stopped, endKind: "early" }, "Nora Lane", fmt, "Cancel call")).toBe("Nora Lane ended your session early on Nov 3, so your Cancel call didn't go through. Work you sent is still reviewed.");
+    expect(R.workOverLine({ ...stopped, endKind: "early" }, "Nora Lane", fmt, "Cancel call")).toBe("Your part in this test has ended, so your Cancel call didn't go through."); // (§364 item 3)
     expect(R.workOverPress("key-broken")).toBe(""); // (Owner, Nov 6, §304) "This key doesn't work" is gone
     expect(["terms", "written", "recording-send", "answer-request", "cancel-set"].map((a) => R.workOverPress(a, a === "terms" ? { choice: "keep" } : a === "answer-request" ? { action: "withdraw" } : {}))).toEqual(["Keep", "Send", "Send", "Withdraw", "Cancel call"]);
     // A block, a rating or a leave aren't "the work is over" here (a block keeps its neutral line).
@@ -63,7 +63,7 @@ describe("after a stop: what's gone is refused and names the press; what still w
     for (const choice of ["switch", "keep"]) {
       const t = await sact(sessionId, "terms", tester.cookie, { seenAt: opened, offerId: offer.id, choice });
       expect(t.status).toBe(409);
-      expect(t.body.error.message).toBe("Your part on this test has ended, so these terms no longer apply.");
+      expect(t.body.error.message).toBe(`This test was stopped, so your ${choice === "keep" ? "Keep" : "Switch"} didn't go through.`); // (§363 / §364)
     }
     await refused("request-time", { startsAt: atHours(100) }, "Request a time");
     await refused("answer-request", { requestId: reqRow.id, action: "accept" }, "Accept");

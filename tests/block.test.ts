@@ -49,7 +49,7 @@ describe("block", () => {
     expect(await db.notification.count({ where: { userId: tester.user.id, text: "Your session on Harbor Run ended." } })).toBe(1);
     expect(await db.notification.count({ where: { userId: tester.user.id, text: { contains: "block" } } })).toBe(0); // never revealed
     expect((await db.call.findFirstOrThrow({ where: { contractId: sessionId } })).status).toBe("cancelled");
-    expect((await sact(sessionId, "written", tester.cookie, { answers: ["x", "y"] })).body.error.message).toBe("Your session on Harbor Run ended.");
+    expect((await sact(sessionId, "written", tester.cookie, { answers: ["x", "y"] })).body.error.message).toBe("Your part in this test has ended, so your Send didn't go through."); // (§364 item 3: neutral, never says block)
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
     expect((await reviewPOST(req("/api/review", { cookie: dev.cookie, body: { payKey: randomUUID(), seenAt: seen(), confirmed: true, kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 } }))).status).toBe(200);
     expect((await sact(sessionId, "message", tester.cookie, { body: "Hello?" })).body.error.message).toBe("This chat is closed.");
@@ -64,7 +64,7 @@ describe("block", () => {
     const { dev, testId } = await setup({ spots: 5 });
     const ben = await makeUser({ tester: true, name: "Ben Carter", pronoun: "he" });
     await block(dev.cookie, ben.user.id);
-    expect((await act(testId, "join", ben.cookie, { listingVersion: 1 })).body.error.message).toBe("This test isn't taking new testers right now.");
+    expect((await act(testId, "join", ben.cookie, { listingVersion: 1 })).body.error.message).toBe("This test isn't taking new testers right now, so your Join didn't go through."); // (§364 item 10)
     await settle(); // Windows' clock can lag: the page load comes clearly after the block
     const inv = await act(testId, "invite", dev.cookie, { seenAt: seen(), testerIds: [ben.user.id] });
     expect(inv.body.message).toBe("Ben Carter can't be invited right now.");

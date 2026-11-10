@@ -141,7 +141,7 @@ describe("batch 30 §12: the join page's stop lists every change since the page 
     const g = await act(testId, "my-gaps", ana.cookie, { seenAt: pageLoaded, verb: "join" });
     expect(g.body.gaps).toEqual({ devices: [], languages: [] });
     expect(g.body.changes.map((c: { text: string }) => c.text)).toEqual([expect.stringMatching(saveRe("Nora Lane", "devices, recording price, questions"))]);
-    expect(g.body.tail).toBe("Press again to join on the current listing.");
+    expect(g.body.tail).toBe("Press again to go ahead."); // (§364: the box reads it "Press Join again to go ahead.")
     // The next press (that box shown) joins.
     expect((await act(testId, "join", ana.cookie, { seenAt: pageLoaded, confirmed: true, boxAt: g.body.now })).status).toBe(200);
   });

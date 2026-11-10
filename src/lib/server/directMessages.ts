@@ -1,5 +1,6 @@
 import { DMS_GROUP } from "@/lib/bell";
 import { createHash, randomUUID } from "node:crypto";
+import * as RF from "@/lib/refusal";
 import type { Prisma, User } from "@prisma/client";
 import { db } from "@/lib/db";
 import { displayName } from "@/lib/format";
@@ -12,7 +13,6 @@ import { adminAccount } from "./session";
 import { HttpError } from "./http";
 import { notify } from "./notify";
 import { CHAT_MAX, CHAT_PER_MINUTE, CHAT_TOO_FAST, CHAT_UNABLE, CHAT_UNABLE_DEV, unreadCount } from "./messages";
-import { DEV_CHARGEBACK, DEV_HELD, DEV_SUSPENDED, SUSPENDED } from "./users";
 
 export const DIRECT_NEW_LIMIT = 20;
 export const DIRECT_LIMIT_LINE = "You've started 20 new conversations in the last 24 hours. Try again later.";
@@ -26,8 +26,8 @@ export function directButtonAllowed(viewer: User, other: User, blocked: boolean)
 
 function ownRestriction(u: User) {
   const asDev = sideFor(u) === "developer";
-  if (asDev ? u.devSuspendedAt : u.testerSuspendedAt) throw new HttpError(403, "suspended", asDev ? DEV_SUSPENDED : SUSPENDED, { suspended: true, failed: "Your Send didn't go through" });
-  if (asDev && u.holdStartedAt) throw new HttpError(403, "held", u.holdReason === "chargeback" ? DEV_CHARGEBACK : DEV_HELD, { held: true, failed: "Your Send didn't go through" });
+  if (asDev ? u.devSuspendedAt : u.testerSuspendedAt) throw new HttpError(403, "suspended", RF.pressRefused(asDev ? RF.ACCOUNT_SUSPENDED_CAUSE : RF.ACCOUNT_PAUSED_CAUSE, "Send"), { suspended: true, failed: "Your Send didn't go through" }); // (§364)
+  if (asDev && u.holdStartedAt) throw new HttpError(403, "held", RF.pressRefused(RF.HELD_CAUSE, "Send"), { held: true, failed: "Your Send didn't go through" }); // (§364)
 }
 
 /** An address is the other account ID, so opening an empty chat never creates a conversation. */

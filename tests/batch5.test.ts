@@ -302,7 +302,7 @@ describe("batch 5 item 6: deleting an account", () => {
     const r = await pay(dev.cookie, { kind: "submission", id: rec.id, amount: "10.00", tickedCents: 1000 });
     expect(r.status).toBe(409);
     // (Batch 11, DEFAULT) No payout account was connected: nothing can reach them.
-    expect(r.body.error).toMatchObject({ code: "gone", message: "Ana Silva deleted her account before setting up payouts, so this can't be paid." });
+    expect(r.body.error).toMatchObject({ code: "gone", message: "Deleted account's session has ended, so your Pay didn't go through." }); // (§364 item 9)
     await runDaily(new Date());
     expect((await db.submission.findUniqueOrThrow({ where: { id: rec.id } })).choiceOfferedAt).toBeNull();
     expect(src("app/app/page.tsx")).toContain("if (!testerPayable(c.tester)) continue;");

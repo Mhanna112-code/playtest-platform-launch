@@ -97,7 +97,7 @@ describe("batch 11 item 1: a deleted tester's sent work is still reviewed", () =
     const { dev, tester, sub } = await sentWork();
     await deleteAccount(tester.user.id, "self");
     const r = await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 });
-    expect(r.body.error).toMatchObject({ code: "gone", message: "Ana Silva deleted her account before setting up payouts, so this can't be paid." });
+    expect(r.body.error).toMatchObject({ code: "gone", message: "Deleted account's session has ended, so your Pay didn't go through." }); // (§364 item 9; "Can't be paid" stays on the row)
     expect(R.testerPayable({ deletedAt: new Date(), stripeAccountId: null, payoutsReady: false })).toBe(false);
     expect(R.testerPayable({ deletedAt: new Date(), stripeAccountId: "acct_1", payoutsReady: true })).toBe(true);
     expect(src("app/app/tests/[id]/page.tsx")).toContain(".filter((c) => testerPayable(c.tester))");

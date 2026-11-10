@@ -51,7 +51,7 @@ describe("batch 12 item 1: a developer can always delete their account", () => {
     await db.submission.update({ where: { id: sub.id }, data: { payBy: new Date(Date.now() - 1000) } });
     await runDaily();
     expect((await db.submission.findUniqueOrThrow({ where: { id: sub.id } })).choiceOfferedAt).toBeNull();
-    expect(R.devDeletedLine("Nora Lane")).toBe("Nora Lane deleted their account, so this can't be paid.");
+    // (§364) devDeletedLine is gone (it was never shown, and contradicted the banner).
     expect(src("app/app/sessions/[id]/page.tsx")).toContain("developerDeleted={devGone && !sub.choiceOfferedAt ? devRealName : null}");
     expect(tester).toBeTruthy();
   });

@@ -165,7 +165,7 @@ describe("batch 10 item 2: a paused test hides what doesn't work, with a banner 
   it("the server refusals stay as a backstop", async () => {
     const { dev, sessionId, tester } = await sentWork("10.00");
     await startHold(dev.user.id, "unpaid");
-    expect((await sact(sessionId, "written", tester.cookie, { answers: ["c", "d"] })).body.error.message).toBe(R.PAUSED_SEND);
+    expect((await sact(sessionId, "written", tester.cookie, { answers: ["c", "d"] })).body.error.message).toBe("This test is paused right now, so your Send didn't go through."); // (§364 item 5)
     // (Batch 15 section 1) The developer on a hold is the restricted person: the tester's Send is turned back neutrally.
     expect((await sact(sessionId, "message", tester.cookie, { body: "Hello?" })).body.error.message).toBe(R.CHAT_NOT_SENT);
   });

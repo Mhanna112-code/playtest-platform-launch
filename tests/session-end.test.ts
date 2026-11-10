@@ -35,7 +35,7 @@ describe("session page after the test is stopped or the work is ended", () => {
     for (const choice of ["switch", "keep"]) {
       const t = await sact(sessionId, "terms", tester.cookie, { seenAt: opened, offerId: offer.id, choice });
       expect(t.status).toBe(409);
-      expect(t.body.error.message).toBe("Your part on this test has ended, so these terms no longer apply.");
+      expect(t.body.error.message).toBe(`This test was stopped, so your ${choice === "keep" ? "Keep" : "Switch"} didn't go through.`); // (§363 / §364)
     }
     await refused("answer-request", { requestId: reqRow.id, action: "accept" }, "Accept");
     await refused("request-time", { startsAt: atHours(80) }, "Request a time");
@@ -52,6 +52,6 @@ describe("session page after the test is stopped or the work is ended", () => {
     expect((await live(tester.cookie, `session:${sessionId}`, opened)).body.changes.map((c: { text: string }) => c.text)).toContain("Nora Lane ended your work");
     const r = await sact(sessionId, "written", tester.cookie, { seenAt: opened, answers: ["a", "b"] });
     expect(r.status).toBe(409);
-    expect(r.body.error.message).toMatch(/ended your session early/);
+    expect(r.body.error.message).toBe("Your part in this test has ended, so your Send didn't go through."); // (§364 item 3; the banner keeps who and when)
   });
 });

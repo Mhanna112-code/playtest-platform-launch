@@ -1,10 +1,11 @@
 import { db } from "@/lib/db";
 import { displayName } from "@/lib/format";
+import * as RF from "@/lib/refusal";
 import { HttpError } from "./http";
 import { notify } from "./notify";
 import { CHAT_NOT_SENT } from "@/lib/rules";
 import { clientMessageId } from "./pressKeys";
-import { TEAM_PAUSED_LINE, teamPausedNow } from "@/lib/restricted";
+import { teamPausedNow } from "@/lib/restricted";
 import { devPauseMoments, loadedOf, pauseStopOnce } from "./stopMoment";
 
 // Per-test chat between the developer and one tester (owner rule): open to testers in the test, invited testers
@@ -90,8 +91,8 @@ export async function sendChat(user: { id: string; name: string; email: string }
   // banner); the other person's Send is turned back with a neutral notice and the text is kept.
   const r = await chatRestriction(testId, testerId);
   const iAmDev = user.id === a.test.developerId;
-  if (iAmDev && r.teamPaused && !r.dev.devSuspendedAt && !r.dev.holdStartedAt) throw new HttpError(409, "admin_paused", TEAM_PAUSED_LINE, { failed: `Your Send on ${a.test.title} didn't go through`, testId });
-  if (iAmDev ? r.developer : r.tester) throw new HttpError(403, iAmDev && !r.dev.devSuspendedAt ? "held" : "suspended", iAmDev ? "Your tests are paused." : "Your account is paused.", { failed: `Your Send on ${a.test.title} didn't go through`, [iAmDev && !r.dev.devSuspendedAt ? "held" : "suspended"]: true });
+  if (iAmDev && r.teamPaused && !r.dev.devSuspendedAt && !r.dev.holdStartedAt) throw new HttpError(409, "admin_paused", RF.pressRefused(RF.TEAM_PAUSED_CAUSE, "Send"), { failed: `Your Send on ${a.test.title} didn't go through`, testId });
+  if (iAmDev ? r.developer : r.tester) throw new HttpError(403, iAmDev && !r.dev.devSuspendedAt ? "held" : "suspended", RF.pressRefused(iAmDev ? (r.dev.devSuspendedAt ? RF.ACCOUNT_SUSPENDED_CAUSE : RF.HELD_CAUSE) : RF.ACCOUNT_PAUSED_CAUSE, "Send"), /* (§364) */ { failed: `Your Send on ${a.test.title} didn't go through`, [iAmDev && !r.dev.devSuspendedAt ? "held" : "suspended"]: true });
   if (iAmDev ? r.tester : r.developer) throw new HttpError(409, "chat_paused", CHAT_NOT_SENT);
   const body = typeof raw === "string" ? raw.trim() : "";
   if (!body) throw new HttpError(400, "empty", "Type a message first.");

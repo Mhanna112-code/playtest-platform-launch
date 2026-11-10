@@ -145,7 +145,8 @@ export async function joinStopList(userId: string, testId: string, body: Record<
   // (Batch 17 section 4) A full test keeps the invite open: No thanks just declines it (the test filling or a spot opening doesn't stop it).
   const changes = withRenamed(verb === "decline" ? raw.filter((e) => e.kind !== "full" && e.kind !== "spot_open") : raw, body);
   if (!changes.length) return null;
-  const tail = verb === "withdraw" || verb === "decline" ? "Press again to go ahead." : `Press again to ${verb} on the current listing.`;
+  // (Owner, Nov 9, §364) One retry tail: the box reads it as "Press <button> again to go ahead." (only Save keeps its own).
+  const tail = "Press again to go ahead.";
   // (Batch 30 §12) `now`: the box's newest line (the next press goes ahead unless something newer came); each line says whether it's an NDA change (its tick clears).
   return { changes: asLines(changes), tail, alertsOff, now: new Date(Math.max(...changes.map((e) => e.createdAt.getTime()))).toISOString() };
 }

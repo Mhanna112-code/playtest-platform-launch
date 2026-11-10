@@ -6,7 +6,7 @@ import { db } from "@/lib/db";
 import { POST as reviewPOST } from "@/app/api/review/route";
 import { POST as excerptsPOST } from "@/app/api/excerpts/route";
 import { ACCOUNT_WAS_DELETED, displayName } from "@/lib/format";
-import { DELETED_NO_EXCERPT, devDeletedNoExcerpt, requestExcerpt } from "@/lib/server/excerpts";
+import { DELETED_NO_EXCERPT, requestExcerpt } from "@/lib/server/excerpts";
 import { bell, notify, sendSummaries } from "@/lib/server/notify";
 import { retryEmails, sendEmail, setEmailTransportForTests } from "@/lib/server/email";
 import { deleteAccount } from "@/lib/server/restrictions";
@@ -112,8 +112,8 @@ describe("§360 (3) a new excerpt request to or for a deleted account is refused
     await deleteAccount(s.dev.user.id, "self");
     const r = await ask(s.tester.cookie, s.sub.id);
     expect(r.status).toBe(409);
-    expect(r.body.error).toMatchObject({ code: "developer_deleted", message: devDeletedNoExcerpt("Harbor Run", "she") });
-    expect(devDeletedNoExcerpt("Harbor Run", "he")).toBe("Harbor Run's developer deleted his account, so nobody can allow an excerpt from it.");
+    // (Owner, Nov 9, §364 item 9; was §360's "<test>'s developer deleted their account, so nobody can allow …") The deletion stopped the test: the stopped line.
+    expect(r.body.error).toMatchObject({ code: "developer_deleted", message: "This test was stopped, so your Ask the developer didn't go through." });
     expect(await db.excerpt.count({ where: { submissionId: s.sub.id } })).toBe(0);
     expect(src("app/app/sessions/[id]/page.tsx")).toContain("!u.testerSuspendedAt && !devGone ? await excerptChoices(written) : []");
   });
@@ -123,6 +123,7 @@ describe("§360 (3) a new excerpt request to or for a deleted account is refused
     await db.user.update({ where: { id: s.tester.user.id }, data: { deletedAt: new Date() } });
     const t = await db.user.findUniqueOrThrow({ where: { id: s.tester.user.id } });
     await expect(requestExcerpt(t, { submissionId: s.sub.id, index: 0, text: "the second boss was far too hard" })).rejects.toMatchObject({ code: "deleted", message: DELETED_NO_EXCERPT });
+    expect(DELETED_NO_EXCERPT).toBe("This account no longer exists."); // (§364 item 12)
   });
 });
 

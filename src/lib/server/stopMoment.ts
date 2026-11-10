@@ -22,7 +22,8 @@ export async function testerStopSince(contractId: string, loaded: Date | null, n
   if (!loaded) return null;
   const c = await db.contract.findUnique({ where: { id: contractId }, include: { tester: true, test: { include: { developer: true } } } });
   if (!c || c.status !== "ended" || !c.endedAt || c.endedAt <= loaded) return null;
-  const kind = c.endKind === "closed" ? "closed" : c.endKind === "early" ? "early" : c.endKind === "stopped" ? (c.test.adminStoppedAt ? "team" : "dev") : null;
+  // (Owner, Nov 9, §364) A stop by the developer deleting their account reads as the team's ("This test was stopped at 3:10 PM."), never "Deleted account stopped …".
+  const kind = c.endKind === "closed" ? "closed" : c.endKind === "early" ? "early" : c.endKind === "stopped" ? (c.test.adminStoppedAt || c.test.developer.deletedAt ? "team" : "dev") : null;
   if (!kind) return null;
   // (Batch 26 section 3) The time in the tester's own zone; a team Stop never names who stopped it ("This test was stopped at 3:10 PM.").
   const tz = c.tester.timeZone;

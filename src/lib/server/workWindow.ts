@@ -1,12 +1,11 @@
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
-import { fmtDate } from "@/lib/server/dateFormat";
 import { testPaused, workDeadlineOf } from "@/lib/rules";
 import { HttpError } from "./http";
 import { closeOffersOfEnded } from "./offerClose";
 
 type Reader = Pick<Prisma.TransactionClient, "test">;
-export const workEndedLine = (at: Date) => `This test ended on ${fmtDate(at)}. Work already sent can still be paid.`;
+import { ENDED_CAUSE, pressRefused } from "@/lib/refusal";
 
 /**
  * (Owner, Nov 2, batch 35 §132) When testers' work on this test ends (the latest tester deadline, no earlier than Open until; the recorded end once it ended): the end of
@@ -19,10 +18,11 @@ export async function workEndOf(reader: Reader, testId: string, developerId?: st
 }
 
 /** A stale press must refuse even before the background job has persisted the end. */
-export async function assertWorkOpen(reader: Reader, testId: string, now = new Date()) {
+export async function assertWorkOpen(reader: Reader, testId: string, now = new Date(), /** (§364 item 2) the press refused */ press = "") {
   const t = await reader.test.findUniqueOrThrow({ where: { id: testId }, include: { developer: true, contracts: { select: { dueAt: true } } } });
   const at = t.workEndedAt ?? workDeadlineOf(t, t.contracts);
-  if (t.workEndedAt || (t.status !== "draft" && !testPaused(t.developer, t) && at && at <= now)) throw new HttpError(409, "closed", workEndedLine(at!));
+  // (Owner, Nov 9, §364 item 2; was "This test ended on <date>. Work already sent can still be paid.") The session page's top line keeps the date and what's left.
+  if (t.workEndedAt || (t.status !== "draft" && !testPaused(t.developer, t) && at && at <= now)) throw new HttpError(409, "closed", pressRefused(ENDED_CAUSE, press));
 }
 
 /** One normal work closure, under the same test lock as a send, booking or listing save. */

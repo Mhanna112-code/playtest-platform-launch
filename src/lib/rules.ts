@@ -8,7 +8,7 @@ import { LIMITS } from "./limits";
 import { qText, sameQuestionSet } from "./questions";
 import { T, safeZone } from "./tz";
 import { startedBeforeWorkEnd } from "./pause";
-import { stoppedPressLine } from "./refusal";
+import { ENDED_CAUSE, PART_ENDED_CAUSE, pressRefused, stoppedPressLine } from "./refusal";
 
 // ---------- Money ----------
 
@@ -819,8 +819,17 @@ export function workOverPress(action: string, body: Record<string, unknown> = {}
  * (Owner, Nov 9, §363; replaces batch 16 §24's stopped line and §355's deleted-developer press line) A stopped test (the developer's Stop, the team's, or the
  * developer deleting their account) reads only "This test was stopped, so your Send didn't go through.": no date, no name, no tail (the banner has them).
  */
-export const workOverLine = (c: StopCtx, devName: string, fmt: (d: Date) => string, press: string) =>
-  c.endKind === "stopped" ? stoppedPressLine(press) : `${overHalf(c, devName, fmt)}, so your ${press} didn't go through. Work you sent is still reviewed.`;
+export const workOverLine = (c: StopCtx, devName: string, fmt: (d: Date) => string, press: string) => overPressLine({ status: "ended", ...c }, press);
+/**
+ * (Owner, Nov 9, §363 and §364 items 1-3) A tester's press once their session is over, by why, never with a date, a name or a tail (the banner has them): the test
+ * was stopped (any Stop, or the developer deleting their account) "This test was stopped, so your Send didn't go through."; the work window ended "This test ended,
+ * so …"; their own part ended (left, rated, ended early, blocked, removed) "Your part in this test has ended, so …".
+ */
+export function overPressLine(c: { status: string; endKind: string }, press: string) {
+  if (c.status === "ended" && c.endKind === "stopped") return stoppedPressLine(press);
+  if (c.status === "ended" && c.endKind === "closed") return pressRefused(ENDED_CAUSE, press);
+  return pressRefused(PART_ENDED_CAUSE, press);
+}
 /**
  * The stopped line at the top of the session page, listing what still works (built from what is actually on the page, as the paused banner does):
  * "Nora Lane stopped the test on Nov 3. You can still charge or let go of unreviewed work, dispute, rate and chat. Work you sent is still reviewed."
@@ -1082,9 +1091,6 @@ export function checkAdditionLength(text: string): Check {
 export const testerPayable = (t: { deletedAt: Date | null; stripeAccountId: string | null; payoutsReady: boolean }) => !t.deletedAt || (!!t.stripeAccountId && t.payoutsReady);
 /** The same rule as a Prisma filter on a tester. */
 export const PAYABLE_TESTER: Prisma.UserWhereInput = { OR: [{ deletedAt: null }, { stripeAccountId: { not: null }, payoutsReady: true }] };
-/** (Owner, Oct 29, batch 12 section 1) The tester's part still under review when the developer deleted their account. */
-// (Batch 35 §162) Each line about a person uses their recorded pronoun (`pronoun`: she, he, they or unset, which reads "they").
-export const devDeletedLine = (dev: string, pronoun?: string | null) => `${dev} deleted ${pronouns(pronoun).poss} account, so this can't be paid.`;
 export const deletedNoPayoutsLine = (name: string, pronoun?: string | null) => `${name} deleted ${pronouns(pronoun).poss} account before setting up payouts, so this can't be paid.`;
 /** (Owner, Oct 29, batch 10) A hold lifted (paid, or a chargeback hold cleared) while an admin suspension is still on: bell and email, sent even with email Off. */
 /** (Owner, Oct 29, batch 10) The platform won a chargeback: the developer's bell and email, and (when they had already paid it back) the receipt line for the refund. */
@@ -1897,7 +1903,7 @@ const stopAt = (d: Date, now: Date, fmtTime: (d: Date) => string, fmtDateTime: (
  */
 export function stopMomentLine(side: "tester" | "developer", kind: "dev" | "team" | "closed" | "early", at: Date, names: { dev: string; tester: string }, fmtTime: (d: Date) => string, fmtDateTime: (d: Date) => string, now = new Date()) {
   const t = stopAt(at, now, fmtTime, fmtDateTime);
-  if (kind === "closed") return `This test closed at ${t}.`;
+  if (kind === "closed") return `This test ended at ${t}.`; // (Owner, Nov 9, §364: one word, "ended", as the banner and the refusal say it)
   if (side === "tester") return kind === "team" ? `This test was stopped at ${t}.` : kind === "early" ? `${names.dev} ended your work early at ${t}.` : `${names.dev} stopped this test at ${t}.`;
   return kind === "team" ? `The team stopped this test at ${t}.` : kind === "early" ? `You ended ${names.tester}'s work early at ${t}.` : `You stopped this test at ${t}.`;
 }

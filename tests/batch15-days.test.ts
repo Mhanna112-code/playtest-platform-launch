@@ -77,7 +77,7 @@ describe("tester days (section 18)", () => {
     await db.test.update({ where: { id: testId }, data: { openUntil: new Date(Date.now() - 60_000) } });
     const b = await makeUser({ tester: true, name: "Ben Okafor" });
     const r = await act(testId, "join", b.cookie, { listingVersion: (await db.test.findUniqueOrThrow({ where: { id: testId } })).listingVersion });
-    expect(r.body.error.message).toMatch(/^This test closed to new testers on [A-Z][a-z]{2} \d{1,2}\.$/);
+    expect(r.body.error.message).toMatch(/^This test closed to new testers on [A-Z][a-z]{2} \d{1,2}, so your Join didn't go through\.$/); // (§364 item 10)
     expect((await findTests(b.user as never)).some((x) => x.id === testId)).toBe(false);
     expect((await db.contract.findUniqueOrThrow({ where: { id: a.sessionId } })).status).toBe("working");
   });

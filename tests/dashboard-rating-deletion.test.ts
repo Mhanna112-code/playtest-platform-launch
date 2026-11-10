@@ -27,11 +27,11 @@ it.each(["tester","developer"])("deleting the %s closes both rating actions, das
  await db.user.update({where:{id:side==="tester"?w.tester.user.id:w.dev.user.id},data:{deletedAt:new Date()}});
  expect((await testerRateState(w.sessionId)).kind).toBe("hidden");
  expect((await ratingsToGive(w.tester.user,"tester")).some(x=>x.id===w.sessionId)).toBe(false);
- await expect(testerRate(w.tester.user,w.sessionId,{stars:4,seenAt:seen(),confirmed:true})).rejects.toThrow("account was deleted");
+ await expect(testerRate(w.tester.user,w.sessionId,{stars:4,seenAt:seen(),confirmed:true})).rejects.toThrow(/session has ended, so your Rate didn't go through|This test was stopped, so your Rate didn't go through/); // (§364 item 9)
  await db.rating.create({data:{testId:w.testId,contractId:w.sessionId,side:"tester",raterId:w.tester.user.id,rateeId:w.dev.user.id,stars:4}});
  expect((await devRateStates([w.sessionId])).get(w.sessionId)?.kind).toBe("hidden");
  expect((await ratingsToGive(w.dev.user,"developer")).some(x=>x.id===w.sessionId)).toBe(false);
- await expect(devRate(w.dev.user,w.testId,{contractId:w.sessionId,stars:4,seenAt:seen(),confirmed:true})).rejects.toThrow("account was deleted");
+ await expect(devRate(w.dev.user,w.testId,{contractId:w.sessionId,stars:4,seenAt:seen(),confirmed:true})).rejects.toThrow(/session has ended, so your Rate didn't go through|This test was stopped, so your Rate didn't go through/); // (§364 item 9)
  await db.contract.update({where:{id:w.sessionId},data:{ratePromptedAt:new Date(Date.now()-5*86400000)}});
  await ratingReminders();
  expect(await db.notification.count({where:{testId:w.testId,text:{startsWith:"Reminder: rate "}}})).toBe(0);
@@ -66,7 +66,7 @@ it("deletion landing after the rating gate is refused under the write lock",asyn
    return result;
  });
  try {
-  await expect(testerRate(w.tester.user,w.sessionId,{stars:4,seenAt:seen()})).rejects.toThrow("account was deleted");
+  await expect(testerRate(w.tester.user,w.sessionId,{stars:4,seenAt:seen()})).rejects.toThrow("This test was stopped, so your Rate didn't go through."); // (§364 item 9)
   expect(spy).toHaveBeenCalledTimes(1);
   expect(await db.rating.count({where:{contractId:w.sessionId}})).toBe(0);
  } finally {spy.mockRestore();}

@@ -69,7 +69,7 @@ describe("what still works follows the running test's stop-once rules (batch 29 
       const c = await sact(b.sessionId, "choose", b.tester.cookie, { submissionId: b.sub.id, choice: "letgo", seenAt: b.opened });
       if (state === "removed") {
         // (Batch 17 section 10) In the suspended tester's limited view Dispute is the only press: Charge and Let it go wait for the reinstatement.
-        expect(c.body.error.message).toBe("You can do this once your account is active again.");
+        expect(c.body.error.message).toBe(`Your account is paused, so your Let it go didn't go through.`); // (§364 item 8)
         return;
       }
       expect(c.body.error?.code, JSON.stringify(c.body)).toBe("stop_once");

@@ -243,7 +243,7 @@ describe("a suspended developer's test page: its restricted view (batch 15 secti
       expect(r.body.error.failed, action).toMatch(/^Your .+ on Harbor Run didn't go through$/);
     }
     // (Batch 17 section 2) Rate has its own refusal while the developer side is suspended.
-    expect((await act(testId, "rate", dev.cookie, { seenAt: seen(), confirmed: true, contractId: sessionId, stars: 4 })).body.error).toMatchObject({ code: "inactive", message: "You can rate once your account is active again." });
+    expect((await act(testId, "rate", dev.cookie, { seenAt: seen(), confirmed: true, contractId: sessionId, stars: 4 })).body.error).toMatchObject({ code: "inactive", message: "Your account is suspended, so your Rate didn't go through." }); // (§364 item 8)
     // (Owner, Oct 30, batch 15 section 29) Stop and End early work from the restricted view, silently.
     for (const [action, body] of [["end-early", { contractIds: [sessionId], reason: "We have what we need" }], ["stop", { reason: "We have what we need." }]] as const) {
       const r = await act(testId, action, dev.cookie, { seenAt: seen(), ...body });

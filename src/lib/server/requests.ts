@@ -1,5 +1,6 @@
 import { assertWorkOpen, finishWorkIfDue, workEndOf } from "./workWindow";
 import { stoppedPressLine } from "@/lib/refusal";
+import * as RF from "@/lib/refusal";
 import { randomBytes } from "node:crypto";
 import { T } from "@/lib/tz";
 import { db } from "@/lib/db";
@@ -7,8 +8,7 @@ import { displayName, fmtDate, fmtDateTime, fmtTime, money, pronouns } from "@/l
 import { andList, checkCallMinutes, checkCancel, workDeadlineOf } from "@/lib/rules";
 import { FOREVER_AHEAD, MAX_ROWS, cutRow, occurrences, rowsOf, stepMs, toJson, type CallRow, type RowRepeat } from "@/lib/callRows";
 import type { Prisma } from "@prisma/client";
-import { NOT_LISTED, PAUSED_RIGHT_NOW, callListed, testPaused } from "@/lib/rules";
-import { DEV_SUSPENDED } from "./users";
+import { NOT_LISTED, callListed, testPaused } from "@/lib/rules";
 import { HttpError, readText } from "./http";
 import { LIMITS } from "@/lib/limits";
 import { bell, notify } from "./notify";
@@ -322,8 +322,8 @@ async function createRequests(datas: Prisma.CallRequestUncheckedCreateInput[]) {
     for (const d of datas) per.set(d.contractId, [...(per.get(d.contractId) ?? []), d]);
     for (const [contractId, list] of per) {
       const c = await tx.contract.findUniqueOrThrow({ where: { id: contractId }, include: { tester: true, test: { include: { developer: true } } } });
-      if (c.status !== "working") throw new HttpError(409, "closed", "This session has ended.");
       const side = list[0].fromSide as Side;
+      if (c.status !== "working") throw new HttpError(409, "closed", RF.pressRefused(side === "tester" ? RF.PART_ENDED_CAUSE : RF.sessionEndedCause(displayName(c.tester)), "Request a time")); // (§364)
       const sender = side === "developer" ? c.test.developer : c.tester;
       const line = roomLine(displayName(side === "developer" ? c.tester : c.test.developer), { sent: await sentToday(c.id, side, sender.timeZone, tx), taken: await callsTaken(c.id, tx) }, list.length, list.length);
       if (line) throw new HttpError(409, "limit", line);
@@ -350,7 +350,7 @@ async function bookAt(contractId: string, startsAt: Date, minutes: number, rateC
     await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${c.testId} FOR UPDATE`;
     await assertWorkOpen(tx, c.testId);
     const fresh = await tx.contract.findUniqueOrThrow({ where: { id: contractId } });
-    if (fresh.status !== "working") throw new HttpError(409, "closed", "This session has ended.");
+    if (fresh.status !== "working") throw new HttpError(409, "closed", RF.pressRefused(byDeveloper ? RF.sessionEndedCause(displayName(c.tester)) : RF.PART_ENDED_CAUSE, "Accept")); // (§364)
     const slot = await tx.callSlot.create({ data: { testId: c.testId, startsAt, minutes, allowedTesterIds: [c.testerId], status: "booked" } });
     const call = await tx.call.create({ data: { slotId: slot.id, contractId, startsAt, minutes, rateCents, setId } });
     if (!quiet) await recordEvent(tx, c.testId, "booked", byDeveloper ? `You booked a call with ${displayName(c.tester)} for ${T(startsAt)}` : `${displayName(c.tester)} booked a call for ${T(startsAt)}`, false, {}, contractId, "", callRow(call.id)); // (Owner, Nov 6, §284) the place the line opens
@@ -490,15 +490,17 @@ async function claimRequest(id: string, status: string, other: Parameters<typeof
 }
 
 /** A paused test (any cause) refuses booking a call: testers read only "paused". */
-function pausedRefusal(c: Ctx["c"], side: Side) {
-  if (testPaused(c.test.developer, c.test)) throw new HttpError(409, "paused", side === "tester" ? `${PAUSED_RIGHT_NOW} You can request calls once it resumes.` : c.test.developer.devSuspendedAt ? DEV_SUSPENDED : c.test.developer.holdStartedAt ? "Pay what you owe first." : "The team paused this test.");
+function pausedRefusal(c: Ctx["c"], side: Side, press: string) {
+  // (Owner, Nov 9, §364 items 5-8) The tester: "This test is paused right now, so your Accept didn't go through." (never why); the developer: by their cause.
+  const d = c.test.developer;
+  if (testPaused(d, c.test)) throw new HttpError(409, "paused", RF.pressRefused(side === "tester" ? RF.PAUSED_CAUSE : d.devSuspendedAt ? RF.ACCOUNT_SUSPENDED_CAUSE : d.holdStartedAt ? RF.HELD_CAUSE : RF.TEAM_PAUSED_CAUSE, press));
 }
 async function refusals(c: Ctx["c"], side: Side, /** (§363) the press refused: "Request a time", "Accept" */ press: string) {
-  if (c.status !== "working") throw new HttpError(409, "closed", side === "tester" ? "Your session has ended." : `${displayName(c.tester)}'s session has ended.`);
-  pausedRefusal(c, side);
+  if (c.status !== "working") throw new HttpError(409, "closed", RF.pressRefused(side === "tester" ? RF.PART_ENDED_CAUSE : RF.sessionEndedCause(displayName(c.tester)), press)); // (§364 items 3, 4)
+  pausedRefusal(c, side, press);
   // (Owner) "Closed" only means no NEW testers: testers already in carry on, so calls work. Only a stopped test refuses.
   if (c.test.status === "stopped") throw new HttpError(409, "closed", stoppedPressLine(press)); // (§363)
-  await assertWorkOpen(db, c.testId);
+  await assertWorkOpen(db, c.testId, new Date(), press);
   // (Owner, Oct 28 afternoon) Calls are allowed whether or not a live call is a listed part: one that isn't reads "Not listed" and its pay is up to the developer.
   if (await db.block.count({ where: { OR: [{ blockerId: c.testerId, blockedId: c.test.developerId }, { blockerId: c.test.developerId, blockedId: c.testerId }] } })) throw new HttpError(409, "gone", "This time isn't available.");
 }
@@ -729,7 +731,7 @@ export async function devRequestTime(dev: U, testId: string, body: Record<string
   };
 }
 /** (Owner, Nov 5, §278) "Your Request a time didn't go through for mhann: mhann's session has ended." */
-export const requestTesterGoneLine = (name: string) => `Your Request a time didn't go through for ${name}: ${name}'s session has ended.`;
+export const requestTesterGoneLine = (name: string) => RF.pressRefused(RF.sessionEndedCause(name), "Request a time"); // (Owner, Nov 9, §364 item 4) one line each
 
 /**
  * Tester: Request a time, always at the contract rate. (Owner, Nov 5, §208) Each row of the form is its OWN request (once, or a daily / weekly set): the developer
@@ -846,7 +848,7 @@ export async function answerRequest(user: U, contractId: string, body: Record<st
   // request into one booked time, so it never raises the count.
   if (action === "accept" && (await callsTaken(contractId)) > MAX_CALLS) throw new HttpError(409, "limit", callLimitLine(displayName(other)));
   // (Owner, Nov 5, §271) Accept on a paused test is refused, so the refusal comes first: it tells them it's paused (never a pause stop, then the refusal).
-  if (action === "accept") pausedRefusal(c, side);
+  if (action === "accept") pausedRefusal(c, side, "Accept");
   // (Batch 35 §79) Accept / Decline never stops for the line about this request itself (the developer's: the tester's "requested …" on this contract).
   if (side === "developer") await db.$transaction((tx) => devGate(tx, c.testId, body, {}, [], undefined, { acts: CALL_ACTS, keys: [`req:${r.id}`, `c:${contractId}`], answers: { item: r.id, kinds: ["requested"], contractId } }));
   else await testerGate(c.testerId, contractId, c.testId, body, undefined, { ...CALL_PRESS, answers: { item: r.id } });
@@ -975,13 +977,13 @@ export async function cancelCallSet(user: U, contractId: string, body: Record<st
   const now = new Date();
   const ahead = () => db.call.findMany({ where: { contractId, setId, status: "booked", startsAt: { gt: now } }, orderBy: { startsAt: "asc" } });
   const first = await ahead();
-  if (!first.length) throw new HttpError(409, "cancelled", "The remaining calls of this set were already cancelled.");
+  if (!first.length) throw new HttpError(409, "cancelled", RF.CALL_ALREADY_CANCELLED); // (§364 item 13)
   const ok = checkCancel(first[0].startsAt, now, reason);
   if (!ok.ok) throw new HttpError(400, "reason", ok.message);
   if (side === "developer") await db.$transaction((tx) => devGate(tx, c.testId, body, {}, [], undefined, { acts: CALL_ACTS, keys: [`set:${setId}`, `c:${contractId}`] }));
   else await testerGate(c.testerId, contractId, c.testId, body, undefined, CALL_PRESS);
   const calls = await ahead();
-  if (!calls.length) throw new HttpError(409, "cancelled", "The remaining calls of this set were already cancelled.");
+  if (!calls.length) throw new HttpError(409, "cancelled", RF.CALL_ALREADY_CANCELLED); // (§364 item 13)
   const set = await db.callSet.findUnique({ where: { id: setId } });
   const unit = set ? unitOf(set.repeat) : calls.length > 1 && calls[1].startsAt.getTime() - calls[0].startsAt.getTime() < 2 * 86_400_000 ? "daily" : "weekly";
   await db.$transaction(async (tx) => {

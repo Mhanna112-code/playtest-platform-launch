@@ -220,11 +220,13 @@ describe("(NEXT-UI 26) a suspended developer", () => {
   it("cannot Pay, $0 included (it waits until the suspension is lifted); everything else (invite, Edit, chat, next round, calls) is refused with the suspended line", async () => {
     const { dev, sub, sessionId, testId, tester } = await sent();
     await db.user.update({ where: { id: dev.user.id }, data: { devSuspendedAt: new Date(), testerSuspendedAt: new Date() } });
-    const LINE = "Your account is suspended: your tests are paused. Contact us in Settings to appeal.";
+    // (Owner, Nov 9, §364 item 8) One cause, each press named.
+    const LINE = "Your account is suspended, so your Pay didn't go through.";
+    const named = (press: string) => `Your account is suspended, so your ${press} didn't go through.`;
     expect((await payReq(dev.cookie, { amount: "0", kind: "submission", id: sub.id, reason: "Nothing usable here" })).body.error.message).toBe(LINE);
-    expect((await act(testId, "next-round", dev.cookie, { seenAt: seen(), confirmed: true })).body.error.message).toBe(LINE);
-    expect((await act(testId, "message", dev.cookie, { contractId: sessionId, body: "hi" })).body.error.message).toBe(LINE);
-    expect((await act(testId, "invite", dev.cookie, { seenAt: seen(), testerIds: [tester.user.id] })).body.error.message).toBe(LINE);
+    expect((await act(testId, "next-round", dev.cookie, { seenAt: seen(), confirmed: true })).body.error.message).toBe(named("Next round"));
+    expect((await act(testId, "message", dev.cookie, { contractId: sessionId, body: "hi" })).body.error.message).toBe(named("Send"));
+    expect((await act(testId, "invite", dev.cookie, { seenAt: seen(), testerIds: [tester.user.id] })).body.error.message).toBe(named("Invite"));
     // Pay is refused too, and nothing is recorded: the piece still waits for review.
     const p = await payReq(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 });
     expect(p.status).toBe(403);

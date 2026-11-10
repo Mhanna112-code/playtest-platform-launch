@@ -55,7 +55,7 @@ describe("invites", () => {
     const full = await act(testId, "invite", dev.cookie, { seenAt: pageLoaded, testerIds: [ben.user.id], confirmed: true });
     expect(full.body.error.message).toBe("Harbor Run is full. Add spots to invite more people.");
     await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true });
-    expect((await act(testId, "invite", dev.cookie, { seenAt: seen(), testerIds: [ben.user.id], confirmed: true })).body.error.message).toMatch(/^This test was stopped on .+, so nobody can be invited\.$/);
+    expect((await act(testId, "invite", dev.cookie, { seenAt: seen(), testerIds: [ben.user.id], confirmed: true })).body.error.message).toBe("This test was stopped, so your Invite didn't go through."); // (§363)
   });
 });
 
@@ -68,7 +68,7 @@ describe("payment hold", () => {
     expect((await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] })).status).toBe(200);
     await startHold(dev.user.id, "unpaid");
     // (Owner, Oct 28 afternoon) Sending waits for the tester too; joining, booking, posting, Pay, Reject and Next round wait.
-    expect((await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] })).body.error.message).toBe("This test is paused right now. You can send this once it resumes.");
+    expect((await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] })).body.error.message).toBe("This test is paused right now, so your Send didn't go through."); // (§364 item 5)
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
     // (Owner, Oct 27) Pay and Reject are unavailable during ANY hold: refused, and the refusal names the press for the dashboard box.
     const waits = await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 });
@@ -77,7 +77,7 @@ describe("payment hold", () => {
     expect((await pay(dev.cookie, { amount: "0", kind: "submission", id: sub.id, reason: "Not useful" })).body.error.code).toBe("held");
     expect(await db.payment.count({ where: { submissionId: sub.id } })).toBe(0);
     const ben = await makeUser({ tester: true });
-    expect((await act(testId, "join", ben.cookie, { listingVersion: 1 })).body.error.message).toBe("This test is paused right now.");
+    expect((await act(testId, "join", ben.cookie, { listingVersion: 1 })).body.error.message).toBe("This test isn't taking new testers right now, so your Join didn't go through."); // (§364 item 10)
     expect((await json(await testsPOST(req("/api/tests", { cookie: dev.cookie, body: listingBody() })))).body.error.code).toBe("held");
     expect((await act(testId, "next-round", dev.cookie, { seenAt: seen(), confirmed: true })).body.error.code).toBe("held");
     // Pretend the hold started 2 days ago, then pay what's owed (nothing failed) → lifts and shifts by ~2 days.
@@ -110,7 +110,7 @@ describe("payment hold", () => {
     expect(await cancelLatePauseCalls(new Date(Date.now() + 1.5 * DAY))).toBe(0);
     expect(await cancelLatePauseCalls(new Date(Date.now() + 2.5 * DAY))).toBe(1);
     expect(await db.call.findUniqueOrThrow({ where: { id: later5.id } })).toMatchObject({ status: "cancelled", cancelledBy: "system" });
-    expect((await sact(sessionId, "request-time", tester.cookie, { seenAt: seen(), startsAt: new Date(Date.now() + 3 * DAY).toISOString(), confirmed: true })).body.error.message).toBe("This test is paused right now. You can request calls once it resumes.");
+    expect((await sact(sessionId, "request-time", tester.cookie, { seenAt: seen(), startsAt: new Date(Date.now() + 3 * DAY).toISOString(), confirmed: true })).body.error.message).toBe("This test is paused right now, so your Request a time didn't go through."); // (§364 item 5)
     expect((await sact(sessionId, "leave", tester.cookie)).status).toBe(200); // may leave any time
   });
 });

@@ -12,7 +12,8 @@ import { keyBoxes } from "@/lib/server/accessKeys";
 import { getUserFromRequest } from "@/lib/server/session";
 import { failedLine, pressVerbOf, requireActive, requireConfirmed, requireCurrentTerms } from "@/lib/server/users";
 import { stoppedPressLine } from "@/lib/refusal";
-import { RESTRICTED_OK_ACTIONS, TEAM_PAUSED_LINE, TEAM_PAUSED_OK_ACTIONS, teamPausedNow } from "@/lib/restricted";
+import * as RF from "@/lib/refusal";
+import { RESTRICTED_OK_ACTIONS, TEAM_PAUSED_OK_ACTIONS, teamPausedNow } from "@/lib/restricted";
 import { bodyPressVerb } from "@/lib/pressLabels";
 
 // (Owner, Oct 27) Email confirmation is needed only for Post a test (its own route), Join (which is also accepting an invite) and Apply. A blocked press is a blue notice under the button with Resend the link.
@@ -47,10 +48,11 @@ export async function POST(req: Request, { params }: Ctx) {
     const { id, action } = await params;
     // (Batch 17 section 2) Rate reaches its own refusal ("You can rate once your account is active again.") while the developer is suspended or on a hold.
     const what = await pressWhat(req, action);
+    const verb = await pressVerbOf(req, what); // (§363 / §364) read before the body is (a refusal names the press)
     const u = await requireActive(req, { devOk: SUSPENDED_OK.has(action) || action === "rate" || action === "edit", devSide: !TESTER_SIDE.has(action), what });
     const body = await readJson(req, 900_000); // (batch 15 sections 3 and 17) an Edit with 20 questions and the steps at 20,000 characters each
     if (NEEDS_CONFIRMED.has(action)) requireConfirmed(u);
-    await adminRefusal(req, u.id, id, action, what);
+    await adminRefusal(req, u.id, id, action, what, verb);
     if (NEEDS_CURRENT_TERMS.has(action)) await requireCurrentTerms(u, body);
     const res0 = await run(u, id, action, body);
     const data = await res0.clone().json().catch(() => null);
@@ -70,19 +72,19 @@ const TESTER_SIDE = new Set(["join", "apply", "rejoin-ask", "withdraw-applicatio
  * dispute; Rate reaches its own refusal). The team stopped it: every press the developer made fails and they are sent back to the test, where a permanent banner says
  * so and names the press that failed.
  */
-async function adminRefusal(req: Request, userId: string, testId: string, action: string, what?: string) {
+async function adminRefusal(req: Request, userId: string, testId: string, action: string, what?: string, verb = "") {
   if (TESTER_SIDE.has(action)) return;
   const t = await db.test.findUnique({ where: { id: testId }, select: { developerId: true, status: true, adminPausedAt: true, adminStoppedAt: true } });
   if (!t || t.developerId !== userId) return;
   // (Owner, Oct 28) A team stop is a HARD refusal for every press a stopped test does not allow (no stop-once); what a stopped test allows (chat, rate, a dispute reply, extra pay, a call's length
   // and problem report) goes on under its own rules.
   // (Owner, Nov 9, §363/§364) The one stopped line, naming the press (the banner still says the team stopped it, why, and which press failed).
-  if (t.adminStoppedAt && !STOPPED_ALLOWS.has(action) && action !== "edit") throw new HttpError(409, "admin_stopped", stoppedPressLine(await pressVerbOf(req, what)), { failed: await failedLine(req, what) });
+  if (t.adminStoppedAt && !STOPPED_ALLOWS.has(action) && action !== "edit") throw new HttpError(409, "admin_stopped", stoppedPressLine(verb), { failed: await failedLine(req, what) });
   if (t.adminStoppedAt) return;
   // (Owner, Nov 4, §172; replaces batch 15 sections 1, 23 and 37) A test the team paused follows a developer suspension's rules: Stop, End early, Cancel call and the
   // side of a dispute go on; Rate goes on to its own refusal (as a suspended developer's does: batch 17 section 2); every other press, chat included, goes to the
   // banner. A stopped or closed test isn't paused any more.
-  if (teamPausedNow(t) && !TEAM_PAUSED_OK_ACTIONS.has(action) && action !== "rate" && action !== "edit") throw new HttpError(409, "admin_paused", TEAM_PAUSED_LINE, { failed: await failedLine(req, what), testId });
+  if (teamPausedNow(t) && !TEAM_PAUSED_OK_ACTIONS.has(action) && action !== "rate" && action !== "edit") throw new HttpError(409, "admin_paused", RF.pressRefused(RF.TEAM_PAUSED_CAUSE, verb), { failed: await failedLine(req, what), testId }); // (§364 item 6)
 }
 
 /**

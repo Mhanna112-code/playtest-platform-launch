@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { LIMITS, NAME_TOO_LONG } from "@/lib/limits";
+import * as RF from "@/lib/refusal";
 import { CATEGORIES, DEVICES, DEVICES_MISSING, LANGUAGES, LANGUAGES_MISSING, pickFrom as pick } from "@/lib/options";
 import { sideFor, type Side } from "@/lib/sides";
 import { HttpError } from "./http";
@@ -85,10 +86,11 @@ export async function requireActive(req: Request, opts: { devOk?: boolean; devSi
   const side = pressSideOf(u, opts.devSide);
   const asDev = side === "developer";
   if (asDev ? u.devSuspendedAt : u.testerSuspendedAt) {
-    throw new HttpError(403, "suspended", asDev ? DEV_SUSPENDED : SUSPENDED, { failed: await failedLine(req, opts.what, opts.piece), suspended: true });
+    // (Owner, Nov 9, §364 item 8) "Your account is suspended, so your Pay didn't go through." / a tester: "Your account is paused, so your Send didn't go through."
+    throw new HttpError(403, "suspended", RF.pressRefused(asDev ? RF.ACCOUNT_SUSPENDED_CAUSE : RF.ACCOUNT_PAUSED_CAUSE, await pressVerbOf(req, opts.what)), { failed: await failedLine(req, opts.what, opts.piece), suspended: true });
   }
   if (u.holdStartedAt && u.isDeveloper && asDev && (opts.devSide === true || opts.devSide === "auto")) {
-    throw new HttpError(403, "held", u.holdReason === "chargeback" ? DEV_CHARGEBACK : DEV_HELD, { failed: await failedLine(req, opts.what, opts.piece), held: true });
+    throw new HttpError(403, "held", RF.pressRefused(RF.HELD_CAUSE, await pressVerbOf(req, opts.what)), { failed: await failedLine(req, opts.what, opts.piece), held: true }); // (§364 item 7)
   }
   return u;
 }

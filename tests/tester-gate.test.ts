@@ -48,7 +48,7 @@ describe("the tester's one set of stop-once reasons", () => {
     await later();
     await act(testId, "end-early", dev.cookie, { seenAt: seen(), confirmed: true, contractId: sessionId, reason: "We have enough" });
     const r = await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"], seenAt: pageLoaded });
-    expect(r.body.error.message).toContain("ended your session early");
+    expect(r.body.error.message).toBe("Your part in this test has ended, so your Send didn't go through."); // (§364 item 3)
   });
 
   it("no 'ask to leave' or 'ask to end early' anywhere", () => {

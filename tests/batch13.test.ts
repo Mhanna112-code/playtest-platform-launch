@@ -156,7 +156,7 @@ describe("batch 13 section 4: Rate and suspensions", () => {
     const r = await sact(s.sessionId, "rate", s.tester.cookie, { stars: 4 });
     // (Batch 17 section 2) Refused with its own line; hidden while suspended (the limited view too).
     expect(r.status).toBe(409);
-    expect(r.body.error).toMatchObject({ code: "inactive", message: "You can rate once your account is active again." });
+    expect(r.body.error).toMatchObject({ code: "inactive", message: "Your account is paused, so your Rate didn't go through." }); // (§364 item 8)
     expect(src("app/app/sessions/[id]/page.tsx")).toContain('{(rateState.kind === "open" || rateState.kind === "disabled") && !meOff && (');
     expect(src("app/app/sessions/[id]/page.tsx")).toContain("const canAct = !meOff || limited;");
     await db.user.update({ where: { id: s.tester.user.id }, data: { devSuspendedAt: null, testerSuspendedAt: null } });

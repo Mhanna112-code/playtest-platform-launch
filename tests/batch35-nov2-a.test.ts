@@ -69,7 +69,7 @@ describe("batch 35 §118 (1): a part that ended closes its new-terms offer", () 
     const r = await sact(x.sessionId, "terms", x.tester.cookie, { choice: "switch", offerId: x.offer.id, seenAt: seen(), confirmed: true });
     expect(r.status).toBe(409);
     expect(r.body.error.message).toBe(PART_ENDED_TERMS);
-    expect(r.body.error.message).toBe("Your part on this test has ended, so these terms no longer apply.");
+    expect(r.body.error.message).toBe("Your part in this test has ended, so your Switch didn't go through."); // (§364 item 3)
     // Nothing switched.
     expect((await db.contract.findUniqueOrThrow({ where: { id: x.sessionId } })).termsSwitchedAt).toBeNull();
     expect((await termsRowLines([x.sessionId])).get(x.sessionId)).toMatch(/\(closed: their part ended\)$/);
@@ -85,7 +85,7 @@ describe("batch 35 §118 (1): a part that ended closes its new-terms offer", () 
     expect((await db.contract.findUniqueOrThrow({ where: { id: x.sessionId } })).status).toBe("left");
     expect((await db.termsOffer.findUniqueOrThrow({ where: { id: x.offer.id } })).status).toBe("closed");
     const k = await sact(x.sessionId, "terms", x.tester.cookie, { choice: "keep", offerId: x.offer.id, seenAt: seen(), confirmed: true });
-    expect(k.body.error?.message).toBe(PART_ENDED_TERMS);
+    expect(k.body.error?.message).toBe("Your part in this test has ended, so your Keep didn't go through."); // (§364 item 3)
     const html = await dashboard(x.tester.user);
     expect(html).not.toContain("Switch or keep your terms");
   });

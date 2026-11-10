@@ -2,9 +2,11 @@ import { additionTerms } from "./submissionAdditions";
 import { randomBytes } from "node:crypto";
 import { db } from "@/lib/db";
 import { displayName, pronouns } from "@/lib/format";
-import { PAUSED_SEND, testerPaused } from "@/lib/rules";
+import { testerPaused } from "@/lib/rules";
 import { HttpError } from "./http";
 import { NO_RECORDING_TO_ADD, SENT_RECORDING_LOCKED } from "@/lib/rules";
+import * as RF from "@/lib/refusal";
+import { overPressLine } from "@/lib/rules";
 import { ATTACHMENT_TYPES, MAX_ATTACHMENTS, MAX_ATTACHMENT_BYTES, MAX_RECORDING_BYTES, MAX_RECORDINGS, deleteObject, deleteStored, headObject, isVideo, listStored, r2On, uploadTarget } from "./storage";
 import { ownContract, sessionRefusal, tellSent, tellSentByBell } from "./tests";
 import type { Prisma } from "@prisma/client";
@@ -23,7 +25,7 @@ type U = Parameters<typeof tellSentByBell>[1];
 export async function startRecording(tester: U, contractId: string, body: Record<string, unknown>) {
   const c = await ownContract(tester.id, contractId);
   const refusal = sessionRefusal(c, c.test, displayName(c.test.developer));
-  if (refusal) throw new HttpError(409, "closed", refusal);
+  if (refusal) throw new HttpError(409, "closed", overPressLine(c, "upload")); // (§363 / §364)
   const part = body.part === "written" ? "written" : "recording";
   const size = Number(body.size);
   const filename = (typeof body.filename === "string" ? body.filename : "recording").replace(/[^\w.\- ]/g, "_").slice(0, 120) || "recording";
@@ -61,7 +63,7 @@ export async function startRecording(tester: U, contractId: string, body: Record
 
 export async function finishRecording(tester: U, contractId: string, body: Record<string, unknown>) {
   const c = await ownContract(tester.id, contractId);
-  await (await import("./workWindow")).assertWorkOpen(db, c.testId);
+  await (await import("./workWindow")).assertWorkOpen(db, c.testId, new Date(), "upload");
   const rec = await db.recording.findUnique({ where: { id: String(body.recordingId ?? "") } });
   if (!rec || rec.contractId !== contractId) throw new HttpError(404, "not_found", "That upload doesn't exist.");
   // (Batch 15 section 6) On R2 the browser uploaded straight to storage: check the real object. Missing, a different size from what was claimed, or over the limit:
@@ -166,9 +168,10 @@ export async function removeRecording(tester: U, contractId: string, body: Recor
 export async function sendRecording(tester: U, contractId: string, body: Record<string, unknown> = {}) {
   const c0 = await ownContract(tester.id, contractId);
   const ended = sessionRefusal(c0, c0.test, displayName(c0.test.developer));
-  if (ended) throw new HttpError(409, "closed", ended);
+  const press = body.add === true ? "Add" : "Send";
+  if (ended) throw new HttpError(409, "closed", overPressLine(c0, press)); // (§363 / §364)
   // (Owner, Oct 28 afternoon) No sending while the test is paused (uploads, the drafts, still work).
-  if (!sessionRefusal(c0, c0.test, displayName(c0.test.developer)) && testerPaused(c0.test.developer, c0.test)) throw new HttpError(409, "paused", PAUSED_SEND);
+  if (!sessionRefusal(c0, c0.test, displayName(c0.test.developer)) && testerPaused(c0.test.developer, c0.test)) throw new HttpError(409, "paused", RF.pressRefused(RF.PAUSED_CAUSE, press)); // (§364 item 5)
   // (Batch 27 section 1) An open new-terms offer blocks Send until it's answered (Switch or Keep).
   await answerTermsFirst(contractId);
   // (Owner, Nov 4, §183) Adding to a sent recording stops once for a developer payment on it since the page loaded, whatever the tester's Alerts. A press that
@@ -184,9 +187,9 @@ export async function sendRecording(tester: U, contractId: string, body: Record<
     await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${c0.testId} FOR UPDATE`;
     const c = await tx.contract.findUniqueOrThrow({ where: { id: contractId } });
     const t = await tx.test.findUniqueOrThrow({ where: { id: c.testId } });
-    await (await import("./workWindow")).assertWorkOpen(tx, t.id);
+    await (await import("./workWindow")).assertWorkOpen(tx, t.id, new Date(), press);
     const refusal = sessionRefusal(c, t, displayName(c0.test.developer));
-    if (refusal) throw new HttpError(409, "closed", refusal);
+    if (refusal) throw new HttpError(409, "closed", overPressLine(c, press)); // (§363 / §364)
     // (Batch 13 section 7) All of them go together as ONE piece; a Send from another tab while one is still uploading waits for it.
     if (await tx.recording.count({ where: { contractId, ...stillUploading("recording") } })) throw new HttpError(409, "uploading", STILL_UPLOADING);
     const existing = await tx.submission.findUnique({ where: { contractId_kind: { contractId, kind: "recording" } }, include: { review: true } });

@@ -1,5 +1,6 @@
 import { fmtDateIn } from "@/lib/format";
 import { db } from "@/lib/db";
+import * as RF from "@/lib/refusal";
 import { HttpError, handle, ok, readJson } from "@/lib/server/http";
 import { requireUser } from "@/lib/server/session";
 import { cancelSubscription, keepSubscription, subscribe } from "@/lib/server/subscription";
@@ -13,7 +14,7 @@ const day = (d: Date | null, timeZone?: string | null) => d ? fmtDateIn(d, timeZ
 export async function POST(req: Request) {
   return handle(async () => {
     const u = await requireUser(req);
-    if (u.deletedAt) throw new HttpError(403, "deleted", "This account was deleted.");
+    if (u.deletedAt) throw new HttpError(403, "deleted", RF.ACCOUNT_NO_LONGER_EXISTS); // (§364 item 12)
     const body = await readJson(req);
     if (!["subscribe", "cancel", "keep"].includes(body.action as string)) throw new HttpError(400, "bad_action", "That action doesn't exist.");
     // (Owner, Oct 28, batch 16 section 27) A repeat of what another tab or device already did is a plain refusal, at once.

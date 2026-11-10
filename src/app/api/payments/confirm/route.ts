@@ -1,5 +1,6 @@
 import { HttpError, handle, ok, readJson } from "@/lib/server/http";
 import { requireUser } from "@/lib/server/session";
+import * as RF from "@/lib/refusal";
 import { confirmFinish, confirmStart } from "@/lib/server/confirm";
 import { peekBankCheck } from "@/lib/server/bankPeek";
 import { heartbeat } from "@/lib/server/bankHeartbeat";
@@ -11,7 +12,7 @@ import { db } from "@/lib/db";
 export async function POST(req: Request) {
   return handle(async () => {
     const u = await requireUser(req);
-    if (u.deletedAt) throw new HttpError(403, "deleted", "This account was deleted.");
+    if (u.deletedAt) throw new HttpError(403, "deleted", RF.ACCOUNT_NO_LONGER_EXISTS); // (§364 item 12)
     const body = await readJson(req);
     const paymentId = String(body.paymentId ?? "");
     // (§158) The open bank check asks whether Stripe still waits for the customer: read-only (nothing is finished, cancelled or charged), the developer's own only.

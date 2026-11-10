@@ -93,7 +93,7 @@ describe("§168 Next round is one tap: a new draft every press, with no name", (
     await startHold(held.dev.user.id, "unpaid");
     expect((await act(held.testId, "next-round", held.dev.cookie, { seenAt: seen() })).body.error.code).toBe("held");
     const u = await db.user.findUniqueOrThrow({ where: { id: held.dev.user.id } });
-    await expect(nextRound(u, held.testId)).rejects.toMatchObject({ code: "on_hold", message: expect.stringMatching(/ Your tests are paused until then\.$/) });
+    await expect(nextRound(u, held.testId)).rejects.toMatchObject({ code: "on_hold", message: "Your tests are paused, so your Next round didn't go through." }); // (§364 item 7)
     expect(await db.test.count({ where: { previousId: held.testId } })).toBe(0);
     // Suspended: the suspended line, as before.
     const sus = await setup();

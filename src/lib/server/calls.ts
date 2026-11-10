@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
+import * as RF from "@/lib/refusal";
 import { T, fmtFor } from "@/lib/tz";
 import { displayName, fmtDateTime, pronouns } from "@/lib/server/dateFormat";
 import { COULD_NOT_CONNECT, callClosedKind, callClosedLineOf, callEndedLine, cancelLine, checkCancel, type TestEventLike, NOBODY_JOINED, JOIN_OPENS_MIN, payByFrom, testPaused } from "@/lib/rules";
@@ -33,7 +34,7 @@ export async function devCancelCall(dev: U, testId: string, body: Record<string,
     const name = displayName(c.contract.tester);
     // (Owner, Nov 4, §185; replaces batch 16 section 21's stop first) A Cancel on a call already cancelled (by the tester, in another tab, by a stop) from an old
     // page is refused once, never a stop first; the row then leaves the booked list with the page's redraw (the call is in the Live session's Cancelled, §209).
-    if (c.status === "cancelled") throw new HttpError(409, "cancelled", `The call with ${name} was already cancelled.`);
+    if (c.status === "cancelled") throw new HttpError(409, "cancelled", RF.CALL_ALREADY_CANCELLED); // (§364 item 13)
     const ok = checkCancel(c.startsAt, new Date(), reason);
     if (!ok.ok) throw new HttpError(400, "reason", ok.message);
     // (Batch 16 section 21) Another tab's call action with this tester stops it once.
@@ -82,7 +83,7 @@ export async function testerCancelCall(tester: U, contractId: string, body: Reco
     await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${c0.testId} FOR UPDATE`;
     const call = await tx.call.findUnique({ where: { id: callId } });
     if (!call || call.contractId !== contractId) throw new HttpError(404, "not_found", "That call doesn't exist.");
-    if (call.status === "cancelled") throw new HttpError(409, "cancelled", `Your call with ${displayName(c0.test.developer)} on ${fmtDateTime(call.startsAt)} was already cancelled.`);
+    if (call.status === "cancelled") throw new HttpError(409, "cancelled", RF.CALL_ALREADY_CANCELLED); // (§364 item 13)
     const ok = checkCancel(call.startsAt, new Date(), reason);
     if (!ok.ok) throw new HttpError(400, "reason", ok.message);
     await testerGate(tester, c0, body);

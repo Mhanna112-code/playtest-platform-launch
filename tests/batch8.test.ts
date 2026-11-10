@@ -258,7 +258,7 @@ describe("batch 8 item 5: holds, suspensions, deletion", () => {
     expect((await sub(dev.cookie, "keep")).status).toBe(200);
     const other = await makeUser({ dev: true });
     await startHold(other.user.id, "unpaid");
-    expect((await sub(other.cookie, "subscribe")).body.error.message).toBe("You can subscribe once your account is active again.");
+    expect((await sub(other.cookie, "subscribe")).body.error.message).toBe("Your tests are paused, so your Subscribe didn't go through."); // (§364 item 7)
     // Paused 3 days ago; lifted now → the renewal moves 3 days later.
     await db.user.update({ where: { id: dev.user.id }, data: { subscriptionPausedAt: new Date(Date.now() - 3 * DAY) } });
     expect((await payOwed(await userOf(dev.user.id))).lifted).toBe(true);

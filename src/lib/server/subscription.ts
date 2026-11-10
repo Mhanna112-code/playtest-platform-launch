@@ -1,5 +1,6 @@
 import type Stripe from "stripe";
 import { db } from "@/lib/db";
+import * as RF from "@/lib/refusal";
 import { HttpError } from "./http";
 import { linesFor, notify } from "./notify";
 import { T } from "@/lib/tz";
@@ -7,10 +8,7 @@ import { PAYMENTS_PROBLEM, bankReturnUrl, chargePlatform, checkUrlOf, forgetCard
 import { serverKey } from "./pressKeys";
 import { receipt } from "./payments";
 import { recordEvent } from "./tests";
-import {
-  DELETE_ENDS_SUBSCRIPTION, FREE_LAUNCH_ENDED_LINE, FREE_NOTICE_DAYS, MAX_OPEN_TESTS, TOO_MANY_OPEN_LINE, RETRY_DAYS, SECOND_TEST_LINE, SUBSCRIBE_WAITS, SUBSCRIPTION_CENTS, SUBSCRIPTION_ENDED, SUBSCRIPTION_ENDED_FREE_LINE, SUBSCRIPTION_ENDED_LINE, SUBSCRIPTION_PRICE,
-  launchFrom, perkLine, periodEnd, subscribed, type Launch, type Perk,
-} from "@/lib/subscription";
+import { DELETE_ENDS_SUBSCRIPTION, FREE_LAUNCH_ENDED_LINE, FREE_NOTICE_DAYS, MAX_OPEN_TESTS, TOO_MANY_OPEN_LINE, RETRY_DAYS, SECOND_TEST_LINE, SUBSCRIPTION_CENTS, SUBSCRIPTION_ENDED, SUBSCRIPTION_ENDED_FREE_LINE, SUBSCRIPTION_ENDED_LINE, SUBSCRIPTION_PRICE, launchFrom, perkLine, periodEnd, subscribed, type Launch, type Perk } from "@/lib/subscription";
 
 // (Owner, Oct 28, batch 8) The developer subscription, $7/month.
 //
@@ -128,7 +126,7 @@ export async function subscribe(dev: Dev, now = new Date()) {
   const u = await userOf(dev.id);
   if (!u.isDeveloper) throw new HttpError(403, "not_developer", "Only developers subscribe.");
   // (Section 8 item 3) Refused during a hold or a suspension.
-  if (u.holdStartedAt || u.devSuspendedAt) throw new HttpError(409, "restricted", SUBSCRIBE_WAITS);
+  if (u.holdStartedAt || u.devSuspendedAt) throw new HttpError(409, "restricted", RF.pressRefused(u.devSuspendedAt ? RF.ACCOUNT_SUSPENDED_CAUSE : RF.HELD_CAUSE, "Subscribe")); // (§364 items 7, 8)
   if (subscribed(u, now)) throw new HttpError(409, "already", u.subscriptionCanceling ? "Press Keep my subscription to keep it." : "You're already subscribed.");
   const launch = await launchState(now);
   if (launch.free && !launch.until) throw new HttpError(409, "free", "Everything is free during launch: there's nothing to subscribe to yet.");

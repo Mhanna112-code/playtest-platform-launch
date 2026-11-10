@@ -1,5 +1,6 @@
 import { CHECK_CANCELLED_UNDERNEATH } from "@/lib/pressLabels";
 import { db } from "@/lib/db";
+import * as RF from "@/lib/refusal";
 import { displayName, fmtDateTimeIn, fmtTimeIn, money, pronouns } from "@/lib/format";
 import { CONFIRM_DAYS, OVER_PAY_TICK_LINE, PAY_TICK_CENTS, PRESS_ACTION_MS, BANK_TO_CONFIRM_HREF, bankAnchor, bankHref, bankWaitingAllLine, bankWaitingLine, BANK_NOT_CONFIRMED, cardDeclinedConfirmLine, cut10 } from "@/lib/rules";
 import { awayFromTest, dayIn, onTestLine, PAY_OWED_HREF } from "@/lib/rules"; // (§177; §332)
@@ -440,9 +441,10 @@ async function refuseInAll(p: { coveredById: string | null; settledAt: Date | nu
 
 /** (Owner, Nov 2, batch 35 §122) "This payment is paused until your tests resume.": its check was cancelled when a hold started; it waits for the lift. */
 export const CONFIRM_PAUSED = "This payment is paused until your tests resume.";
+const CONFIRM_WITH_BANK_PRESS = "Confirm with your bank";
 async function refusePaused(p: { status: string; kind: string; note: string; developerId: string }) {
   const paused = p.status === "deferred" || (p.kind === "owed" && p.status === "cancelled" && p.note.endsWith(":charges") && !!(await db.user.findUnique({ where: { id: p.developerId }, select: { holdStartedAt: true } }))?.holdStartedAt);
-  if (paused) throw new HttpError(409, "paused", CONFIRM_PAUSED);
+  if (paused) throw new HttpError(409, "paused", RF.pressRefused(RF.HELD_CAUSE, CONFIRM_WITH_BANK_PRESS)); // (§364 item 7)
 }
 
 /**

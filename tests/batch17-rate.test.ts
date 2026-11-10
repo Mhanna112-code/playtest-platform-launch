@@ -11,7 +11,7 @@ import { closePausedTest } from "@/lib/server/pauseClosure";
 import { decideDispute } from "@/lib/server/payments";
 import { startHold } from "@/lib/server/holds";
 import { fmtDate } from "@/lib/format";
-import { CALL_CANCELLED_BY_STOP, LIMITED_CHOICE_REFUSAL, LIMITED_VIEW_LINE, RATED_NO_DISPUTE, RATE_CHARGE_FIRST, RATE_INACTIVE, RATE_MY_DISPUTE, reviewDateOf } from "@/lib/rules";
+import { LIMITED_VIEW_LINE, RATED_NO_DISPUTE, RATE_CHARGE_FIRST, RATE_INACTIVE, RATE_MY_DISPUTE, reviewDateOf } from "@/lib/rules";
 
 // (Owner, Oct 28) Batch 17 sections 1, 2, 10, 12, 14, 16, 17 and the rating half of 19.
 
@@ -124,10 +124,10 @@ describe("section 2: no rating during a suspension; the developer's window pause
     const s = (await devRateStates([x.sessionId])).get(x.sessionId)!;
     expect(s).toMatchObject({ kind: "hidden", line: RATE_INACTIVE, paused: true });
     const r = await act(x.testId, "rate", x.dev.cookie, { contractId: x.sessionId, stars: 5 });
-    expect(r.body.error).toMatchObject({ code: "inactive", message: RATE_INACTIVE });
+    expect(r.body.error).toMatchObject({ code: "inactive", message: expect.stringMatching(/^Your (tests are paused|account is suspended), so your Rate didn't go through\.$/) }); // (§364 items 7, 8)
     await db.user.update({ where: { id: x.dev.user.id }, data: { holdStartedAt: null } });
     await suspendAccount((await admin()).id, x.dev.user.id, "Checking", "developer");
-    expect((await act(x.testId, "rate", x.dev.cookie, { contractId: x.sessionId, stars: 5 })).body.error.message).toBe(RATE_INACTIVE);
+    expect((await act(x.testId, "rate", x.dev.cookie, { contractId: x.sessionId, stars: 5 })).body.error.message).toBe("Your account is suspended, so your Rate didn't go through."); // (§364 item 8: a suspended developer)
   });
 
   it("a suspended tester: Rate, Charge and Let it go refused; Dispute goes straight through; the limited view's line (section 10)", async () => {
@@ -136,9 +136,9 @@ describe("section 2: no rating during a suspension; the developer's window pause
     expect(LIMITED_VIEW_LINE).toBe("Your account is paused. You can still dispute a payment.");
     await suspendAccount((await admin()).id, x.tester.user.id, "Checking", "tester");
     expect(await testerRateState(x.sessionId)).toMatchObject({ kind: "hidden", line: RATE_INACTIVE });
-    expect((await sact(x.sessionId, "rate", x.tester.cookie, { stars: 5 })).body.error.message).toBe(RATE_INACTIVE);
-    expect((await sact(x.sessionId, "choose", x.tester.cookie, { submissionId: sub.id, choice: "charge" })).body.error.message).toBe(LIMITED_CHOICE_REFUSAL);
-    expect((await sact(x.sessionId, "choose", x.tester.cookie, { submissionId: sub.id, choice: "letgo" })).body.error.message).toBe(LIMITED_CHOICE_REFUSAL);
+    expect((await sact(x.sessionId, "rate", x.tester.cookie, { stars: 5 })).body.error.message).toBe("Your account is paused, so your Rate didn't go through."); // (§364 item 8; the Rate box keeps RATE_INACTIVE)
+    expect((await sact(x.sessionId, "choose", x.tester.cookie, { submissionId: sub.id, choice: "charge" })).body.error.message).toBe("Your account is paused, so your Charge didn't go through.");
+    expect((await sact(x.sessionId, "choose", x.tester.cookie, { submissionId: sub.id, choice: "letgo" })).body.error.message).toBe("Your account is paused, so your Let it go didn't go through.");
     // Nothing is lost: the piece is still open to Charge.
     expect(await db.review.count({ where: { submissionId: sub.id } })).toBe(0);
     // The developer pays under the listing; (batch 29 section 11) the dispute from an old page stops once for the payment, then goes through.
@@ -161,7 +161,7 @@ describe("section 12: a stop while a page is open", () => {
     expect((await act(x.testId, "stop", x.dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true })).status).toBe(200);
     const r = await sact(x.sessionId, "choose", x.tester.cookie, { submissionId: sub.id, choice: "letgo", seenAt: old, pageSeenAt: old });
     expect(r.status, JSON.stringify(r.body)).toBe(200);
-    expect((await sact(x.sessionId, "cancel-call", x.tester.cookie, { callId: "x", seenAt: old })).body.error.message).toBe(CALL_CANCELLED_BY_STOP);
+    expect((await sact(x.sessionId, "cancel-call", x.tester.cookie, { callId: "x", seenAt: old })).body.error.message).toBe("This test was stopped, so your Cancel call didn't go through."); // (§363)
   });
 
   it("a page opened after the stop: Charge goes straight through", async () => {
@@ -256,7 +256,7 @@ describe("section 14: Rate stops only for changes about that person", () => {
     const x = await bothCanRate();
     await pauseTest((await admin()).id, x.testId, "Checking");
     const refused = await act(x.testId, "rate", x.dev.cookie, { contractId: x.sessionId, stars: 5, seenAt: seen() });
-    expect(refused.body.error).toMatchObject({ code: "inactive", message: "The team paused this test: you can rate once the pause is lifted." });
+    expect(refused.body.error).toMatchObject({ code: "inactive", message: "The team paused this test, so your Rate didn't go through." }); // (§364 item 6)
     const y = await sent();
     await pay(y.dev.cookie, { kind: "submission", id: y.sub.id, amount: "10.00", tickedCents: 1000 });
     await pauseTest((await admin()).id, y.testId, "Checking");

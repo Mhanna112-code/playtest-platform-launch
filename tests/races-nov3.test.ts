@@ -348,7 +348,7 @@ describe("(Nov 3, races) 6: the developer's Stop wins over the tester's Add", ()
       const msg = add.ok ? null : add.e.message;
       if (!msg) continue;
       refused++;
-      expect(keptRefusalLine(pressLabelOf(path(j.sessionId), body), msg)).toMatch(/^Your Add didn't go through: Nora Lane stopped the test on /);
+      expect(keptRefusalLine(pressLabelOf(path(j.sessionId), body), msg)).toBe("This test was stopped, so your Add didn't go through."); // (§363: the line names the press itself)
     }
     // After the Stop, Add always loses the same way.
     const s = await setup();
@@ -357,7 +357,7 @@ describe("(Nov 3, races) 6: the developer's Stop wins over the tester's Add", ()
     await stopTest(await db.user.findUniqueOrThrow({ where: { id: s.dev.user.id } }), s.testId, { reason: "We have what we need.", seenAt: seen(), confirmed: true });
     const late = await outcome(addWritten(await db.user.findUniqueOrThrow({ where: { id: j.tester.user.id } }), j.sessionId, { text: "x", question: questionKey("What did you like?"), seenAt: seen(), confirmed: true }));
     expect(late.ok).toBe(false);
-    if (!late.ok) expect(keptRefusalLine(pressLabelOf(path(j.sessionId), {}), late.e.message)).toMatch(/^Your Add didn't go through: Nora Lane stopped the test on /);
+    if (!late.ok) expect(keptRefusalLine(pressLabelOf(path(j.sessionId), {}), late.e.message)).toBe("This test was stopped, so your Add didn't go through."); // (§363)
     void refused;
   });
 });

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { POST as testsPOST } from "@/app/api/tests/route";
-import { RATE_TEAM_PAUSED, RESTRICTED_OK_ACTIONS, TEAM_PAUSED_LINE, TEAM_PAUSED_OK_ACTIONS, teamPausedWaits } from "@/lib/restricted";
+import { RATE_TEAM_PAUSED, RESTRICTED_OK_ACTIONS, TEAM_PAUSED_OK_ACTIONS, teamPausedWaits } from "@/lib/restricted";
 import { CHAT_NOT_SENT } from "@/lib/rules";
 import { cancelLatePauseCalls, pauseTest, TEAM_PAUSED_EMAIL_LINE, unpauseTest } from "@/lib/server/restrictions";
 import { chatRestriction, openTesterChat, CHAT_UNABLE } from "@/lib/server/messages";
@@ -47,7 +47,7 @@ describe("§172: the developer's presses on a test the team paused are a suspend
       const r = await act(s.testId, action, s.dev.cookie, { ...body, seenAt: seen() });
       if (action === "edit") { expect(r.body.error?.code).toBe("nda_only"); continue; }
       expect(r.body.error?.code, action).toBe("admin_paused");
-      expect(r.body.error.message).toBe(TEAM_PAUSED_LINE);
+      expect(r.body.error.message).toBe(`The team paused this test, so your ${({ message: "Send", invite: "Invite", "next-round": "Next round", "pay-extra": "Pay more" } as Record<string, string>)[action]} didn't go through.`); // (§364 item 6)
       expect(r.body.error.testId).toBe(s.testId);
       expect(r.body.error.failed).toMatch(/didn't go through$/);
     }
@@ -89,7 +89,7 @@ describe("§172: the developer's presses on a test the team paused are a suspend
     const st = (await devRateStates([x.sessionId])).get(x.sessionId)!;
     expect(st).toMatchObject({ kind: "hidden", line: RATE_TEAM_PAUSED, paused: true });
     const r = await act(x.testId, "rate", x.dev.cookie, { contractId: x.sessionId, stars: 5, seenAt: seen() });
-    expect(r.body.error).toMatchObject({ code: "inactive", message: RATE_TEAM_PAUSED });
+    expect(r.body.error).toMatchObject({ code: "inactive", message: "The team paused this test, so your Rate didn't go through." }); // (§364 item 6; the Rate box keeps RATE_TEAM_PAUSED)
     await unpauseTest(x.testId);
     expect((await devRateStates([x.sessionId])).get(x.sessionId)!.kind).toBe("open");
     expect((await act(x.testId, "rate", x.dev.cookie, { contractId: x.sessionId, stars: 5, seenAt: seen() })).status).toBe(200);

@@ -1,3 +1,4 @@
+import { TEAM_PAUSED_CAUSE, pressOfWhat, pressRefused } from "./refusal";
 // (Owner, Oct 27) A payment hold, a chargeback hold and an admin suspension are ONE state for a developer's pages: every page of theirs that
 // changes anything is closed, every press is refused (and routes them to the top of the dashboard), and a blue box there says why and how to resume.
 // (Owner, Oct 30, batch 15 section 16) Suspensions are per side: a developer-side suspension restricts only the developer side (like a hold), a tester-side one only
@@ -64,19 +65,10 @@ export const teamPausedNow = (t: { adminPausedAt?: Date | string | null; status?
 /** (§172) What a refused press on a test the team paused says (never "suspended" or "hold"). */
 export const TEAM_PAUSED_LINE = "The team paused this test: you can stop it, end testers' work early, cancel calls, or add your side of a dispute.";
 /** (§172) A press that waits for the lift, as under a suspension: "The team paused this test: Pay waits until the pause is lifted." */
-export const teamPausedWaits = (what: string) => `The team paused this test: ${what} waits until the pause is lifted.`;
+export const teamPausedWaits = (what: string) => pressRefused(TEAM_PAUSED_CAUSE, pressOfWhat(what)); // (Owner, Nov 9, §364 item 6) "The team paused this test, so your Pay didn't go through."
 /** (§172) The developer's Rate on a test the team paused (a suspended developer's reads RATE_INACTIVE). */
 export const RATE_TEAM_PAUSED = "The team paused this test: you can rate once the pause is lifted.";
 
-/** What a refused press tells the developer (the blue box at the dashboard top says the rest). */
-export const RESTRICTED_LINE: Record<DevRestriction, string> = {
-  suspended: "Your account is suspended: your tests are paused.",
-  hold: "Your account is on hold until you pay what you owe: your tests are paused.",
-  chargeback: "Your account is on hold after a chargeback: your tests are paused.",
-};
-
-/** Testers never read "hold", "suspended", "failed" or "chargeback" about a developer. */
-export const PAUSED_TEST_LINE = "This test is paused right now.";
 
 /**
  * A short key for the restriction a page is under ("" = none, "s" developer side suspended, "t" tester side suspended, "h" payment hold, "c" chargeback hold). The layout

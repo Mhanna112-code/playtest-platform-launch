@@ -693,7 +693,7 @@ describe("§122: a hold starting pauses the charges still waiting for the bank",
     expect((await deferredForBox(w.dev.user.id)).map((d) => d.id)).toEqual(items.slice(1).map((x) => x.p.id));
     // An old tab's Confirm with your bank on one: refused, nothing charged.
     const start = await confirm(w.dev.cookie, { paymentId: items[1].p.id, start: true });
-    expect(start.body.error).toMatchObject({ code: "paused", message: "This payment is paused until your tests resume." });
+    expect(start.body.error).toMatchObject({ code: "paused", message: "Your tests are paused, so your Confirm with your bank didn't go through." }); // (§364 item 7)
     const fin = await confirm(w.dev.cookie, { paymentId: items[1].p.id });
     expect(fin.body.error).toMatchObject({ code: "paused" });
     expect(st.made).toHaveLength(0);

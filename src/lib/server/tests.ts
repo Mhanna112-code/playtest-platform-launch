@@ -1,5 +1,7 @@
 import { ndaOnlyEdit, NDA_ONLY_EDIT } from "@/lib/ndaEditing";
 import { stoppedPressLine } from "@/lib/refusal";
+import * as RF from "@/lib/refusal";
+import { overPressLine } from "@/lib/rules";
 import { additionTerms } from "./submissionAdditions";
 import { dateZone } from "./dateZone";
 import { TEAM_LIFTED_EVENT, TEAM_PAUSED_EVENT, devLiftSince, devPauseMoments, devPauseSince, devStopSince, loadedOf } from "./stopMoment";
@@ -26,9 +28,7 @@ import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
 import { T, safeZone, renderTimes } from "@/lib/tz";
 import { LISTING_INFO_FIELDS, LISTING_VALUES, valuesText } from "@/lib/listingInfo";
 import { LISTING_SAVED, savedText } from "@/lib/listingPanel";
-import {
-  andList, testClosedToNewLine, daysBetween, dueAfterDays, movedDue, endOfDayIn, openUntilDay, testerDaysOf, testPaused, testerPaused, PAUSED_SEND, checkWrittenLength, checkAdditionLength, PAUSED_RIGHT_NOW, openUntilShortened, changedTerms, sameListingValue, checkListing, checkOpenUntilChange, contractSnapshot, editCheck, joinCheck, payByFrom, PAY_WAITS, testerRefusal, LISTING_FIELDS, mergeEdit, dropHiddenPartFields, termsLine, type Listing, type TestEventLike,
-} from "@/lib/rules";
+import { andList, testClosedToNewLine, daysBetween, dueAfterDays, movedDue, endOfDayIn, openUntilDay, testerDaysOf, testPaused, testerPaused, checkWrittenLength, checkAdditionLength, openUntilShortened, changedTerms, sameListingValue, checkListing, checkOpenUntilChange, contractSnapshot, editCheck, joinCheck, payByFrom, testerRefusal, LISTING_FIELDS, mergeEdit, dropHiddenPartFields, termsLine, type Listing, type TestEventLike } from "@/lib/rules";
 import { gapsOf, gapsUnseen, missingNeedText, noGaps, readGaps } from "@/lib/gaps";
 import { HttpError, readText } from "./http";
 import { notify } from "./notify";
@@ -254,7 +254,7 @@ const confirmedHighOf = (body: Record<string, unknown>) => (Array.isArray(body.c
 /** Post a test's checks (Post a test, and posting a draft): the listing (at most 10 spots) and the access keys. */
 async function checkPost(dev: U, body: Record<string, unknown>) {
   if (!dev.isDeveloper) throw new HttpError(403, "not_developer", "Turn on “post tests” in your profile to post a test.");
-  if (await devOnHold(dev.id)) throw new HttpError(409, "on_hold", `${PAY_WAITS} New tests can't be posted while payments are on hold.`);
+  if (await devOnHold(dev.id)) throw new HttpError(409, "on_hold", RF.pressRefused(RF.HELD_CAUSE, "Post the test")); // (§364 item 7)
   const l = parseListing(body, false, tzOf(body, dev)) as Listing;
   if (!l.mature) l.matureWhy = "";
   const now = new Date();
@@ -910,16 +910,16 @@ export async function endEarly(dev: U, testId: string, body: Record<string, unkn
       const c = await tx.contract.findUnique({ where: { id }, include: { tester: true, test: { select: { title: true } } } });
       if (!c || c.testId !== testId) throw new HttpError(404, "not_found", "Choose a tester.");
       const name = displayName(c.tester);
-      if (c.status === "left") { gone.push({ id, name, why: `${name} already left the test.` }); continue; }
+      if (c.status === "left") { gone.push({ id, name, why: RF.pressRefused(RF.sessionEndedCause(name), "End early") }); continue; } // (§364 item 4)
       if (c.status === "ended" && c.endKind === "early" && seenOf(body.seenAt) && c.endedAt && c.endedAt > seenOf(body.seenAt)!) { endedElsewhere.push({ id, name }); continue; }
-      if (c.status !== "working") { gone.push({ id, name, why: `${name}'s work already ended.` }); continue; }
+      if (c.status !== "working") { gone.push({ id, name, why: RF.pressRefused(RF.sessionEndedCause(name), "End early") }); continue; } // (§364 item 4)
       list.push(c);
     }
     // (§278) Nobody ticked is still working: one refusal naming them, as before.
-    if (!list.length && gone.length) throw new HttpError(409, "gone", [...gone.map((g) => g.why), ...(endedElsewhere.length ? [`${andList(endedElsewhere.map((x) => x.name))}'s work already ended.`] : [])].join(" "));
+    if (!list.length && gone.length) throw new HttpError(409, "gone", [...gone.map((g) => g.why), ...endedElsewhere.map((x) => RF.pressRefused(RF.sessionEndedCause(x.name), "End early"))].join(" "));
     // (§278) Some still working: the others' refusal lines go with whatever this press shows (its stop box, or its done line).
     if (list.length) {
-      goneLines = [...gone, ...endedElsewhere.map((x) => ({ ...x, why: `${x.name}'s work already ended.` }))].sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id)).map((g) => ({ contractId: g.id, text: endEarlyGoneLine(g.name, g.why) }));
+      goneLines = [...gone, ...endedElsewhere.map((x) => ({ ...x, why: RF.pressRefused(RF.sessionEndedCause(x.name), "End early") }))].sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id)).map((g) => ({ contractId: g.id, text: g.why })); // (§364 item 4) one line each
     }
     const goneIds = new Set(gone.map((g) => g.id));
     // (§278) A gone tester's own leaving line is what their refusal line says: it doesn't stop the press for the others.
@@ -928,7 +928,7 @@ export async function endEarly(dev: U, testId: string, body: Record<string, unkn
     // section 21: ended the ticked testers early, paid their work, or requested, booked or cancelled a call with them; batch 29: any of BIG_OWN_ACTS).
     // (§278) The press is about the ticked testers still in it (and those ended in another tab, as before).
     await topPanelGate(tx, testId, body, goneLines.length ? { gone: goneLines } : {}, [], notTheirLeaving, { acts: ["end-early", ...PAY_ACTS, ...CALL_ACTS], keys: ids.filter((id) => !goneIds.has(id)).map((id) => `c:${id}`) });
-    if (!list.length && endedElsewhere.length) throw new HttpError(409, "gone", `${andList(endedElsewhere.map((x) => x.name))}'s work already ended.`);
+    if (!list.length && endedElsewhere.length) throw new HttpError(409, "gone", endedElsewhere.map((x) => RF.pressRefused(RF.sessionEndedCause(x.name), "End early")).join(" ")); // (§364 item 4)
     for (const c of list) {
       await tx.contract.update({ where: { id: c.id }, data: { status: "ended", endKind: "early", endedAt: new Date(), endReason: reason } });
       await (await import("./accessKeys")).releaseTesterKeys(tx, c.id);
@@ -964,7 +964,7 @@ export async function nextRound(dev: U, testId: string) {
   const res = await db.$transaction(async (tx) => {
     const t = await lockTest(tx, testId);
     // (Owner, Oct 28 evening) Next round stays on a stopped test: it starts a new draft from it.
-    if (await devOnHold(dev.id)) throw new HttpError(409, "on_hold", `${PAY_WAITS} Your tests are paused until then.`);
+    if (await devOnHold(dev.id)) throw new HttpError(409, "on_hold", RF.pressRefused(RF.HELD_CAUSE, "Next round")); // (§364 item 7)
     const round = t.round + 1;
     const copy = await tx.test.create({
       data: {
@@ -1087,7 +1087,7 @@ export async function joinTest(tester: U, testId: string, body: Record<string, u
     if (old && (await tx.rating.count({ where: { contractId: old.id } }))) throw new HttpError(409, "not_again", old.endKind === "rated" && old.status === "left" ? "You rated this test, so you can't join it again." : "You can't join this test again.");
     if (old && old.status === "ended" && body.rejoinAccepted !== true && !(await tx.invite.findFirst({ where: { testId, testerId: tester.id, status: "sent" } }))) throw new HttpError(409, "not_again", "You can't join this test again.");
     const dev = await tx.user.findUniqueOrThrow({ where: { id: t.developerId } });
-    if (testPaused(dev, t)) throw new HttpError(409, "paused", PAUSED_RIGHT_NOW);
+    if (testPaused(dev, t)) throw new HttpError(409, "paused", RF.pressRefused(RF.NOT_TAKING_CAUSE, "Join")); // (§364 item 10)
     const testersIn = await tx.contract.count({ where: working(testId) });
     const r = joinCheck({ status: t.status, listingVersion: t.listingVersion, spots: t.spots, testersIn, openUntil: t.openUntil }, seen, body.confirmed === true, new Date(), (d) => fmtDate(d).replace(/, \d{4}$/, ""));
     if (r.result === "refused") throw new HttpError(409, "refused", r.message);
@@ -1167,9 +1167,8 @@ export async function leaveTest(tester: U, contractId: string, body: Record<stri
   const c0 = await ownContract(tester.id, contractId);
   const refused = (c: Parameters<typeof sessionRefusal>[0]) => {
     const refusal = sessionRefusal(c, { openUntil: null }, displayName(c0.test.developer));
-    // (Owner, Nov 9, §363) A stopped test: the one stopped line, naming Leave.
-    if (refusal && c.status === "ended" && c.endKind === "stopped") throw new HttpError(409, "gone", stoppedPressLine("Leave"));
-    if (refusal) throw new HttpError(409, "gone", refusal === "You left this test." ? "You already left this test." : refusal);
+    // (Owner, Nov 9, §363 / §364) The one line by why, naming Leave (left already: "Your part in this test has ended, so your Leave didn't go through.").
+    if (refusal) throw new HttpError(409, "gone", overPressLine(c, "Leave"));
   };
   // (Owner, Oct 31, batch 35 §59; replaces batch 15 §25 for Leave) Leave goes through the tester's one gate like their other presses: the first press stops once
   // for changes the page hasn't shown (Alerts Off: only contract changes; new terms send the page up to the offer box), the confirmed press leaves. A refusal
@@ -1201,7 +1200,7 @@ export async function leaveTest(tester: U, contractId: string, body: Record<stri
 export async function sendWritten(tester: U, contractId: string, body: Record<string, unknown>) {
   const c0 = await ownContract(tester.id, contractId);
   const ended = sessionRefusal(c0, c0.test, displayName(c0.test.developer));
-  if (ended) throw new HttpError(409, "closed", ended);
+  if (ended) throw new HttpError(409, "closed", overPressLine(c0, "Send")); // (§363 / §364)
   // (Batch 27 section 1) An open new-terms offer blocks Send until it's answered (Switch or Keep): nothing is checked or sent before.
   await answerTermsFirst(contractId);
   const qs = writtenQuestions(c0);
@@ -1249,7 +1248,7 @@ export async function sendWritten(tester: U, contractId: string, body: Record<st
   const long = checkWrittenLength([...answers, notes]);
   if (!long.ok) throw new HttpError(400, "too_long", long.message);
   // (Owner, Oct 28 afternoon) No sending while the test is paused (the typed answers stay kept as a draft).
-  if (!sessionRefusal(c0, c0.test, displayName(c0.test.developer)) && testerPaused(c0.test.developer, c0.test)) throw new HttpError(409, "paused", PAUSED_SEND);
+  if (!sessionRefusal(c0, c0.test, displayName(c0.test.developer)) && testerPaused(c0.test.developer, c0.test)) throw new HttpError(409, "paused", RF.pressRefused(RF.PAUSED_CAUSE, "Send")); // (§364 item 5)
   // (Owner, Nov 4, §183) A Send that adds to sent answers (the answers to changed questions) stops once for a developer payment on them since the page loaded,
   // whatever the tester's Alerts. One that could only be refused (locked, or the team's $0 closure) is refused at once, never after a stop (checked again below).
   const sent = await db.submission.findUnique({ where: { contractId_kind: { contractId, kind: "written" } }, include: { review: true } });
@@ -1260,9 +1259,9 @@ export async function sendWritten(tester: U, contractId: string, body: Record<st
   const { sub, updated, afterPaid } = await db.$transaction(async (tx) => {
     const t = await lockTest(tx, c0.testId);
     const c = await tx.contract.findUniqueOrThrow({ where: { id: contractId } });
-    await (await import("./workWindow")).assertWorkOpen(tx, t.id);
+    await (await import("./workWindow")).assertWorkOpen(tx, t.id, new Date(), "Send");
     const refusal = sessionRefusal(c, t, displayName(c0.test.developer));
-    if (refusal) throw new HttpError(409, "closed", refusal);
+    if (refusal) throw new HttpError(409, "closed", overPressLine(c, "Send")); // (§363 / §364)
     // (§269) The questions changed between the checks and this lock: nothing is sent (refused before anything is written; the page keeps what it typed and
     // redraws, and its next press meets the stop above).
     if (!sameQuestionWords(writtenQuestions(c), qs)) throw new HttpError(409, "questions_changed", QUESTIONS_CHANGED_MEANWHILE);
@@ -1398,13 +1397,13 @@ function addRefusal(existing: SentPart | null, c: { questions: unknown }, key: s
 export async function addWritten(tester: U, contractId: string, body: Record<string, unknown>) {
   const c0 = await ownContract(tester.id, contractId);
   const ended = sessionRefusal(c0, c0.test, displayName(c0.test.developer));
-  if (ended) throw new HttpError(409, "closed", ended);
+  if (ended) throw new HttpError(409, "closed", overPressLine(c0, "Add")); // (§363 / §364)
   await answerTermsFirst(contractId);
   const key = typeof body.question === "string" ? body.question : "";
   if (!key) throw new HttpError(409, "pick_question", ADD_UNDER_QUESTION);
   const text = typeof body.text === "string" ? body.text.trim() : "";
   if ((await db.recording.count({ where: { contractId, ...(await import("./recordings")).stillUploading("written") } })) || text.includes("[Uploading ")) throw new HttpError(409, "uploading", "Wait for the upload to finish before sending.");
-  if (!sessionRefusal(c0, c0.test, displayName(c0.test.developer)) && testerPaused(c0.test.developer, c0.test)) throw new HttpError(409, "paused", PAUSED_SEND);
+  if (!sessionRefusal(c0, c0.test, displayName(c0.test.developer)) && testerPaused(c0.test.developer, c0.test)) throw new HttpError(409, "paused", RF.pressRefused(RF.PAUSED_CAUSE, "Add")); // (§364 item 5)
   // (§167) Only the uploads placed in this text (by their markers) go with it.
   const placedIn = (rows: { id: string; filename: string }[]) => {
     const ids = markerIds(text, rows);
@@ -1435,9 +1434,9 @@ export async function addWritten(tester: U, contractId: string, body: Record<str
   const { sub, afterPaid, question } = await db.$transaction(async (tx) => {
     const t = await lockTest(tx, c0.testId);
     const c = await tx.contract.findUniqueOrThrow({ where: { id: contractId } });
-    await (await import("./workWindow")).assertWorkOpen(tx, t.id);
+    await (await import("./workWindow")).assertWorkOpen(tx, t.id, new Date(), "Add");
     const refusal = sessionRefusal(c, t, displayName(c0.test.developer));
-    if (refusal) throw new HttpError(409, "closed", refusal);
+    if (refusal) throw new HttpError(409, "closed", overPressLine(c, "Add")); // (§363 / §364)
     const existing = await tx.submission.findUnique({ where: { contractId_kind: { contractId, kind: "written" } }, include: { review: true } });
     // (§222) The question's 5 (and every other refusal) counted again under the lock.
     const refused = addRefusal(existing, c, key, text);

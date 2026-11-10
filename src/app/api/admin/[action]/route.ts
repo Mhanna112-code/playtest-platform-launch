@@ -1,9 +1,11 @@
 import { db } from "@/lib/db";
 import { fmtTime } from "@/lib/server/dateFormat";
+import * as RF from "@/lib/refusal";
+import { ADMIN_PRESS } from "@/lib/pressLabels";
 import { HttpError, handle, ok, readJson, readText } from "@/lib/server/http";
 import { LIMITS } from "@/lib/limits";
 import { decideDispute } from "@/lib/server/payments";
-import { ADMIN_PAUSED, adminAccount, isAdmin, requireUser } from "@/lib/server/session";
+import { adminAccount, isAdmin, requireUser } from "@/lib/server/session";
 import { approveHoldLift } from "@/lib/server/holds";
 import { approveChargebackHold, declineChargebackReserve } from "@/lib/server/chargeback";
 import { clearFailedEmails } from "@/lib/server/email";
@@ -25,7 +27,7 @@ export async function POST(req: Request, { params }: Ctx) {
   return handle(async () => {
     const { action } = await params;
     const u = await requireUser(req);
-    if (adminAccount(u) && !isAdmin(u)) throw new HttpError(403, "suspended", ADMIN_PAUSED); // (batch 15 section 35) a suspended admin
+    if (adminAccount(u) && !isAdmin(u)) throw new HttpError(403, "suspended", RF.pressRefused(RF.ACCOUNT_PAUSED_CAUSE, ADMIN_PRESS[action])) /* (§364 item 8) */; // (batch 15 section 35) a suspended admin
     if (!isAdmin(u)) throw new HttpError(403, "not_admin", "Only admins can do that.");
     const body = await readJson(req);
     const id = String(body.id ?? "");

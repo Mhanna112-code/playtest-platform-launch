@@ -209,8 +209,8 @@ describe("batch 6 item 4: a paused test, what testers can do", () => {
       if (kind === "team") await db.test.update({ where: { id: testId }, data: { adminPausedAt: new Date() } });
       const w = await sact(sessionId, "written", tester.cookie, { answers: ["c", "d"] });
       expect(w.status).toBe(409);
-      expect(w.body.error.message).toBe("This test is paused right now. You can send this once it resumes.");
-      expect((await sact(sessionId, "recording-send", tester.cookie, { seenAt: seen(), confirmed: true })).body.error.message).toBe("This test is paused right now. You can send this once it resumes.");
+      expect(w.body.error.message).toBe("This test is paused right now, so your Send didn't go through."); // (§364 item 5)
+      expect((await sact(sessionId, "recording-send", tester.cookie, { seenAt: seen(), confirmed: true })).body.error.message).toBe("This test is paused right now, so your Send didn't go through."); // (§364 item 5)
       // Drafts: a recording can still be uploaded (sent later).
       expect((await sact(sessionId, "recording-start", tester.cookie, { size: 1000, contentType: "video/mp4", filename: "a.mp4" })).status).toBe(200);
       const m = await sact(sessionId, "message", tester.cookie, { body: "Hello?" });
@@ -323,7 +323,7 @@ describe("batch 6 item 4: a paused test, what testers can do", () => {
     expect((await adm("suspend", a.cookie, { id: dev.user.id, note: "Check" })).status).toBe(200);
     expect((await db.application.findUniqueOrThrow({ where: { id: app.id } })).status).toBe("pending");
     const ben = await makeUser({ tester: true });
-    expect((await act(testId, "join", ben.cookie, { listingVersion: 1 })).body.error.message).toBe("This test is paused right now.");
+    expect((await act(testId, "join", ben.cookie, { listingVersion: 1 })).body.error.message).toBe("This test isn't taking new testers right now, so your Join didn't go through."); // (§364 item 10: the join page's own line stays "This test is paused right now.")
     expect(src("app/app/find/[id]/page.tsx")).toContain('<p className="info" data-paused="">This test is paused right now.</p>');
     expect((await adm("unsuspend", a.cookie, { id: dev.user.id })).status).toBe(200);
     expect((await db.application.findUniqueOrThrow({ where: { id: app.id } })).status).toBe("pending");

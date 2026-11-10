@@ -138,7 +138,7 @@ describe("§159: a suspended developer's payment presses are refused", () => {
       const rows = await db.payment.findMany({ where: { submissionId: w.anaSub.id, status: { in: ["charged", "not_set_up"] } } });
       if (p.status === 200) expect(rows).toHaveLength(1);
       else {
-        expect(p.body.error?.message).toBe("Your account is suspended: Pay waits until it is lifted.");
+        expect(p.body.error?.message).toBe("Your account is suspended, so your Pay didn't go through."); // (§364 item 8)
         expect(rows).toHaveLength(0);
         expect(st.made).toHaveLength(0);
       }
