@@ -46,7 +46,7 @@ const DEFAULT_TAILS = new Set(["Press again to go ahead.", "Press again to go ah
  * toggle wording on the tester side); and last, in bold, "Press <button> again to go ahead.". A refusal names the press first: "Your Pay didn't go through: <reason>".
  * `press` is the button's label; without one, the label of the press that was just stopped or refused (from its API path).
  */
-export function ChangesBox({ changes, error, tail = "Press again to go ahead.", link, didntGo = false, press, side = "developer", detail, seeIt, alertsWhere, heading }: { changes: Change[] | null; error?: string; tail?: string; link?: string; didntGo?: boolean; press?: string; side?: "developer" | "tester"; /** (Batch 16 section 19) more under a line (Edit: Before / What you typed) */ detail?: (c: Change) => React.ReactNode; /** (Batch 30 §10) a listing save's line ends "· See it" (where the listing is on this page) */ seeIt?: string; /** (Batch 30 §10) the join page has no test page yet: its Alerts hint says "on your dashboard" */ alertsWhere?: "join"; /** (Batch 34 §1) the admin pages' heading: "Since this page loaded:" */ heading?: string }) {
+export function ChangesBox({ changes, error, tail = "Press again to go ahead.", link, didntGo = false, press, side = "developer", detail, seeIt, alertsWhere, heading }: { changes: Change[] | null; error?: string; tail?: string; link?: string; didntGo?: boolean; press?: string; side?: "developer" | "tester"; /** (Batch 16 section 19) more under a line (Edit: Before / What you typed) */ detail?: (c: Change) => React.ReactNode; /** (Batch 30 §10) a listing save's line ends "· See it" (where the listing is on this page) */ seeIt?: string; /** (Owner, Nov 11, §376; replaces batch 30 §10's "on your dashboard" hint) a join-page box (Join, Apply, Ask to rejoin, No thanks, Withdraw): it always stops, whatever the Alerts, so it never offers them */ alertsWhere?: "join"; /** (Batch 34 §1) the admin pages' heading: "Since this page loaded:" */ heading?: string }) {
   const ref = useRef<HTMLDivElement>(null);
   // (Batch 34 §14) The developer's test page gives every box its Listing panel ("#listing").
   const pageSeeIt = useSeeItTarget();
@@ -97,7 +97,8 @@ export function ChangesBox({ changes, error, tail = "Press again to go ahead.", 
               </li>
             ))}
           </LongList>
-          {side === "tester" ? <TesterAlertsOff show={testerCanTurnOff(changes)} where={alertsWhere} /> : <QuickIgnore alerts={alerts} />}
+          {/* (Owner, Nov 11, §376) A join-page box always stops (the tester's Alerts never switch it off): no "You can turn these stops off …" line and no Turn off alerts. */}
+          {side === "tester" ? (alertsWhere === "join" ? null : <TesterAlertsOff show={testerCanTurnOff(changes)} />) : <QuickIgnore alerts={alerts} />}
           <p className="mt-1 font-semibold" data-press-again="">{action}</p>
         </>
       )}

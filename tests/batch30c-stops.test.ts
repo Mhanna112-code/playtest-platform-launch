@@ -86,8 +86,9 @@ describe("batch 30 §10: one line per listing save for testers", () => {
     expect(saveLine(removed, at, "UTC", "join")?.text).toMatch(/^Marc Hanna edited the listing at 11:55\sPM: NDA \(removed\), description$/);
   });
 
-  it("the join page's Alerts hint says the dashboard (there is no test page yet); the stop box's See it", () => {
-    expect(src("components/QuickIgnore.tsx")).toContain('"You can turn these stops off below, or with Alerts on your dashboard."');
+  it("(Owner, Nov 11, §376) the join page's box offers no Alerts (it always stops); the stop box's See it", () => {
+    expect(src("components/QuickIgnore.tsx")).not.toContain("on your dashboard");
+    expect(src("components/ChangesBox.tsx")).toContain('alertsWhere === "join" ? null : <TesterAlertsOff');
     const join = src("app/app/find/[id]/JoinBox.tsx");
     expect(join).toContain('seeIt="#listing" alertsWhere="join"');
     expect(join).not.toMatch(/<ChangesBox side="tester" changes=\{box\?\.changes \?\? null\} tail=\{box\?\.tail\} \/>/);
