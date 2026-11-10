@@ -20,7 +20,7 @@ import { PAYMENTS_PROBLEM, fakeOn, setStripeForTests } from "@/lib/server/stripe
 import { clientPressKey, serverKey } from "@/lib/server/pressKeys";
 import { approveOutage, recordAlert, alertRefusal, parseAlert } from "@/lib/server/outages";
 import { presign, viewUrl } from "@/lib/server/storage";
-import { DAILY_UPLOAD_BYTES, UPLOAD_QUOTA_LINE, purgeUploads } from "@/lib/server/recordings";
+import { purgeUploads } from "@/lib/server/recordings";
 import { CHAT_PER_MINUTE, CHAT_TOO_FAST } from "@/lib/server/messages";
 import { MAX_KEPT, setKept } from "@/lib/server/kept";
 import { clientIp } from "@/lib/server/passwords";
@@ -216,7 +216,7 @@ describe("M5 and M6: R2 types and clean-up", () => {
     expect(get.searchParams.get("response-content-disposition")).toBe('attachment; filename="notes.pdf"');
     expect(new URL(viewUrl("r1", "recordings/x/a.mp4", "video/mp4", "run.mp4")).searchParams.get("response-content-disposition")).toBe('inline; filename="run.mp4"');
   });
-  it("removing a recording deletes its file; the daily purge takes unfinished uploads and files with no row; 3 GB a day", async () => {
+  it("removing a recording deletes its file; the daily purge takes unfinished uploads and files with no row; no daily quota (§375)", async () => {
     const { testId } = await setup({ recordingCents: "5.00" });
     const { tester, sessionId } = await joined(testId);
     const up = path.resolve(__dirname, "../.test-uploads");
@@ -235,11 +235,9 @@ describe("M5 and M6: R2 types and clean-up", () => {
     expect(await purgeUploads()).toBeGreaterThanOrEqual(2);
     expect(await db.recording.findUnique({ where: { id: s2.body.recordingId } })).toBeNull();
     expect(fs.existsSync(orphan)).toBe(false);
-    // The quota.
-    await db.recording.create({ data: { contractId: sessionId, storageKey: "recordings/big", filename: "big.mp4", sizeBytes: 2_000_000_000, contentType: "video/mp4", uploadedAt: new Date() } });
-    await db.recording.create({ data: { contractId: sessionId, storageKey: "recordings/big2", filename: "big2.mp4", sizeBytes: DAILY_UPLOAD_BYTES - 2_000_000_000 - 10, contentType: "video/mp4", part: "written", uploadedAt: new Date() } });
-    const r = await sact(sessionId, "recording-start", tester.cookie, { size: 100, contentType: "video/mp4", filename: "c.mp4", part: "written" });
-    expect(r.body.error.message).toBe(UPLOAD_QUOTA_LINE);
+    // (Owner, Nov 11, §375) No daily upload quota any more (batch 15 §41 M6's 3 GB a day removed): a big day's uploads don't stop the next one.
+    for (const k of ["big", "big2"]) await db.recording.create({ data: { contractId: sessionId, storageKey: `recordings/${k}`, filename: `${k}.mp4`, sizeBytes: 2_000_000_000, contentType: "video/mp4", part: "written", uploadedAt: new Date() } });
+    expect((await sact(sessionId, "recording-start", tester.cookie, { size: 100, contentType: "video/mp4", filename: "c.mp4", part: "written" })).status).toBe(200);
   });
 });
 

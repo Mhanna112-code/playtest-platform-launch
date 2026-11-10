@@ -20,7 +20,7 @@ type U = Parameters<typeof tellSentByBell>[1];
  * Start an upload: checks the session can still send, the size (500 MB) and the count (5 recordings per session). (Owner, Oct 29, batch 11) `part: "written"` attaches it
  * to the written part instead: a screen recording (the same limits) or a file (at most 5, 500 MB each: images, PDF, plain text, zip; batch 31 section 2, was 25 MB).
  * (Owner, Nov 11, §375) The file's own checks (type, empty, size) first; then ONE pass under the test's lock (onePass): part over → a rejection or the team's
- * $0 closure → the limits, counting the rows read there (another tab's upload included) → the daily quota → the new row. An upload is a draft: no stop-once.
+ * $0 closure → the limits, counting the rows read there (another tab's upload included) → the new row (no daily quota any more: the owner removed it, Nov 11). An upload is a draft: no stop-once.
  */
 export async function startRecording(tester: U, contractId: string, body: Record<string, unknown>) {
   const c0 = await ownContract(tester.id, contractId, false);
@@ -53,9 +53,6 @@ export async function startRecording(tester: U, contractId: string, body: Record
     if (video && part === "recording" && mine.filter((r) => r.part === "recording").length >= MAX_RECORDINGS) return { stop: new HttpError(409, "too_many", mine.some((r) => r.part === "recording" && !r.submissionId) ? TOO_MANY_RECORDINGS : ALL_RECORDINGS_SENT) };
     if (video && part === "written" && mine.filter((r) => r.part === "written" && isVideo(r.contentType)).length >= MAX_RECORDINGS) return { stop: new HttpError(409, "too_many", `You can attach at most ${MAX_RECORDINGS} recordings to your written answers.`) };
     if (!video && mine.filter((r) => r.part === "written" && !isVideo(r.contentType)).length >= MAX_ATTACHMENTS) return { stop: new HttpError(409, "too_many", `You can attach at most ${MAX_ATTACHMENTS} files to your written answers.`) };
-    // (Batch 15 section 41, M6) At most 3 GB of uploads per account a day.
-    const today = (await tx.recording.aggregate({ where: { contract: { testerId: tester.id }, createdAt: { gt: new Date(Date.now() - 86_400_000) } }, _sum: { sizeBytes: true } }))._sum.sizeBytes ?? 0;
-    if (today + size > DAILY_UPLOAD_BYTES) return { stop: new HttpError(429, "quota", UPLOAD_QUOTA_LINE) };
     return { saved: await tx.recording.create({ data: { contractId, storageKey, filename, sizeBytes: size, contentType: type, part, aliveAt: new Date() } }) };
   });
   // (Batch 35 §4) The short tag its marker carries ("[📎 map.png #k3f9]"): the end of its id, unique among the contract's uploads.
@@ -96,9 +93,6 @@ export async function abandonUpload(tester: U, contractId: string, body: Record<
   return { abandoned: true };
 }
 
-/** (Batch 15 section 41, M6) Uploads per account per day. */
-export const DAILY_UPLOAD_BYTES = 3 * 1024 * 1024 * 1024;
-export const UPLOAD_QUOTA_LINE = "You've uploaded a lot today. Try again tomorrow.";
 /**
  * (Batch 15 section 41, M6) The daily job's clean-up: uploads not finished within 3 hours (row and file), then stored files whose row is gone. Returns how many files went.
  */
