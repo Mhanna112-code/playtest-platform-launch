@@ -204,7 +204,28 @@ describe("(Nov 3, races) 2: Join while the developer's Edit lowers the price", (
         stopped++;
       }
     }
-    expect(stopped).toBeGreaterThan(0);
+    void stopped;
+    // (Owner, Nov 11, §377) Join is one pass under the test's lock: whether a lag lands the Edit before or after it is timing, so the stop is proved
+    // deterministically: an Edit saved just before the press takes the lock always stops it once, naming the change, and nothing is joined.
+    const s = await setup();
+    const ana = await makeUser({ tester: true, name: "Ana Silva", pronoun: "she" });
+    const t = await db.test.findUniqueOrThrow({ where: { id: s.testId } });
+    const loaded = seen();
+    await settle();
+    const hooks = ((globalThis as { __pressHooks?: Record<string, () => Promise<void>> }).__pressHooks ??= {});
+    hooks.join = async () => {
+      delete hooks.join;
+      expect((await act(s.testId, "edit", s.dev.cookie, { version: t.version, fields: { writtenCents: "6.00" }, confirmed: true })).status).toBe(200);
+      await settle();
+    };
+    try {
+      const j = await act(s.testId, "join", ana.cookie, { listingVersion: t.listingVersion, seenAt: loaded });
+      expect([j.status, j.body.error.code]).toEqual([409, "stop_once"]);
+      expect(j.body.error.changes.map((x: { text: string }) => x.text)).toEqual(["Nora Lane edited the listing"]);
+      expect(await db.contract.findFirst({ where: { testId: s.testId, testerId: ana.user.id } })).toBeNull();
+    } finally {
+      delete (globalThis as { __pressHooks?: unknown }).__pressHooks;
+    }
   });
 });
 

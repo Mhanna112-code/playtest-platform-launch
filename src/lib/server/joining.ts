@@ -5,13 +5,13 @@ import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, fmtTime, pronouns } from "@/lib/server/dateFormat";
 import { PAUSED_RIGHT_NOW, closedToNewLine, canAskToRejoin, leftText, movedDue, MAX_ACTIVE_TESTS, termsLine, testPaused, TEST_LIMIT_LINE, type TestEventLike } from "@/lib/rules";
 import { HttpError } from "./http";
-import { asPressRefusal } from "@/lib/refusal";
+import { asPressRefusal, joinPressRefusal } from "@/lib/refusal";
 import { NO_FREE_KEY, noKeyWaitingLine } from "@/lib/keys";
 import { LIMITS } from "@/lib/limits";
 import { bell, notify } from "./notify";
 import { APP_WITHDRAWN_GROUP, APPLICATIONS_GROUP } from "@/lib/bell";
 import { unanswered, answersIt, asLines, listingSaveLines, logEvent, ownChanges, seenOf, tabOf, withRenamed } from "./live";
-import { asListing, devGate, gapStop, joinTest, needsGap, ownTest, PROFILE_FIRST, profileSaved } from "./tests";
+import { afterJoin, asListing, devGate, gapStop, joinTest, lockTest, needsGap, onePass, ownTest, PROFILE_FIRST, profileSaved, saveJoin, stopOf, type Joined, type Pass } from "./tests";
 import { ratingChangedLine } from "./invites";
 import { ratingSummary } from "./ratings";
 
@@ -21,6 +21,11 @@ import { ratingSummary } from "./ratings";
 // blocked, 10 tests, already in.
 
 type U = { id: string; email: string; name: string; pronoun: string; isTester: boolean; isDeveloper: boolean };
+/** The developer blocks the tester (never why); (§377) Ask to rejoin's line for a block either way. The same words as blocks.ts NOT_TAKING_LINE. */
+const NOT_TAKING_NEUTRAL = "This test isn't taking new testers right now.";
+type Tx = Prisma.TransactionClient;
+/** (Owner, Nov 11, §377) Where a check reads: the press's transaction (under the test's lock) in the one pass, else the database. */
+type Q = Tx | typeof db;
 
 const listingSnapshot = (t: Parameters<typeof asListing>[0]) => {
   const l = asListing(t);
@@ -41,31 +46,32 @@ const sameListingIgnoringMode = (saved: unknown, current: Parameters<typeof list
  * this order (owner, Nov 9, §348):
  *   1. "This test was stopped."   2. Open until passed: "“…” closed to new testers on <date>."   3. "This test isn't taking new testers any more." (not open)
  *   4. Paused right now   5. "You've already joined this test."   6. rated / can't join again   7. ended with no invite: "You can't join this test again."
- *   8. full: "This test is full." ("<title> is full right now." with an invite)   9. (§348) no free access key with a spot open: the key line, NO_FREE_KEY
+ *   8. full: "This test is full." ("<title> is full right now." with an invite; (owner, Nov 11, §377) Join / Apply / Ask to rejoin say it in the pattern, "This
+ *      test is full, so your Join didn't go through.": joinPressRefusal)   9. (§348) no free access key with a spot open: the key line, NO_FREE_KEY
  *   10. a block either way   11. the 10-test limit.
- * Then the press's own checks (join(): left → ask to rejoin; the listing changed → stop once; apply-only → "press Apply"; "This test is invite only."), so a test
- * that is both full and keyless, or full and invite only, reads only "This test is full.".
+ * Then the press's own checks (§377: see join(), apply(), askToRejoin()), so a test that is both full and keyless, or full and invite only, reads only "full".
+ * (Owner, Nov 11, §377) `q`: the press's transaction, which holds the test's lock (the one pass), so nothing here can change before the save.
  * (Owner, Nov 9, §341) `byDeveloper`: the developer's own Accept / Invite / switch to "Anyone can join" skip 9; the join itself is then refused with the key line.
  */
-export async function joinRefusal(testerId: string, testId: string, opts: { rejoin?: boolean; byDeveloper?: boolean } = {}) {
-  const t = await db.test.findUniqueOrThrow({ where: { id: testId }, include: { developer: true } });
+export async function joinRefusal(testerId: string, testId: string, opts: { rejoin?: boolean; byDeveloper?: boolean; /** (§377) Ask to rejoin: a block either way reads the neutral line */ neutralBlocks?: boolean } = {}, q: Q = db) {
+  const t = await q.test.findUniqueOrThrow({ where: { id: testId }, include: { developer: true } });
   if (t.status === "stopped") return "This test was stopped.";
   if (t.openUntil && t.openUntil < new Date()) return closedToNewLine(t.openUntil, (d) => fmtDate(d).replace(/, \d{4}$/, "")); // (batch 15 section 18)
   if (t.status !== "open") return "This test isn't taking new testers any more.";
   // (Owner, Oct 28 afternoon) Invites and applications wait while the test is paused; the join page says only this.
   if (testPaused(t.developer, t)) return PAUSED_RIGHT_NOW;
-  const old = await db.contract.findUnique({ where: { testId_testerId: { testId, testerId } } });
+  const old = await q.contract.findUnique({ where: { testId_testerId: { testId, testerId } } });
   if (old?.status === "working") return "You've already joined this test.";
-  if (old && (await db.rating.count({ where: { contractId: old.id } }))) return old.status === "left" && old.endKind === "rated" ? "You rated this test, so you can't join it again." : "You can't join this test again.";
-  if (old?.status === "ended" && !opts.rejoin && !(await db.invite.findFirst({ where: { testId, testerId, status: "sent" } }))) return "You can't join this test again.";
-  const testersIn = await db.contract.count({ where: { testId, status: "working" } });
-  if (testersIn >= t.spots) return (await db.invite.findFirst({ where: { testId, testerId, status: "sent" } })) ? `${t.title} is full right now.` : "This test is full.";
+  if (old && (await q.rating.count({ where: { contractId: old.id } }))) return old.status === "left" && old.endKind === "rated" ? "You rated this test, so you can't join it again." : "You can't join this test again.";
+  if (old?.status === "ended" && !opts.rejoin && !(await q.invite.findFirst({ where: { testId, testerId, status: "sent" } }))) return "You can't join this test again.";
+  const testersIn = await q.contract.count({ where: { testId, status: "working" } });
+  if (testersIn >= t.spots) return (await q.invite.findFirst({ where: { testId, testerId, status: "sent" } })) ? `${t.title} is full right now.` : "This test is full.";
   // (§341, §348) A test that uses access keys with none free (a spot open): the tester's presses read the key line, not "full"; nothing closes (applications, asks
   // and invites stay) and Find leaves it out.
-  if (!opts.byDeveloper && (await (await import("./accessKeys")).noFreeKeyTests(db, [testId])).has(testId)) return NO_FREE_KEY;
-  if (await db.block.count({ where: { blockerId: testerId, blockedId: t.developerId } })) return `You blocked ${displayName(t.developer)}: unblock ${pronouns(t.developer.pronoun).obj} in Account → Blocked people to join.`;
-  if (await db.block.count({ where: { blockerId: t.developerId, blockedId: testerId } })) return "This test isn't taking new testers right now.";
-  if ((await db.contract.count({ where: { testerId, status: "working" } })) >= MAX_ACTIVE_TESTS) return TEST_LIMIT_LINE;
+  if (!opts.byDeveloper && (await (await import("./accessKeys")).noFreeKeyTests(q, [testId])).has(testId)) return NO_FREE_KEY;
+  if (await q.block.count({ where: { blockerId: testerId, blockedId: t.developerId } })) return opts.neutralBlocks ? NOT_TAKING_NEUTRAL : `You blocked ${displayName(t.developer)}: unblock ${pronouns(t.developer.pronoun).obj} in Account → Blocked people to join.`;
+  if (await q.block.count({ where: { blockerId: t.developerId, blockedId: testerId } })) return NOT_TAKING_NEUTRAL;
+  if ((await q.contract.count({ where: { testerId, status: "working" } })) >= MAX_ACTIVE_TESTS) return TEST_LIMIT_LINE;
   return "";
 }
 
@@ -77,32 +83,32 @@ export async function listingChanges(testId: string, seenAt: unknown): Promise<T
 }
 
 /** The join page's stop-once reasons: (D) the listing changed (spots excepted), (E) the tester's own actions in another tab. */
-export async function joinPageChanges(userId: string, testId: string, seenAt: unknown, tab: string): Promise<TestEventLike[]> {
+export async function joinPageChanges(userId: string, testId: string, seenAt: unknown, tab: string, q: Q = db): Promise<TestEventLike[]> {
   const d = seenOf(seenAt);
   if (!d) return [];
   // (Batch 30 §10, §12) ONE line per listing save, every save since the page last showed them (the NDA too: "Marc Hanna changed the NDA at 6:58 PM: read and accept it
   // again below"); a rename alone is info only.
-  const edits = await listingSaveLines(testId, d, userId, "join");
+  const edits = await listingSaveLines(testId, d, userId, "join", q);
   // (NEWEST+4, LIVE + GONE) Their application closed / their invite re-sent on the updated listing.
-  const t = await db.test.findUniqueOrThrow({ where: { id: testId }, include: { developer: true } });
+  const t = await q.test.findUniqueOrThrow({ where: { id: testId }, include: { developer: true } });
   // (Batch 16 section 11) A test a block hides from this tester shows nothing (its page reads "This test isn't available right now.").
   if (await (await import("./blocks")).hiddenByBlock(userId, t)) return [];
   const gone: TestEventLike[] = [];
-  for (const a of await db.application.findMany({ where: { testId, testerId: userId, status: "closed", decidedAt: { gt: d } } }))
+  for (const a of await q.application.findMany({ where: { testId, testerId: userId, status: "closed", decidedAt: { gt: d } } }))
     gone.push({ kind: "applied", text: a.closedReason === "blocked" ? (await import("./blocks")).appClosedLine(t.title).replace(/\.$/, "") : a.closedReason === "full" ? `${t.title} is full: your application was closed` : a.closedReason === "invite_only" ? `${displayName(t.developer)} made the test invite only: your application was closed` : a.closedReason === "joining_closed" ? `Joining ${t.title} closed (Open until passed) on ${fmtDate(t.openUntil ?? a.decidedAt!)}: your application was closed` : a.closedReason === "stopped" ? `${t.title} was stopped: your application was closed` : `${displayName(t.developer)} changed the listing: your application was closed`, createdAt: a.decidedAt! }); // (§354) each its real reason
   // (Correction 6) Invited: the test filled (the invite stays open) / a spot opened.
-  if (await db.invite.findFirst({ where: { testId, testerId: userId, status: "sent" } })) {
-    for (const e of await db.testEvent.findMany({ where: { testId, kind: { in: ["full", "spot_open"] }, createdAt: { gt: d } } }))
+  if (await q.invite.findFirst({ where: { testId, testerId: userId, status: "sent" } })) {
+    for (const e of await q.testEvent.findMany({ where: { testId, kind: { in: ["full", "spot_open"] }, createdAt: { gt: d } } }))
       gone.push({ kind: e.kind, text: e.kind === "full" ? `${t.title} is full right now. Your invite stays open; we'll tell you when a spot opens.` : e.text, createdAt: e.createdAt });
   }
-  const replaced = await db.invite.findMany({ where: { testId, testerId: userId, status: "replaced", updatedAt: { gt: d } } });
+  const replaced = await q.invite.findMany({ where: { testId, testerId: userId, status: "replaced", updatedAt: { gt: d } } });
   if (replaced.length) {
-    const fresh = await db.invite.findFirst({ where: { testId, testerId: userId, status: "sent" }, orderBy: { createdAt: "desc" } });
+    const fresh = await q.invite.findFirst({ where: { testId, testerId: userId, status: "sent" }, orderBy: { createdAt: "desc" } });
     gone.push(fresh ? { kind: "invite", text: `${displayName(t.developer)} changed the listing: here's a new invite on the updated listing`, createdAt: fresh.createdAt, item: fresh.id } : { kind: "invite", text: `${displayName(t.developer)} changed the listing: your invite closed (no spots left)`, createdAt: replaced[0].updatedAt });
   }
   // (Owner) Rejoining a test they LEFT stops once for the same reasons as their in-test buttons (A-F): paid / rejected,
   // call changes, their own other-tab actions; the listing's one line covers new terms (they rejoin on the current listing, no offer).
-  const left = await db.contract.findUnique({ where: { testId_testerId: { testId, testerId: userId } } });
+  const left = await q.contract.findUnique({ where: { testId_testerId: { testId, testerId: userId } } });
   const rejoin: TestEventLike[] = [];
   if (left && left.status === "left") {
     const { testerChanges } = await import("./testerGate");
@@ -110,7 +116,7 @@ export async function joinPageChanges(userId: string, testId: string, seenAt: un
     // (Batch 35 §53) No "changed the terms: <fields>" line: the save's one listing line ("<Dev> edited the listing · See it") already covers it, and a tester
     // who isn't working has no offer to answer.
   }
-  const all = [...edits, ...gone, ...(await ownChanges(userId, testId, d, tab)), ...rejoin];
+  const all = [...edits, ...gone, ...(await ownChanges(userId, testId, d, tab, q)), ...rejoin];
   const seen = new Set<string>();
   return all.filter((e) => {
     const k = `${e.createdAt.getTime()}|${e.text}`;
@@ -121,8 +127,8 @@ export async function joinPageChanges(userId: string, testId: string, seenAt: un
 }
 
 /** Join / Apply / Withdraw application / No thanks stop once (box under the button) for the join page's reasons. */
-export async function listingGate(userId: string, testId: string, body: Record<string, unknown>, verb: string) {
-  const r = await joinStopList(userId, testId, body, verb);
+export async function listingGate(userId: string, testId: string, body: Record<string, unknown>, verb: string, q: Q = db) {
+  const r = await joinStopList(userId, testId, body, verb, q);
   if (r) throw new HttpError(409, "stop_once", r.tail, r);
 }
 
@@ -131,17 +137,17 @@ export async function listingGate(userId: string, testId: string, body: Record<s
  * another tab with the developer's (batch 30 §12 and the Oct 29 addition: one box, never one source hiding another). (Batch 30 §12) Also what the needs-covered
  * notice ("You now meet this test's needs") shows with it, before the press.
  */
-export async function joinStopList(userId: string, testId: string, body: Record<string, unknown>, verb: string) {
+export async function joinStopList(userId: string, testId: string, body: Record<string, unknown>, verb: string, q: Q = db) {
   // (Owner) The second press goes ahead only if nothing new happened since the box last updated (boxAt).
   const boxAt = seenOf(body.boxAt);
   if (body.confirmed === true && !boxAt) return null;
-  const raw0 = await joinPageChanges(userId, testId, body.confirmed === true ? boxAt!.toISOString() : body.seenAt, tabOf(body));
+  const raw0 = await joinPageChanges(userId, testId, body.confirmed === true ? boxAt!.toISOString() : body.seenAt, tabOf(body), q);
   // (Batch 17 section 13) The tester's box drops "Turn off alerts" when their Alerts are already Off.
   const alertsOff = !!(await db.user.findUnique({ where: { id: userId }, select: { testerAlertsOff: true } }))?.testerAlertsOff;
   // (Owner, Oct 31, batch 35 §61; replaces batch 29 section 13 here) Their own changes in another tab ("You applied to join in another tab") always stop once,
   // Alerts Off too, like the developer's own other-tab actions.
   // (Batch 35 §79) Join from the invite that just arrived: never the line about that invite itself.
-  const raw = (await unanswered(userId, testId, raw0)).filter((e) => !(typeof body.inviteId === "string" && answersIt(e, { item: body.inviteId })));
+  const raw = (await unanswered(userId, testId, raw0, q)).filter((e) => !(typeof body.inviteId === "string" && answersIt(e, { item: body.inviteId })));
   // (Batch 17 section 4) A full test keeps the invite open: No thanks just declines it (the test filling or a spot opening doesn't stop it).
   const changes = withRenamed(verb === "decline" ? raw.filter((e) => e.kind !== "full" && e.kind !== "spot_open") : raw, body);
   if (!changes.length) return null;
@@ -166,9 +172,9 @@ export async function inviteClosedLine(testId: string, now = new Date()) {
 }
 export const INVITE_NOT_OPEN = "This invite is no longer open.";
 /** Join or Accept on an invite that closed meanwhile: refused (no stop box) with the reason; the card goes. */
-async function closedInvite(testerId: string, body: Record<string, unknown>) {
+async function closedInvite(testerId: string, body: Record<string, unknown>, q: Q = db) {
   if (typeof body.inviteId !== "string" || !body.inviteId) return;
-  const inv = await db.invite.findUnique({ where: { id: body.inviteId } });
+  const inv = await q.invite.findUnique({ where: { id: body.inviteId } });
   if (!inv || inv.testerId !== testerId || inv.status !== "cancelled") return;
   throw new HttpError(409, "invite_closed", asPressRefusal(await inviteClosedLine(inv.testId), "Join")); // (§363)
 }
@@ -180,24 +186,29 @@ export const newInviteLine = (dev: string, at: string) => `${dev} changed the li
  * Accept on an invite a listing change replaced. (Batch 34 §10, owner's finding) The join page's "changed since you opened this page" stop runs FIRST (Join), so a
  * press stops once with the full list; a press that already saw it (the second, confirmed press) joins on the tester's CURRENT invite without a reload. Otherwise
  * it's refused under the button with the new invite right there (its id and `now`: the page switches to it, and the next press goes ahead).
+ * (Owner, Nov 11, §377; replaces batch 34 §10's order) Join's own refusals now come before the listing box, this one too. While the join page still has changes it
+ * hasn't shown (`boxPending`: the listing's, an NDA change among them), the refusal carries no `now`: the page doesn't count them as seen, so the next press (on
+ * the new invite) shows the box, which clears the NDA tick, and the press after it joins.
  */
-async function replacedInvite(testerId: string, testId: string, body: Record<string, unknown>) {
+async function replacedInvite(testerId: string, testId: string, body: Record<string, unknown>, q: Q = db, boxPending: () => Promise<boolean> = async () => false) {
   if (typeof body.inviteId !== "string" || !body.inviteId) return;
-  const inv = await db.invite.findUnique({ where: { id: body.inviteId } });
+  const inv = await q.invite.findUnique({ where: { id: body.inviteId } });
   if (!inv || inv.testerId !== testerId || inv.status !== "replaced") return;
-  const fresh = await db.invite.findFirst({ where: { testId, testerId, status: "sent" }, orderBy: { createdAt: "desc" } });
+  const fresh = await q.invite.findFirst({ where: { testId, testerId, status: "sent" }, orderBy: { createdAt: "desc" } });
   if (fresh && body.confirmed === true) return; // joins on the current invite (join() takes the tester's sent invite)
-  const t = await db.test.findUniqueOrThrow({ where: { id: testId } });
-  const dev = await db.user.findUniqueOrThrow({ where: { id: t.developerId } });
-  throw new HttpError(409, "invite_replaced", fresh ? newInviteLine(displayName(dev), fmtTime(inv.updatedAt)) : `${displayName(dev)} changed the listing at ${fmtTime(inv.updatedAt)}, and this invite closed.`, fresh ? { newInviteId: fresh.id, terms: termsLine(asListing(t), true), listingVersion: t.listingVersion, now: new Date().toISOString() } : {});
+  const t = await q.test.findUniqueOrThrow({ where: { id: testId } });
+  const dev = await q.user.findUniqueOrThrow({ where: { id: t.developerId } });
+  const unseen = fresh ? await boxPending() : false;
+  throw new HttpError(409, "invite_replaced", fresh ? newInviteLine(displayName(dev), fmtTime(inv.updatedAt)) : `${displayName(dev)} changed the listing at ${fmtTime(inv.updatedAt)}, and this invite closed.`, fresh ? { newInviteId: fresh.id, terms: termsLine(asListing(t), true), listingVersion: t.listingVersion, ...(unseen ? {} : { now: new Date().toISOString() }) } : {});
 }
 
 /**
  * (Owner's finding, Oct 29, batch 32 §2) Apply or Ask to rejoin while this tester already has one waiting (sent in another tab): refused, nothing changes (the
- * first note stays, the developer isn't told again); the page redraws to the waiting state.
+ * first note stays, the developer isn't told again); the page redraws to the waiting state. (Owner, Nov 11, §377) ONE wording, before and under the lock (no
+ * more "You already have a request waiting for this test."): the pass checks it under the lock only.
  */
-async function alreadyWaiting(testerId: string, testId: string) {
-  const a = await db.application.findUnique({ where: { testId_testerId: { testId, testerId } } });
+async function alreadyWaiting(testerId: string, testId: string, q: Q = db) {
+  const a = await q.application.findUnique({ where: { testId_testerId: { testId, testerId } } });
   if (a?.status !== "pending") return;
   throw new HttpError(409, "already_waiting", a.kind === "rejoin" ? "You already asked to rejoin this test in another tab." : "You already applied to join this test in another tab.");
 }
@@ -214,8 +225,8 @@ export function pressSeen(body: Record<string, unknown>) {
  * (Batch 34 §16) Apply or Ask to rejoin while holding a sent invite: a page that hadn't shown the invite yet (sent after its seen time) joins at once; a page that
  * already showed it (the invite card and Join) is refused with the line, and the page redraws to Join.
  */
-async function inviteBeforePress(tester: { id: string }, testId: string, body: Record<string, unknown>, devName: string) {
-  const inv = await db.invite.findFirst({ where: { testId, testerId: tester.id, status: "sent" }, orderBy: { createdAt: "desc" } });
+async function inviteBeforePress(tester: { id: string }, testId: string, body: Record<string, unknown>, devName: string, q: Q = db) {
+  const inv = await q.invite.findFirst({ where: { testId, testerId: tester.id, status: "sent" }, orderBy: { createdAt: "desc" } });
   if (!inv) return null;
   const seen = pressSeen(body);
   if (seen && inv.createdAt <= seen) throw new HttpError(409, "invited", `${devName} invited you: press Join to join.`);
@@ -236,72 +247,167 @@ export function clientJoinBody(body: Record<string, unknown>) {
   return out;
 }
 
-/** Join (Who can join = Anyone, or an invited tester on an invite-only test). */
+/*
+ * (Owner, Nov 11, §377) Join, Apply to join and Ask to rejoin make ONE pass under the test's lock (onePass, as §375's Send Answers): the lock first, then every
+ * check in the owner's order, then the save; what stopped the press is thrown after the commit. Nothing is checked before the lock and nothing again after it,
+ * so a press's one outcome never depends on timing (a Stop, a fill, an Edit, a block or another tab's press is either fully before the pass or fully after it).
+ *   1. J01: joinRefusal (stopped → joining closed → not open → paused → already joined → rated / can't join again → full → no free key → you blocked the
+ *      developer → the developer blocks you → your test limit), in the press's pattern (joinPressRefusal). Apply / Ask to rejoin: an invite the page hadn't
+ *      shown joins at once right here (batch 34 §16); one it showed is refused ("… invited you: press Join to join.").
+ *   2. The button's own refusals. Join: the invite closed, left earlier without an invite, the invite replaced, an apply-only test. Apply / Ask to rejoin: already
+ *      waiting (J09, one wording), the 2-per-24-hours limit; Ask to rejoin first: never in / still in, a block either way (neutral), rated.
+ *   3. The profile not saved.
+ *   4. The listing-changed stop-once box (J04 / T05). (Owner's exception, Nov 11) "This test is invite only." stays right after it.
+ *   5. The profile-gap box ("Your profile is missing … Join anyway?"), then the NDA tick (red).
+ *   6. The save (the join, or the application / the ask).
+ */
+
+/**
+ * (§377) Step 1, J01, under the lock: the first refusal that applies, named with the press. Ask to rejoin keeps its own neutral line for a block either way
+ * (batch 16 section 11: "This test isn't taking new testers right now.", never why), at J01's place for the blocks.
+ */
+async function j01(tx: Tx, testerId: string, testId: string, press: "Join" | "Apply" | "Ask to rejoin", opts: { rejoin?: boolean } = {}) {
+  const ask = press === "Ask to rejoin";
+  const line = await joinRefusal(testerId, testId, { ...opts, neutralBlocks: ask }, tx);
+  if (ask && line === NOT_TAKING_NEUTRAL) return new HttpError(409, "refused", NOT_TAKING_NEUTRAL);
+  return line ? new HttpError(409, "refused", joinPressRefusal(line, press)) : null;
+}
+
+/** (§348) The last free key went (it can't under the lock, which J01 checked; kept as a backstop): refused with joinRefusal's reason now. */
+const noKeyLine = (testerId: string, testId: string, press: string) => async (e: unknown): Promise<never> => {
+  throw e instanceof HttpError && e.code === "no_key" ? new HttpError(409, "refused", joinPressRefusal((await joinRefusal(testerId, testId)) || NO_FREE_KEY, press)) : e;
+};
+
+/** (§377) Step 1's invite for Apply / Ask to rejoin: one the page hadn't shown (it joins at once), a refusal (the page showed it), or none. */
+async function inviteMet(tx: Tx, tester: U, testId: string, body: Record<string, unknown>, devName: string) {
+  let invite: Awaited<ReturnType<typeof inviteBeforePress>> = null;
+  const shown = await stopOf(async () => { invite = await inviteBeforePress(tester, testId, body, devName, tx); });
+  return shown ?? invite;
+}
+
+type TestRow = Prisma.TestGetPayload<object>;
+/**
+ * (§377) Join's steps 2 to 6, under the lock (step 1 passed). Apply and Ask to rejoin meeting an invite the page hadn't shown, and Apply on a test that now lets
+ * anyone join, take them too; `as` keeps their own words in the gap box and the NDA tick (Apply's are Join's, as before).
+ */
+async function joinSteps(tx: Tx, tester: U, t: TestRow, body: Record<string, unknown>, as: "Join" | "Ask" = "Join"): Promise<Pass<Joined>> {
+  const testId = t.id;
+  const invited = await tx.invite.findFirst({ where: { testId, testerId: tester.id, status: "sent" } });
+  // 2. Join's own refusals. (Batch 16 section 32) The invite closed meanwhile: refused with the reason.
+  const closed = await stopOf(() => closedInvite(tester.id, body, tx));
+  if (closed) return { stop: closed };
+  // (Design doc 7.3) Coming back is always an ask the developer accepts, unless they invited the tester back. (§352) An accepted ask never comes through here.
+  const old = await tx.contract.findUnique({ where: { testId_testerId: { testId, testerId: tester.id } } });
+  if (old && old.status !== "working" && !invited) return { stop: new HttpError(409, "ask", "You left this test, so you ask to rejoin and the developer accepts.") };
+  const replaced = await stopOf(() => replacedInvite(tester.id, testId, body, tx, async () => !!(await joinStopList(tester.id, testId, body, "join", tx))));
+  if (replaced) return { stop: replaced };
+  if (t.joinMode === "apply" && !invited && !(await tx.application.findFirst({ where: { testId, testerId: tester.id, status: "pending", changedAt: { not: null } } })))
+    return { stop: new HttpError(409, "apply", "This test takes applications: press Apply to join.") };
+  // 3. (Owner, Nov 2) A saved tester profile.
+  const profile = await tx.testerProfile.findUnique({ where: { userId: tester.id } });
+  if (!profileSaved(profile)) return { stop: new HttpError(409, "profile_first", PROFILE_FIRST) };
+  // 4. (Batch 34 §10) The "changed since you opened this page" box (the NDA's line clears its tick); then (owner's exception) invite only.
+  const box = await stopOf(() => listingGate(tester.id, testId, body, "join", tx));
+  if (box) return { stop: box };
+  if (t.joinMode === "invite" && !invited) return { stop: new HttpError(409, "invite_only", "This test is invite only.") };
+  // 5. The gap box, then (design doc 7.3) the NDA tick.
+  const gap = await stopOf(async () => gapStop(t, profile, body, as));
+  if (gap) return { stop: gap };
+  if (t.ndaText && body.ndaAccepted !== true) return { stop: new HttpError(400, "nda", as === "Ask" ? "Accept the NDA to ask to rejoin." : "Accept the NDA to join.") };
+  // 6. The join; any waiting application or ask of theirs closes as joined.
+  const joined = await saveJoin(tx, t, tester, body);
+  await tx.application.updateMany({ where: { testId, testerId: tester.id, status: "pending" }, data: { status: "joined", decidedAt: new Date() } });
+  return { saved: joined };
+}
+
+/** Join (Who can join = Anyone, or an invited tester on an invite-only test). (Owner, Nov 11, §377) One pass under the test's lock, in the order above. */
 export async function join(tester: U, testId: string, rawBody: Record<string, unknown>) {
   // (§352) The tester's own press: never the server-only flags (rejoining is the developer's accepted ask, or an invite).
   const body = clientJoinBody(rawBody);
   if (!tester.isTester) throw new HttpError(403, "not_tester", "Turn on “test apps, games and more” in your profile to join tests.");
-  const t = await db.test.findUnique({ where: { id: testId } });
-  if (!t) throw new HttpError(404, "not_found", "That test doesn't exist.");
-  await closedInvite(tester.id, body); // (batch 16 section 32) the invite closed meanwhile: refused with the reason
-  const refusal = await joinRefusal(tester.id, testId);
-  if (refusal) throw new HttpError(409, "refused", asPressRefusal(refusal, "Join")); // (§363)
-  // (Design doc 7.3) Coming back is always an ask the developer accepts, unless they invited the tester back. (§352) An accepted ask never comes through here.
-  const gone = await db.contract.findUnique({ where: { testId_testerId: { testId, testerId: tester.id } } });
-  if (gone && gone.status !== "working" && !(await db.invite.findFirst({ where: { testId, testerId: tester.id, status: "sent" } })))
-    throw new HttpError(409, "ask", "You left this test, so you ask to rejoin and the developer accepts.");
-  // (Batch 34 §10) The "changed since you opened this page" stop first: the press stops once with every change (the NDA's too, whose tick clears), then the invite.
-  await listingGate(tester.id, testId, body, "join");
-  await replacedInvite(tester.id, testId, body);
-  if (t.joinMode === "apply" && !(await db.invite.findFirst({ where: { testId, testerId: tester.id, status: "sent" } })) && !(await db.application.findFirst({ where: { testId, testerId: tester.id, status: "pending", changedAt: { not: null } } }))) {
-    throw new HttpError(409, "apply", "This test takes applications: press Apply to join.");
-  }
-  if (t.joinMode === "invite" && !(await db.invite.findFirst({ where: { testId, testerId: tester.id, status: "sent" } }))) throw new HttpError(409, "invite_only", "This test is invite only.");
-  // (Owner, Nov 3, races) The check above ran before the test's lock: joinTest runs it again under the lock (an Edit saved in between stops the press once).
-  const c = await joinTest(tester, testId, { ...body, listingVersion: t.listingVersion, confirmed: true, anyway: body.anyway === true, rejoinAccepted: false, acceptedByDeveloper: false }, { lockedGate: () => listingGate(tester.id, testId, body, "join") })
-    // (Owner, Nov 9, §348) The last free key went meanwhile: refused with joinRefusal's reason now (the key line, or "full" if the test filled).
-    .catch(async (e) => { throw e instanceof HttpError && e.code === "no_key" ? new HttpError(409, "refused", (await joinRefusal(tester.id, testId)) || NO_FREE_KEY) : e; });
-  await db.application.updateMany({ where: { testId, testerId: tester.id, status: "pending" }, data: { status: "joined", decidedAt: new Date() } });
-  return c;
+  if (!(await db.test.count({ where: { id: testId } }))) throw new HttpError(404, "not_found", "That test doesn't exist.");
+  const joined = await onePass(testId, "join", body, async (tx): Promise<Pass<Joined>> => {
+    const t = await tx.test.findUniqueOrThrow({ where: { id: testId } });
+    if (t.developerId === tester.id) return { stop: new HttpError(409, "own", "You can't join your own test.") };
+    const refused = await j01(tx, tester.id, testId, "Join");
+    if (refused) return { stop: refused };
+    return joinSteps(tx, tester, t, body);
+  }).catch(noKeyLine(tester.id, testId, "Join"));
+  await afterJoin(joined, tester, testId, body);
+  return joined.contract;
 }
 
 export const JOIN_REQUESTS_PER_TEST_PER_DAY = 2;
-export async function saveJoinRequest(testerId:string,testId:string,data:{note:string;listing:Prisma.InputJsonValue;kind:string;ndaAcceptedAt:Date|null},text:string,bypassLimit=false) {
- return db.$transaction(async tx=>{
-  await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${testId} FOR UPDATE`;
-  const previous=await tx.application.findUnique({where:{testId_testerId:{testId,testerId}}});
-  if(previous?.status==="pending")throw new HttpError(409,"waiting","You already have a request waiting for this test.");
-  if(!TESTING_NO_LIMITS&&!bypassLimit&&previous && await tx.testEvent.count({where:{testId,kind:"applied",link:`item-app-${previous.id}`,createdAt:{gt:new Date(Date.now()-24*3600000)}}})>=JOIN_REQUESTS_PER_TEST_PER_DAY)throw new HttpError(429,"too_many_requests","You can apply or ask to rejoin this test twice in 24 hours. Try again later.");
-  const application=await tx.application.upsert({where:{testId_testerId:{testId,testerId}},update:{...data,status:"pending",changedAt:null,decidedAt:null,createdAt:new Date()},create:{testId,testerId,...data}});
-  await tx.testEvent.create({data:{testId,kind:"applied",link:`item-app-${application.id}`,text}});
+/** (§377) Step 2's limit for an application or an ask: twice per test in 24 hours (shared), or null. */
+async function requestLimit(q: Q, testerId: string, testId: string) {
+  if (TESTING_NO_LIMITS) return null;
+  const previous = await q.application.findUnique({ where: { testId_testerId: { testId, testerId } } });
+  if (previous && (await q.testEvent.count({ where: { testId, kind: "applied", link: `item-app-${previous.id}`, createdAt: { gt: new Date(Date.now() - 24 * 3600000) } } })) >= JOIN_REQUESTS_PER_TEST_PER_DAY)
+    return new HttpError(429, "too_many_requests", "You can apply or ask to rejoin this test twice in 24 hours. Try again later.");
+  return null;
+}
+type RequestData = { note: string; listing: Prisma.InputJsonValue; kind: string; ndaAcceptedAt: Date | null };
+/** (§377) Step 6 for Apply / Ask to rejoin: the application or ask, and its "applied" line, in the pass's transaction. */
+async function storeJoinRequest(tx: Tx, testerId: string, testId: string, data: RequestData, text: string) {
+  const application = await tx.application.upsert({ where: { testId_testerId: { testId, testerId } }, update: { ...data, status: "pending", changedAt: null, decidedAt: null, createdAt: new Date() }, create: { testId, testerId, ...data } });
+  await tx.testEvent.create({ data: { testId, kind: "applied", link: `item-app-${application.id}`, text } });
   return application;
- });
+}
+/** An application or ask saved on its own under the test's lock (already waiting: J09's one wording; then the limit). The presses save in their pass. */
+export async function saveJoinRequest(testerId: string, testId: string, data: RequestData, text: string, bypassLimit = false) {
+  return db.$transaction(async (tx) => {
+    await lockTest(tx, testId);
+    await alreadyWaiting(testerId, testId, tx);
+    const limit = bypassLimit ? null : await requestLimit(tx, testerId, testId);
+    if (limit) throw limit;
+    return storeJoinRequest(tx, testerId, testId, data, text);
+  });
 }
 
-/** Apply to join (optional note). If the test now lets anyone join, the second press simply joins. */
+/** (§377) What an Apply or an Ask to rejoin ended with: joined (an unseen invite, or a test that now lets anyone join), or the request saved. */
+type RequestDone = { joined: Joined } | { requested: { note: string } };
+const asJoined = (p: Pass<Joined>): Pass<RequestDone> => ("stop" in p ? p : { saved: { joined: p.saved } });
+
+/** Apply to join (optional note). If the test now lets anyone join, the second press simply joins. (Owner, Nov 11, §377) One pass, in the order above. */
 export async function apply(tester: U, testId: string, body: Record<string, unknown>) {
   if (!tester.isTester) throw new HttpError(403, "not_tester", "Turn on “test apps, games and more” in your profile to join tests.");
-  const t = await db.test.findUnique({ where: { id: testId }, include: { developer: true } });
-  if (!t) throw new HttpError(404, "not_found", "That test doesn't exist.");
-  await closedInvite(tester.id, body); // (batch 16 section 32)
-  const refusal = await joinRefusal(tester.id, testId);
-  if (refusal) throw new HttpError(409, "refused", asPressRefusal(refusal, "Apply")); // (§363)
-  // (Batch 34 §16, owner, Oct 30) Apply while holding a sent invite the page hadn't shown yet: it joins at once, as the invite's Join does (any waiting application
-  // of theirs closes as joined), instead of filing an application next to the invite. A page that showed the invite is refused ("… invited you: press Join").
-  if (await inviteBeforePress(tester, testId, body, displayName(t.developer))) return { joined: true, sessionId: (await join(tester, testId, body)).id };
-  await alreadyWaiting(tester.id, testId);
-  // (Owner, Nov 2) A saved tester profile first, like Join.
-  if (!profileSaved(await db.testerProfile.findUnique({ where: { userId: tester.id } }))) throw new HttpError(409, "profile_first", PROFILE_FIRST);
-  await listingGate(tester.id, testId, body, "apply");
-  if (t.joinMode !== "anyone" && t.joinMode !== "invite") gapStop(t, await db.testerProfile.findUnique({ where: { userId: tester.id } }), body, "Apply");
-  if (t.joinMode === "anyone") return { joined: true, sessionId: (await join(tester, testId, { ...body, confirmed: true })).id };
-  if (t.joinMode === "invite") throw new HttpError(409, "invite_only", "This test is invite only.");
-  const note = typeof body.note === "string" ? body.note.trim().slice(0, LIMITS.joinNote) : "";
-  const snap = listingSnapshot(t) as Prisma.InputJsonValue;
-  // (7.3) The NDA is accepted when applying; the developer's Accept joins them on it.
-  if (t.ndaText && body.ndaAccepted !== true) throw new HttpError(400, "nda", "Accept the NDA to apply.");
-  const ndaAcceptedAt = t.ndaText ? new Date() : null;
-  await saveJoinRequest(tester.id,testId,{note,listing:snap,kind:"apply",ndaAcceptedAt},`${displayName(tester)} applied to join`);
+  if (!(await db.test.count({ where: { id: testId } }))) throw new HttpError(404, "not_found", "That test doesn't exist.");
+  const done = await onePass(testId, "apply", body, async (tx): Promise<Pass<RequestDone>> => {
+    const t = await tx.test.findUniqueOrThrow({ where: { id: testId }, include: { developer: true } });
+    // 1. J01; (batch 34 §16) an invite the page hadn't shown joins at once (any waiting application of theirs closes as joined), one it showed is refused.
+    const refused = await j01(tx, tester.id, testId, "Apply");
+    if (refused) return { stop: refused };
+    const invite = await inviteMet(tx, tester, testId, body, displayName(t.developer));
+    if (invite instanceof HttpError) return { stop: invite };
+    if (invite) return asJoined(await joinSteps(tx, tester, t, body));
+    // 2. Already waiting (J09), then the 2-per-24-hours limit (a press that files an application).
+    const waiting = await stopOf(() => alreadyWaiting(tester.id, testId, tx));
+    if (waiting) return { stop: waiting };
+    const limit = t.joinMode === "apply" ? await requestLimit(tx, tester.id, testId) : null;
+    if (limit) return { stop: limit };
+    // 3. (Owner, Nov 2) A saved tester profile first, like Join.
+    const profile = await tx.testerProfile.findUnique({ where: { userId: tester.id } });
+    if (!profileSaved(profile)) return { stop: new HttpError(409, "profile_first", PROFILE_FIRST) };
+    // 4. The listing box; then (owner's exception) invite only. A test that now lets anyone join: the press joins (Join's steps, past this box).
+    const box = await stopOf(() => listingGate(tester.id, testId, body, "apply", tx));
+    if (box) return { stop: box };
+    if (t.joinMode === "invite") return { stop: new HttpError(409, "invite_only", "This test is invite only.") };
+    if (t.joinMode === "anyone") return asJoined(await joinSteps(tx, tester, t, { ...body, confirmed: true }));
+    // 5. The gap box, then (7.3) the NDA tick: the NDA is accepted when applying; the developer's Accept joins them on it.
+    const gap = await stopOf(async () => gapStop(t, profile, body, "Apply"));
+    if (gap) return { stop: gap };
+    if (t.ndaText && body.ndaAccepted !== true) return { stop: new HttpError(400, "nda", "Accept the NDA to apply.") };
+    // 6. The application.
+    const note = typeof body.note === "string" ? body.note.trim().slice(0, LIMITS.joinNote) : "";
+    await storeJoinRequest(tx, tester.id, testId, { note, listing: listingSnapshot(t) as Prisma.InputJsonValue, kind: "apply", ndaAcceptedAt: t.ndaText ? new Date() : null }, `${displayName(tester)} applied to join`);
+    return { saved: { requested: { note } } };
+  }).catch(noKeyLine(tester.id, testId, "Apply"));
+  if ("joined" in done) {
+    await afterJoin(done.joined, tester, testId, body);
+    return { joined: true, sessionId: done.joined.contract.id };
+  }
+  const t = await db.test.findUniqueOrThrow({ where: { id: testId }, include: { developer: true } });
+  const note = done.requested.note;
   await notify(t.developer.email, `${displayName(tester)} applied to join “${t.title}”`, [`${displayName(tester)} applied to join “${t.title}”.`, ...(note ? [`${pronouns(tester.pronoun).Poss} note: “${note}”`] : []), "Accept or decline on the test page."], `/app/tests/${testId}#needs-you`, { testId, group: APPLICATIONS_GROUP }); // (Owner, Nov 6, §308) "Applications · N", one entry a day across tests
   return { applied: true };
 }
@@ -500,45 +606,60 @@ export function rejoinAskLine(name: string, pron: { subj: string; poss: string }
 
 /**
  * (Design doc 7.3) Ask to rejoin: a tester who left, or whose work was ended (or who a suspension removed), before their deadline,
- * asks to come back; the developer accepts and the session returns on the current listing with the time they had left. An invite
- * and an ask in either order join them at once, unless a final refusal applies. Checks the 10-test limit, the NDA and the
- * listing like Join.
+ * asks to come back; the developer accepts and the session returns on the current listing with the time they had left. Checks the 10-test limit, the NDA and
+ * the listing like Join. (Owner, Nov 11, §377) One pass under the test's lock, in the order above Join, with the same order as Join and Apply after its own
+ * refusals (the gap box before the NDA tick). An invite the page hadn't shown joins them at once right after J01 (batch 34 §16: the ask and the invite meet),
+ * so an ask is never filed next to an open invite.
  */
 export async function askToRejoin(tester: U, testId: string, body: Record<string, unknown>) {
   if (!tester.isTester) throw new HttpError(403, "not_tester", "Turn on “test apps, games and more” in your profile to join tests.");
-  const t = await db.test.findUnique({ where: { id: testId }, include: { developer: true } });
-  if (!t) throw new HttpError(404, "not_found", "That test doesn't exist.");
-  const old = await db.contract.findUnique({ where: { testId_testerId: { testId, testerId: tester.id } } });
-  const rated = old ? (await db.rating.count({ where: { contractId: old.id } })) > 0 : false;
-  if (!old || old.status === "working") throw new HttpError(409, "not_again", old ? "You've already joined this test." : "You haven't been in this test.");
-  // (Owner, Oct 28, batch 16 section 11) A block either way: the ask is refused with the neutral line (never says why).
-  const blocks = await import("./blocks");
-  if (await blocks.blockedEitherWay(tester.id, t.developerId)) throw new HttpError(409, "refused", blocks.NOT_TAKING_LINE);
-  if (!canAskToRejoin(old, rated)) throw new HttpError(409, "not_again", rated || old.endKind === "rated" ? "You rated this test, so you can't join it again." : "You can't ask to rejoin this test.");
-  const refusal = await joinRefusal(tester.id, testId, { rejoin: true });
-  if (refusal) throw new HttpError(409, "refused", asPressRefusal(refusal, "Ask to rejoin")); // (§363)
-  // (Batch 34 §16) An invite the page already showed: Join, not an ask. One it hadn't shown: the ask meets it below and they're back at once.
-  await inviteBeforePress(tester, testId, body, displayName(t.developer));
-  await alreadyWaiting(tester.id, testId);
-  if (!profileSaved(await db.testerProfile.findUnique({ where: { userId: tester.id } }))) throw new HttpError(409, "profile_first", PROFILE_FIRST);
-  await listingGate(tester.id, testId, body, "ask");
-  if (t.ndaText && body.ndaAccepted !== true) throw new HttpError(400, "nda", "Accept the NDA to ask to rejoin.");
-  gapStop(t, await db.testerProfile.findUnique({ where: { userId: tester.id } }), body, "Ask");
-  const note = typeof body.note === "string" ? body.note.trim().slice(0, LIMITS.joinNote) : "";
-  const ndaAcceptedAt = t.ndaText ? new Date() : null;
-  const snap = listingSnapshot(t) as Prisma.InputJsonValue;
-  const invited = await db.invite.findFirst({ where: { testId, testerId: tester.id, status: "sent" } });
-  await saveJoinRequest(tester.id,testId,{note,listing:snap,kind:"rejoin",ndaAcceptedAt},`${displayName(tester)} asks to rejoin`,!!invited);
-  // (Owner, Oct 28) A test a suspension removed them from leaves the dashboard top once they ask (or dismiss it).
-  if (old.endKind === "suspended" && !old.removedDismissedAt) await db.contract.update({ where: { id: old.id }, data: { removedDismissedAt: new Date() } });
-  if (invited) {
-    // The developer already invited them: the ask and the invite meet, and they are back at once.
-    const c = await matchInviteAndAsk(testId, tester.id);
-    if (c) return { joined: true, sessionId: c.id };
+  if (!(await db.test.count({ where: { id: testId } }))) throw new HttpError(404, "not_found", "That test doesn't exist.");
+  let old: Prisma.ContractGetPayload<object> | null = null;
+  const done = await onePass(testId, "rejoin-ask", body, async (tx): Promise<Pass<RequestDone>> => {
+    const t = await tx.test.findUniqueOrThrow({ where: { id: testId }, include: { developer: true } });
+    // 1. J01 (a rejoin); an invite the page hadn't shown: they're back at once; one it showed: Join, not an ask.
+    const refused = await j01(tx, tester.id, testId, "Ask to rejoin", { rejoin: true });
+    if (refused) return { stop: refused };
+    const invite = await inviteMet(tx, tester, testId, body, displayName(t.developer));
+    if (invite instanceof HttpError) return { stop: invite };
+    if (invite) return asJoined(await joinSteps(tx, tester, t, body, "Ask"));
+    // 2. Ask to rejoin's own refusals: never in / still in; (owner, Oct 28, batch 16 section 11) a block either way (the neutral line, never why); rated; then
+    // already waiting (J09) and the 2-per-24-hours limit.
+    old = await tx.contract.findUnique({ where: { testId_testerId: { testId, testerId: tester.id } } });
+    if (!old || old.status === "working") return { stop: new HttpError(409, "not_again", old ? "You've already joined this test." : "You haven't been in this test.") };
+    const blocks = await import("./blocks");
+    if (await blocks.blockedEitherWay(tester.id, t.developerId)) return { stop: new HttpError(409, "refused", blocks.NOT_TAKING_LINE) };
+    const rated = (await tx.rating.count({ where: { contractId: old.id } })) > 0;
+    if (!canAskToRejoin(old, rated)) return { stop: new HttpError(409, "not_again", rated || old.endKind === "rated" ? "You rated this test, so you can't join it again." : "You can't ask to rejoin this test.") };
+    const waiting = await stopOf(() => alreadyWaiting(tester.id, testId, tx));
+    if (waiting) return { stop: waiting };
+    const limit = await requestLimit(tx, tester.id, testId);
+    if (limit) return { stop: limit };
+    // 3. A saved tester profile.
+    const profile = await tx.testerProfile.findUnique({ where: { userId: tester.id } });
+    if (!profileSaved(profile)) return { stop: new HttpError(409, "profile_first", PROFILE_FIRST) };
+    // 4. The listing box.
+    const box = await stopOf(() => listingGate(tester.id, testId, body, "ask", tx));
+    if (box) return { stop: box };
+    // 5. (§377; was the NDA tick first) The gap box, then the NDA tick, as Join and Apply.
+    const gap = await stopOf(async () => gapStop(t, profile, body, "Ask"));
+    if (gap) return { stop: gap };
+    if (t.ndaText && body.ndaAccepted !== true) return { stop: new HttpError(400, "nda", "Accept the NDA to ask to rejoin.") };
+    // 6. The ask.
+    const note = typeof body.note === "string" ? body.note.trim().slice(0, LIMITS.joinNote) : "";
+    await storeJoinRequest(tx, tester.id, testId, { note, listing: listingSnapshot(t) as Prisma.InputJsonValue, kind: "rejoin", ndaAcceptedAt: t.ndaText ? new Date() : null }, `${displayName(tester)} asks to rejoin`);
+    // (Owner, Oct 28) A test a suspension removed them from leaves the dashboard top once they ask (or dismiss it).
+    if (old.endKind === "suspended" && !old.removedDismissedAt) await tx.contract.update({ where: { id: old.id }, data: { removedDismissedAt: new Date() } });
+    return { saved: { requested: { note } } };
+  }).catch(noKeyLine(tester.id, testId, "Ask to rejoin"));
+  if ("joined" in done) {
+    await afterJoin(done.joined, tester, testId, body);
+    return { joined: true, sessionId: done.joined.contract.id };
   }
+  const t = await db.test.findUniqueOrThrow({ where: { id: testId }, include: { developer: true } });
   const name = displayName(tester);
-
-  const line = rejoinAskLine(name, pronouns(tester.pronoun), old);
+  const note = done.requested.note;
+  const line = rejoinAskLine(name, pronouns(tester.pronoun), old!);
   await notify(t.developer.email, `${name} asks to rejoin “${t.title}”`, [line, ...(note ? [`${pronouns(tester.pronoun).Poss} note: “${note}”`] : [])], `/app/tests/${testId}#needs-you`, { about: tester.id, testId, group: APPLICATIONS_GROUP }); // (Owner, Nov 6, §308) "Applications · N", one entry a day across tests
   return { asked: true };
 }

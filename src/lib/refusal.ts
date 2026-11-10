@@ -52,3 +52,11 @@ export function asPressRefusal(line: string, press: string) {
   if (line === ANY_MORE) return pressRefused(ANY_MORE.replace(/\.$/, ""), press);
   return line;
 }
+
+/** (Owner, Nov 11, §377) A full test, for Join, Apply and Ask to rejoin: "This test is full, so your Join didn't go through." */
+export const FULL_CAUSE = "This test is full";
+/**
+ * (Owner, Nov 11, §377) A join refusal (joinRefusal's line) named with Join, Apply or Ask to rejoin: asPressRefusal's lines, and "This test is full." in the
+ * pattern too. Every other line stays as it is (the invite's "<title> is full right now.", already joined, the key line, the test limit …).
+ */
+export const joinPressRefusal = (line: string, press: string) => (line === `${FULL_CAUSE}.` ? pressRefused(FULL_CAUSE, press) : asPressRefusal(line, press));

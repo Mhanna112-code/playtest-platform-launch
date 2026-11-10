@@ -1067,17 +1067,16 @@ export const needsGap = (t: { devices: string[]; languages: string[] }, p: { dev
  * Join: the tester sends the listing version they saw. A changed listing stops once and returns the new terms;
  * the second press joins on them. Closed, stopped or full tests refuse for good. The contract is a snapshot.
  */
-export async function joinTest(tester: U, testId: string, body: Record<string, unknown>, options: { applicationId?: string; /** what the claimed application becomes (default "joined") */ applicationStatus?: "joined" | "accepted"; quietJoinEvent?: boolean; /** (Owner, Nov 3, races) the press's own stop-once, run again under the test's lock */ lockedGate?: () => Promise<void> } = {}) {
+export async function joinTest(tester: U, testId: string, body: Record<string, unknown>, options: { applicationId?: string; /** what the claimed application becomes (default "joined") */ applicationStatus?: "joined" | "accepted"; quietJoinEvent?: boolean } = {}) {
   if (!tester.isTester) throw new HttpError(403, "not_tester", "Turn on “test apps, games and more” in your profile to join tests.");
   const profile = await db.testerProfile.findUnique({ where: { userId: tester.id } });
   // (Owner, Nov 2) The tester's own press needs a saved profile (a developer accepting their application or ask doesn't: they pressed with one).
   if (!options.applicationId && !profileSaved(profile)) throw new HttpError(409, "profile_first", PROFILE_FIRST);
   const seen = Number(body.listingVersion);
-  const { contract, dev, filled, title } = await db.$transaction(async (tx) => {
+  // (Owner, Nov 11, §377) The tester's own Join, Apply and Ask to rejoin no longer come through here: they make one pass under the test's lock (joining.ts) and
+  // save with saveJoin. Here: the developer's Accept, an invite meeting an ask, the switch to "Anyone can join".
+  const joined = await db.$transaction(async (tx) => {
     const t = await lockTest(tx, testId);
-    // (Owner, Nov 3, races) Join's "changed since your page loaded" check, again under the lock: an Edit that saved after the first check (before this lock) stops
-    // the press once naming it, instead of joining on a listing the page never showed.
-    if (options.lockedGate) await options.lockedGate();
     if (options.applicationId) {
       const application = await tx.application.findUnique({ where: { id: options.applicationId } });
       if (!application || application.testId !== testId || application.testerId !== tester.id || application.status !== "pending")
@@ -1109,46 +1108,67 @@ export async function joinTest(tester: U, testId: string, body: Record<string, u
     // (Design doc 7.3) Joining needs the NDA accepted (the time it was accepted is kept with the terms).
     const ndaAt = typeof body.ndaAcceptedAt === "string" && !isNaN(new Date(body.ndaAcceptedAt).getTime()) ? new Date(body.ndaAcceptedAt) : null;
     if (t.ndaText && body.ndaAccepted !== true && !ndaAt) throw new HttpError(400, "nda", "Accept the NDA to join.");
-    // (Batch 15 section 18) The tester's deadline: the day they join + the test's tester days (counted in the developer's time zone, like Open until).
-    const snap = contractSnapshot({ ...asListing(t), listingVersion: t.listingVersion, testerDays: t.testerDays, tz: dev.timeZone }, new Date(), body.keepPrivate === true, ndaAt ?? new Date());
-    // (Owner, Nov 6, §283) Coming back: on the listing's questions; if theirs still differ (an ended contract no Save reached), the change is a Terms history
-    // entry first (followQuestions), so the old answered questions stay readable there.
-    if (old) await followQuestions(tx, old, asListing(t).questions, new Date());
-    // (Owner, Nov 6, §313c) Work sent before she left keeps the deadline it was sent under (the one in effect when she left): its review date, Charge and closing
-    // date don't move with the rejoined stint's new deadline. Stamped once (a piece already stamped by an earlier rejoin keeps its own).
-    if (old) {
-      await tx.submission.updateMany({ where: { contractId: old.id, stintDueAt: null }, data: { stintDueAt: old.dueAt } });
-      await tx.call.updateMany({ where: { contractId: old.id, stintDueAt: null }, data: { stintDueAt: old.dueAt } });
-    }
-    // (Owner, Nov 6, §312e) Rejoining accepts the listing as it is now, NDA included: the earlier stint's NDA change (and its unacknowledged notice, which blocked
-    // every press and showed "… changed the NDA … Acknowledge" on the fresh page) does not carry over.
-    if (old) await (await import("./accessKeys")).releaseTesterKeys(tx, old.id);
-    const contract = old
-      ? await tx.contract.update({ where: { id: old.id }, data: { ...snap, dueAt: rejoinDue(old.dueAt, old.endedAt, new Date(), dev.timeZone), status: "working", endKind: "", endedAt: null, endReason: "", termsSwitchedAt: null, ndaChangedAt: null, ndaChangeKind: "", ndaNoticeSeenAt: null } })
-      : await tx.contract.create({ data: { testId, testerId: tester.id, ...snap } });
-    await stampCounting(testId, tx); // (batch 35 §66) the 3-change count starts with the first join
-    if (old) await tx.termsOffer.updateMany({ where: { contractId: old.id, status: "open" }, data: { status: "superseded", decidedAt: new Date() } });
-    // (Owner, Nov 6, §311g) A rejoin is a fresh deadline: the earlier stint's deadline marks go, so the new deadline's latest passed mark is sent once (a "1d" sent
-    // before she left no longer swallows the new one when she rejoins with under a day left).
-    if (old) {
-      const marks = (await tx.test.findUniqueOrThrow({ where: { id: testId }, select: { notifiedMarks: true } })).notifiedMarks;
-      const kept = forgetDeadlineMarks(marks, old.id);
-      if (kept.length !== marks.length) await tx.test.update({ where: { id: testId }, data: { notifiedMarks: kept } });
-    }
-    // (Design doc 5) Each joining tester gets an access key (the key they had, else the oldest free one). (Owner, Nov 6, §304) No "still works?" answer.
-    await assignKeyAtJoin(tx, testId, contract.id);
-    await recordEvent(tx, testId, options.quietJoinEvent === true ? "auto_joined" : "joined", old ? `${displayName(tester)} joined again` : `${displayName(tester)} joined`, true, {}, contract.id, "", testerRow(contract.id)); // (Owner, Nov 6, §284) the place the line opens: their row in Testers
-    await tx.invite.updateMany({ where: { testId, testerId: tester.id, status: "sent" }, data: { status: "joined" } });
-    // (Correction 4) The last spot taken: every other pending application and open invite closes, in this transaction.
-    const filled = (await tx.contract.count({ where: working(testId) })) >= t.spots
-      ? await closeOnFull(tx, testId, tester.id)
-      : null;
-    return { contract, dev, filled, title: t.title };
+    return saveJoin(tx, t, tester, body, options);
   });
+  await afterJoin(joined, tester, testId, body);
+  return joined.contract;
+}
+
+/** (Owner, Nov 11, §377) What a join saved, for afterJoin. */
+export type Joined = Awaited<ReturnType<typeof saveJoin>>;
+
+/**
+ * (Owner, Nov 11, §377) The join itself, inside the transaction that holds the test's lock, once every check passed (joinTest's, or the press's one pass in
+ * joining.ts): the contract (new, or the old one restored), the key, the "joined" line, the invites, and the test filling.
+ */
+export async function saveJoin(tx: Tx, t: Prisma.TestGetPayload<object>, tester: U, body: Record<string, unknown>, options: { quietJoinEvent?: boolean } = {}) {
+  const testId = t.id;
+  const dev = await tx.user.findUniqueOrThrow({ where: { id: t.developerId } });
+  const old = await tx.contract.findUnique({ where: { testId_testerId: { testId, testerId: tester.id } } });
+  const ndaAt = typeof body.ndaAcceptedAt === "string" && !isNaN(new Date(body.ndaAcceptedAt).getTime()) ? new Date(body.ndaAcceptedAt) : null;
+  // (Batch 15 section 18) The tester's deadline: the day they join + the test's tester days (counted in the developer's time zone, like Open until).
+  const snap = contractSnapshot({ ...asListing(t), listingVersion: t.listingVersion, testerDays: t.testerDays, tz: dev.timeZone }, new Date(), body.keepPrivate === true, ndaAt ?? new Date());
+  // (Owner, Nov 6, §283) Coming back: on the listing's questions; if theirs still differ (an ended contract no Save reached), the change is a Terms history
+  // entry first (followQuestions), so the old answered questions stay readable there.
+  if (old) await followQuestions(tx, old, asListing(t).questions, new Date());
+  // (Owner, Nov 6, §313c) Work sent before she left keeps the deadline it was sent under (the one in effect when she left): its review date, Charge and closing
+  // date don't move with the rejoined stint's new deadline. Stamped once (a piece already stamped by an earlier rejoin keeps its own).
+  if (old) {
+    await tx.submission.updateMany({ where: { contractId: old.id, stintDueAt: null }, data: { stintDueAt: old.dueAt } });
+    await tx.call.updateMany({ where: { contractId: old.id, stintDueAt: null }, data: { stintDueAt: old.dueAt } });
+  }
+  // (Owner, Nov 6, §312e) Rejoining accepts the listing as it is now, NDA included: the earlier stint's NDA change (and its unacknowledged notice, which blocked
+  // every press and showed "… changed the NDA … Acknowledge" on the fresh page) does not carry over.
+  if (old) await (await import("./accessKeys")).releaseTesterKeys(tx, old.id);
+  const contract = old
+    ? await tx.contract.update({ where: { id: old.id }, data: { ...snap, dueAt: rejoinDue(old.dueAt, old.endedAt, new Date(), dev.timeZone), status: "working", endKind: "", endedAt: null, endReason: "", termsSwitchedAt: null, ndaChangedAt: null, ndaChangeKind: "", ndaNoticeSeenAt: null } })
+    : await tx.contract.create({ data: { testId, testerId: tester.id, ...snap } });
+  await stampCounting(testId, tx); // (batch 35 §66) the 3-change count starts with the first join
+  if (old) await tx.termsOffer.updateMany({ where: { contractId: old.id, status: "open" }, data: { status: "superseded", decidedAt: new Date() } });
+  // (Owner, Nov 6, §311g) A rejoin is a fresh deadline: the earlier stint's deadline marks go, so the new deadline's latest passed mark is sent once (a "1d" sent
+  // before she left no longer swallows the new one when she rejoins with under a day left).
+  if (old) {
+    const marks = (await tx.test.findUniqueOrThrow({ where: { id: testId }, select: { notifiedMarks: true } })).notifiedMarks;
+    const kept = forgetDeadlineMarks(marks, old.id);
+    if (kept.length !== marks.length) await tx.test.update({ where: { id: testId }, data: { notifiedMarks: kept } });
+  }
+  // (Design doc 5) Each joining tester gets an access key (the key they had, else the oldest free one). (Owner, Nov 6, §304) No "still works?" answer.
+  await assignKeyAtJoin(tx, testId, contract.id);
+  await recordEvent(tx, testId, options.quietJoinEvent === true ? "auto_joined" : "joined", old ? `${displayName(tester)} joined again` : `${displayName(tester)} joined`, true, {}, contract.id, "", testerRow(contract.id)); // (Owner, Nov 6, §284) the place the line opens: their row in Testers
+  await tx.invite.updateMany({ where: { testId, testerId: tester.id, status: "sent" }, data: { status: "joined" } });
+  // (Correction 4) The last spot taken: every other pending application and open invite closes, in this transaction.
+  const filled = (await tx.contract.count({ where: working(testId) })) >= t.spots
+    ? await closeOnFull(tx, testId, tester.id)
+    : null;
+  return { contract, dev, filled, title: t.title };
+}
+
+/** (Owner, Nov 11, §377) After a join's commit: the developer's "full" line, and their "joined" bell (not for their own Accept). */
+export async function afterJoin(j: Joined, tester: U, testId: string, body: Record<string, unknown>) {
+  const { contract, dev, filled, title } = j;
   if (filled) await tellFull(filled);
   // (Owner, Oct 27) The developer who accepted an application made it happen themselves: no second "joined" line for it (the "applied" line was the notice).
   if (body.acceptedByDeveloper !== true) await notify(dev.email, `${displayName(tester)} joined “${title}”`, [`${displayName(tester)} joined your test “${title}”.`, `${pronouns(tester.pronoun).Poss} deal: ${termsLine(contract)}.`], `/app/tests/${testId}#tester-${contract.id}`, { about: tester.id, testId }); // (Owner, Nov 6, §308) a plain per-test line: the test's own "Harbor Run · N updates" stack
-  return contract;
 }
 
 // ---------- tester: session ----------
@@ -1239,7 +1259,7 @@ export async function onePass<T>(testId: string, hook: string, body: Record<stri
 }
 
 /** (§375) Ends a step inside the pass: a refusal or a box thrown by a check becomes the pass's result (anything else is a real error). */
-async function stopOf(check: () => Promise<unknown>) {
+export async function stopOf(check: () => Promise<unknown>) {
   try {
     await check();
     return null;

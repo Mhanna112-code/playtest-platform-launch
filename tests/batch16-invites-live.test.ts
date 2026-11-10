@@ -127,7 +127,8 @@ describe("tester invitations follow every close (section 32)", () => {
     const ou = new Date(Date.now() - 60_000);
     await db.test.update({ where: { id: y.testId }, data: { openUntil: ou } });
     await closeJoiningAfterOpenUntil();
-    expect((await join(y.testId, y.ana.cookie, y.inv.id)).body.error.message).toBe(`This test closed to new testers on ${fmtDate(ou)}, so your Join didn't go through.`); // (§364 item 10)
+    // (Owner, Nov 11, §377) J01 comes before Join's own "the invite closed": its Open until line (the date without the year), in the pattern.
+    expect((await join(y.testId, y.ana.cookie, y.inv.id)).body.error.message).toBe(`This test closed to new testers on ${fmtDate(ou).replace(/, \d{4}$/, "")}, so your Join didn't go through.`); // (§364 item 10)
   });
 
   it("the card says when it was sent again on a new listing, and when the test is full", () => {

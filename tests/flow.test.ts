@@ -87,7 +87,7 @@ describe("join and contract snapshots", () => {
     const { dev, testId } = await setup({ spots: 1 });
     await joined(testId);
     const ben = await makeUser({ tester: true });
-    expect((await act(testId, "join", ben.cookie, { listingVersion: 1, confirmed: true })).body.error.message).toBe("This test is full.");
+    expect((await act(testId, "join", ben.cookie, { listingVersion: 1, confirmed: true })).body.error.message).toBe("This test is full, so your Join didn't go through."); // (Owner, Nov 11, §377) in the pattern
     expect((await act(testId, "join", dev.cookie, { listingVersion: 1 })).status).toBe(403); // not a tester
     const s = await setup({ devices: ["Mac"] });
     expect((await act(s.testId, "join", ben.cookie, { listingVersion: 1 })).body.error.message).toContain("Your profile doesn't list a device this test needs (Mac)."); // (batch 20 section 3)

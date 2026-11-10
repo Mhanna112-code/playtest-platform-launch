@@ -74,7 +74,7 @@ describe("joining: Anyone / Apply / Invite only", () => {
     expect((await act(testId, "join", ana.cookie, {})).body.error.message).toBe("This test is invite only.");
     await act(testId, "invite", dev.cookie, { seenAt: seen(), testerIds: [ana.user.id] });
     expect((await act(testId, "join", ana.cookie, {})).status).toBe(200);
-    expect((await act(testId, "join", ben.cookie, { confirmed: true })).body.error.message).toBe("This test is full.");
+    expect((await act(testId, "join", ben.cookie, { confirmed: true })).body.error.message).toBe("This test is full, so your Join didn't go through."); // (Owner, Nov 11, §377)
     expect(joined).toBeDefined();
   });
 });

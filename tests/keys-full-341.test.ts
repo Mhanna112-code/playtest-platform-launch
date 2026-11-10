@@ -113,7 +113,7 @@ describe("§341 no free access key: full to testers", () => {
     expect(await keysFullNow(db, testId)).toBe(false); // no spot open
     expect(await joinRefusal(ana.user.id, testId)).toBe("This test is full.");
     const r = await act(testId, "join", ana.cookie, { listingVersion: (await db.test.findUniqueOrThrow({ where: { id: testId } })).listingVersion, seenAt: seen(), confirmed: true });
-    expect(r.body.error?.message).toBe("This test is full.");
+    expect(r.body.error?.message).toBe("This test is full, so your Join didn't go through."); // (Owner, Nov 11, §377) the press's pattern
     // Invite only, a spot open but no free key: the key line, never "invite only" as well.
     const { testId: inviteOnly } = await setup({ spots: 2, joinMode: "invite" });
     await unassigned(inviteOnly);
