@@ -17,13 +17,13 @@ describe("§372", () => {
     const s = src("src/app/app/sessions/[id]/SessionActions.tsx");
     expect(s).toMatch(/\/didn\['’\]t go through\/\.test\(now \|\| message\) \? null :/);
   });
-
-  it("Send Answers, Add and a recording's Send / Add name their press when the work closes at the gate (\"This test ended, so your Send Answers didn't go through.\")", () => {
-    expect(src("src/lib/server/terms.ts")).toMatch(/assertWorkOpen\(db, c\.testId, new Date\(\), press\)/);
+  it("Send Answers, Add and a recording's Send / Add name their press when the work closes (\"This test ended, so your Send Answers didn't go through.\")", () => {
+    // (Owner, Nov 11, §375) Checked in each press's one pass (partOver, with the press's name), no longer at the gate.
     const tests = src("src/lib/server/tests.ts");
-    expect(tests.match(/testerSendGate\([^)]*"Send Answers"\)/g)?.length).toBe(3);
-    expect(tests.match(/testerSendGate\([^)]*"Add"\)/g)?.length).toBe(3);
-    const rec = src("src/lib/server/recordings.ts");
-    expect(rec.match(/testerSendGate\(contractId, body, sent\?\.id\)/g)).toBeNull();
+    expect(tests).toMatch(/assertWorkOpen\(tx, c\.testId, new Date\(\), press\)/);
+    expect(tests).toContain('const press = "Send Answers";');
+    expect(tests).toContain('const press = "Add";');
+    expect(tests.match(/await partOver\(tx, contractId, press, run\)/g)?.length).toBe(2);
+    expect(src("src/lib/server/recordings.ts")).toContain("await partOver(tx, contractId, press, run)");
   });
 });

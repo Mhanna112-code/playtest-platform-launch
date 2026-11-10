@@ -3,16 +3,18 @@ import { afterEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { carriedAnswers, questionKeys } from "@/lib/additions";
 import { itemsFor } from "@/lib/answerSets";
-import { QUESTIONS_CHANGED_MEANWHILE, sendWritten } from "@/lib/server/tests";
+import { sendWritten } from "@/lib/server/tests";
+/** (§369) The old "meanwhile" refusal (gone since §375's one pass): never the answer. */
+const QUESTIONS_CHANGED_MEANWHILE = "Your questions changed just now: nothing was sent. Check your answers and press Send Answers again.";
 import { SENT_ANSWERS_LOCKED } from "@/lib/rules";
 import { act, addTo, atHours, joined, sact, seen, settle, setup } from "./fixtures";
 import { payMore } from "./b15";
 import { POST as releasePOST } from "@/app/api/test/race-release/route";
 import { req } from "./helpers";
 
-// (Owner, Nov 10, §369) "The result must never depend on timing." A press that checks before the test's lock and writes under it re-reads what it decided by under
-// the lock (questions first); any change rolls back and reruns the press from the top, so it ends exactly as a later press would: ONE normal stop-once box, never
-// "Your questions changed just now" or "Your answers were already sent". The interleavings are forced with the press's hook between its checks and its lock.
+// (Owner, Nov 10, §369) "The result must never depend on timing." (Owner, Nov 11, §375) A press makes ONE pass under the test's lock (no check before it, none
+// again after it), so whatever lands while it waits for the lock is simply before the pass, and the press ends exactly as a later press would: ONE normal
+// stop-once box, never "Your questions changed just now" or "Your answers were already sent". The interleavings are forced with the press's hook just before its lock.
 
 const Q = ["What did you like?", "Where did you get stuck?", "What would you change?", "Anything about the controls?"];
 const Q3b = "What would you change first?";
@@ -97,7 +99,7 @@ describe("§369 Send Answers in two tabs, and a questions Save, never depend on 
     expect(carriedAnswers((await written(w))!, [Q[0], Q[1], Q3b, Q[3]])).toEqual([A1, A1, "B on the changed question, typed after the box.", B_TYPED[3]]);
   });
 
-  it("(c) the developer's Save lands between B's checks and B's lock: the question-change stop-once, not QUESTIONS_CHANGED_MEANWHILE", async () => {
+  it("(c) the developer's Save lands while B waits for its lock: the question-change stop-once, not QUESTIONS_CHANGED_MEANWHILE", async () => {
     const w = await world();
     pauseAt("written", () => editQuestions(w.testId, w.dev.cookie, [Q[0], Q[1], Q3b, Q[3]]));
     const b = await sendB(w);
@@ -208,8 +210,8 @@ describe("§369 the same race for Add to this answer and a recording's Send", ()
 
 });
 
-describe("§369 a final refusal before the lock stays one", () => {
-  it("a too-short answer is refused before any lock (nothing reaches it)", async () => {
+describe("§369 a final refusal stays one (§375: in the one pass under the lock)", () => {
+  it("a too-short answer is refused in the pass (one pass, no second look): nothing saved", async () => {
     const w = await world();
     let reached = 0;
     hooks().written = async () => { reached++; };
@@ -221,7 +223,7 @@ describe("§369 a final refusal before the lock stays one", () => {
     } finally {
       process.env.ANSWER_MIN_CHARS = was;
     }
-    expect(reached).toBe(0);
+    expect(reached).toBe(1); // (Owner, Nov 11, §375) every press makes its one pass under the lock; the mistake is found there
     expect(await written(w)).toBeNull();
   });
 });

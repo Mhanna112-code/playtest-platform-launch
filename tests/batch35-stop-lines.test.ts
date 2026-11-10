@@ -59,18 +59,18 @@ describe("batch 35 §77 a re-send with nothing new isn't 'updated'", () => {
   });
   // (Batch 35 §136) Replaced: sent work is locked, so a second Send is refused as locked (answers) or adds only new recordings.
   it("both Sends refuse a re-send of what was sent: the answers as locked, the recordings with nothing to add", () => {
-    expect(src("lib/server/recordings.ts")).toContain('throw new HttpError(400, "none", existing ? NO_RECORDING_TO_ADD : "Upload a recording first.");');
-    // (Batch 35 §183) The same refusal, now in sendRefusal: checked before the stop-once (a single refusal, never a stop first) and again under the lock.
+    const rec = src("lib/server/recordings.ts");
+    expect(rec).toContain('return { stop: new HttpError(400, "none", sent ? NO_RECORDING_TO_ADD : "Upload a recording first.") };');
+    // (Batch 35 §183) The same refusal, in sendRefusal: a single refusal, never a stop first. (Owner, Nov 11, §375) In the one pass, step 3a, before the gate.
     const tests = src("lib/server/tests.ts");
     // (§375) And never while a current question still has no answer (`openLeft`: the form below can still send one).
     expect(tests).toContain('if (existing && !existing.setUntil && !answersNew && !openLeft && sameQuestions(latestItems(existing, qs), itemsFor(qs, answers))) return new HttpError(409, "locked", SENT_ANSWERS_LOCKED);' /* (§235) a Send answering nothing new */);
-    // (§235 / §269; §375: in the one refusal set, writtenRefusals) The refusal still comes before the gate, and again under the lock; the call carries whether the
-    // press answers anything new.
-    expect(tests).toContain("return sendRefusal(sent, page.qs, answers, answersNew, !!fresh?.length);");
-    const once = tests.slice(tests.indexOf("async function sendWrittenOnce("));
-    expect(once.indexOf("await writtenRefusals(db, contractId, body);")).toBeGreaterThan(0);
-    expect(once.indexOf("await writtenRefusals(db, contractId, body);")).toBeLessThan(once.indexOf("await testerSendGate(contractId, body, sent?.id, { stale: [] }, \"Send Answers\");"));
-    expect(once).toContain("await writtenRefusals(tx, contractId, body);"); // under the lock
-    expect(src("lib/server/recordings.ts")).toContain('return new HttpError(400, "none", NO_RECORDING_TO_ADD);'); // §183: the recordings' nothing-to-add, before the gate too (§375: in recordingRefusals)
+    // (§235 / §269) The call carries whether the press answers anything new.
+    const send = tests.slice(tests.indexOf("export async function sendWritten("));
+    const refusal = "const final = sendRefusal(sent, page.qs, answers, answersNew, !!fresh?.length);";
+    expect(send.indexOf(refusal)).toBeGreaterThan(0);
+    expect(send.indexOf(refusal)).toBeLessThan(send.indexOf("await testerSendGate(tx, contractId, body, sent?.id, { stale: [] });"));
+    // §183: the recordings' nothing-to-add, before the gate too.
+    expect(rec.indexOf('sent ? NO_RECORDING_TO_ADD : "Upload a recording first."')).toBeLessThan(rec.indexOf("await testerSendGate(tx, contractId, body, sent?.id);"));
   });
 });

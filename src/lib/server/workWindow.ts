@@ -31,34 +31,47 @@ export async function finishWorkIfDue(testId: string, now = new Date()) {
   if (!peek || peek.status === "draft" || peek.status === "stopped" || peek.workEndedAt || testPaused(peek.developer, peek)) return false;
   const deadline = workDeadlineOf(peek, peek.contracts);
   if (!deadline || deadline > now) return false;
-  const { recordEvent, cancelCallsAhead, tellCancelled } = await import("./tests");
   const result = await db.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${testId} FOR UPDATE`;
-    const t = await tx.test.findUnique({ where: { id: testId }, include: { developer: true, contracts: { select: { id: true, status: true, dueAt: true } } } });
-    if (!t || t.status === "draft" || t.status === "stopped" || t.workEndedAt || testPaused(t.developer, t)) return null;
-    const at = workDeadlineOf(t, t.contracts);
-    if (!at || at > now) return null;
-    const ids = t.contracts.map((c) => c.id);
-    // (Owner, Nov 6, §286) The testers whose work this ends: their top box reads "This test ended", so their bell does too (below).
-    const ending = await tx.contract.findMany({ where: { testId, status: "working" }, select: { id: true, title: true, testerId: true, tester: { select: { email: true } }, test: { select: { title: true } } } });
-    await tx.contract.updateMany({ where: { testId, status: "working" }, data: { status: "ended", endKind: "closed", endedAt: at, endReason: "The test ended." } });
-    await (await import("./accessKeys")).releaseInactiveKeys(tx, testId);
-    const cancelled = await cancelCallsAhead(tx, ids, "The test ended.", at);
-    await closeOffersOfEnded(tx, ids, at); // (batch 35 §118) the part ended: its offer closes
-    await tx.callRequest.updateMany({ where: { contractId: { in: ids }, status: "pending" }, data: { status: "closed", closedReason: "the test ended", decidedAt: at } });
-    await tx.callSlot.updateMany({ where: { testId, status: "open" }, data: { status: "removed" } });
-    await tx.invite.updateMany({ where: { testId, status: "sent" }, data: { status: "cancelled" } });
-    await tx.application.updateMany({ where: { testId, status: "pending" }, data: { status: "closed", closedReason: "stopped", decidedAt: at } });
-    await recordEvent(tx, testId, "stopped", "The test was closed", true, { status: "closed", workEndedAt: at });
-    return { at, cancelled, ending };
+    return closeWorkIfDueIn(tx, testId, now);
   });
   if (!result) return false;
+  await afterWorkClosed(testId, result, now);
+  return true;
+}
+
+/**
+ * The closure itself, in a transaction that already holds the test's lock ((Owner, Nov 11, §375) a tester's Send / Add closes the work there, in its own pass,
+ * never with a second lock). Returns what afterWorkClosed tells once the transaction is committed, or null when nothing was due.
+ */
+export async function closeWorkIfDueIn(tx: Prisma.TransactionClient, testId: string, now = new Date()) {
+  const { recordEvent, cancelCallsAhead } = await import("./tests");
+  const t = await tx.test.findUnique({ where: { id: testId }, include: { developer: true, contracts: { select: { id: true, status: true, dueAt: true } } } });
+  if (!t || t.status === "draft" || t.status === "stopped" || t.workEndedAt || testPaused(t.developer, t)) return null;
+  const at = workDeadlineOf(t, t.contracts);
+  if (!at || at > now) return null;
+  const ids = t.contracts.map((c) => c.id);
+  // (Owner, Nov 6, §286) The testers whose work this ends: their top box reads "This test ended", so their bell does too (below).
+  const ending = await tx.contract.findMany({ where: { testId, status: "working" }, select: { id: true, title: true, testerId: true, tester: { select: { email: true } }, test: { select: { title: true } } } });
+  await tx.contract.updateMany({ where: { testId, status: "working" }, data: { status: "ended", endKind: "closed", endedAt: at, endReason: "The test ended." } });
+  await (await import("./accessKeys")).releaseInactiveKeys(tx, testId);
+  const cancelled = await cancelCallsAhead(tx, ids, "The test ended.", at);
+  await closeOffersOfEnded(tx, ids, at); // (batch 35 §118) the part ended: its offer closes
+  await tx.callRequest.updateMany({ where: { contractId: { in: ids }, status: "pending" }, data: { status: "closed", closedReason: "the test ended", decidedAt: at } });
+  await tx.callSlot.updateMany({ where: { testId, status: "open" }, data: { status: "removed" } });
+  await tx.invite.updateMany({ where: { testId, status: "sent" }, data: { status: "cancelled" } });
+  await tx.application.updateMany({ where: { testId, status: "pending" }, data: { status: "closed", closedReason: "stopped", decidedAt: at } });
+  await recordEvent(tx, testId, "stopped", "The test was closed", true, { status: "closed", workEndedAt: at });
+  return { at, cancelled, ending };
+}
+
+/** What a closure tells once its transaction is committed: the testers' bells, the calls at the deadline, the cancelled calls. */
+export async function afterWorkClosed(testId: string, result: NonNullable<Awaited<ReturnType<typeof closeWorkIfDueIn>>>, now = new Date()) {
   // (§286) In the words of the same closure's other bells (a pause running out, pauseClosure): "“Harbor Run” ended", in the day's "Tests stopped or ended" stack.
   const { notify } = await import("./notify");
   for (const c of result.ending) await notify(c.tester.email, `“${c.test.title}” ended`, [`“${c.test.title}” ended. Work you already sent is still reviewed and paid. Calls ahead are cancelled.`], `/app/sessions/${c.id}`, { recipientId: c.testerId, group: "tstopped" });
   await (await import("./calls")).endCallsAtWorkDeadline(testId, result.at, now);
-  await tellCancelled(result.cancelled, "closed");
-  return true;
+  await (await import("./tests")).tellCancelled(result.cancelled, "closed");
 }
 
 /** Checked on the live beat as well as daily, so unattended tests also finish. */

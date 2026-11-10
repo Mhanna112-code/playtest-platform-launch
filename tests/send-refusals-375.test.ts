@@ -11,17 +11,18 @@ import { POST as releasePOST } from "@/app/api/test/race-release/route";
 import { act, addTo, joined, sact, seen, settle, setup } from "./fixtures";
 import { json, makeUser, req } from "./helpers";
 
-// (Owner, Nov 11, §375) "One refusal set, checked in every place": a refusal (pressing again can never help) always comes before any stop-once box, and is
-// checked again under the test's lock, so a Save of new terms or the NDA, a pause, a Leave or a block that lands while a press waits for the lock refuses it
-// (nothing is saved), and a press that waited while something moved never gets a box whose second press could only be refused. Typed text is never lost.
-// The interleavings are forced with the press's hook between its checks and its lock (as in send-race-369.test.ts).
+// (Owner, Nov 11, §375) Send Answers, Add to this answer and a recording's Send / Add make ONE pass under the test's lock, in the owner's order: 1 the drafts
+// (an out-of-date page's typed text) → 2 part over → 3a the final refusals (rejected, $0, already sent) → 3b paused → NDA → new terms → upload still running →
+// 4 the questions box → 5 the form's mistakes → 6 the stop-once gate → 7 the save. Nothing is checked before the lock or again after it, so a Save, a pause, a
+// Leave, a block or another tab's press is either wholly before the pass or wholly after it. The interleavings are forced with the press's hook just before
+// its lock (`pauseAt`, as in send-race-369.test.ts) or the test-only race hold (RACE_HOLDS=1).
 
 const Q = ["What did you like?", "Where did you get stuck?", "What would you change?", "Anything about the controls?"];
 const Q3b = "What would you change first?";
 const A1 = "The harbour level was clear and the boats handled well on the first try.";
-type Res = { status: number; body: { error?: { code?: string; message?: string; changes?: { text: string }[] } } & Record<string, unknown> };
+type Res = { status: number; body: { error?: { code?: string; message?: string; changes?: { text: string }[]; questions?: boolean; failed?: string; top?: boolean } } & Record<string, unknown> };
 const hooks = () => ((globalThis as { __pressHooks?: Record<string, () => Promise<void>> }).__pressHooks ??= {});
-/** Runs `during` once, the first time a press reaches its lock (the pressing tab paused between its checks and its lock). */
+/** Runs `during` once, the first time a press reaches its lock (just before it takes it). */
 function pauseAt(name: string, during: () => Promise<unknown>) {
   let fired = false;
   hooks()[name] = async () => {
@@ -48,6 +49,12 @@ const edit = async (testId: string, cookie: string, fields: Record<string, unkno
   return r;
 };
 const block = (cookie: string, userId: string) => blocksPOST(req("/api/blocks", { cookie, body: { userId } })).then(json);
+const teamPause = async (testId: string) => pauseTest((await makeUser({ name: "Team Admin" })).user.id, testId, "Checking reports");
+const withMin = async <T,>(min: string, f: () => Promise<T>) => {
+  const was = process.env.ANSWER_MIN_CHARS;
+  process.env.ANSWER_MIN_CHARS = min;
+  try { return await f(); } finally { process.env.ANSWER_MIN_CHARS = was; }
+};
 
 async function world(over: Record<string, unknown> = {}) {
   const s = await setup({ questions: Q, recordingCents: "10.00", ...over });
@@ -63,6 +70,8 @@ const B_TYPED = ["B's own take on what was good about it all.", "B's view on whe
 const sendB = (w: W, extra: Record<string, unknown> = {}) => sact(w.sessionId, "written", w.tester.cookie, { answers: B_TYPED, for: Q, notes: "", seenAt: w.loaded, tab: "B", ...extra }) as Promise<Res>;
 const written = (w: W) => db.submission.findUnique({ where: { contractId_kind: { contractId: w.sessionId, kind: "written" } } });
 const addDraft = async (w: W, i: number) => (await db.keptForm.findUnique({ where: { userId_key: { userId: w.tester.user.id, key: `add:${w.sessionId}:${questionKeys(itemsFor(Q))[i]}` } } }))?.data;
+const formDraft = async (w: W) => JSON.stringify((await db.keptForm.findUnique({ where: { userId_key: { userId: w.tester.user.id, key: `written:${w.sessionId}` } } }))?.data ?? null);
+const termsHistory = async (w: W) => JSON.stringify((await db.contract.findUniqueOrThrow({ where: { id: w.sessionId } })).prevSets);
 const leave = (w: W) => sact(w.sessionId, "leave", w.tester.cookie, { seenAt: seen(), confirmed: true });
 /** A recording uploaded (not sent yet). */
 async function upload(w: W, name = "run.mp4") {
@@ -70,32 +79,31 @@ async function upload(w: W, name = "run.mp4") {
   expect((await sact(w.sessionId, "recording-done", w.tester.cookie, { recordingId: up.body.recordingId })).status).toBe(200);
 }
 
-describe("§375 Send Answers: what lands while the press waits for the lock refuses it (gap 1)", () => {
-  it("(a) new terms saved while Send waits: \"Answer the new terms first: Switch or Keep.\"; nothing saved", async () => {
+describe("§375 Send Answers: what lands just before the pass refuses it; nothing saved", () => {
+  it("new terms: \"Answer the new terms first: Switch or Keep.\"", async () => {
     const w = await world();
     pauseAt("written", async () => expect((await edit(w.testId, w.dev.cookie, { writtenCents: "12.00" })).body.offered).toBe(1));
     refused(await sendB(w), ANSWER_TERMS_CODE, ANSWER_TERMS_FIRST);
     expect(await written(w)).toBeNull();
   });
 
-  it("(b) an NDA change while Send waits: the NDA refusal; nothing saved", async () => {
+  it("an NDA change: the NDA refusal", async () => {
     const w = await world();
     pauseAt("written", () => edit(w.testId, w.dev.cookie, { ndaText: "Keep everything about Harbor Run secret." }));
     refused(await sendB(w), NDA_BLOCK_CODE, NDA_BLOCK_FIRST);
     expect(await written(w)).toBeNull();
   });
 
-  it("(c) the team pauses the test while Send waits: the paused refusal; nothing saved", async () => {
+  it("the team's pause: the paused refusal", async () => {
     const w = await world();
-    const admin = await makeUser({ name: "Team Admin" });
-    pauseAt("written", () => pauseTest(admin.user.id, w.testId, "Checking reports"));
+    pauseAt("written", () => teamPause(w.testId));
     refused(await sendB(w), "paused", PAUSED("Send Answers"));
     expect(await written(w)).toBeNull();
   });
 
-  it("(c) the developer's payment hold starting while Send waits: the paused refusal too", async () => {
-    // A hold is written under the developer's own row lock, not the test's: one that commits before the press takes the test's lock is read there (this case);
-    // one that commits while the press holds the lock counts as coming just after it (the answers are saved, then the test is paused).
+  it("the developer's payment hold: the paused refusal too", async () => {
+    // A hold is written under the developer's own row lock, not the test's: one committed before the pass takes the test's lock is read there (this case); one
+    // committed while the pass holds the lock counts as coming just after it (the answers are saved, then the test is paused).
     const w = await world();
     pauseAt("written", () => db.user.update({ where: { id: w.dev.user.id }, data: { holdStartedAt: new Date() } }));
     refused(await sendB(w), "paused", PAUSED("Send Answers"));
@@ -103,57 +111,108 @@ describe("§375 Send Answers: what lands while the press waits for the lock refu
   });
 });
 
-describe("§375 a press that waited while something moved: every refusal before the box (gap 2)", () => {
-  it("(d) another tab's Send, then the tester leaves, while B waits: the part-ended refusal, NOT a box; nothing saved (part over is step 1)", async () => {
+describe("§375 each clash: the earlier step wins", () => {
+  it("part over + another tab's Send + new terms: part over (never a box); the out-of-date page's text is still kept as Add drafts (step 1)", async () => {
     const w = await world();
     pauseAt("written", async () => {
       expect((await sendA(w)).status).toBe(200);
+      await edit(w.testId, w.dev.cookie, { writtenCents: "12.00" });
       expect((await leave(w)).status).toBe(200);
     });
-    refused(await sendB(w), "closed", PART_ENDED("Send Answers"));
+    refused(await sendB(w), "gone", PART_ENDED("Send Answers"));
     expect(carriedAnswers((await written(w))!, Q)).toEqual([A1, A1, null, null]);
-    expect(await addDraft(w, 0)).toBeUndefined();
+    expect(await addDraft(w, 0)).toEqual({ text: B_TYPED[0] });
   });
 
-  it("another tab's Send of every answer while B waits: \"already sent\" under the lock, and B's typed text kept as Add drafts first", async () => {
-    const w = await world();
-    pauseAt("written", async () => expect((await sendA(w, [A1, A1, A1, A1])).status).toBe(200));
-    refused(await sendB(w), "locked", SENT_ANSWERS_LOCKED);
-    for (const i of [0, 1, 2, 3]) expect(await addDraft(w, i)).toEqual({ text: B_TYPED[i] });
-  });
-
-  it("(d) another tab's Send, then the developer blocks the tester, while B waits: the part-ended refusal, NOT a box", async () => {
+  it("blocked + another tab's Send: part over, never a box", async () => {
     const w = await world();
     pauseAt("written", async () => {
       expect((await sendA(w)).status).toBe(200);
       expect((await block(w.dev.cookie, w.tester.user.id)).status).toBe(200);
     });
-    refused(await sendB(w), "closed", PART_ENDED("Send Answers"));
+    refused(await sendB(w), "gone", PART_ENDED("Send Answers"));
     expect(carriedAnswers((await written(w))!, Q)).toEqual([A1, A1, null, null]);
   });
 
-  it("another tab's Send, then new terms, while B waits: the terms refusal, NOT a box", async () => {
+  it("already sent + an NDA change: \"already sent\"", async () => {
     const w = await world();
-    pauseAt("written", async () => {
-      expect((await sendA(w)).status).toBe(200);
-      await edit(w.testId, w.dev.cookie, { writtenCents: "12.00" });
-    });
-    refused(await sendB(w), ANSWER_TERMS_CODE, ANSWER_TERMS_FIRST);
+    expect((await sendA(w, [A1, A1, A1, A1])).status).toBe(200);
+    await edit(w.testId, w.dev.cookie, { ndaText: "Keep everything about Harbor Run secret." });
+    await settle();
+    refused(await sendB(w), "locked", SENT_ANSWERS_LOCKED);
   });
-});
 
-describe("§375 typed text is kept first, then the refusal (gap 3)", () => {
-  it("(e) an out-of-date page, every question answered by another tab: \"already sent\" AND the different typed text saved as Add drafts", async () => {
+  it("already sent + a red mistake (over 20,000 characters in all): \"already sent\" (never fix a mistake only to be refused)", async () => {
     const w = await world();
     expect((await sendA(w, [A1, A1, A1, A1])).status).toBe(200);
     await settle();
-    const b = await sendB(w);
-    refused(b, "locked", SENT_ANSWERS_LOCKED);
+    refused(await sendB(w, { notes: "n".repeat(20_001) }), "locked", SENT_ANSWERS_LOCKED);
+  });
+
+  it("paused + a red mistake: paused", async () => {
+    const w = await world();
+    await teamPause(w.testId);
+    refused(await withMin("50", () => sendB(w, { answers: ["Too short.", "", "", ""] })), "paused", PAUSED("Send Answers"));
+  });
+
+  it("an upload still running + a red mistake: wait for the upload", async () => {
+    const w = await world();
+    refused(await withMin("50", () => sendB(w, { answers: ["Too short [Uploading map.png]", "", "", ""] })), "uploading", "Wait for the upload to finish before sending.");
+  });
+
+  it("the questions changed + a red mistake: the questions box", async () => {
+    const w = await world();
+    await edit(w.testId, w.dev.cookie, { questions: [Q[0], Q[1], Q3b, Q[3]] });
+    await settle();
+    const r = await withMin("50", () => sendB(w, { answers: ["Too short.", "", "", ""] }));
+    expect(r.body.error?.code, JSON.stringify(r.body)).toBe("stop_once");
+    expect(r.body.error?.questions).toBe(true);
+    expect(await written(w)).toBeNull();
+  });
+
+  it("a red mistake + another tab's Send: the red mistake (before the gate's box)", async () => {
+    const w = await world();
+    expect((await sendA(w)).status).toBe(200);
+    await settle();
+    const r = await withMin("50", () => sendB(w, { answers: ["", "", "Too short.", ""] }));
+    expect(r.body.error?.code, JSON.stringify(r.body)).toBe("bad_answers");
+  });
+
+  for (const race of [true, false]) {
+    it(`one Save changes the NDA AND the questions ${race ? "just before B's pass (with A's Send)" : "before B presses"}: the NDA refusal, nothing sent, every typed text kept`, async () => {
+      const w = await world();
+      const save = async () => {
+        expect((await sendA(w)).status).toBe(200);
+        await edit(w.testId, w.dev.cookie, { ndaText: "Keep everything about Harbor Run secret.", questions: [Q[0], Q[1], Q3b, Q[3]] });
+      };
+      if (race) pauseAt("written", save);
+      else {
+        await save();
+        await settle();
+      }
+      refused(await sendB(w), NDA_BLOCK_CODE, NDA_BLOCK_FIRST);
+      expect(carriedAnswers((await written(w))!, Q)).toEqual([A1, A1, null, null]);
+      // Answered by A: B's text in their Add drafts (not in the form's draft). Removed (Q3): its Terms history "Draft (not sent)". Still asked (Q4): the form's draft.
+      expect(await addDraft(w, 0)).toEqual({ text: B_TYPED[0] });
+      expect(await addDraft(w, 1)).toEqual({ text: B_TYPED[1] });
+      expect(await formDraft(w)).not.toContain(B_TYPED[0]);
+      expect(await termsHistory(w)).toContain(B_TYPED[2]);
+      expect(await formDraft(w)).toContain(B_TYPED[3]);
+    });
+  }
+});
+
+describe("§375 typed text (step 1)", () => {
+  it("an out-of-date page, every question answered by another tab: \"already sent\" AND the different typed text saved as Add drafts", async () => {
+    const w = await world();
+    expect((await sendA(w, [A1, A1, A1, A1])).status).toBe(200);
+    await settle();
+    refused(await sendB(w), "locked", SENT_ANSWERS_LOCKED);
     for (const i of [0, 1, 2, 3]) expect(await addDraft(w, i)).toEqual({ text: B_TYPED[i] });
     expect(carriedAnswers((await written(w))!, Q)).toEqual([A1, A1, A1, A1]);
   });
 
-  it("(e) the same text as was sent: \"already sent\", and no Add draft", async () => {
+  it("the same text as was sent: \"already sent\", and no Add draft", async () => {
     const w = await world();
     expect((await sendA(w, [A1, A1, A1, A1])).status).toBe(200);
     await settle();
@@ -169,10 +228,8 @@ describe("§375 typed text is kept first, then the refusal (gap 3)", () => {
     refused(await sendB(w), "locked", SENT_ANSWERS_LOCKED);
     expect(await addDraft(w, 0)).toEqual({ text: `Already typed in the Add box.\n\n${B_TYPED[0]}` });
     expect(await addDraft(w, 1)).toEqual({ text: B_TYPED[1] });
-    // The same press again: nothing doubles.
     refused(await sendB(w), "locked", SENT_ANSWERS_LOCKED);
     expect(await addDraft(w, 0)).toEqual({ text: `Already typed in the Add box.\n\n${B_TYPED[0]}` });
-    expect(await addDraft(w, 1)).toEqual({ text: B_TYPED[1] });
   });
 
   it("(Owner, Nov 11, §375) the same text as was sent is never appended to an Add draft", async () => {
@@ -185,131 +242,16 @@ describe("§375 typed text is kept first, then the refusal (gap 3)", () => {
   });
 });
 
-describe("(Owner, Nov 11, §375) the order: part over → keep typed text → refusals → the questions box → the form's mistakes → the gate", () => {
-  const user = (w: W) => db.user.findUniqueOrThrow({ where: { id: w.tester.user.id } });
-  const asRes = (p: Promise<unknown>) => p.then(() => ({ status: 200, body: {} }) as Res, (e: { status?: number; code?: string; message?: string; data?: Record<string, unknown> }) => ({ status: e.status ?? 500, body: { error: { code: e.code, message: e.message, ...e.data } } }) as Res);
-  const withMin = async <T,>(min: string, f: () => Promise<T>) => {
-    const was = process.env.ANSWER_MIN_CHARS;
-    process.env.ANSWER_MIN_CHARS = min;
-    try { return await f(); } finally { process.env.ANSWER_MIN_CHARS = was; }
-  };
-
-  it("part over comes first and saves nothing: an out-of-date page of a tester who left keeps no Add drafts", async () => {
-    const w = await world();
-    expect((await sendA(w, [A1, A1, A1, A1])).status).toBe(200);
-    expect((await leave(w)).status).toBe(200);
-    const { sendWritten } = await import("@/lib/server/tests");
-    refused(await asRes(sendWritten(await user(w), w.sessionId, { answers: B_TYPED, for: Q, notes: "", seenAt: w.loaded })), "closed", PART_ENDED("Send Answers"));
-    for (const i of [0, 1, 2, 3]) expect(await addDraft(w, i)).toBeUndefined();
-  });
-
-  it("a red mistake AND \"already sent\": \"already sent\" (never fix a mistake only to be refused)", async () => {
-    const w = await world();
-    expect((await sendA(w, [A1, A1, A1, A1])).status).toBe(200);
-    await settle();
-    refused(await sendB(w, { notes: "n".repeat(20_001) }), "locked", SENT_ANSWERS_LOCKED);
-  });
-
-  it("paused AND a red mistake: paused", async () => {
-    const w = await world();
-    const admin = await makeUser({ name: "Team Admin" });
-    await pauseTest(admin.user.id, w.testId, "Checking reports");
-    const { sendWritten } = await import("@/lib/server/tests");
-    const r = await withMin("50", async () => asRes(sendWritten(await user(w), w.sessionId, { answers: ["Too short.", "", "", ""], for: Q, notes: "", seenAt: w.loaded })));
-    refused(r, "paused", PAUSED("Send Answers"));
-  });
-
-  it("an upload still running AND a red mistake: wait for the upload", async () => {
-    const w = await world();
-    const r = await withMin("50", () => sendB(w, { answers: ["Too short [Uploading map.png]", "", "", ""] }));
-    refused(r, "uploading", "Wait for the upload to finish before sending.");
-  });
-
-  it("the questions changed AND a red mistake: the questions box", async () => {
-    const w = await world();
-    await edit(w.testId, w.dev.cookie, { questions: [Q[0], Q[1], Q3b, Q[3]] });
-    await settle();
-    const r = await withMin("50", () => sendB(w, { answers: ["Too short.", "", "", ""] }));
-    expect(r.body.error?.code, JSON.stringify(r.body)).toBe("stop_once");
-    expect(r.body.error).toMatchObject({ questions: true });
-  });
-
-  it("Add: paused AND a too-short text: paused", async () => {
-    const w = await world();
-    expect((await sendA(w)).status).toBe(200);
-    const admin = await makeUser({ name: "Team Admin" });
-    await pauseTest(admin.user.id, w.testId, "Checking reports");
-    const { addWritten } = await import("@/lib/server/tests");
-    const r = await withMin("50", async () => asRes(addWritten(await user(w), w.sessionId, { question: questionKeys(itemsFor(Q))[0], text: "Short.", seenAt: seen() })));
-    refused(r, "paused", PAUSED("Add"));
-  });
-});
-
-describe("(Owner, Nov 11, §375) one Save changes the NDA AND the questions: the NDA refusal, nothing sent, the typed text kept", () => {
-  const ndaAndQuestions = (w: W) => edit(w.testId, w.dev.cookie, { ndaText: "Keep everything about Harbor Run secret.", questions: [Q[0], Q[1], Q3b, Q[3]] });
-  async function kept(w: W) {
-    // Answered by A meanwhile: B's text in their Add drafts. Removed (Q3): in its Terms history entry's "Draft (not sent)". Still asked, unanswered (Q4): the form's draft.
-    expect(await addDraft(w, 0)).toEqual({ text: B_TYPED[0] });
-    expect(await addDraft(w, 1)).toEqual({ text: B_TYPED[1] });
-    expect(JSON.stringify((await db.contract.findUniqueOrThrow({ where: { id: w.sessionId } })).prevSets)).toContain(B_TYPED[2]);
-    expect(JSON.stringify((await db.keptForm.findUnique({ where: { userId_key: { userId: w.tester.user.id, key: `written:${w.sessionId}` } } }))?.data ?? null)).toContain(B_TYPED[3]);
-    expect(carriedAnswers((await written(w))!, Q)).toEqual([A1, A1, null, null]);
-  }
-
-  it("while B's Send waits for the lock (with A's Send too)", async () => {
-    const w = await world();
-    pauseAt("written", async () => {
-      expect((await sendA(w)).status).toBe(200);
-      await ndaAndQuestions(w);
-    });
-    refused(await sendB(w), NDA_BLOCK_CODE, NDA_BLOCK_FIRST);
-    await kept(w);
-  });
-
-  it("with no race: B presses after A's Send and the Save", async () => {
-    const w = await world();
-    expect((await sendA(w)).status).toBe(200);
-    await ndaAndQuestions(w);
-    await settle();
-    refused(await sendB(w), NDA_BLOCK_CODE, NDA_BLOCK_FIRST);
-    await kept(w);
-  });
-});
-
-describe("(Owner, Nov 11, §375) a block ends the session under the test's lock, like every other end", () => {
+describe("§375 the race of recording 1, and a block, in one pass (RACE_HOLDS=1)", () => {
   const release = (body: Record<string, unknown>) => releasePOST(req("/api/test/race-release", { body }));
+  const waiting = async (name: string) => { for (let i = 0; i < 200 && !(await (await release({ name, peek: true })).json()).waiting; i++) await settle(); };
   afterEach(() => { delete process.env.RACE_HOLDS; });
 
-  it("Send waits before the lock; the developer blocks the tester; Send takes the lock: the part-ended refusal, nothing saved, no drafts", async () => {
+  it("B waits; A sends Q1 and Q2; the developer changes Q3; B goes: ONE box, nothing saved; Q1/Q2 text only in the Add drafts, Q4's in the form's draft", async () => {
     process.env.RACE_HOLDS = "1";
     const w = await world();
     const pending = sendB(w, { raceHold: "B" });
-    for (let i = 0; i < 200 && !(await (await release({ name: "B", peek: true })).json()).waiting; i++) await settle();
-    expect((await block(w.dev.cookie, w.tester.user.id)).status).toBe(200);
-    expect((await (await release({ name: "B" })).json()).released).toBe(true);
-    refused(await pending, "closed", PART_ENDED("Send Answers"));
-    expect(await written(w)).toBeNull();
-    for (const i of [0, 1, 2, 3]) expect(await addDraft(w, i)).toBeUndefined();
-  });
-
-  it("the other order: Send saves first, then the block ends the session (the answers stay)", async () => {
-    const w = await world();
-    expect((await sendB(w)).status).toBe(200);
-    expect((await block(w.dev.cookie, w.tester.user.id)).status).toBe(200);
-    expect(carriedAnswers((await written(w))!, Q)).toEqual(B_TYPED);
-    expect(await db.contract.findUniqueOrThrow({ where: { id: w.sessionId } })).toMatchObject({ status: "ended", endKind: "blocked" });
-  });
-});
-
-describe("§375 the race of recording 1 still gives ONE box, and keepStaleTyped no longer duplicates (gap 4)", () => {
-  const release = (body: Record<string, unknown>) => releasePOST(req("/api/test/race-release", { body }));
-  afterEach(() => { delete process.env.RACE_HOLDS; });
-
-  it("(f) B waits; A sends Q1 and Q2; the developer changes Q3; B released: ONE box, nothing saved; Q1/Q2 text only in the Add drafts, Q4's in the form's draft", async () => {
-    process.env.RACE_HOLDS = "1";
-    const w = await world();
-    const pending = sendB(w, { raceHold: "B" });
-    for (let i = 0; i < 200 && !(await (await release({ name: "B", peek: true })).json()).waiting; i++) await settle();
+    await waiting("B");
     expect((await sendA(w)).status).toBe(200);
     await edit(w.testId, w.dev.cookie, { questions: [Q[0], Q[1], Q3b, Q[3]] });
     await settle();
@@ -319,62 +261,83 @@ describe("§375 the race of recording 1 still gives ONE box, and keepStaleTyped 
     expect(b.body.error?.changes?.length).toBeGreaterThan(0);
     expect(carriedAnswers((await written(w))!, Q)).toEqual([A1, A1, null, null]);
     expect(await db.submission.count({ where: { contractId: w.sessionId } })).toBe(1);
-    // Q1 and Q2 (answered by A): B's text is their Add drafts, and NOT also in the form's draft.
     expect(await addDraft(w, 0)).toEqual({ text: B_TYPED[0] });
     expect(await addDraft(w, 1)).toEqual({ text: B_TYPED[1] });
-    const form = JSON.stringify((await db.keptForm.findUnique({ where: { userId_key: { userId: w.tester.user.id, key: `written:${w.sessionId}` } } }))?.data ?? null);
-    expect(form).not.toContain(B_TYPED[0]);
-    expect(form).not.toContain(B_TYPED[1]);
-    // Q4 (still asked, unanswered) is in the form's draft; Q3 (removed) in its Terms history entry's draft snapshot: nothing typed is lost.
-    expect(form).toContain(B_TYPED[3]);
-    expect(JSON.stringify((await db.contract.findUniqueOrThrow({ where: { id: w.sessionId } })).prevSets)).toContain(B_TYPED[2]);
+    expect(await formDraft(w)).not.toContain(B_TYPED[0]);
+    expect(await formDraft(w)).not.toContain(B_TYPED[1]);
+    expect(await formDraft(w)).toContain(B_TYPED[3]);
+    expect(await termsHistory(w)).toContain(B_TYPED[2]);
+  });
+
+  it("(Owner, Nov 11, §375) Send waits; the developer blocks the tester; Send goes: the part-ended refusal, nothing saved, no drafts", async () => {
+    process.env.RACE_HOLDS = "1";
+    const w = await world();
+    const pending = sendB(w, { raceHold: "B" });
+    await waiting("B");
+    expect((await block(w.dev.cookie, w.tester.user.id)).status).toBe(200);
+    expect((await (await release({ name: "B" })).json()).released).toBe(true);
+    refused(await pending, "gone", PART_ENDED("Send Answers"));
+    expect(await written(w)).toBeNull();
+    for (const i of [0, 1, 2, 3]) expect(await addDraft(w, i)).toBeUndefined();
+  });
+
+  it("(Owner, Nov 11, §375) the other order: Send saves first, then the block ends the session (the answers stay)", async () => {
+    const w = await world();
+    expect((await sendB(w)).status).toBe(200);
+    expect((await block(w.dev.cookie, w.tester.user.id)).status).toBe(200);
+    expect(carriedAnswers((await written(w))!, Q)).toEqual(B_TYPED);
+    expect(await db.contract.findUniqueOrThrow({ where: { id: w.sessionId } })).toMatchObject({ status: "ended", endKind: "blocked" });
   });
 });
 
-describe("§375 Add to this answer: the same refusals while it waits", () => {
+describe("§375 Add to this answer: the same pass", () => {
   const sent = async () => {
     const w = await world();
     expect((await sendA(w)).status).toBe(200);
     await settle();
-    return { ...w, loaded: seen() };
+    const loaded = seen();
+    await settle();
+    return { ...w, loaded };
   };
   const add = (w: W, tab: string, text: string) => addTo(w.sessionId, w.tester.cookie, { text, seenAt: w.loaded, tab }) as Promise<Res>;
   const additions = async (w: W) => ((await written(w))!.additions as unknown[] | null)?.length ?? 0;
 
-  it("(a) new terms saved while Add waits: the terms refusal; nothing added", async () => {
+  it("new terms just before the pass: the terms refusal; nothing added", async () => {
     const w = await sent();
-    await settle();
     pauseAt("written-add", () => edit(w.testId, w.dev.cookie, { writtenCents: "12.00" }));
     refused(await add(w, "B", "B adds a different note about the first level."), ANSWER_TERMS_CODE, ANSWER_TERMS_FIRST);
     expect(await additions(w)).toBe(0);
   });
 
-  it("(c) the team pauses the test while Add waits: the paused refusal", async () => {
+  it("the team's pause just before the pass: the paused refusal", async () => {
     const w = await sent();
-    await settle();
-    const admin = await makeUser({ name: "Team Admin" });
-    pauseAt("written-add", () => pauseTest(admin.user.id, w.testId, "Checking reports"));
+    pauseAt("written-add", () => teamPause(w.testId));
     refused(await add(w, "B", "B adds a different note about the first level."), "paused", PAUSED("Add"));
     expect(await additions(w)).toBe(0);
   });
 
-  it("(d) another tab's Add, then the tester leaves, while B waits: the part-ended refusal, NOT a box", async () => {
+  it("paused + a too-short text: paused", async () => {
     const w = await sent();
-    await settle();
+    await teamPause(w.testId);
+    refused(await withMin("50", () => add(w, "B", "Short.")), "paused", PAUSED("Add"));
+  });
+
+  it("another tab's Add, then the tester leaves: part over, NOT a box", async () => {
+    const w = await sent();
     pauseAt("written-add", async () => {
       expect((await add(w, "A", "A adds a little more about the first level here.")).status).toBe(200);
       expect((await leave(w)).status).toBe(200);
     });
-    refused(await add(w, "B", "B adds a different note about the first level."), "closed", PART_ENDED("Add"));
+    refused(await add(w, "B", "B adds a different note about the first level."), "gone", PART_ENDED("Add"));
     expect(await additions(w)).toBe(1);
   });
 });
 
-describe("§375 a recording's Send / Add: the same refusals while it waits", () => {
+describe("§375 a recording's Send / Add: the same pass", () => {
   const send = (w: W, tab: string, extra: Record<string, unknown> = {}) => sact(w.sessionId, "recording-send", w.tester.cookie, { seenAt: w.loaded, tab, ...extra }) as Promise<Res>;
   const recs = (w: W) => db.submission.count({ where: { contractId: w.sessionId, kind: "recording" } });
 
-  it("(a) new terms saved while Send waits: the terms refusal; nothing sent", async () => {
+  it("new terms just before the pass: the terms refusal; nothing sent", async () => {
     const w = await world();
     await upload(w);
     pauseAt("recording-send", () => edit(w.testId, w.dev.cookie, { recordingCents: "12.00" }));
@@ -382,7 +345,7 @@ describe("§375 a recording's Send / Add: the same refusals while it waits", () 
     expect(await recs(w)).toBe(0);
   });
 
-  it("(b) an NDA change while Send waits: the NDA refusal", async () => {
+  it("an NDA change just before the pass: the NDA refusal", async () => {
     const w = await world();
     await upload(w);
     pauseAt("recording-send", () => edit(w.testId, w.dev.cookie, { ndaText: "Keep everything about Harbor Run secret." }));
@@ -390,7 +353,7 @@ describe("§375 a recording's Send / Add: the same refusals while it waits", () 
     expect(await recs(w)).toBe(0);
   });
 
-  it("(d) another tab's Send, then the tester leaves, while B waits: the part-ended refusal, NOT a box", async () => {
+  it("another tab's Send, then the tester leaves: part over, NOT a box", async () => {
     const w = await world();
     await upload(w);
     pauseAt("recording-send", async () => {
@@ -398,11 +361,11 @@ describe("§375 a recording's Send / Add: the same refusals while it waits", () 
       await upload(w, "second.mp4");
       expect((await leave(w)).status).toBe(200);
     });
-    refused(await send(w, "B"), "closed", PART_ENDED("Send"));
+    refused(await send(w, "B"), "gone", PART_ENDED("Send"));
     expect(await recs(w)).toBe(1);
   });
 
-  it("(d) an Add: another tab's Add, then the tester is blocked, while B waits: the part-ended refusal naming Add", async () => {
+  it("an Add: another tab's Add, then the tester is blocked: part over, naming Add", async () => {
     const w = await world();
     await upload(w);
     expect((await send(w, "A", { confirmed: true, seenAt: seen() })).status).toBe(200);
@@ -414,11 +377,11 @@ describe("§375 a recording's Send / Add: the same refusals while it waits", () 
       expect((await send(v, "A", { add: true })).status).toBe(200);
       expect((await block(w.dev.cookie, w.tester.user.id)).status).toBe(200);
     });
-    refused(await send(v, "B", { add: true }), "closed", PART_ENDED("Add"));
+    refused(await send(v, "B", { add: true }), "gone", PART_ENDED("Add"));
   });
 });
 
-describe("§375 Dispute: new terms or an NDA change while it waits refuse it (it stays allowed while paused)", () => {
+describe("§375 Dispute: new terms or an NDA change just before its lock refuse it (it stays allowed while paused)", () => {
   async function paid() {
     const w = await world();
     expect((await sendA(w)).status).toBe(200);
@@ -432,26 +395,38 @@ describe("§375 Dispute: new terms or an NDA change while it waits refuse it (it
   }
   const dispute = (w: Awaited<ReturnType<typeof paid>>) => sact(w.sessionId, "dispute", w.tester.cookie, { kind: "submission", id: w.sub.id, reason: "I answered every question fully and in detail.", seenAt: w.loaded, loadedAt: w.loaded, tab: "B" }) as Promise<Res>;
 
-  it("(a) new terms saved while Dispute waits: the terms refusal; no dispute", async () => {
+  it("new terms: the terms refusal; no dispute", async () => {
     const w = await paid();
     pauseAt("dispute", () => edit(w.testId, w.dev.cookie, { writtenCents: "12.00" }));
     refused(await dispute(w), ANSWER_TERMS_CODE, ANSWER_TERMS_FIRST);
     expect(await db.dispute.count({ where: { submissionId: w.sub.id } })).toBe(0);
   });
 
-  it("(b) an NDA change while Dispute waits: the NDA refusal; no dispute", async () => {
+  it("an NDA change: the NDA refusal; no dispute", async () => {
     const w = await paid();
     pauseAt("dispute", () => edit(w.testId, w.dev.cookie, { ndaText: "Keep everything about Harbor Run secret." }));
     refused(await dispute(w), NDA_BLOCK_CODE, NDA_BLOCK_FIRST);
     expect(await db.dispute.count({ where: { submissionId: w.sub.id } })).toBe(0);
   });
 
-  it("a team pause while Dispute waits refuses nothing: the dispute is made", async () => {
+  it("a team pause refuses nothing: the dispute is made", async () => {
     const w = await paid();
-    const admin = await makeUser({ name: "Team Admin" });
-    pauseAt("dispute", () => pauseTest(admin.user.id, w.testId, "Checking reports"));
+    pauseAt("dispute", () => teamPause(w.testId));
     const r = await dispute(w);
     expect(r.status, JSON.stringify(r.body)).toBe(200);
     expect(await db.dispute.count({ where: { submissionId: w.sub.id } })).toBe(1);
+  });
+});
+
+describe("(Owner, Nov 11, §375) starting an upload counts and creates under the test's lock", () => {
+  // (The test database runs these starts one after another, so this checks the outcome, not the interleaving itself: without the lock it passes here too.)
+  it("tabs start recordings at the same moment with 4 already: one is made, the others refused", async () => {
+    const w = await world();
+    for (let i = 0; i < 4; i++) await upload(w, `r${i}.mp4`);
+    const start = (name: string) => sact(w.sessionId, "recording-start", w.tester.cookie, { filename: name, size: 1000, contentType: "video/mp4" }) as Promise<Res>;
+    const all = await Promise.all(["a", "b", "c", "d", "e", "f"].map((n) => start(`${n}.mp4`)));
+    expect(all.filter((r) => r.status === 200)).toHaveLength(1);
+    for (const r of all.filter((x) => x.status !== 200)) expect(r.body.error?.message).toBe("You can add at most 5 recordings. Remove one first.");
+    expect(await db.recording.count({ where: { contractId: w.sessionId, part: "recording" } })).toBe(5);
   });
 });

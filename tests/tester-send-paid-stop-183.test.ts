@@ -118,9 +118,9 @@ describe("§362 a payment on the same part stops Send / Add / Dispute once, what
 
   it("every Send / Add route passes its sent part to the gate (Send Answers' resend, Add to this answer, a recording's Send or Add)", () => {
     const tests = fs.readFileSync(path.resolve(__dirname, "../src/lib/server/tests.ts"), "utf8");
-    expect(tests).toContain("await testerSendGate(contractId, body, sent?.id, { stale: [] }, \"Send Answers\");"); // Send Answers (a resend)
-    expect(tests).toContain("await testerSendGate(contractId, body, before?.id, { stale: [] }, \"Add\");"); // Add to this answer
-    expect(fs.readFileSync(path.resolve(__dirname, "../src/lib/server/recordings.ts"), "utf8")).toContain("await testerSendGate(contractId, body, sent?.id, undefined, press);"); // a recording's Send / Add
+    expect(tests).toContain("await testerSendGate(tx, contractId, body, sent?.id, { stale: [] });"); // Send Answers (a resend; §375: in its one pass)
+    expect(tests).toContain("await testerSendGate(tx, contractId, body, before?.id, { stale: [] });"); // Add to this answer
+    expect(fs.readFileSync(path.resolve(__dirname, "../src/lib/server/recordings.ts"), "utf8")).toContain("await testerSendGate(tx, contractId, body, sent?.id);"); // a recording's Send / Add
   });
 });
 

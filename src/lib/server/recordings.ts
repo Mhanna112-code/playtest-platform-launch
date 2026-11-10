@@ -1,4 +1,3 @@
-import { Moved, beforeLock } from "./pressRace";
 import { recordingOwnText } from "./actionText";
 import { additionTerms } from "./submissionAdditions";
 import { randomBytes } from "node:crypto";
@@ -8,7 +7,7 @@ import { HttpError } from "./http";
 import { NO_RECORDING_TO_ADD, SENT_RECORDING_LOCKED } from "@/lib/rules";
 import { overPressLine } from "@/lib/rules";
 import { ATTACHMENT_TYPES, MAX_ATTACHMENTS, MAX_ATTACHMENT_BYTES, MAX_RECORDING_BYTES, MAX_RECORDINGS, deleteObject, deleteStored, headObject, isVideo, listStored, r2On, uploadTarget } from "./storage";
-import { movedCheck, ownContract, partOver, pressRefusals, sawOf, sentPart, sessionRefusal, tellSent, tellSentByBell } from "./tests";
+import { contractIn, lockTest, onePass, ownContract, partOver, sentPart, sessionRefusal, softRefusals, tellSent, tellSentByBell, type Pass } from "./tests";
 import type { Prisma } from "@prisma/client";
 import { additionsOf } from "@/lib/additions";
 import { testerSendGate } from "./terms";
@@ -43,19 +42,24 @@ export async function startRecording(tester: U, contractId: string, body: Record
   // (Batch 30 §2; batch 35 §136) A paid part can still be added to (attachments included); only an old rejection or the team's $0 closure stays locked.
   const locked = resendRefusal(paid?.review, part);
   if (locked) throw new HttpError(409, "paid", locked);
-  // (Owner, Oct 29, batch 13 section 7) The Recording part takes up to 5 recordings (a removed one frees its slot); videos attached to the written part count separately
-  // (batch 11's limits: 5 videos and 5 files there).
-  const mine = await db.recording.findMany({ where: { contractId, part: { in: ["recording", "written"] } }, select: { contentType: true, part: true, submissionId: true } });
-  // (Batch 35 §136) Sent recordings count and can't be removed: with all 5 sent, the line doesn't offer Remove.
-  if (video && part === "recording" && mine.filter((r) => r.part === "recording").length >= MAX_RECORDINGS) throw new HttpError(409, "too_many", mine.some((r) => r.part === "recording" && !r.submissionId) ? TOO_MANY_RECORDINGS : ALL_RECORDINGS_SENT);
-  if (video && part === "written" && mine.filter((r) => r.part === "written" && isVideo(r.contentType)).length >= MAX_RECORDINGS) throw new HttpError(409, "too_many", `You can attach at most ${MAX_RECORDINGS} recordings to your written answers.`);
-  // (Batch 15 section 41, M6) At most 3 GB of uploads per account a day.
-  const today = (await db.recording.aggregate({ where: { contract: { testerId: tester.id }, createdAt: { gt: new Date(Date.now() - 86_400_000) } }, _sum: { sizeBytes: true } }))._sum.sizeBytes ?? 0;
-  if (today + size > DAILY_UPLOAD_BYTES) throw new HttpError(429, "quota", UPLOAD_QUOTA_LINE);
-  if (!video && mine.filter((r) => r.part === "written" && !isVideo(r.contentType)).length >= MAX_ATTACHMENTS) throw new HttpError(409, "too_many", `You can attach at most ${MAX_ATTACHMENTS} files to your written answers.`);
   const ext = filename.includes(".") ? filename.slice(filename.lastIndexOf(".")).toLowerCase() : ".mp4";
   const storageKey = `recordings/${contractId}/${randomBytes(12).toString("hex")}${ext}`;
-  const rec = await db.recording.create({ data: { contractId, storageKey, filename, sizeBytes: size, contentType: type, part, aliveAt: new Date() } });
+  // (Owner, Nov 11, §375) The counts and the new row in one transaction under the test's lock: two tabs starting an upload at the same moment at 4 recordings
+  // make one, and the other is refused (it used to make 6).
+  const rec = await db.$transaction(async (tx) => {
+    await lockTest(tx, c.testId);
+    // (Owner, Oct 29, batch 13 section 7) The Recording part takes up to 5 recordings (a removed one frees its slot); videos attached to the written part count separately
+    // (batch 11's limits: 5 videos and 5 files there).
+    const mine = await tx.recording.findMany({ where: { contractId, part: { in: ["recording", "written"] } }, select: { contentType: true, part: true, submissionId: true } });
+    // (Batch 35 §136) Sent recordings count and can't be removed: with all 5 sent, the line doesn't offer Remove.
+    if (video && part === "recording" && mine.filter((r) => r.part === "recording").length >= MAX_RECORDINGS) throw new HttpError(409, "too_many", mine.some((r) => r.part === "recording" && !r.submissionId) ? TOO_MANY_RECORDINGS : ALL_RECORDINGS_SENT);
+    if (video && part === "written" && mine.filter((r) => r.part === "written" && isVideo(r.contentType)).length >= MAX_RECORDINGS) throw new HttpError(409, "too_many", `You can attach at most ${MAX_RECORDINGS} recordings to your written answers.`);
+    // (Batch 15 section 41, M6) At most 3 GB of uploads per account a day.
+    const today = (await tx.recording.aggregate({ where: { contract: { testerId: tester.id }, createdAt: { gt: new Date(Date.now() - 86_400_000) } }, _sum: { sizeBytes: true } }))._sum.sizeBytes ?? 0;
+    if (today + size > DAILY_UPLOAD_BYTES) throw new HttpError(429, "quota", UPLOAD_QUOTA_LINE);
+    if (!video && mine.filter((r) => r.part === "written" && !isVideo(r.contentType)).length >= MAX_ATTACHMENTS) throw new HttpError(409, "too_many", `You can attach at most ${MAX_ATTACHMENTS} files to your written answers.`);
+    return tx.recording.create({ data: { contractId, storageKey, filename, sizeBytes: size, contentType: type, part, aliveAt: new Date() } });
+  });
   // (Batch 35 §4) The short tag its marker carries ("[📎 map.png #k3f9]"): the end of its id, unique among the contract's uploads.
   const ids = (await db.recording.findMany({ where: { contractId }, select: { id: true } })).map((r) => r.id);
   return { recordingId: rec.id, tag: attachmentTag(rec.id, ids), uploadUrl: uploadTarget(rec.id, storageKey, size, type) };
@@ -165,81 +169,53 @@ export async function removeRecording(tester: U, contractId: string, body: Recor
 }
 
 /**
- * (Owner, Nov 11, §375) Step 3 for a recording's Send / Add: pressRefusals, then its own: (batch 13 §7) a recording still uploading (all of them go together as
- * ONE piece, so a Send waits for it), then ((Owner, Nov 4, §183) an old rejection or the team's $0 closure, nothing new to add after a Send), so a press that
- * could only be refused is refused at once, never after a stop.
+ * Send the uploaded recordings (or send them again with new ones, until paid). (Owner, Nov 11, §375) In one pass under the test's lock (onePass in tests.ts),
+ * in the owner's order; nothing is typed and there is no form, so the drafts, the questions box and the form's mistakes don't apply.
  */
-const recordingRefusals = (q: Prisma.TransactionClient | typeof db, contractId: string, press: string) =>
-  pressRefusals(q, contractId, press, async () => {
-    if (await q.recording.count({ where: { contractId, ...stillUploading("recording") } })) return new HttpError(409, "uploading", STILL_UPLOADING);
-    const sent = await sentPart(q, contractId, "recording");
+export async function sendRecording(tester: U, contractId: string, body: Record<string, unknown> = {}) {
+  const c0 = await ownContract(tester.id, contractId, false);
+  const press = body.add === true ? "Add" : "Send";
+  const done = await onePass(c0.testId, "recording-send", body, async (tx, run): Promise<Pass<Awaited<ReturnType<typeof saveRecording>>>> => {
+    const c = await contractIn(tx, contractId);
+    const sent = await sentPart(tx, contractId, "recording"); // the recording part sent so far (or none)
+    // 2. Their part is over, or the test closed.
+    const over = await partOver(tx, contractId, press, run);
+    if (over) return { stop: over };
+    // 3a. Refused for good ((Owner, Nov 4, §183) never after a stop): an old rejection or the team's $0 closure; nothing new to send ((Owner, Nov 3, batch 35
+    // §136) sent recordings are locked, a later Send ADDS the ones not sent yet; one still uploading counts as new: step 3b waits for it).
     const shut = resendRefusal(sent?.review, "recording");
-    if (shut) return new HttpError(409, "paid", shut);
-    if (sent && !(await q.recording.count({ where: { contractId, part: "recording", submissionId: null, uploadedAt: { not: null } } }))) return new HttpError(400, "none", NO_RECORDING_TO_ADD);
-    return null;
+    if (shut) return { stop: new HttpError(409, "paid", shut) };
+    if (!(await tx.recording.count({ where: { contractId, part: "recording", submissionId: null, OR: [{ uploadedAt: { not: null } }, stillUploading("recording")] } }))) return { stop: new HttpError(400, "none", sent ? NO_RECORDING_TO_ADD : "Upload a recording first.") };
+    // 3b. Paused → an NDA change → new terms → (batch 13 §7) a recording still uploading: all of them go together as ONE piece, so a Send waits for it.
+    const soft = await softRefusals(tx, c, press, async () => ((await tx.recording.count({ where: { contractId, ...stillUploading("recording") } })) ? new HttpError(409, "uploading", STILL_UPLOADING) : null));
+    if (soft) return { stop: soft };
+    // 6. The tester's one gate ((Owner, Nov 4, §183) adding to a sent recording stops once for a developer payment on it since the page loaded, whatever the
+    // tester's Alerts; another tab's Send).
+    const box = await testerSendGate(tx, contractId, body, sent?.id);
+    if (box) return { stop: box };
+    // 7. The save.
+    return { saved: await saveRecording(tx, tester, contractId, sent, body) };
   });
-
-/** Send the uploaded recordings (or send them again with new ones, until paid). */
-export async function sendRecording(tester: U, contractId: string, body: Record<string, unknown> = {}): Promise<Awaited<ReturnType<typeof sendRecordingOnce>>> {
-  try {
-    return await sendRecordingOnce(tester, contractId, body);
-  } catch (e) {
-    if (!(e instanceof Moved)) throw e;
-    // (Owner, Nov 10, §369) The transaction rolled back: the normal stop-once box for what moved (another tab's Send, a developer payment on the recording), as a
-    // later press would get it. (Owner, Nov 11, §375) Every refusal comes first, as for a later press (never a stop whose second press could only be refused).
-    const press = body.add === true ? "Add" : "Send";
-    await partOver(db, contractId, press);
-    await recordingRefusals(db, contractId, press);
-    const sent = await sentPart(db, contractId, "recording");
-    await testerSendGate(contractId, body, sent?.id, undefined, press);
-    if (body.__moved !== true) return sendRecording(tester, contractId, { ...body, __moved: true });
-    throw new HttpError(400, "none", NO_RECORDING_TO_ADD);
-  }
+  await tellSentByBell(c0, tester, { id: done.subId, late: done.late }, "recording", done.updated, done.afterPaid, done.n);
+  return { sent: true, ...(done.updated ? { added: done.n } : {}) };
 }
 
-/** (Owner, Nov 11, §375) One Send (or Add) of the recordings, in the owner's order (no typed text and no form: steps 2, 4 and 5 don't apply). */
-async function sendRecordingOnce(tester: U, contractId: string, body: Record<string, unknown>) {
-  const c0 = await ownContract(tester.id, contractId);
-  const press = body.add === true ? "Add" : "Send";
-  // 1. Their part is over or the test closed: refused.
-  await partOver(db, contractId, press);
-  // 3. The refusals: paused → an NDA change → new terms → a recording still uploading → rejected / the team's $0 closure / nothing new to add.
-  await recordingRefusals(db, contractId, press);
-  // 6. The tester's one gate ((Owner, Nov 4, §183) adding to a sent recording stops once for a developer payment on it since the page loaded, whatever the
-  // tester's Alerts). What this press saw is noted first (§369: the sent part, or none, and what was paid on it).
-  const sent = await sentPart(db, contractId, "recording");
-  const saw = await sawOf(sent);
-  await testerSendGate(contractId, body, sent?.id, undefined, press);
-
-  const name = displayName(tester), poss = pronouns(tester.pronoun).poss;
-  await beforeLock("recording-send");
-  // 7. Under the test's lock: steps 1 and 3 again (a Save, a pause or a Leave while the press waited), then anything that moved since the first look (nothing
-  // is written; sendRecording gives the box), then the save.
-  const { updated, late, subId, afterPaid, n } = await db.$transaction(async (tx) => {
-    await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${c0.testId} FOR UPDATE`;
-    await partOver(tx, contractId, press);
-    await recordingRefusals(tx, contractId, press);
-    const existing = await movedCheck(tx, contractId, saw, "recording");
-    const c = await tx.contract.findUniqueOrThrow({ where: { id: contractId } });
-    // (Owner, Nov 3, batch 35 §136; replaces batch 13 §7's "send again" and batch 20 §26) Sent recordings are locked: a later Send ADDS the ones not sent yet
-    // under them ("Added"); nothing new to add is refused.
-    const fresh = await tx.recording.findMany({ where: { contractId, part: "recording", uploadedAt: { not: null }, submissionId: null }, select: { id: true } });
-    if (!fresh.length) throw new HttpError(400, "none", existing ? NO_RECORDING_TO_ADD : "Upload a recording first.");
-    const paid = !!existing?.review;
-    const now = new Date();
-    // Additions follow the shared price-freeze rule and preserve the original piece's status.
-    const data = { updatedAt: now, ...additionTerms(existing, c, c.recordingCents, now) };
-    const sub = existing
-      ? await tx.submission.update({ where: { id: existing.id }, data: { ...data, additions: [...additionsOf(existing.additions), { at: now.toISOString(), files: fresh.map((r) => r.id) }] as unknown as Prisma.InputJsonValue } })
-      // (Owner, Nov 5, §239) A recording takes no notes: a `notes` in the body is ignored and nothing is stored (the written part keeps its own).
-      : await tx.submission.create({ data: { contractId, kind: "recording", agreedCents: c.recordingCents, ...data } });
-    await tx.recording.updateMany({ where: { id: { in: fresh.map((r) => r.id) } }, data: { submissionId: sub.id } });
-    const afterPaid = await tellSent(tx, { testId: c.testId, contractId: c.id, subId: sub.id, name, poss, part: "recording", added: !!existing, paid, n: fresh.length });
-    await (await import("./live")).logAction(tester.id, c.testId, body, recordingOwnText(existing ? fresh.length : 0), undefined, tx); // (§369) with the save
-    return { updated: !!existing, late: data.late, subId: sub.id, afterPaid, n: fresh.length };
-  });
-  await tellSentByBell(c0, tester, { id: subId, late }, "recording", updated, afterPaid, n);
-  return { sent: true, ...(updated ? { added: n } : {}) };
+/** (§375) Step 7 for a recording's Send / Add: every recording uploaded and not sent yet, as ONE piece (the first one) or added under it. */
+async function saveRecording(tx: Prisma.TransactionClient, tester: U, contractId: string, existing: Awaited<ReturnType<typeof sentPart>>, body: Record<string, unknown>) {
+  const c = await tx.contract.findUniqueOrThrow({ where: { id: contractId } });
+  const fresh = await tx.recording.findMany({ where: { contractId, part: "recording", uploadedAt: { not: null }, submissionId: null }, select: { id: true } });
+  const paid = !!existing?.review;
+  const now = new Date();
+  // Additions follow the shared price-freeze rule and preserve the original piece's status.
+  const data = { updatedAt: now, ...additionTerms(existing, c, c.recordingCents, now) };
+  const sub = existing
+    ? await tx.submission.update({ where: { id: existing.id }, data: { ...data, additions: [...additionsOf(existing.additions), { at: now.toISOString(), files: fresh.map((r) => r.id) }] as unknown as Prisma.InputJsonValue } })
+    // (Owner, Nov 5, §239) A recording takes no notes: a `notes` in the body is ignored and nothing is stored (the written part keeps its own).
+    : await tx.submission.create({ data: { contractId, kind: "recording", agreedCents: c.recordingCents, ...data } });
+  await tx.recording.updateMany({ where: { id: { in: fresh.map((r) => r.id) } }, data: { submissionId: sub.id } });
+  const afterPaid = await tellSent(tx, { testId: c.testId, contractId: c.id, subId: sub.id, name: displayName(tester), poss: pronouns(tester.pronoun).poss, part: "recording", added: !!existing, paid, n: fresh.length });
+  await (await import("./live")).logAction(tester.id, c.testId, body, recordingOwnText(existing ? fresh.length : 0), undefined, tx); // (§369) with the save
+  return { updated: !!existing, late: data.late, subId: sub.id, afterPaid, n: fresh.length };
 }
 
 /** Who may watch: the tester who made it, or the test's developer. */

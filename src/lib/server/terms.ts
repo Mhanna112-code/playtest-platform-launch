@@ -133,14 +133,21 @@ export async function answerTermsFirst(contractId: string, /** (Owner, Nov 11, �
  * (Batch 27 section 1) Send's own stop-once, after answerTermsFirst: every other reason as before; new terms are no longer a stop-once for it (they block).
  * (Owner, Nov 4, §183) `piece`: the sent part this press adds to (its submission id; none for a first Send): a developer payment on it since the page loaded stops
  * once whatever the tester's Alerts. `skipTerms` only drops the terms lines (an open offer already blocked the press), so the piece needs nothing more there.
+ * (Owner, Nov 11, §375) Run inside the press's one pass under the test's lock (Send Answers, Add to this answer, a recording's Send / Add): it only reads (the
+ * work closure and "This test ended" are the pass's part-over step), and it returns the stop-once box (or null) instead of throwing it, so the pass ends normally
+ * and keeps the drafts it saved.
  */
-export async function testerSendGate(contractId: string, body: Record<string, unknown>, piece?: string, written?: { stale?: TestEventLike[] }, /** (§372) the press, named in an "ended" refusal */ press = "") {
-  const c = await db.contract.findUniqueOrThrow({ where: { id: contractId } });
-  await (await import("./workWindow")).finishWorkIfDue(c.testId);
-  await (await import("./workWindow")).assertWorkOpen(db, c.testId, new Date(), press); // (§372) "This test ended, so your <press> didn't go through."
-  // (Owner, Nov 5, §269) Send Answers and Add to this answer (`written`) list a questions change question by question; a page whose questions are no longer the
-  // contract's (`written.stale`: what changed) always stops once, and the page then takes the new questions.
-  await testerGate(c.testerId, contractId, c.testId, body, undefined, { skipTerms: true, sendPiece: piece, questionLines: !!written, staleQuestions: written?.stale });
+export async function testerSendGate(tx: Prisma.TransactionClient, contractId: string, body: Record<string, unknown>, piece?: string, written?: { stale?: TestEventLike[] }) {
+  const c = await tx.contract.findUniqueOrThrow({ where: { id: contractId } });
+  try {
+    // (Owner, Nov 5, §269) Send Answers and Add to this answer (`written`) list a questions change question by question; a page whose questions are no longer
+    // the contract's (`written.stale`: what changed) always stops once, and the page then takes the new questions.
+    await testerGate(c.testerId, contractId, c.testId, body, undefined, { skipTerms: true, sendPiece: piece, questionLines: !!written, staleQuestions: written?.stale });
+    return null;
+  } catch (e) {
+    if (e instanceof HttpError) return e;
+    throw e;
+  }
 }
 
 /**
