@@ -184,7 +184,7 @@ describe("a suspended tester's limited view of all their own sessions", () => {
     expect(page).toContain("const canChoose = !meOff;"); // (batch 17 section 10) no Charge / Let it go there
     expect(page).toContain("off={meOff && !limited}");
     // Hidden there: chat, the key box (not working), Leave (not working), excerpt requests (excerptPicks need an active tester side).
-    expect(page).toContain("!excerptPending && !u.testerSuspendedAt ? await excerptChoices(written)");
+    expect(page).toContain("!excerptPending && !u.testerSuspendedAt && !devGone ? await excerptChoices(written)"); // (§360) never on a deleted developer's test
     expect(src("app/app/page.tsx")).toContain('href={`/app/sessions/${c.id}`}');
     expect(src("app/app/page.tsx")).not.toContain('data-waiting-plain'); // (§245) the green test name
   });
