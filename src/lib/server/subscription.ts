@@ -126,7 +126,7 @@ export async function subscribe(dev: Dev, now = new Date()) {
   const u = await userOf(dev.id);
   if (!u.isDeveloper) throw new HttpError(403, "not_developer", "Only developers subscribe.");
   // (Section 8 item 3) Refused during a hold or a suspension.
-  if (u.holdStartedAt || u.devSuspendedAt) throw new HttpError(409, "restricted", RF.pressRefused(u.devSuspendedAt ? RF.ACCOUNT_SUSPENDED_CAUSE : RF.HELD_CAUSE, "Subscribe")); // (§364 items 7, 8)
+  if (u.holdStartedAt || u.devSuspendedAt) throw new HttpError(409, "restricted", RF.pressRefused(u.devSuspendedAt ? RF.ACCOUNT_SUSPENDED_CAUSE : RF.HELD_CAUSE, `Subscribe for ${SUBSCRIPTION_PRICE}`)); // (§364 items 7, 8)
   if (subscribed(u, now)) throw new HttpError(409, "already", u.subscriptionCanceling ? "Press Keep my subscription to keep it." : "You're already subscribed.");
   const launch = await launchState(now);
   if (launch.free && !launch.until) throw new HttpError(409, "free", "Everything is free during launch: there's nothing to subscribe to yet.");

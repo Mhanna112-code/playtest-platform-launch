@@ -496,6 +496,9 @@ function pausedRefusal(c: Ctx["c"], side: Side, press: string) {
   if (testPaused(d, c.test)) throw new HttpError(409, "paused", RF.pressRefused(side === "tester" ? RF.PAUSED_CAUSE : d.devSuspendedAt ? RF.ACCOUNT_SUSPENDED_CAUSE : d.holdStartedAt ? RF.HELD_CAUSE : RF.TEAM_PAUSED_CAUSE, press));
 }
 async function refusals(c: Ctx["c"], side: Side, /** (§363) the press refused: "Request a time", "Accept" */ press: string) {
+  // (Owner, Nov 9, §365, found by the refusal matrix) A stopped test first: its stop ended every session, and the press reads the stopped line, not "<name>'s
+  // session has ended".
+  if (c.test.status === "stopped") throw new HttpError(409, "closed", stoppedPressLine(press));
   if (c.status !== "working") throw new HttpError(409, "closed", RF.pressRefused(side === "tester" ? RF.PART_ENDED_CAUSE : RF.sessionEndedCause(displayName(c.tester)), press)); // (§364 items 3, 4)
   pausedRefusal(c, side, press);
   // (Owner) "Closed" only means no NEW testers: testers already in carry on, so calls work. Only a stopped test refuses.
@@ -842,6 +845,8 @@ export async function answerRequest(user: U, contractId: string, body: Record<st
     const call = await db.call.findUnique({ where: { id: fresh.callId }, select: { startsAt: true } });
     if (call && !sameTime(call.startsAt, pick) && rowsOf(fresh).length > 1) throw new HttpError(409, "gone", mine ? OTHER_TIME_BOOKED : `You already accepted another time of this request at ${fmtTime(fresh.updatedAt)}.`);
   }
+  // (Owner, Nov 9, §365, found by the refusal matrix) Accept on a paused test reads the paused line, even though the pause already closed its request.
+  if (action === "accept") pausedRefusal(c, side, "Accept");
   if (fresh.status !== "pending") throw new HttpError(409, "gone", refusalFor(fresh, displayName(other), mine));
   if (action === "withdraw" ? !mine : mine) throw new HttpError(409, "not_yours", mine ? "You can't answer your own request: withdraw it instead." : "Only the person who asked can withdraw it.");
   // (Owner, Nov 4, §185) Accepting with the pair already over 3 (booked + waiting, from before the limit): refused at once, before the gate. An Accept turns this
