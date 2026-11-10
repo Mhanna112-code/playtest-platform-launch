@@ -25,7 +25,7 @@ const SECTIONS: { title: string; points: (string | { id: string; text: string })
       "A live call's hourly rate is at least $10 an hour (or free); each call request picks its own length (10 to 180 minutes). Each part can be marked Required or Not required: it is a label, it blocks nothing.",
       `Posting a test is free; what developers pay is in section 5. Every test takes at most ${MAX_SPOTS} testers. A tester can be in up to ${MAX_ACTIVE_TESTS} tests at once.`,
       // (Owner, Nov 9, §343) The Terms state the current rules in place (no new version): a closed test has no Edit.
-      "Tests can be stopped for good by the developer; the work already sent still waits to be paid, and calls ahead are cancelled. A closed test can't be edited.",
+      "Tests can be stopped for good by the developer; the work already sent still waits to be paid, and calls ahead are cancelled. A stopped or closed test can only have its NDA edited.",
     ],
   },
   {

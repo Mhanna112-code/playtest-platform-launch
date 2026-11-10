@@ -23,7 +23,7 @@ describe("§343 the Terms updated in place", () => {
 
   it("the rules: closed tests, rejoining, withdrawals, rating, calls, outages", async () => {
     const html = await page();
-    expect(html).toContain("A closed test can't be edited.");
+    expect(html).toContain("A stopped or closed test can only have its NDA edited."); // (Owner, Nov 9, §358; was "A closed test can't be edited.")
     expect(html).toContain("Coming back gives you the time that was left on your deadline, on the listing as it is then (its NDA included); work you sent before leaving keeps the dates it had.");
     expect(html).toContain("Requests, applications and invitations can be withdrawn or cancelled until the other side answers.");
     expect(html).not.toContain("offers can be withdrawn");

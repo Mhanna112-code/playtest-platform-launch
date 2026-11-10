@@ -51,7 +51,7 @@ export function TestersJoined({ testId, spots, seats, gone, status, children, ti
   const joined = seats.length;
   const shown = Math.min(spots, 12);
   const stopped = status === "stopped";
-  // (Owner, Nov 3, batch 35 §168) A closed test can't be edited: no "Change in Edit".
+  // (Owner, Nov 3, batch 35 §168) A closed test has no full Edit (§358: its NDA only): no "Change in Edit".
   const noEdit = stopped || status === "closed";
   return (
     <details open className="card space-y-3" id="testers-joined" aria-label="Testers joined">
