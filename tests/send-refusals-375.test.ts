@@ -221,19 +221,23 @@ describe("§375 typed text (step 1)", () => {
     for (const i of [0, 1, 2, 3]) expect(await addDraft(w, i)).toBeUndefined();
   });
 
-  it("(Owner, Nov 11, §375) an Add draft already kept: the different typed text goes under it after a blank line; pressed twice, it is added once", async () => {
+  it("(Owner, Nov 11, §376; reverses §375's appending) an Add draft already kept: the most recent typed text REPLACES it; pressed again, it stays that text", async () => {
     const w = await world();
     expect((await sendA(w, [A1, A1, A1, A1])).status).toBe(200);
     const key = `add:${w.sessionId}:${questionKeys(itemsFor(Q))[0]}`;
     await db.keptForm.create({ data: { userId: w.tester.user.id, key, data: { text: "Already typed in the Add box." } } });
     refused(await sendB(w), "locked", SENT_ANSWERS_LOCKED);
-    expect(await addDraft(w, 0)).toEqual({ text: `Already typed in the Add box.\n\n${B_TYPED[0]}` });
+    expect(await addDraft(w, 0)).toEqual({ text: B_TYPED[0] });
     expect(await addDraft(w, 1)).toEqual({ text: B_TYPED[1] });
     refused(await sendB(w), "locked", SENT_ANSWERS_LOCKED);
-    expect(await addDraft(w, 0)).toEqual({ text: `Already typed in the Add box.\n\n${B_TYPED[0]}` });
+    expect(await addDraft(w, 0)).toEqual({ text: B_TYPED[0] });
+    // A later out-of-date press with other text: only the most recent stays (no stacking).
+    const later = [`${B_TYPED[0]} And one more thought.`, B_TYPED[1], B_TYPED[2], B_TYPED[3]];
+    refused(await sendB(w, { answers: later }), "locked", SENT_ANSWERS_LOCKED);
+    expect(await addDraft(w, 0)).toEqual({ text: later[0] });
   });
 
-  it("(Owner, Nov 11, §375) the same text as was sent is never appended to an Add draft", async () => {
+  it("(Owner, Nov 11, §375) the same text as was sent never touches an Add draft", async () => {
     const w = await world();
     expect((await sendA(w, [A1, A1, A1, A1])).status).toBe(200);
     const key = `add:${w.sessionId}:${questionKeys(itemsFor(Q))[0]}`;

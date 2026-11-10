@@ -11,7 +11,7 @@ import { CALL_ACTS, PAY_ACTS, unanswered, answersIt, devBoxRule, devChanges, dev
 import { notListed, sidOf } from "./shownLines";
 import { ANSWER_ONE, NOT_REQUIRED, answerChars, answerMin, answerShortLine, answersMissing, qText, sameQuestionSet } from "@/lib/questions";
 import { answerUnit, NOTES_UNIT } from "@/lib/draftUnits";
-import { getKept, patchKept, setKept } from "./kept";
+import { patchKept, setKept } from "./kept";
 import { beforeLock } from "./pressRace";
 import { addOwnText, writtenOwnText } from "./actionText";
 import { questionChangeTexts } from "@/lib/questionHistory";
@@ -1335,7 +1335,8 @@ async function keepTyped(tx: Tx, testerId: string, c: { id: string }, page: Writ
 
 /**
  * (§369) Text a page typed into a question already answered (by another tab) is kept as that question's "Add to this answer" draft, never lost (not text the
- * same as what was sent; an Add draft already kept gets it added under it). Returns the questions (by their words) whose text is safe there, so keepStaleTyped skips them.
+ * same as what was sent). (Owner, Nov 11, §376; replaces §375's appending) The most recent text replaces an Add draft already kept. Returns the questions (by their
+ * words) whose text is safe there, so keepStaleTyped skips them.
  */
 async function keepTypedForAnswered(testerId: string, contractId: string, sub: { answers: unknown; additions?: unknown }, qs: string[], typed: Map<string, string>) {
   const carried = carriedAnswers(sub, qs);
@@ -1349,12 +1350,9 @@ async function keepTypedForAnswered(testerId: string, contractId: string, sub: {
       safe.add(qText(q));
       continue;
     }
-    const draft = (await getKept(testerId, `add:${contractId}:${keys[i]}`)).data as { text?: unknown } | null;
-    const had = typeof draft?.text === "string" ? draft.text : "";
-    // (Owner, Nov 11, §375) An Add draft already kept is never replaced: this text goes under it, after a blank line (not when the draft holds it already, so a
-    // repeated press never doubles it). The Add draft is the only place it lives (keepStaleTyped skips it).
-    if (!had.trim()) await setKept(testerId, `add:${contractId}:${keys[i]}`, { text: t });
-    else if (!had.includes(t)) await setKept(testerId, `add:${contractId}:${keys[i]}`, { text: `${had}\n\n${t}` });
+    // (Owner, Nov 11, §376; reverses §375's appending) The most recent text REPLACES an Add draft already kept (no appending, no blank-line stacking; the same
+    // text again changes nothing), as Terms history's "Draft (not sent)" keeps only the most recent. The Add draft is the only place it lives (keepStaleTyped skips it).
+    await setKept(testerId, `add:${contractId}:${keys[i]}`, { text: t });
     safe.add(qText(q));
   }
   return safe;
