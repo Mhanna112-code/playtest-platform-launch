@@ -331,20 +331,26 @@ async function openDisputeOnce(tester: U, contractId: string, body: Record<strin
   const c = await db.contract.findUnique({ where: { id: contractId }, include: { test: { include: { developer: true } } } });
   if (!c || c.testerId !== tester.id) throw new HttpError(404, "not_found", "That session doesn't exist or isn't yours.");
   const where = kind === "call" ? { callId: id } : { submissionId: id };
-  // (Owner, Nov 6, §288) The tester rated the test, or the part's closing date passed: closed, decided before anything else (never after a terms block or a
-  // stop-once that could only end in this refusal, §159). A part already disputed keeps its own line ("You already disputed this payment").
-  const shut = await disputeClosedFor(contractId, where);
-  if (shut && !(await db.dispute.findFirst({ where }))) throw new HttpError(409, "no_dispute", shut);
-  // (Owner, Oct 29, batch 32 §7) An open new-terms offer blocks Dispute until the tester answers it (Switch or Keep).
-  await (await import("./terms")).answerTermsFirst(contractId);
-  // (Owner, Oct 28 afternoon) Disputes work while the test is paused (and while the developer owes a declined payment): a decision for the tester during a hold is added to what is owed.
-  const review = await db.review.findFirst({ where: { ...where, contractId } });
-  // (Batch 30 §5, owner Oct 29) The team's $0 closure is final: no dispute.
-  if (review?.teamClosedById) throw new HttpError(409, "no_dispute", TEAM_CLOSED_NO_DISPUTE);
-  if (!review) throw new HttpError(409, "not_paid", "This hasn't been paid yet.");
+  // (Owner, Nov 11, §375) Dispute's refusals, in the owner's order, before any box: checked first, again when the gate would stop it, and again under the lock
+  // (an NDA change or new terms saved while the press waited). Dispute works while the test is paused and after the tester's part ended (the NDA block and
+  // new terms then block nothing), so neither refuses it.
+  const refusals = async (q: Prisma.TransactionClient | typeof db) => {
+    // (Owner, Nov 6, §288) The tester rated the test, or the part's closing date passed: closed, decided before anything else (never after a terms block or a
+    // stop-once that could only end in this refusal, §159). A part already disputed keeps its own line ("You already disputed this payment").
+    const shut = await disputeClosedFor(contractId, where);
+    if (shut && !(await db.dispute.findFirst({ where }))) throw new HttpError(409, "no_dispute", shut);
+    // (Owner, Oct 29, batch 32 §7) An open new-terms offer blocks Dispute until the tester answers it (Switch or Keep); (§267 / §302) an NDA change first.
+    await (await import("./terms")).answerTermsFirst(contractId, q);
+    // (Owner, Oct 28 afternoon) Disputes work while the test is paused (and while the developer owes a declined payment): a decision for the tester during a hold is added to what is owed.
+    const review = await q.review.findFirst({ where: { ...where, contractId } });
+    // (Batch 30 §5, owner Oct 29) The team's $0 closure is final: no dispute.
+    if (review?.teamClosedById) throw new HttpError(409, "no_dispute", TEAM_CLOSED_NO_DISPUTE);
+    if (!review) throw new HttpError(409, "not_paid", "This hasn't been paid yet.");
+    return disputable(review);
+  };
   // (Owner, Nov 3, §159) Whether anything is left to dispute is decided FIRST: a refusal is never shown as a stop-once whose second press could only be refused.
   // (Batch 20 section 15) Nothing a decision could add (the admin form's max, from disputeBounds): refused with the page's line (an older page).
-  const disputable = async () => {
+  const disputable = async (review: NonNullable<Awaited<ReturnType<typeof db.review.findFirst>>>) => {
     const existing = await db.dispute.findFirst({ where });
     // (Owner, Nov 6, §288) Checked again each time (a Rate in another tab meanwhile closes it too).
     const closed = await disputeClosedFor(contractId, where);
@@ -359,13 +365,14 @@ async function openDisputeOnce(tester: U, contractId: string, body: Record<strin
     }
     return { existing, roomCents: bounds ? bounds.max - bounds.min : 0 };
   };
-  const first = await disputable();
+  const first = await refusals(db);
   // (§369) What this press saw: what was paid on the part.
   const sawPaid = await paidOnPiece(db, where);
   // (Batch 35 §68) A payment on this piece since the page loaded stops it once even with Alerts Off.
   // A payment landing between that check and this stop: what's left is checked again, so a stop that couldn't go ahead is the refusal instead.
+  // (§375) Every refusal is checked again there, not only what is left to dispute.
   if (!first.existing) await testerGate(tester.id, contractId, c.testId, body, undefined, { piece: id }).catch(async (e) => {
-    if (e instanceof HttpError && e.code === "stop_once") await disputable();
+    if (e instanceof HttpError && e.code === "stop_once") await refusals(db);
     throw e;
   });
   // (Owner, Nov 3, §159) Dispute and Pay more on the same part are decided in one place: the dispute is made under the test's row lock (the lock Pay more reserves
@@ -375,10 +382,10 @@ async function openDisputeOnce(tester: U, contractId: string, body: Record<strin
   await beforeLock("dispute");
   const d = await db.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${c.testId} FOR UPDATE`;
+    roomCents = (await refusals(tx)).roomCents; // (Owner, Nov 11, §375) every refusal again under the lock first (an NDA change or new terms while it waited)
     // (Owner, Nov 10, §369) A payment on the part since the first look: nothing is written (Moved rolls back; openDispute runs the press again, so it ends with
     // the payment's stop-once, or the refusal when nothing is left). Another tab's Dispute is the final "disputed once" refusal below, whatever the timing.
     if ((await paidOnPiece(tx, where)) !== sawPaid) throw new Moved("paid");
-    roomCents = (await disputable()).roomCents;
     // (Owner, Nov 3, §157) Two Disputes at the same moment (two tabs): the piece's one dispute is the unique key; the later one reads the usual line, never a 500.
     if (await tx.dispute.findFirst({ where })) throw new HttpError(409, "no_dispute", ALREADY_DISPUTED);
     const made = await tx.dispute.create({ data: { ...where, contractId, testerId: tester.id, reason } });

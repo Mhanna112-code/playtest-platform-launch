@@ -1200,6 +1200,157 @@ export async function leaveTest(tester: U, contractId: string, body: Record<stri
   return { left: true };
 }
 
+/*
+ * (Owner, Nov 11, §375) The ONE refusal set of a tester's Send / Add (written answers, a recording), in two parts, each in one place: partOver (step 1: nothing
+ * is saved) and pressRefusals (step 3, after the typed text is kept). Each refusal is final (pressing again can never help), so it always comes before any
+ * stop-once box and before the form's red mistakes: both are checked at the first look, again under the test's lock, and before the box of a press that waited
+ * while something moved. `q`: `db`, or the press's transaction under the test's lock (a developer Save of new terms or the NDA, a team pause, a Stop, a block
+ * or another tab's Leave that took the lock while the press waited is read there). A developer's payment hold or suspension is written under the developer's
+ * own row lock, not the test's: one that lands while a press holds the test's lock counts as coming just after that press.
+ */
+
+/** (§375) Step 1: the tester's part is over (left, rated, blocked, stopped, ended early) or the test closed. */
+export async function partOver(q: Tx | typeof db, contractId: string, press: string) {
+  const c = await q.contract.findUniqueOrThrow({ where: { id: contractId }, include: { test: { include: { developer: true } } } });
+  // (§363 / §364) "Your part in this test has ended, so your Send Answers didn't go through." (a Stop: "This test was stopped, so …").
+  if (sessionRefusal(c, c.test, displayName(c.test.developer))) throw new HttpError(409, "closed", overPressLine(c, press));
+  // (§364 item 2) "This test ended, so your Send Answers didn't go through."
+  await (await import("./workWindow")).assertWorkOpen(q, c.testId, new Date(), press);
+}
+
+/**
+ * (§375) Step 3: paused → an NDA change not acknowledged → new terms not answered → then `own` (the part's own: an upload still running, then a rejection or the
+ * team's $0 closure, already sent, nothing new to add…), given the contract as read with `q`.
+ */
+export async function pressRefusals(q: Tx | typeof db, contractId: string, press: string, own?: (c: { questions: unknown }) => Promise<HttpError | null> | HttpError | null) {
+  const c = await q.contract.findUniqueOrThrow({ where: { id: contractId }, include: { test: { include: { developer: true } } } });
+  // (Owner, Oct 28 afternoon; §364 item 5) No sending while the test is paused (what was typed stays kept as a draft).
+  if (testerPaused(c.test.developer, c.test)) throw new HttpError(409, "paused", RF.pressRefused(RF.PAUSED_CAUSE, press));
+  // (§267 / §302) An NDA change not acknowledged, then (batch 27 §1) an open new-terms offer: "Answer the new terms first: Switch or Keep."
+  await answerTermsFirst(contractId, q);
+  const refused = await own?.(c);
+  if (refused) throw refused;
+}
+
+type SentPart = Prisma.SubmissionGetPayload<{ include: { review: true } }>;
+type Contract0 = Awaited<ReturnType<typeof ownContract>>;
+
+/** (§375) The part sent so far (the written answers, or the recording) with its review, or null: read with `db`, or under the lock. */
+export const sentPart = (q: Tx | typeof db, contractId: string, kind: "written" | "recording" = "written") =>
+  q.submission.findUnique({ where: { contractId_kind: { contractId, kind } }, include: { review: true } });
+
+/** (§369) What a press saw at its first look: the questions (none for a recording), the part saved so far (or none) and what the developer paid on it. */
+export async function sawOf(part: { id: string; updatedAt: Date } | null, questions?: string[]) {
+  return { questions, savedAt: part?.updatedAt.getTime() ?? null, paid: await paidOn(db, part?.id) };
+}
+
+/**
+ * (Owner, Nov 10, §369) Under the lock: something the press saw moved since its first look, so nothing is written (Moved rolls the transaction back, and the
+ * press's Moved path gives the stop-once a press made a moment later would get). The questions first (NEW-A), then the saved part (NEW-B: another tab's Send
+ * or Add), then a developer payment on it (§183 / §362: it stops the press once, whatever the Alerts). Returns the part as it is now.
+ */
+export async function movedCheck(tx: Tx, contractId: string, saw: Awaited<ReturnType<typeof sawOf>>, kind: "written" | "recording" = "written") {
+  if (saw.questions && !sameQuestionWords(writtenQuestions(await tx.contract.findUniqueOrThrow({ where: { id: contractId }, select: { questions: true } })), saw.questions)) throw new Moved("questions");
+  const part = await sentPart(tx, contractId, kind);
+  if ((part?.updatedAt.getTime() ?? null) !== saw.savedAt) throw new Moved("answers");
+  if ((await paidOn(tx, part?.id)) !== saw.paid) throw new Moved("paid");
+  return part;
+}
+
+/** (§375) What a Send Answers page sent: the contract's questions now, the page's own (`for`, every page since §269), what it typed for each (by the words). */
+function writtenPage(c: { questions: unknown }, body: Record<string, unknown>) {
+  const sentAnswers = Array.isArray(body.answers) ? body.answers.map((a) => (typeof a === "string" ? a.trim() : "")) : [];
+  const forQs = Array.isArray(body.for) ? body.for.filter((q): q is string => typeof q === "string") : null;
+  const rawNotes = typeof body.notes === "string" ? body.notes : "";
+  return { qs: writtenQuestions(c), forQs, sentAnswers, typed: new Map((forQs ?? []).map((q, i) => [qText(q), sentAnswers[i] ?? ""])), rawNotes, notes: rawNotes.trim(), body };
+}
+type WrittenPage = ReturnType<typeof writtenPage>;
+
+/**
+ * (§375) The answers this press sends, one per current question, against the part as it is (`part`). (Batch 20 §28) By place on a page without `for`.
+ * (Owner, Nov 5, §235) Once answers were sent, the form below them holds only the current questions with no answer yet (`fresh`: their places); every
+ * answered question keeps exactly what it has (carriedAnswers), whatever the page sent for it. (§269) A page that says its questions is read by their words.
+ */
+function answersFor(part: SentPart | null, page: WrittenPage) {
+  const { qs, forQs, typed, sentAnswers } = page;
+  const carried = forQs && part ? carriedAnswers(part, qs) : null;
+  const answers = carried ? qs.map((q, i) => carried[i] ?? typed.get(qText(q)) ?? "") : forQs ? qs.map((q) => typed.get(qText(q)) ?? "") : qs.map((_, i) => sentAnswers[i] ?? "");
+  const fresh = carried ? qs.flatMap((_, i) => (carried[i] == null ? [i] : [])) : null;
+  return { carried, answers, fresh, answersNew: !!fresh?.some((i) => answers[i].trim()) };
+}
+
+/**
+ * (Owner, Nov 5, §269) A page whose form holds questions the contract no longer has (or lacks one it has now) never sends: what changed (`lines`) and the
+ * form's questions now (`formQs`), or null when the page's questions are the contract's. A question it holds is gone: always. One it lacks: when a change since
+ * the page loaded added it (an older page's own form is refused as before).
+ */
+async function staleQuestions(testId: string, dev: string, page: WrittenPage, part: SentPart | null) {
+  const { qs, forQs, body } = page;
+  if (!forQs) return null;
+  const { carried } = answersFor(part, page);
+  const formQs = carried ? qs.filter((_, i) => carried[i] == null) : qs;
+  const nowWords = new Set(qs.map(qText)), asked = new Set(forQs.map(qText));
+  const gone = forQs.some((q) => !nowWords.has(qText(q))), lacks = formQs.some((q) => !asked.has(qText(q)));
+  const lines = gone || lacks ? await questionChangeLines(testId, seenOf(body.pageSeenAt) ?? seenOf(body.seenAt), dev) : [];
+  if (!gone && !(lacks && lines.length)) return null;
+  // No record since the page (it loaded without a time): what its form differs by (never an answered question it still shows).
+  const formWords = new Set(formQs.map(qText));
+  const stale: TestEventLike[] = lines.length ? lines : questionChangeTexts(dev, forQs.filter((q) => !nowWords.has(qText(q)) || formWords.has(qText(q))), formQs).map((text) => ({ kind: "info", text, createdAt: new Date(), listing: true, keys: ["questions"] }));
+  return { formQs, lines: stale };
+}
+
+/**
+ * (Owner, Nov 10, §369; Nov 11, §375) Step 2: what was typed is never lost. It only matters on an out-of-date page: text typed into a question answered
+ * meanwhile (another tab's Send) goes into that question's "Add to this answer" draft; a page whose questions changed (`stale`) keeps the rest (keepStaleTyped:
+ * an unanswered question's text in the form's draft, a removed or reworded question's in its Terms history entry's "Draft (not sent)").
+ */
+async function keepTyped(testerId: string, c: { id: string; testId: string }, page: WrittenPage, part: SentPart | null, stale: { formQs: string[] } | null) {
+  if (!page.forQs) return;
+  const inAddDrafts = part ? await keepTypedForAnswered(testerId, c.id, part, page.qs, page.typed) : new Set<string>();
+  if (stale) await keepStaleTyped(testerId, c, page.forQs, page.sentAnswers, stale.formQs, part ? "" : page.rawNotes, inAddDrafts);
+}
+
+/** (§375) Step 2 against the questions and answers as they are now, for a press that waited (its Moved path, or a refusal under the lock). */
+async function keepTypedNow(testerId: string, contractId: string, body: Record<string, unknown>, questionsMoved = false) {
+  const c = await db.contract.findUniqueOrThrow({ where: { id: contractId }, include: { test: { include: { developer: true } } } });
+  const page = writtenPage(c, body);
+  const sent = await sentPart(db, contractId);
+  const { carried } = answersFor(sent, page);
+  await keepTyped(testerId, c, page, sent, questionsMoved ? { formQs: page.qs.filter((_, i) => carried?.[i] == null) } : await staleQuestions(c.testId, displayName(c.test.developer), page, sent));
+}
+
+/**
+ * (§375) Step 3 for Send Answers: pressRefusals, then its own: an upload still running, then sendRefusal (a rejection, the team's $0 closure, already sent) on
+ * the part as it is now and what the page typed, against the contract's questions as read with `q`.
+ */
+const writtenRefusals = (q: Tx | typeof db, contractId: string, body: Record<string, unknown>) =>
+  pressRefusals(q, contractId, "Send Answers", async (c) => {
+    if ((await q.recording.count({ where: { contractId, ...(await import("./recordings")).stillUploading("written") } })) || JSON.stringify([body.answers, body.notes]).includes("[Uploading ")) return new HttpError(409, "uploading", "Wait for the upload to finish before sending.");
+    const page = writtenPage(c, body);
+    const sent = await sentPart(q, contractId);
+    const { answers, fresh, answersNew } = answersFor(sent, page);
+    return sendRefusal(sent, page.qs, answers, answersNew, !!fresh?.length);
+  });
+
+/**
+ * (§375) Step 5: the form's own mistakes, red at the question (400s: the tester fixes the text and presses again). (Batch 26 §14) At least one question
+ * answered, plus every Required one (the notes box alone doesn't count); the refusal names which question (`missing`), so the page marks it red there. (Batch 30
+ * §14) Each answer given is at least 50 characters (answerMin). (§235) Only the form's own questions are checked (an answer sent before stays as it is), and
+ * `missing` is their place in the page's form (§269); after a switch to changed questions the Send needs no new answer (it moves the part to the current
+ * questions). (Owner, Oct 29, batch 11) A length limit for the whole written part (WRITTEN_MAX_CHARS in rules.ts: 20,000 characters; §372 comment fix) (all its answers and notes together).
+ */
+function formMistakes(page: WrittenPage, part: SentPart | null) {
+  const { qs, forQs } = page;
+  const { answers, fresh } = answersFor(part, page);
+  const switched = !!part && (!!part.setUntil || !sameQuestions(latestItems(part, qs), itemsFor(qs)));
+  const missing0 = fresh ? answersMissing(fresh.map((i) => qs[i]), fresh.map((i) => answers[i]), answerMin()) : answersMissing(qs, answers, answerMin());
+  const missing = fresh && missing0 ? (missing0.message === ANSWER_ONE && switched ? null : { ...missing0, at: Math.max(0, (forQs ?? []).findIndex((q) => qText(q) === qText(qs[fresh[missing0.at] ?? 0]))) })
+    : forQs && missing0 ? { ...missing0, at: Math.max(0, forQs.findIndex((q) => qText(q) === qText(qs[missing0.at] ?? ""))) } /* (§269) its place in the page's form */ : missing0;
+  if (missing) throw new HttpError(400, "bad_answers", missing.message, { missing: missing.at, ...(missing.chars != null ? { chars: missing.chars } : {}) });
+  const long = checkWrittenLength([...answers, page.notes]);
+  if (!long.ok) throw new HttpError(400, "too_long", long.message);
+}
+
 /**
  * Send (or update, until it's paid) the written answers: one answer per question in the contract. Allowed even when
  * written answers aren't in the contract and after the deadline (shown as sent late).
@@ -1210,160 +1361,124 @@ export async function sendWritten(tester: U, contractId: string, body: Record<st
   } catch (e) {
     if (!(e instanceof Moved)) throw e;
     // (Owner, Nov 10, §369) NEW-D: the transaction rolled back and the lock is released: the normal stop-once box for what moved, as a press made a moment later
-    // would get (never QUESTIONS_CHANGED_MEANWHILE or "Your answers were already sent" because of timing).
+    // would get (never QUESTIONS_CHANGED_MEANWHILE or "Your answers were already sent" because of timing). (Owner, Nov 11, §375) In this order:
     const c = await ownContract(tester.id, contractId);
-    const qs = writtenQuestions(c);
-    const forQs = Array.isArray(body.for) ? body.for.filter((q): q is string => typeof q === "string") : null;
-    const sentAnswers = Array.isArray(body.answers) ? body.answers.map((a) => (typeof a === "string" ? a.trim() : "")) : [];
-    const existing = await db.submission.findUnique({ where: { contractId_kind: { contractId, kind: "written" } }, include: { review: true } });
-    const typed = new Map((forQs ?? []).map((q, i) => [qText(q), sentAnswers[i] ?? ""]));
-    // What this page typed into a question answered meanwhile (another tab's Send) becomes that question's "Add to this answer" draft.
-    if (existing && forQs) await keepTypedForAnswered(tester.id, contractId, existing, qs, typed);
-    // A refusal that is final whatever the timing comes first, as for a later press (every question answered already and nothing new typed: "already sent").
-    if (e.what !== "questions" && existing && forQs) {
-      const carried = carriedAnswers(existing, qs);
-      const answersNow = qs.map((q, i) => carried[i] ?? typed.get(qText(q)) ?? "");
-      const refused = sendRefusal(existing, qs, answersNow, qs.some((q, i) => carried[i] == null && !!typed.get(qText(q))?.trim()));
-      if (refused) throw refused;
-    }
-    let stale: TestEventLike[] = [];
-    if (e.what === "questions") {
-      const carried = existing ? carriedAnswers(existing, qs) : null;
-      const formQs = carried ? qs.filter((_, i) => carried[i] == null) : qs;
-      if (forQs) await keepStaleTyped(tester.id, c, forQs, sentAnswers, formQs, !existing && typeof body.notes === "string" ? body.notes : "");
-      stale = await questionChangeLines(c.testId, seenOf(body.pageSeenAt) ?? seenOf(body.seenAt), displayName(c.test.developer));
-    }
-    await testerSendGate(contractId, body, existing?.id, { stale }, "Send Answers");
+    // 2. The typed text (a question answered meanwhile: its Add draft; the questions moved: the rest in the form's draft or Terms history).
+    await keepTypedNow(tester.id, contractId, body, e.what === "questions");
+    // 1 and 3. Every refusal, as for a later press (the tester left or was blocked, the test closed or was paused, an NDA change, new terms, every question
+    // answered already and nothing new typed: "already sent"): never a box whose second press could only be refused.
+    await partOver(db, contractId, "Send Answers");
+    await writtenRefusals(db, contractId, body);
+    // The box: what moved (the question lines when the questions did), with every other change the page hasn't shown.
+    const stale = e.what === "questions" ? await questionChangeLines(c.testId, seenOf(body.pageSeenAt) ?? seenOf(body.seenAt), displayName(c.test.developer)) : [];
+    const sent = await sentPart(db, contractId);
+    await testerSendGate(contractId, body, sent?.id, { stale }, "Send Answers");
     // Nothing to show (the change was listed already, or made in this same tab): the press as a later one would make it, once.
     if (body.__moved !== true) return sendWritten(tester, contractId, { ...body, __moved: true });
     throw e.what === "questions" ? new HttpError(409, "questions_changed", QUESTIONS_CHANGED_MEANWHILE) : new HttpError(409, "locked", SENT_ANSWERS_LOCKED);
   }
 }
 
-/** (§369) Text a page typed into a question already answered (by another tab) is kept as that question's "Add to this answer" draft, never lost. */
+/**
+ * (§369) Text a page typed into a question already answered (by another tab) is kept as that question's "Add to this answer" draft, never lost (not text the
+ * same as what was sent; an Add draft already kept gets it added under it). Returns the questions (by their words) whose text is safe there, so keepStaleTyped skips them.
+ */
 async function keepTypedForAnswered(testerId: string, contractId: string, sub: { answers: unknown; additions?: unknown }, qs: string[], typed: Map<string, string>) {
   const carried = carriedAnswers(sub, qs);
   const keys = questionKeys(itemsFor(qs));
+  const safe = new Set<string>();
   for (const [i, q] of qs.entries()) {
     const t = typed.get(qText(q))?.trim();
-    if (carried[i] == null || !t || t === carried[i]!.trim()) continue;
-    if (!(await getKept(testerId, `add:${contractId}:${keys[i]}`)).data) await setKept(testerId, `add:${contractId}:${keys[i]}`, { text: t });
+    if (carried[i] == null || !t) continue;
+    // The same as what was sent: nothing to keep.
+    if (t === carried[i]!.trim()) {
+      safe.add(qText(q));
+      continue;
+    }
+    const draft = (await getKept(testerId, `add:${contractId}:${keys[i]}`)).data as { text?: unknown } | null;
+    const had = typeof draft?.text === "string" ? draft.text : "";
+    // (Owner, Nov 11, §375) An Add draft already kept is never replaced: this text goes under it, after a blank line (not when the draft holds it already, so a
+    // repeated press never doubles it). The Add draft is the only place it lives (keepStaleTyped skips it).
+    if (!had.trim()) await setKept(testerId, `add:${contractId}:${keys[i]}`, { text: t });
+    else if (!had.includes(t)) await setKept(testerId, `add:${contractId}:${keys[i]}`, { text: `${had}\n\n${t}` });
+    safe.add(qText(q));
   }
+  return safe;
 }
 
+/**
+ * (Owner, Nov 11, §375) One Send Answers, in the owner's order. Nothing is written before step 7, except the typed text kept at step 2.
+ */
 async function sendWrittenOnce(tester: U, contractId: string, body: Record<string, unknown>) {
   const c0 = await ownContract(tester.id, contractId);
-  const ended = sessionRefusal(c0, c0.test, displayName(c0.test.developer));
-  if (ended) throw new HttpError(409, "closed", overPressLine(c0, "Send Answers")); // (§363 / §364)
-  // (Batch 27 section 1) An open new-terms offer blocks Send until it's answered (Switch or Keep): nothing is checked or sent before.
-  await answerTermsFirst(contractId);
-  const qs = writtenQuestions(c0);
-  if ((await db.recording.count({ where: { contractId, ...(await import("./recordings")).stillUploading("written") } })) || JSON.stringify([body.answers, body.notes]).includes("[Uploading ")) throw new HttpError(409, "uploading", "Wait for the upload to finish before sending.");
-  const sentAnswers = Array.isArray(body.answers) ? body.answers.map((a) => (typeof a === "string" ? a.trim() : "")) : [];
-  // (Owner, Nov 5, §235) Once answers were sent, the form below them holds only the current questions with no answer yet (`for`: those questions, their answers
-  // in the same order); every answered question keeps exactly what it has (carriedAnswers), whatever the page sent for it.
-  const forQs = Array.isArray(body.for) ? body.for.filter((q): q is string => typeof q === "string") : null;
-  const before = forQs ? await db.submission.findUnique({ where: { contractId_kind: { contractId, kind: "written" } } }) : null;
-  const carried = before ? carriedAnswers(before, qs) : null;
-  const typed = new Map((forQs ?? []).map((q, i) => [qText(q), sentAnswers[i] ?? ""]));
-  // (Batch 20 section 28) One answer per question of the contract, by position (a missing one is blank). (Batch 26 section 14) At least one question answered, plus
-  // every Required one (the notes box alone doesn't count). The refusal names which question (`missing`), so the page marks it red there.
-  // (Owner, Nov 5, §269) A page that says its questions (`for`, every page since §269) is read by the questions' words, never by place: order doesn't matter.
-  const answers = carried ? qs.map((q, i) => carried[i] ?? typed.get(qText(q)) ?? "") : forQs ? qs.map((q) => typed.get(qText(q)) ?? "") : qs.map((_, i) => sentAnswers[i] ?? "");
-  // (§269) A page whose form holds questions the contract no longer has (or lacks one it has now) never sends: the press stops once, whatever the Alerts, a
-  // confirmed press or what the live pill showed, listing what changed in the questions; what was typed is kept (a current question's text in the draft, a
-  // removed question's in the draft snapshot of its Terms history entry), and the page takes the new questions in place. The next press sends normally.
-  if (forQs) {
-    const formQs = carried ? qs.filter((_, i) => carried[i] == null) : qs;
-    const nowWords = new Set(qs.map(qText)), asked = new Set(forQs.map(qText));
-    const gone = forQs.some((q) => !nowWords.has(qText(q))), lacks = formQs.some((q) => !asked.has(qText(q)));
-    const dev = displayName(c0.test.developer);
-    const lines = gone || lacks ? await questionChangeLines(c0.testId, seenOf(body.pageSeenAt) ?? seenOf(body.seenAt), dev) : [];
-    // A question it holds is gone: always. One it lacks: when a change since the page loaded added it (an older page's own form is refused as before).
-    if (gone || (lacks && lines.length)) {
-      await keepStaleTyped(tester.id, c0, forQs, sentAnswers, formQs, !before && typeof body.notes === "string" ? body.notes : "");
-      // No record since the page (it loaded without a time): what its form differs by (never an answered question it still shows).
-      const formWords = new Set(formQs.map(qText));
-      const stale = lines.length ? lines : questionChangeTexts(dev, forQs.filter((q) => !nowWords.has(qText(q)) || formWords.has(qText(q))), formQs).map((text) => ({ kind: "info", text, createdAt: new Date(), listing: true, keys: ["questions"] }));
-      await testerSendGate(contractId, body, before?.id, { stale }, "Send Answers");
-    }
-  }
-  // (Batch 30 §14) Each answer given is at least 50 characters (answerMin): "Each answer needs at least 50 characters." with which question (and how long it is).
-  // (§235) The form's own questions only are checked (an answer sent before stays as it is), and `missing` is their place in the form; after a switch to changed
-  // questions the Send needs no new answer (it moves the part to the current questions).
-  const fresh = carried ? qs.flatMap((q, i) => (carried[i] == null ? [i] : [])) : null;
-  const switched = !!before && (!!before.setUntil || !sameQuestions(latestItems(before, qs), itemsFor(qs)));
-  const missing0 = fresh ? answersMissing(fresh.map((i) => qs[i]), fresh.map((i) => answers[i]), answerMin()) : answersMissing(qs, answers, answerMin());
-  const missing = fresh && missing0 ? (missing0.message === ANSWER_ONE && switched ? null : { ...missing0, at: Math.max(0, (forQs ?? []).findIndex((q) => qText(q) === qText(qs[fresh[missing0.at] ?? 0]))) })
-    : forQs && missing0 ? { ...missing0, at: Math.max(0, forQs.findIndex((q) => qText(q) === qText(qs[missing0.at] ?? ""))) } /* (§269) its place in the page's form */ : missing0;
-  if (missing) throw new HttpError(400, "bad_answers", missing.message, { missing: missing.at, ...(missing.chars != null ? { chars: missing.chars } : {}) });
-  const notes = typeof body.notes === "string" ? body.notes.trim() : "";
-  // (Owner, Oct 29, batch 11) A length limit for the whole written part (WRITTEN_MAX_CHARS in rules.ts: 20,000 characters; §372 comment fix) (all its answers and notes together).
-  const long = checkWrittenLength([...answers, notes]);
-  if (!long.ok) throw new HttpError(400, "too_long", long.message);
-  // (Owner, Oct 28 afternoon) No sending while the test is paused (the typed answers stay kept as a draft).
-  if (!sessionRefusal(c0, c0.test, displayName(c0.test.developer)) && testerPaused(c0.test.developer, c0.test)) throw new HttpError(409, "paused", RF.pressRefused(RF.PAUSED_CAUSE, "Send Answers")); // (§364 item 5; the button's real label, §235)
-  // (Owner, Nov 4, §183) A Send that adds to sent answers (the answers to changed questions) stops once for a developer payment on them since the page loaded,
-  // whatever the tester's Alerts. One that could only be refused (locked, or the team's $0 closure) is refused at once, never after a stop (checked again below).
-  const sent = await db.submission.findUnique({ where: { contractId_kind: { contractId, kind: "written" } }, include: { review: true } });
-  const sentRefusal = sendRefusal(sent, qs, answers, !!fresh?.some((i) => answers[i].trim()));
-  if (sentRefusal) throw sentRefusal;
-  // (Owner, Nov 10, §369) Questions answered meanwhile (another tab's Send): what this page typed into them is never lost: it becomes that question's
-  // "Add to this answer" draft (unless one is kept already); the answered ones stay as sent, the unanswered ones are this press's first answers (§235).
-  if (before && forQs) await keepTypedForAnswered(tester.id, contractId, before, qs, typed);
-  // (§369) What this press saw: its questions and the saved part (or none). Under the lock either moving gives the stop-once below (sendWritten), not a refusal.
-  const saw = { questions: qs, savedAt: sent?.updatedAt.getTime() ?? null, paid: await paidOn(db, sent?.id) };
+  const page = writtenPage(c0, body); // what the page sent: its questions and what it typed for each
+  const sent = await sentPart(db, contractId); // the part sent so far (or none)
+  // 1. Their part is over (left, rated, blocked, stopped, ended early) or the test closed: refused, nothing saved.
+  await partOver(db, contractId, "Send Answers");
+  // 2. The typed text is kept (only matters on an out-of-date page), so nothing is lost whatever comes next.
+  const stale = await staleQuestions(c0.testId, displayName(c0.test.developer), page, sent);
+  await keepTyped(tester.id, c0, page, sent, stale);
+  // 3. The refusals: paused → an NDA change → new terms → an upload still running → rejected, the team's $0 closure, already sent.
+  await writtenRefusals(db, contractId, body);
+  // 4. (§269) The page's questions changed: the stop-once box, whatever the Alerts, a confirmed press or what the live pill showed, listing what changed in the
+  // questions; the page then takes the new questions in place. The next press sends normally.
+  if (stale) await testerSendGate(contractId, body, sent?.id, { stale: stale.lines }, "Send Answers");
+  // 5. The form's own mistakes, red at the question (Required, 50 characters, 20,000 in all): after the refusals, so a tester never fixes one only to be refused.
+  formMistakes(page, sent);
+  // 6. The tester's one gate: the stop-once box for what the page hasn't shown ((Owner, Nov 4, §183) a developer payment on sent answers since the page loaded,
+  // whatever the Alerts). What this press saw is noted first (§369).
+  const saw = await sawOf(sent, page.qs);
   await testerSendGate(contractId, body, sent?.id, { stale: [] }, "Send Answers");
-  const name = displayName(tester), poss = pronouns(tester.pronoun).poss;
   await beforeLock("written");
   await (await import("./raceHold")).raceHold(body); // (§369) test-only pause point (RACE_HOLDS=1), no lock held
+  // 7. Under the test's lock: steps 1 and 3 again (a Save, a pause, a Leave or another tab while the press waited), then anything that moved since the first look
+  // (nothing is written; sendWritten gives the box a later press would get), then the save.
   const { sub, updated, afterPaid } = await db.$transaction(async (tx) => {
-    const t = await lockTest(tx, c0.testId);
-    const c = await tx.contract.findUniqueOrThrow({ where: { id: contractId } });
-    await (await import("./workWindow")).assertWorkOpen(tx, t.id, new Date(), "Send Answers");
-    const refusal = sessionRefusal(c, t, displayName(c0.test.developer));
-    if (refusal) throw new HttpError(409, "closed", overPressLine(c, "Send Answers")); // (§363 / §364)
-    // (Owner, Nov 10, §369; NEW-A replaces §269's refusal here) The questions changed between the checks and this lock: nothing is written (Moved rolls
-    // back; sendWritten gives the question-change stop-once).
-    if (!sameQuestionWords(writtenQuestions(c), saw.questions)) throw new Moved("questions");
-    const now = new Date();
-    const existing = await tx.submission.findUnique({ where: { contractId_kind: { contractId, kind: "written" } }, include: { review: true } });
-    // (§369 NEW-B) The saved answers moved (another tab's Send): nothing is written; the stop-once names it ("You sent your written answers in another tab").
-    if ((existing?.updatedAt.getTime() ?? null) !== saw.savedAt) throw new Moved("answers");
-    // A developer payment on them since the first look (§183 / §362: it stops this press once, whatever the Alerts).
-    if ((await paidOn(tx, existing?.id)) !== saw.paid) throw new Moved("paid");
-    // Only the final refusals (the part as checked before the lock: it can't newly fire).
-    const refused = sendRefusal(existing, qs, answers, !!fresh?.some((i) => answers[i].trim()));
-    if (refused) throw refused;
-    const paid = !!existing?.review;
-    const items = itemsFor(qs, answers);
-    // Additions preserve an existing piece's status; before the deadline they adopt the agreed price.
-    const addition = additionTerms(existing, c, c.writtenCents, now);
-    const late = addition.late;
-    // (Owner, Nov 6, §283) Only unsent uploads (never one already sent), and not one that went with a draft into Terms history (snapshotOnlyFiles).
-    const unsentFiles = await tx.recording.findMany({ where: { contractId, part: "written", uploadedAt: { not: null }, submissionId: null }, select: { id: true, filename: true } });
-    const snapped = snapshotOnlyFiles(c.prevSets, unsentFiles, [...answers, notes]);
-    const files = unsentFiles.filter((f) => !snapped.has(f.id));
-    const sub = existing
-      ? await tx.submission.update({ where: { id: existing.id }, data: {
-          // The shared addition rule decides whether this unpaid piece can adopt current terms.
-          additions: [...additionsOf(existing.additions), { at: now.toISOString(), items, notes: notes !== existing.notes ? notes : "", files: files.map((f) => f.id) }] as unknown as Prisma.InputJsonValue,
-          setUntil: null, updatedAt: now,
-          ...addition,
-        } })
-      : await tx.submission.create({ data: { contractId, kind: "written", agreedCents: c.writtenCents, answers: items as unknown as Prisma.InputJsonValue, notes, late, updatedAt: now, payBy: payByFrom(now), ...(late ? { choiceOfferedAt: null, choiceBy: null } : {}) } });
-    // (Batch 11) Files and recordings attached to the written part go with it.
-    await tx.recording.updateMany({ where: { id: { in: files.map((f) => f.id) } }, data: { submissionId: sub.id } });
-    const afterPaid = await tellSent(tx, { testId: c.testId, contractId: c.id, subId: sub.id, name, poss, part: "written answers", added: !!existing, paid });
-    // (§369 NEW-C) The own-action line commits with the save: another tab that sees these answers also sees "You sent your written answers in another tab".
-    await (await import("./live")).logAction(tester.id, c.testId, body, writtenOwnText(!!existing), undefined, tx);
-    return { sub, updated: !!existing, afterPaid };
+    await lockTest(tx, c0.testId);
+    await partOver(tx, contractId, "Send Answers");
+    await writtenRefusals(tx, contractId, body);
+    const existing = await movedCheck(tx, contractId, saw);
+    return saveWritten(tx, tester, contractId, existing, page, body);
+  }).catch(async (e) => {
+    // Refused under the lock (but not as part over): the transaction rolled back (like Moved), so step 2 runs here against the questions and answers as they
+    // are now (a Save or another tab meanwhile), then the same refusal is raised (the owner's example: one Save changed the NDA and the questions).
+    if (e instanceof HttpError && e.code !== "closed") await keepTypedNow(tester.id, contractId, body);
+    throw e;
   });
   await tellSentByBell(c0, tester, sub, "written answers", updated, afterPaid);
   return sub;
 }
 
-type SentPart = Prisma.SubmissionGetPayload<{ include: { review: true } }>;
+/** (§375) The save of Send Answers, under the lock once nothing moved and nothing refused: the first answers, or the answers added under what was sent. */
+async function saveWritten(tx: Tx, tester: U, contractId: string, existing: SentPart | null, page: WrittenPage, body: Record<string, unknown>) {
+  const c = await tx.contract.findUniqueOrThrow({ where: { id: contractId } });
+  const { qs, notes } = page;
+  const { answers } = answersFor(existing, page);
+  const now = new Date();
+  const paid = !!existing?.review;
+  const items = itemsFor(qs, answers);
+  // Additions preserve an existing piece's status; before the deadline they adopt the agreed price.
+  const addition = additionTerms(existing, c, c.writtenCents, now);
+  const late = addition.late;
+  // (Owner, Nov 6, §283) Only unsent uploads (never one already sent), and not one that went with a draft into Terms history (snapshotOnlyFiles).
+  const unsentFiles = await tx.recording.findMany({ where: { contractId, part: "written", uploadedAt: { not: null }, submissionId: null }, select: { id: true, filename: true } });
+  const snapped = snapshotOnlyFiles(c.prevSets, unsentFiles, [...answers, notes]);
+  const files = unsentFiles.filter((f) => !snapped.has(f.id));
+  const sub = existing
+    ? await tx.submission.update({ where: { id: existing.id }, data: {
+        // The shared addition rule decides whether this unpaid piece can adopt current terms.
+        additions: [...additionsOf(existing.additions), { at: now.toISOString(), items, notes: notes !== existing.notes ? notes : "", files: files.map((f) => f.id) }] as unknown as Prisma.InputJsonValue,
+        setUntil: null, updatedAt: now,
+        ...addition,
+      } })
+    : await tx.submission.create({ data: { contractId, kind: "written", agreedCents: c.writtenCents, answers: items as unknown as Prisma.InputJsonValue, notes, late, updatedAt: now, payBy: payByFrom(now), ...(late ? { choiceOfferedAt: null, choiceBy: null } : {}) } });
+  // (Batch 11) Files and recordings attached to the written part go with it.
+  await tx.recording.updateMany({ where: { id: { in: files.map((f) => f.id) } }, data: { submissionId: sub.id } });
+  const afterPaid = await tellSent(tx, { testId: c.testId, contractId: c.id, subId: sub.id, name: displayName(tester), poss: pronouns(tester.pronoun).poss, part: "written answers", added: !!existing, paid });
+  // (§369 NEW-C) The own-action line commits with the save: another tab that sees these answers also sees "You sent your written answers in another tab".
+  await (await import("./live")).logAction(tester.id, c.testId, body, writtenOwnText(!!existing), undefined, tx);
+  return { sub, updated: !!existing, afterPaid };
+}
 
 /** (§369) What the developer paid on a sent part (its review and every payment that went through or is on its way), for a press's first look. */
 export async function paidOn(q: Tx | typeof db, submissionId: string | null | undefined) {
@@ -1381,9 +1496,10 @@ export const QUESTIONS_CHANGED_MEANWHILE = "Your questions changed just now: not
 /**
  * (Owner, Nov 5, §269) A stale page's Send never loses what was typed. A current question's text goes into the written draft (by its words, so the boxes have it
  * after the redraw); a removed question's text goes into the draft snapshot ("Draft (not sent)") of the Terms history entry that removed it, so it shows there
- * and comes back into the form if the question comes back (§263). `notes`: the first form's notes box (kept in the draft too).
+ * and comes back into the form if the question comes back (§263). `notes`: the first form's notes box (kept in the draft too). (Owner, Nov 11, §375) Not a
+ * question whose text is safe in its "Add to this answer" draft (`inAddDrafts`, keepTypedForAnswered): it isn't written into the form's draft as well.
  */
-async function keepStaleTyped(testerId: string, c0: { id: string; testId: string }, forQs: string[], typed: string[], formQs: string[], notes: string) {
+async function keepStaleTyped(testerId: string, c0: { id: string; testId: string }, forQs: string[], typed: string[], formQs: string[], notes: string, inAddDrafts = new Set<string>()) {
   const units: Record<string, string> = {};
   await db.$transaction(async (tx) => {
     await lockTest(tx, c0.testId);
@@ -1392,7 +1508,7 @@ async function keepStaleTyped(testerId: string, c0: { id: string; testId: string
     const removed: { q: string; text: string }[] = [];
     forQs.forEach((q, i) => {
       const text = typed[i] ?? "";
-      if (!text.trim()) return;
+      if (!text.trim() || inAddDrafts.has(qText(q))) return;
       if (now.has(qText(q))) units[answerUnit(q)] = text;
       else removed.push({ q: qText(q), text });
     });
@@ -1415,15 +1531,19 @@ async function keepStaleTyped(testerId: string, c0: { id: string; testId: string
   if (Object.keys(units).length) await patchKept(testerId, `written:${c0.id}`, units, { questions: formQs });
 }
 
-/** What refuses a Send of written answers whatever changed meanwhile ((Owner, Nov 4, §183) checked before the stop-once and again under the lock). */
-function sendRefusal(existing: SentPart | null, qs: string[], answers: string[], answersNew = false) {
+/**
+ * What refuses a Send of written answers whatever changed meanwhile ((Owner, Nov 4, §183) checked before the stop-once and again under the lock).
+ * `openLeft` (Owner, Nov 11, §375): a current question still has no answer, so the form below can still send one: never "already sent" then (the form's own
+ * check asks for an answer), so this refusal can be checked before the §269 box and the form's mistakes without ever being wrong.
+ */
+function sendRefusal(existing: SentPart | null, qs: string[], answers: string[], answersNew = false, openLeft = false) {
   // (Batch 30 §2) Only an old rejection or the team's $0 closure stays locked against anything more.
   const locked = resendRefusal(existing?.review, "written");
   if (locked) return new HttpError(409, "paid", locked);
   // (Owner, Nov 3, batch 35 §136; replaces batch 13 §8's "sending replaces the sent version" and batch 20 §26's updated answers) What was sent is locked: a
   // second Send is only for the answers to changed questions (after a switch), and those are ADDED under what was sent ("Added"), never in its place.
   // (Owner, Nov 5, §235) Or the first answers to current questions that had none (the form below the answers): added the same way, the answered ones unchanged.
-  if (existing && !existing.setUntil && !answersNew && sameQuestions(latestItems(existing, qs), itemsFor(qs, answers))) return new HttpError(409, "locked", SENT_ANSWERS_LOCKED);
+  if (existing && !existing.setUntil && !answersNew && !openLeft && sameQuestions(latestItems(existing, qs), itemsFor(qs, answers))) return new HttpError(409, "locked", SENT_ANSWERS_LOCKED);
   return null;
 }
 
@@ -1434,7 +1554,7 @@ const unansweredNow = (sub: { answers: unknown; additions?: unknown }, qs: strin
 };
 
 /** What refuses an Add to this answer whatever changed meanwhile ((Owner, Nov 4, §183) checked before the stop-once and again under the lock). */
-function addRefusal(existing: SentPart | null, c: { questions: unknown }, key: string, text: string) {
+function addRefusal(existing: SentPart | null, c: { questions: unknown }, key: string) {
   if (!existing) return new HttpError(409, "not_sent", "Send your answers first.");
   const locked = resendRefusal(existing.review, "written");
   if (locked) return new HttpError(409, "paid", locked);
@@ -1447,13 +1567,64 @@ function addRefusal(existing: SentPart | null, c: { questions: unknown }, key: s
   // (Owner, Nov 5, §222; replaces §167's 10 per part) This question's 5 (Anything else's own 5). A question with no answer yet: its first answer (Answer this
   // question) is free and never refused for it.
   if (!unansweredNow(existing, qs, key) && addsCounted(existing.additions, key) >= ADDITIONS_MAX) return new HttpError(409, "add_full", additionsFull(key));
-  // (Owner, Nov 4, §186; replaces batch 14's one limit over the answers, the notes and everything added) An addition has the same limit as the answers sent
-  // first: at most 20,000 characters of its own, whatever the others hold. Checked before the stop-once, so a too-long addition is refused on the first press.
-  const long = checkAdditionLength(text);
-  if (!long.ok) return new HttpError(400, "too_long", long.message);
-  const chars = answerChars(text);
-  if (chars < answerMin()) return new HttpError(400, "too_short", answerShortLine(chars));
   return null;
+}
+
+/** (§375) What an Add to this answer page sent: the question it adds to (its key, questionKeys of the current questions) and the text. */
+const addPage = (body: Record<string, unknown>) => ({ key: typeof body.question === "string" ? body.question : "", text: typeof body.text === "string" ? body.text.trim() : "" });
+/** (§167) Only the uploads placed in this text (by their markers) go with it. */
+const placedIn = (text: string, rows: { id: string; filename: string }[]) => {
+  const ids = markerIds(text, rows);
+  return rows.filter((r) => ids.has(r.id));
+};
+const unsentWritten = (contractId: string) => ({ contractId, part: "written", uploadedAt: { not: null }, submissionId: null });
+
+/**
+ * (§375) Step 3 for Add to this answer: pressRefusals, then its own: an upload still running, then addRefusal on the part as it is now. (§222) Already at the
+ * question's 5 (an older page): refused before any stop box. (Owner, Nov 4, §183) So is everything else that could only refuse it (the team's $0 closure, a
+ * question gone): a developer payment on these answers since the page loaded stops the press once whatever the tester's Alerts, and a stop whose second press
+ * could only be refused is a single refusal instead (owner's rule).
+ */
+const addRefusals = (q: Tx | typeof db, contractId: string, key: string, text: string) =>
+  pressRefusals(q, contractId, "Add", async (c) => {
+    if ((await q.recording.count({ where: { contractId, ...(await import("./recordings")).stillUploading("written") } })) || text.includes("[Uploading ")) return new HttpError(409, "uploading", "Wait for the upload to finish before sending.");
+    return addRefusal(await sentPart(q, contractId), c, key);
+  });
+
+/**
+ * (§375) Steps 3 and 4 for Add: its refusals, then (Owner, Nov 5, §269) its question removed by a change this page hasn't shown (made after it loaded): the
+ * stop-once box instead of the refusal, listing what changed in the questions (whatever the Alerts); the typed text stays kept under the question (it comes
+ * back if the question does), and the page redraws without it. Once a box listed those lines (or the change came before the page), the plain refusal
+ * (QUESTION_GONE).
+ */
+async function addRefusalsOrQuestionBox(tester: U, c: Contract0, key: string, text: string, body: Record<string, unknown>, before: SentPart | null) {
+  try {
+    await addRefusals(db, c.id, key, text);
+  } catch (e) {
+    if (e instanceof HttpError && e.code === "question_gone") {
+      const pageAt = seenOf(body.pageSeenAt) ?? seenOf(body.seenAt);
+      const removedSince = pageAt && prevSetsOf(c.prevSets).some((p) => new Date(p.until) > pageAt && p.items.some((it) => questionKeyOf(key) === questionKey(it.question)) && !(p.to ?? []).some((t) => questionKey(t) === questionKeyOf(key)));
+      const stale = removedSince ? notListed(await questionChangeLines(c.testId, pageAt, displayName(c.test.developer)), body) : [];
+      if (stale.length) {
+        if (text) await setKept(tester.id, `add:${c.id}:${key}`, { text });
+        await testerSendGate(c.id, body, before?.id, { stale }, "Add");
+      }
+    }
+    throw e;
+  }
+}
+
+/**
+ * (§375) Step 5 for Add: the text's own mistakes (400s). (Batch 35 §136) Nothing to add. (Owner, Nov 4, §186; replaces batch 14's one limit over the answers,
+ * the notes and everything added) An addition has the same limit as the answers sent first: at most 20,000 characters of its own, whatever the others hold;
+ * (batch 30 §14) and at least 50 characters. Checked before the stop-once, so a press with a mistake is told on the first press.
+ */
+async function addMistakes(contractId: string, text: string) {
+  if (!withoutAttachmentMarkers(text).trim() && !placedIn(text, await db.recording.findMany({ where: unsentWritten(contractId), select: { id: true, filename: true } })).length) throw new HttpError(400, "empty", NOTHING_TO_ADD);
+  const long = checkAdditionLength(text);
+  if (!long.ok) throw new HttpError(400, "too_long", long.message);
+  const chars = answerChars(text);
+  if (chars < answerMin()) throw new HttpError(400, "too_short", answerShortLine(chars));
 }
 
 /**
@@ -1475,100 +1646,81 @@ export async function addWritten(tester: U, contractId: string, body: Record<str
   } catch (e) {
     if (!(e instanceof Moved)) throw e;
     // (Owner, Nov 10, §369) The transaction rolled back: the normal stop-once box for what moved (another tab's addition, a developer payment on the answers, the
-    // questions), as a later press would get. The typed text stays kept under its question.
+    // questions), as a later press would get. (Owner, Nov 11, §375) In this order:
     const c = await ownContract(tester.id, contractId);
-    const key = typeof body.question === "string" ? body.question : "";
-    const text = typeof body.text === "string" ? body.text.trim() : "";
+    const { key, text } = addPage(body);
+    // 2. The typed text stays kept under its question.
     if (text && key) await setKept(tester.id, `add:${contractId}:${key}`, { text });
-    const existing = await db.submission.findUnique({ where: { contractId_kind: { contractId, kind: "written" } } });
+    // 1 and 3. Every refusal, as for a later press (its question removed meanwhile: the §269 box).
+    const before = await sentPart(db, contractId);
+    await partOver(db, contractId, "Add");
+    await addRefusalsOrQuestionBox(tester, c, key, text, body, before);
+    // The box: what moved (the question lines when the questions did), with every other change the page hasn't shown.
     const stale = e.what === "questions" ? await questionChangeLines(c.testId, seenOf(body.pageSeenAt) ?? seenOf(body.seenAt), displayName(c.test.developer)) : [];
-    await testerSendGate(contractId, body, existing?.id, { stale }, "Add");
+    await testerSendGate(contractId, body, before?.id, { stale }, "Add");
     if (body.__moved !== true) return addWritten(tester, contractId, { ...body, __moved: true });
     throw new HttpError(409, "changed", "Your answers changed just now: nothing was added. Press Add again.");
   }
 }
 
+/** (Owner, Nov 11, §375) One Add to this answer, in the owner's order. Nothing is written before step 7. */
 async function addWrittenOnce(tester: U, contractId: string, body: Record<string, unknown>) {
   const c0 = await ownContract(tester.id, contractId);
-  const ended = sessionRefusal(c0, c0.test, displayName(c0.test.developer));
-  if (ended) throw new HttpError(409, "closed", overPressLine(c0, "Add")); // (§363 / §364)
-  await answerTermsFirst(contractId);
-  const key = typeof body.question === "string" ? body.question : "";
+  const { key, text } = addPage(body); // what the page sent: the question and the text
+  // (§167) An older page's general Add more (no question) is refused.
   if (!key) throw new HttpError(409, "pick_question", ADD_UNDER_QUESTION);
-  const text = typeof body.text === "string" ? body.text.trim() : "";
-  if ((await db.recording.count({ where: { contractId, ...(await import("./recordings")).stillUploading("written") } })) || text.includes("[Uploading ")) throw new HttpError(409, "uploading", "Wait for the upload to finish before sending.");
-  if (!sessionRefusal(c0, c0.test, displayName(c0.test.developer)) && testerPaused(c0.test.developer, c0.test)) throw new HttpError(409, "paused", RF.pressRefused(RF.PAUSED_CAUSE, "Add")); // (§364 item 5)
-  // (§167) Only the uploads placed in this text (by their markers) go with it.
-  const placedIn = (rows: { id: string; filename: string }[]) => {
-    const ids = markerIds(text, rows);
-    return rows.filter((r) => ids.has(r.id));
-  };
-  const unsent = { contractId, part: "written", uploadedAt: { not: null }, submissionId: null };
-  if (!withoutAttachmentMarkers(text).trim() && !placedIn(await db.recording.findMany({ where: unsent, select: { id: true, filename: true } })).length) throw new HttpError(400, "empty", NOTHING_TO_ADD);
-  // (§222) Already at the question's 5 (an older page): refused before any stop box. (Owner, Nov 4, §183) So is everything else that could only refuse it (the team's $0 closure,
-  // changed questions, a question gone, too long): a developer payment on these answers since the page loaded now stops the press once whatever the tester's
-  // Alerts, and a stop whose second press could only be refused is a single refusal instead (owner's standing rule).
-  const before = await db.submission.findUnique({ where: { contractId_kind: { contractId, kind: "written" } }, include: { review: true } });
-  const beforeRefusal = addRefusal(before, c0, key, text);
-  // (Owner, Nov 5, §269) Its question was removed by a change this page hasn't shown (made after it loaded): the press stops once, listing what changed in the
-  // questions (whatever the Alerts), the typed text stays kept under the question (it comes back if the question does), and the page redraws without it. Once a
-  // box listed those lines (or the change came before the page), the plain refusal (QUESTION_GONE).
-  if (beforeRefusal?.code === "question_gone") {
-    const pageAt = seenOf(body.pageSeenAt) ?? seenOf(body.seenAt);
-    const removedSince = pageAt && prevSetsOf(c0.prevSets).some((p) => new Date(p.until) > pageAt && p.items.some((it) => questionKeyOf(key) === questionKey(it.question)) && !(p.to ?? []).some((t) => questionKey(t) === questionKeyOf(key)));
-    const stale = removedSince ? notListed(await questionChangeLines(c0.testId, pageAt, displayName(c0.test.developer)), body) : [];
-    if (stale.length) {
-      if (text) await setKept(tester.id, `add:${contractId}:${key}`, { text });
-      await testerSendGate(contractId, body, before?.id, { stale }, "Add");
-    }
-  }
-  if (beforeRefusal) throw beforeRefusal;
-  // (§369) What this press saw: the questions, the saved answers, what was paid on them.
-  const saw = { questions: writtenQuestions(c0), savedAt: before?.updatedAt.getTime() ?? null, paid: await paidOn(db, before?.id) };
+  const before = await sentPart(db, contractId); // the answers sent so far (or none)
+  // 1. Their part is over or the test closed: refused.
+  await partOver(db, contractId, "Add");
+  // 3 and 4. The refusals: paused → an NDA change → new terms → an upload still running → not sent / rejected / the team's $0 closure / question gone / the
+  // question's 5; its question removed since the page loaded: the §269 box instead (step 2, keeping the text, is part of that box).
+  await addRefusalsOrQuestionBox(tester, c0, key, text, body, before);
+  // 5. The text's own mistakes: nothing to add, too long, too short.
+  await addMistakes(contractId, text);
+  // 6. The tester's one gate. What this press saw is noted first (§369: the questions, the saved answers, what was paid on them).
+  const saw = await sawOf(before, writtenQuestions(c0));
   await testerSendGate(contractId, body, before?.id, { stale: [] }, "Add");
-  const name = displayName(tester), poss = pronouns(tester.pronoun).poss;
   await beforeLock("written-add");
   await (await import("./raceHold")).raceHold(body); // (§369) test-only pause point (RACE_HOLDS=1), no lock held
+  // 7. Under the test's lock: steps 1 and 3 again ((§222) the question's 5 counted again too), then anything that moved (nothing is written; addWritten gives
+  // the box), then the save.
   const { sub, afterPaid, question } = await db.$transaction(async (tx) => {
-    const t = await lockTest(tx, c0.testId);
-    const c = await tx.contract.findUniqueOrThrow({ where: { id: contractId } });
-    await (await import("./workWindow")).assertWorkOpen(tx, t.id, new Date(), "Add");
-    const refusal = sessionRefusal(c, t, displayName(c0.test.developer));
-    if (refusal) throw new HttpError(409, "closed", overPressLine(c, "Add")); // (§363 / §364)
-    // (Owner, Nov 10, §369) The questions (first), the saved answers or a payment on them moved since the first look: nothing is written (Moved rolls back;
-    // addWritten gives the stop-once). The refusals below are the final ones.
-    if (!sameQuestionWords(writtenQuestions(c), saw.questions)) throw new Moved("questions");
-    const existing = await tx.submission.findUnique({ where: { contractId_kind: { contractId, kind: "written" } }, include: { review: true } });
-    if ((existing?.updatedAt.getTime() ?? null) !== saw.savedAt) throw new Moved("answers");
-    if ((await paidOn(tx, existing?.id)) !== saw.paid) throw new Moved("paid");
-    // (§222) The question's 5 (and every other refusal) counted again under the lock.
-    const refused = addRefusal(existing, c, key, text);
-    if (refused || !existing) throw refused ?? new HttpError(409, "not_sent", "Send your answers first.");
-    // (Owner, Nov 5, §265) The contract's questions now (they follow the listing), not the set last sent.
-    const qs = writtenQuestions(c);
-    const at = questionKeys(itemsFor(qs)).indexOf(key);
-    const made = additionsOf(existing.additions);
-    // (§222) The first answer to a question that had none: stored with `first`, so it isn't one of the question's 5.
-    const first = unansweredNow(existing, qs, key);
-    const now = new Date();
-    // (Owner, Nov 3, races) A Pay in flight (reserved, its review not recorded yet) reads as unpaid here; recordReviewDraft marks this addition as one after the
-    // payment once that Pay is recorded.
-    const paid = !!existing.review;
-    const addition = additionTerms(existing, c, c.writtenCents, now);
-    const fresh = placedIn(await tx.recording.findMany({ where: unsent, select: { id: true, filename: true } }));
-    const sub = await tx.submission.update({ where: { id: existing.id }, data: {
-      additions: [...made, { at: now.toISOString(), text, files: fresh.map((f) => f.id), questionKey: key, ...(first ? { first: true } : {}) }] as unknown as Prisma.InputJsonValue,
-      updatedAt: now,
-      ...addition,
-    } });
-    await tx.recording.updateMany({ where: { id: { in: fresh.map((f) => f.id) } }, data: { submissionId: sub.id } });
-    const question = key === ANYTHING_ELSE_KEY ? ANYTHING_ELSE_TITLE : qText(qs[at]);
-    const afterPaid = await tellSent(tx, { testId: c.testId, contractId: c.id, subId: sub.id, name, poss, part: "written answers", added: true, paid, question });
-    await (await import("./live")).logAction(tester.id, c.testId, body, addOwnText(c.questions, key), undefined, tx); // (§369) with the save
-    return { sub, afterPaid, question };
+    await lockTest(tx, c0.testId);
+    await partOver(tx, contractId, "Add");
+    await addRefusals(tx, contractId, key, text);
+    const existing = await movedCheck(tx, contractId, saw);
+    if (!existing) throw new HttpError(409, "not_sent", "Send your answers first.");
+    return saveAddition(tx, tester, contractId, existing, key, text, body);
   });
   await tellSentByBell(c0, tester, sub, "written answers", true, afterPaid, 1, question);
   return sub;
+}
+
+/** (§375) The save of an Add to this answer, under the lock once nothing moved and nothing refused. */
+async function saveAddition(tx: Tx, tester: U, contractId: string, existing: SentPart, key: string, text: string, body: Record<string, unknown>) {
+  const c = await tx.contract.findUniqueOrThrow({ where: { id: contractId } });
+  // (Owner, Nov 5, §265) The contract's questions now (they follow the listing), not the set last sent.
+  const qs = writtenQuestions(c);
+  const at = questionKeys(itemsFor(qs)).indexOf(key);
+  const made = additionsOf(existing.additions);
+  // (§222) The first answer to a question that had none: stored with `first`, so it isn't one of the question's 5.
+  const first = unansweredNow(existing, qs, key);
+  const now = new Date();
+  // (Owner, Nov 3, races) A Pay in flight (reserved, its review not recorded yet) reads as unpaid here; recordReviewDraft marks this addition as one after the
+  // payment once that Pay is recorded.
+  const paid = !!existing.review;
+  const addition = additionTerms(existing, c, c.writtenCents, now);
+  const fresh = placedIn(text, await tx.recording.findMany({ where: unsentWritten(contractId), select: { id: true, filename: true } }));
+  const sub = await tx.submission.update({ where: { id: existing.id }, data: {
+    additions: [...made, { at: now.toISOString(), text, files: fresh.map((f) => f.id), questionKey: key, ...(first ? { first: true } : {}) }] as unknown as Prisma.InputJsonValue,
+    updatedAt: now,
+    ...addition,
+  } });
+  await tx.recording.updateMany({ where: { id: { in: fresh.map((f) => f.id) } }, data: { submissionId: sub.id } });
+  const question = key === ANYTHING_ELSE_KEY ? ANYTHING_ELSE_TITLE : qText(qs[at]);
+  const afterPaid = await tellSent(tx, { testId: c.testId, contractId: c.id, subId: sub.id, name: displayName(tester), poss: pronouns(tester.pronoun).poss, part: "written answers", added: true, paid, question });
+  await (await import("./live")).logAction(tester.id, c.testId, body, addOwnText(c.questions, key), undefined, tx); // (§369) with the save
+  return { sub, afterPaid, question };
 }
 
 /** (Batch 35 §136) The developer's live line for a send or an addition (after a Pay: below the cap a stop-once "sent" line, at the cap a quiet one). */

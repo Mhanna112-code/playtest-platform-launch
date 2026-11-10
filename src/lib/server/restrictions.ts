@@ -300,6 +300,7 @@ export async function deleteAccount(userId: string, by: "self" | "admin", reason
       const cs = await db.contract.findMany({ where: { testId: t.id, status: "working" }, include: { tester: true, test: { select: { title: true } } } });
       let invitesClosed: string[] = [];
       const cancelled = await db.$transaction(async (tx) => {
+        await (await import("./tests")).lockTest(tx, t.id); // (Owner, Nov 11, §375) under the test's lock, like every other end of a session
         invitesClosed = await (await import("./invites")).openInviteIds({ testId: t.id }, tx);
         await tx.contract.updateMany({ where: { testId: t.id, status: "working" }, data: { status: "ended", endKind: "stopped", endedAt: new Date(), endReason: "The test was stopped." } });
         await (await import("./accessKeys")).releaseInactiveKeys(tx, t.id);

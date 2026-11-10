@@ -4,16 +4,14 @@ import { additionTerms } from "./submissionAdditions";
 import { randomBytes } from "node:crypto";
 import { db } from "@/lib/db";
 import { displayName, pronouns } from "@/lib/format";
-import { testerPaused } from "@/lib/rules";
 import { HttpError } from "./http";
 import { NO_RECORDING_TO_ADD, SENT_RECORDING_LOCKED } from "@/lib/rules";
-import * as RF from "@/lib/refusal";
 import { overPressLine } from "@/lib/rules";
 import { ATTACHMENT_TYPES, MAX_ATTACHMENTS, MAX_ATTACHMENT_BYTES, MAX_RECORDING_BYTES, MAX_RECORDINGS, deleteObject, deleteStored, headObject, isVideo, listStored, r2On, uploadTarget } from "./storage";
-import { ownContract, sessionRefusal, tellSent, tellSentByBell } from "./tests";
+import { movedCheck, ownContract, partOver, pressRefusals, sawOf, sentPart, sessionRefusal, tellSent, tellSentByBell } from "./tests";
 import type { Prisma } from "@prisma/client";
 import { additionsOf } from "@/lib/additions";
-import { answerTermsFirst, testerSendGate } from "./terms";
+import { testerSendGate } from "./terms";
 import { resendRefusal } from "./paidUpdates";
 import { attachmentTag, hasMarkerFor } from "@/lib/answerAttachments";
 import { ATTACH_FORMATS_LINE, VIDEO_FORMATS_LINE, videoTypeOf } from "@/lib/videoFormats";
@@ -166,6 +164,21 @@ export async function removeRecording(tester: U, contractId: string, body: Recor
   return { removed: true };
 }
 
+/**
+ * (Owner, Nov 11, §375) Step 3 for a recording's Send / Add: pressRefusals, then its own: (batch 13 §7) a recording still uploading (all of them go together as
+ * ONE piece, so a Send waits for it), then ((Owner, Nov 4, §183) an old rejection or the team's $0 closure, nothing new to add after a Send), so a press that
+ * could only be refused is refused at once, never after a stop.
+ */
+const recordingRefusals = (q: Prisma.TransactionClient | typeof db, contractId: string, press: string) =>
+  pressRefusals(q, contractId, press, async () => {
+    if (await q.recording.count({ where: { contractId, ...stillUploading("recording") } })) return new HttpError(409, "uploading", STILL_UPLOADING);
+    const sent = await sentPart(q, contractId, "recording");
+    const shut = resendRefusal(sent?.review, "recording");
+    if (shut) return new HttpError(409, "paid", shut);
+    if (sent && !(await q.recording.count({ where: { contractId, part: "recording", submissionId: null, uploadedAt: { not: null } } }))) return new HttpError(400, "none", NO_RECORDING_TO_ADD);
+    return null;
+  });
+
 /** Send the uploaded recordings (or send them again with new ones, until paid). */
 export async function sendRecording(tester: U, contractId: string, body: Record<string, unknown> = {}): Promise<Awaited<ReturnType<typeof sendRecordingOnce>>> {
   try {
@@ -173,55 +186,41 @@ export async function sendRecording(tester: U, contractId: string, body: Record<
   } catch (e) {
     if (!(e instanceof Moved)) throw e;
     // (Owner, Nov 10, §369) The transaction rolled back: the normal stop-once box for what moved (another tab's Send, a developer payment on the recording), as a
-    // later press would get it; nothing left to add after another tab's Send is that press's own refusal.
-    const sent = await db.submission.findUnique({ where: { contractId_kind: { contractId, kind: "recording" } }, include: { review: true } });
-    // The refusals that are final whatever the timing come first, as for a later press (never a stop whose second press could only be refused).
-    const shut = resendRefusal(sent?.review, "recording");
-    if (shut) throw new HttpError(409, "paid", shut);
-    if (sent && !(await db.recording.count({ where: { contractId, part: "recording", submissionId: null, OR: [{ uploadedAt: { not: null } }, stillUploading("recording")] } }))) throw new HttpError(400, "none", NO_RECORDING_TO_ADD);
-    await testerSendGate(contractId, body, sent?.id, undefined, body.add === true ? "Add" : "Send");
+    // later press would get it. (Owner, Nov 11, §375) Every refusal comes first, as for a later press (never a stop whose second press could only be refused).
+    const press = body.add === true ? "Add" : "Send";
+    await partOver(db, contractId, press);
+    await recordingRefusals(db, contractId, press);
+    const sent = await sentPart(db, contractId, "recording");
+    await testerSendGate(contractId, body, sent?.id, undefined, press);
     if (body.__moved !== true) return sendRecording(tester, contractId, { ...body, __moved: true });
     throw new HttpError(400, "none", NO_RECORDING_TO_ADD);
   }
 }
 
+/** (Owner, Nov 11, §375) One Send (or Add) of the recordings, in the owner's order (no typed text and no form: steps 2, 4 and 5 don't apply). */
 async function sendRecordingOnce(tester: U, contractId: string, body: Record<string, unknown>) {
   const c0 = await ownContract(tester.id, contractId);
-  const ended = sessionRefusal(c0, c0.test, displayName(c0.test.developer));
   const press = body.add === true ? "Add" : "Send";
-  if (ended) throw new HttpError(409, "closed", overPressLine(c0, press)); // (§363 / §364)
-  // (Owner, Oct 28 afternoon) No sending while the test is paused (uploads, the drafts, still work).
-  if (!sessionRefusal(c0, c0.test, displayName(c0.test.developer)) && testerPaused(c0.test.developer, c0.test)) throw new HttpError(409, "paused", RF.pressRefused(RF.PAUSED_CAUSE, press)); // (§364 item 5)
-  // (Batch 27 section 1) An open new-terms offer blocks Send until it's answered (Switch or Keep).
-  await answerTermsFirst(contractId);
-  // (Owner, Nov 4, §183) Adding to a sent recording stops once for a developer payment on it since the page loaded, whatever the tester's Alerts. A press that
-  // could only be refused (the team's $0 closure or an old rejection, nothing new to add) is refused at once, never after a stop (checked again under the lock).
-  const sent = await db.submission.findUnique({ where: { contractId_kind: { contractId, kind: "recording" } }, include: { review: true } });
-  const shut = resendRefusal(sent?.review, "recording");
-  if (shut) throw new HttpError(409, "paid", shut);
-  if (sent && !(await db.recording.count({ where: { contractId, part: "recording", submissionId: null, OR: [{ uploadedAt: { not: null } }, stillUploading("recording")] } }))) throw new HttpError(400, "none", NO_RECORDING_TO_ADD);
-  // (§369) What this press saw: the sent part (or none) and what was paid on it.
-  const saw = { savedAt: sent?.updatedAt.getTime() ?? null, paid: await (await import("./tests")).paidOn(db, sent?.id) };
+  // 1. Their part is over or the test closed: refused.
+  await partOver(db, contractId, press);
+  // 3. The refusals: paused → an NDA change → new terms → a recording still uploading → rejected / the team's $0 closure / nothing new to add.
+  await recordingRefusals(db, contractId, press);
+  // 6. The tester's one gate ((Owner, Nov 4, §183) adding to a sent recording stops once for a developer payment on it since the page loaded, whatever the
+  // tester's Alerts). What this press saw is noted first (§369: the sent part, or none, and what was paid on it).
+  const sent = await sentPart(db, contractId, "recording");
+  const saw = await sawOf(sent);
   await testerSendGate(contractId, body, sent?.id, undefined, press);
 
   const name = displayName(tester), poss = pronouns(tester.pronoun).poss;
   await beforeLock("recording-send");
+  // 7. Under the test's lock: steps 1 and 3 again (a Save, a pause or a Leave while the press waited), then anything that moved since the first look (nothing
+  // is written; sendRecording gives the box), then the save.
   const { updated, late, subId, afterPaid, n } = await db.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${c0.testId} FOR UPDATE`;
+    await partOver(tx, contractId, press);
+    await recordingRefusals(tx, contractId, press);
+    const existing = await movedCheck(tx, contractId, saw, "recording");
     const c = await tx.contract.findUniqueOrThrow({ where: { id: contractId } });
-    const t = await tx.test.findUniqueOrThrow({ where: { id: c.testId } });
-    await (await import("./workWindow")).assertWorkOpen(tx, t.id, new Date(), press);
-    const refusal = sessionRefusal(c, t, displayName(c0.test.developer));
-    if (refusal) throw new HttpError(409, "closed", overPressLine(c, press)); // (§363 / §364)
-    // (Batch 13 section 7) All of them go together as ONE piece; a Send from another tab while one is still uploading waits for it.
-    if (await tx.recording.count({ where: { contractId, ...stillUploading("recording") } })) throw new HttpError(409, "uploading", STILL_UPLOADING);
-    const existing = await tx.submission.findUnique({ where: { contractId_kind: { contractId, kind: "recording" } }, include: { review: true } });
-    // (Owner, Nov 10, §369) The sent part moved (another tab's Send took the uploads) or a payment on it came since the first look: nothing is written (Moved
-    // rolls back; sendRecording gives the stop-once), never a "nothing new to add" because of timing.
-    if ((existing?.updatedAt.getTime() ?? null) !== saw.savedAt) throw new Moved("answers");
-    if ((await (await import("./tests")).paidOn(tx, existing?.id)) !== saw.paid) throw new Moved("paid");
-    const locked = resendRefusal(existing?.review, "recording"); // (batch 30 §2) an old rejection or the team's closure only
-    if (locked) throw new HttpError(409, "paid", locked);
     // (Owner, Nov 3, batch 35 §136; replaces batch 13 §7's "send again" and batch 20 §26) Sent recordings are locked: a later Send ADDS the ones not sent yet
     // under them ("Added"); nothing new to add is refused.
     const fresh = await tx.recording.findMany({ where: { contractId, part: "recording", uploadedAt: { not: null }, submissionId: null }, select: { id: true } });

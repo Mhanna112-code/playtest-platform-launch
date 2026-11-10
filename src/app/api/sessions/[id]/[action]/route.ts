@@ -139,10 +139,11 @@ export async function POST(req: Request, { params }: Ctx) {
     const body = await readJson(req, 900_000); // (batch 14; batch 15) a written part of up to 20,000 characters (§186; was 50,000), with the question set it answers (20 × 20,000)
     if (NEEDS_CONFIRMED.has(action)) requireConfirmed(u);
     await finalRefusal(u.id, id, action, body);
-    await pausedRefusal(u.id, id, action, body);
+    // (Owner, Nov 11, §375) Send Answers checks paused and the NDA itself, after keeping what an out-of-date page typed (sendWritten, steps 2 and 3).
+    if (action !== "written") await pausedRefusal(u.id, id, action, body);
     // (Owner, Nov 5, §267; Nov 6, §302: every NDA change) An NDA change not yet acknowledged blocks every press here but Rate and Leave (§268), the
     // Acknowledge button and the pill.
-    if (!NDA_FREE_SET.has(action)) await ndaBlockFirst(id);
+    if (!NDA_FREE_SET.has(action) && action !== "written") await ndaBlockFirst(id);
     await stateMoment(id, action, body);
     const res0 = await run(u, id, action, body);
     const data = await res0.clone().json().catch(() => null);

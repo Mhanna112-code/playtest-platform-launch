@@ -77,8 +77,15 @@ export async function blockUser(me: { id: string; email: string; name: string },
     const { endCallForBlock } = await import("./calls");
     for (const call of await db.call.findMany({ where: { contractId: c.id, status: "booked", startsAt: { lte: now }, endedAt: null, measuredAt: null, actualMinutes: null } })) await endCallForBlock(call.id, by, now);
     // (§157) Each session ends once (both people blocking each other at the same moment: one of them ends it and sends its line).
-    if ((await db.contract.updateMany({ where: { id: c.id, status: "working" }, data: { status: "ended", endKind: "blocked", endedAt: now, endReason: "" } })).count !== 1) continue;
-    await db.$transaction(async tx => { await (await import("./tests")).lockTest(tx, c.testId); await (await import("./accessKeys")).releaseTesterKeys(tx, c.id); });
+    // (Owner, Nov 11, §375) Under the test's lock, like every other end of a session: a Send, an Add or a recording's Send holding the lock either saves before
+    // the block or reads the session as ended (refused), never a save on a blocked session because of timing.
+    const endedNow = await db.$transaction(async (tx) => {
+      await (await import("./tests")).lockTest(tx, c.testId);
+      if ((await tx.contract.updateMany({ where: { id: c.id, status: "working" }, data: { status: "ended", endKind: "blocked", endedAt: now, endReason: "" } })).count !== 1) return false;
+      await (await import("./accessKeys")).releaseTesterKeys(tx, c.id);
+      return true;
+    });
+    if (!endedNow) continue;
     ended.push(c);
     const calls = await db.call.findMany({ where: { contractId: c.id, status: "booked", startsAt: { gt: now } } });
     for (const call of calls) {

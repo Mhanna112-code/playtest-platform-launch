@@ -119,12 +119,12 @@ export const openOffer = (contractId: string) => db.termsOffer.findFirst({ where
  * gets through), from an old page that hasn't shown the offer too, and with Alerts Off (an offer is about the tester's own contract). A newer Save replaces the
  * offer (still blocked until the newest is answered); an offer whose work closed (the test stopped or closed, the tester's work ended, they left) blocks nothing.
  */
-export async function answerTermsFirst(contractId: string) {
-  const c = await db.contract.findUnique({ where: { id: contractId }, include: { test: { include: { developer: true } } } });
+export async function answerTermsFirst(contractId: string, /** (Owner, Nov 11, §375) `db`, or the press's transaction under the test's lock */ q: Prisma.TransactionClient | typeof db = db) {
+  const c = await q.contract.findUnique({ where: { id: contractId }, include: { test: { include: { developer: true } } } });
   if (!c || testerRefusal(c, c.test, displayName(c.test.developer), fmtDate, new Date())) return;
   // (Owner, Nov 5, §267; §302: every NDA change) An NDA change the tester hasn't acknowledged blocks the press first (calls too, which come through here).
   ndaBlockCheck(c);
-  const offer = await openOffer(contractId);
+  const offer = await q.termsOffer.findFirst({ where: { contractId, status: "open" }, orderBy: { createdAt: "desc" } }); // (openOffer, read with `q`)
   // (Batch 29 section 20) `sessionId`: a Join call refused away from the session page (the dashboard's Upcoming calls) links to the Switch / Keep box there.
   if (offer) throw new HttpError(409, ANSWER_TERMS_CODE, ANSWER_TERMS_FIRST, { offerId: offer.id, sessionId: contractId });
 }
