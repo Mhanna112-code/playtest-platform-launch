@@ -14,6 +14,6 @@ it("clears earlier retry and pause notices as soon as Send Answers succeeds", ()
   const success = form.split("await api(`/api/sessions/${sessionId}/written`")[1].split("} catch (err)")[0];
   expect(success).toContain("setBox(null);");
   expect(success).toContain('setBoxAt("");');
-  expect(success).toContain('setPausedNow("");');
+  expect(success).toContain("setPausedNow(false);"); // (Owner, Nov 11, §376) a mark, never the refusal's text
   expect(success).toContain('now.finish("Sent your answers.");'); // (§371) in the form shown now
 });

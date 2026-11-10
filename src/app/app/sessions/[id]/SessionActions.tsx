@@ -32,6 +32,7 @@ import { peekCarried, setCarried, useCarried, useCarriedLive } from "@/lib/press
 import { SendingScope, lockPick, lockText } from "@/lib/sendLock";
 import { PressDone } from "@/components/PressDone";
 import { OwnPanel, ResizeBox } from "@/components/Panel";
+import * as RF from "@/lib/refusal";
 
 /** (§237) The answer preview's first height (it was a fixed max-h-72). */
 export const PREVIEW_BOX_MAX = "18rem";
@@ -39,22 +40,25 @@ export const PREVIEW_BOX_MAX = "18rem";
 /**
  * (Owner, Nov 5, §213) A Send refused because the test is paused: a blue notice naming the press, above the "kept as a draft" line. The page redraws for the
  * pause (Send goes), so the refusal is kept for this tab (sessionStorage) until it shows; once Send is back (the test resumed) it goes.
+ * (Owner, Nov 11, §376) Only a "refused while paused" mark is kept, never the refusal's text: the notice always reads today's line
+ * ("This test is paused right now, so your Send Answers didn't go through."), so an older wording kept in the tab never comes back after the code changes.
  */
 const pausedKey = (sessionId: string, press: string) => `paused-send:${sessionId}:${press}`;
-function rememberPaused(sessionId: string, press: string, message: string) {
-  try { sessionStorage.setItem(pausedKey(sessionId, press), message); } catch { /* storage off: the notice shows until the redraw */ }
+const PAUSED_MARK = "1";
+function rememberPaused(sessionId: string, press: string) {
+  try { sessionStorage.setItem(pausedKey(sessionId, press), PAUSED_MARK); } catch { /* storage off: the notice shows until the redraw */ }
 }
-function PausedSend({ sessionId, press, label = press, canSend, now }: { sessionId: string; press: string; /** the press's name in the line (`press` keys it) */ label?: string; canSend: boolean; now: string }) {
-  const [message, setMessage] = useState(now);
+function PausedSend({ sessionId, press, label = press, canSend, now }: { sessionId: string; press: string; /** the press's name in the line (`press` keys it) */ label?: string; canSend: boolean; /** refused as paused just now (this page) */ now: boolean }) {
+  const [kept, setKept] = useState(false);
   useEffect(() => {
     try {
-      if (canSend && !now) { sessionStorage.removeItem(pausedKey(sessionId, press)); setMessage(""); return; }
-      const kept = sessionStorage.getItem(pausedKey(sessionId, press));
-      if (kept) setMessage(kept);
+      if (canSend && !now) { sessionStorage.removeItem(pausedKey(sessionId, press)); setKept(false); return; }
+      // (§376) Any kept value is only the mark (an older tab's kept text included): the line below is always today's.
+      if (sessionStorage.getItem(pausedKey(sessionId, press))) setKept(true);
     } catch { /* storage off */ }
   }, [sessionId, press, canSend, now]);
-  if (!message && !now) return null;
-  return <p role="status" className="rounded-lg border border-sky-300/40 bg-sky-300/[0.08] p-2.5 text-sm text-sky-100" data-paused-send="">{/* (§372) A line that already names the press ("This test is paused, so your Send Answers didn't go through.") shows alone, never named twice. */}{/didn['’]t go through/.test(now || message) ? null : <><strong className="font-semibold text-sky-50">Your {label} didn&apos;t go through:</strong>{" "}</>}{now || message}</p>;
+  if (!kept && !now) return null;
+  return <p role="status" className="rounded-lg border border-sky-300/40 bg-sky-300/[0.08] p-2.5 text-sm text-sky-100" data-paused-send="">{RF.pressRefused(RF.PAUSED_CAUSE, label)}</p>;
 }
 
 /** (Owner, Oct 29, batch 11) Bold, Italic and Code block for a written answer (stored as Markdown; the developer sees it formatted). */
@@ -152,7 +156,7 @@ export function WrittenForm({ sessionId, questions, newQs = [], initial, initial
   const [boxAt, setBoxAt] = useCarried(carry, "boxAt", "");
   const confirmed = !!boxAt;
   const [box, setBox] = useStopBox(carry);
-  const [pausedNow, setPausedNow] = useCarried(carry, "pausedNow", "");
+  const [pausedNow, setPausedNow] = useCarried(carry, "pausedNow", false);
   const [answers0, setAnswers] = useState<string[]>(() => typedBefore?.answers ?? questions.map((_, i) => initial[i] ?? ""));
   // (Owner, Nov 5, §269) The questions the boxes are for. A redraw with other questions (a change, a reorder, one answered meanwhile) switches the form in
   // place: each box keeps its text by the question's words, a new question is an empty box, a removed question's box goes (the server kept its text: in the
@@ -269,7 +273,7 @@ export function WrittenForm({ sessionId, questions, newQs = [], initial, initial
       await api(`/api/sessions/${sessionId}/written`, { answers, notes, seenAt, confirmed, boxAt, for: questions });
       setBox(null);
       setBoxAt("");
-      setPausedNow("");
+      setPausedNow(false);
       // (§371) The form shown now (this one, or the one a redraw swapped in meanwhile).
       const now = shown();
       await now.clear();
@@ -277,7 +281,7 @@ export function WrittenForm({ sessionId, questions, newQs = [], initial, initial
       now.finish("Sent your answers.");
     } catch (err) {
       const sb = stopBox(err); if (sb) { setBox(sb); setBoxAt(sb.now); if (questionsChanged(err)) redrawNow(); }
-      else if (err instanceof ApiError && err.code === "paused") { rememberPaused(sessionId, sendPress, err.message); setPausedNow(err.message); }
+      else if (err instanceof ApiError && err.code === "paused") { rememberPaused(sessionId, sendPress); setPausedNow(true); }
       else {
         // (Batch 20 section 28) Which required question the server found empty: the red goes AT it.
         if (err instanceof ApiError && err.message === ANSWER_ONE) { setNeedOne(true); setSending(false); return; }
@@ -376,7 +380,7 @@ export function WrittenAddForm({ sessionId, seenAt, canSend = true, known = [], 
   const [err, setErr] = useState("");
   const [box, setBox] = useStopBox();
   const [boxAt, setBoxAt] = useState("");
-  const [pausedNow, setPausedNow] = useState("");
+  const [pausedNow, setPausedNow] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   // (§182) Where the open box is drawn (null: here, at the button's place); `pressed`: opened by the button, so it is brought into view.
   const [slotEl, setSlotEl] = useState<HTMLElement | null>(null);
@@ -427,7 +431,7 @@ export function WrittenAddForm({ sessionId, seenAt, canSend = true, known = [], 
     } catch (e) {
       const sb = stopBox(e);
       if (sb) { setBox(sb); setBoxAt(sb.now); if (questionsChanged(e)) redrawNow(); }
-      else if (e instanceof ApiError && e.code === "paused") { rememberPaused(sessionId, `Add:${questionKey}`, e.message); setPausedNow(e.message); }
+      else if (e instanceof ApiError && e.code === "paused") { rememberPaused(sessionId, `Add:${questionKey}`); setPausedNow(true); }
       else setErr(errOf(e));
       setBusy(false);
     }

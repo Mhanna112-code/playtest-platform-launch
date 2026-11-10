@@ -9,10 +9,12 @@ const read = (f: string) => fs.readFileSync(path.resolve(__dirname, "..", f), "u
 describe("(Owner, Nov 5) §213-§216 and the join popup", () => {
   it("§213: a Send or Add refused because the test is paused shows a blue notice naming the press, kept through the page's redraw", () => {
     const s = read("src/app/app/sessions/[id]/SessionActions.tsx");
-    expect(s).toContain('err.code === "paused") { rememberPaused(sessionId, sendPress, err.message)');
-    expect(s).toContain('e.code === "paused") { rememberPaused(sessionId, `Add:${questionKey}`, e.message)');
-    expect(s).toMatch(/border-sky-300\/40 bg-sky-300\/\[0\.08\][^"]*" data-paused-send="">.*Your \{label\} didn&apos;t go through:/);
-    expect(s).toContain("sessionStorage.setItem(pausedKey(sessionId, press), message)");
+    // (Owner, Nov 11, §376) Only a "refused while paused" mark is kept: the notice always reads today's line, never a kept text.
+    expect(s).toContain('err.code === "paused") { rememberPaused(sessionId, sendPress);');
+    expect(s).toContain('e.code === "paused") { rememberPaused(sessionId, `Add:${questionKey}`);');
+    expect(s).toMatch(/border-sky-300\/40 bg-sky-300\/\[0\.08\][^"]*" data-paused-send="">\{RF\.pressRefused\(RF\.PAUSED_CAUSE, label\)\}<\/p>/);
+    expect(s).toContain("sessionStorage.setItem(pausedKey(sessionId, press), PAUSED_MARK)");
+    expect(s).not.toContain("setItem(pausedKey(sessionId, press), message)");
     // Above the "kept as a draft" line.
     expect(s.indexOf("<PausedSend sessionId={sessionId} press={sendPress}")).toBeLessThan(s.indexOf("Your answers are kept as a draft."));
   });
