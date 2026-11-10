@@ -116,7 +116,7 @@ describe("batch 30 §2 (batch 35 §136): adding to a part after it's paid", () =
     const page = src("app/app/tests/[id]/page.tsx");
     expect(page).toContain("{UPDATED_AT_CAP}");
     expect(page).toContain("updateWaiting(x) && (rooms.get(x.id)?.room ?? 0) > 0");
-    expect(page).toContain("restricted || !payMore.open ? []");
+    expect(page).toContain("(restricted && !restrictedPays) || !payMore.open ? []");
   });
 
   it("Pay more closed (the close-out passed): the update doesn't wait in Needs you", async () => {
