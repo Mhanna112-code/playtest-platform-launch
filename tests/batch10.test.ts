@@ -14,7 +14,7 @@ import { liftHoldIfClear, owed, payOwed, startHold } from "@/lib/server/holds";
 import { approveChargebackHold, startCardVerification } from "@/lib/server/chargeback";
 import { setStripeForTests } from "@/lib/server/stripe";
 import { json, makeUser, req } from "./helpers";
-import { act, bookCall, joined, sact, seen, settle, setup } from "./fixtures";
+import { act, addTo, bookCall, joined, sact, seen, settle, setup } from "./fixtures";
 
 // Batch 10 (owner, Oct 29): every reviewed part can be disputed, a paused test hides what doesn't work, long answers scroll, the suspended payment line, a live owed box,
 // and a chargeback the platform wins.
@@ -165,7 +165,9 @@ describe("batch 10 item 2: a paused test hides what doesn't work, with a banner 
   it("the server refusals stay as a backstop", async () => {
     const { dev, sessionId, tester } = await sentWork("10.00");
     await startHold(dev.user.id, "unpaid");
-    expect((await sact(sessionId, "written", tester.cookie, { answers: ["c", "d"] })).body.error.message).toBe("This test is paused right now, so your Send Answers didn't go through."); // (§364 item 5)
+    // (Owner, Nov 11, §375) A re-send of what was sent is "already sent" first (a refusal for good, before the soft ones); an addition is the paused one.
+    expect((await sact(sessionId, "written", tester.cookie, { answers: ["c", "d"] })).body.error.code).toBe("locked");
+    expect((await addTo(sessionId, tester.cookie, { text: "one more thing" })).body.error.message).toBe("This test is paused right now, so your Add didn't go through."); // (§364 item 5)
     // (Batch 15 section 1) The developer on a hold is the restricted person: the tester's Send is turned back neutrally.
     expect((await sact(sessionId, "message", tester.cookie, { body: "Hello?" })).body.error.message).toBe(R.CHAT_NOT_SENT);
   });

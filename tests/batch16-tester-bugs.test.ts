@@ -106,6 +106,11 @@ describe("B. every call change stops every tester press once (Alerts On), never 
     for (const [action, body] of presses) {
       // Without the page's load time (as before), the refreshed marker hides the request.
       const r = await sact(s.sessionId, action, s.tester.cookie, { ...body, seenAt: refreshed, loadedAt: loaded });
+      // (Owner, Nov 11, §375) Send here re-sends what was sent: "already sent" (a refusal for good) comes before the open offer (a soft refusal).
+      if (action === "written") {
+        expect(r.body.error?.code, action).toBe("locked");
+        continue;
+      }
       // (Batch 27 section 1) The session's offer is still open: Send and the call presses are blocked until it's answered (no stop-once for them meanwhile).
       // (Batch 32 §7) Charge, Let it go and Dispute are blocked too.
       if (["written", "cancel-call", "request-time", "dispute", "choose"].includes(action)) {

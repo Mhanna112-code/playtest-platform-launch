@@ -9,7 +9,6 @@ import { countsOf } from "@/lib/limits";
 import { unitsOf } from "@/lib/draftUnits";
 import { questionChanges } from "@/lib/questionHistory";
 import { sameQuestionSet, sameQuestionWords } from "@/lib/questions";
-import { QUESTION_GONE } from "@/lib/additions";
 import { act, joined, sact, seen, settle, setup } from "./fixtures";
 
 // (Owner, Nov 5, batch 35 §269) 1. Order doesn't matter: a Save that only reorders the questions (the same words and Required ticks) is not a questions change
@@ -194,7 +193,7 @@ describe("§269 a stale page's Send stops once, then takes the new questions", (
 });
 
 describe("§269 a stale page's Add to this answer, and an answered question that comes back", () => {
-  it("stops once for its removed question (text kept under it), then the plain refusal; brought back, its answer and additions return and Add works", async () => {
+  it("stops for its removed question every time (text kept under it); brought back, its answer and additions return and Add works", async () => {
     const { dev, testId } = await setup();
     const j = await joined(testId);
     expect((await sact(j.sessionId, "written", j.tester.cookie, { answers: ["the boats", "level two gate"], notes: "", seenAt: seen(), confirmed: true })).status).toBe(200);
@@ -210,10 +209,11 @@ describe("§269 a stale page's Add to this answer, and an answered question that
     expect(linesOf(r).map((l) => l.text)).toContain(`Nora Lane removed the question “${Q2}”`);
     const draft = await db.keptForm.findUniqueOrThrow({ where: { userId_key: { userId: j.tester.user.id, key: `add:${j.sessionId}:${questionKey(Q2)}` } } });
     expect(draft.data).toEqual({ text: "one more thing" });
-    // Its lines were listed: the next press is the plain refusal (never added under a question the contract no longer has).
+    // (Owner, Nov 11, §375; was the plain refusal once listed) Every press is the questions box again, never added under a question the contract no longer has.
     const again = await sact(j.sessionId, "written-add", j.tester.cookie, { ...add, confirmed: true, boxAt: seen(), shownIds: linesOf(r).map((l) => l.sid) });
     expect(again.status).toBe(409);
-    expect(again.body.error.message).toBe(QUESTION_GONE);
+    expect(again.body.error.code).toBe("stop_once");
+    expect(again.body.error.questions).toBe(true);
     // Brought back: current again, its answer and its addition in the list, and Add to this answer works.
     expect((await edit(testId, dev.cookie, { questions: [Q1, Q3, Q2] })).status).toBe(200);
     const page = await sessionPage(j.sessionId, j.tester.user.id);

@@ -5,9 +5,8 @@ import { db } from "@/lib/db";
 import { displayName, pronouns } from "@/lib/format";
 import { HttpError } from "./http";
 import { NO_RECORDING_TO_ADD, SENT_RECORDING_LOCKED } from "@/lib/rules";
-import { overPressLine } from "@/lib/rules";
 import { ATTACHMENT_TYPES, MAX_ATTACHMENTS, MAX_ATTACHMENT_BYTES, MAX_RECORDING_BYTES, MAX_RECORDINGS, deleteObject, deleteStored, headObject, isVideo, listStored, r2On, uploadTarget } from "./storage";
-import { contractIn, lockTest, onePass, ownContract, partOver, sentPart, sessionRefusal, softRefusals, tellSent, tellSentByBell, type Pass } from "./tests";
+import { contractIn, onePass, ownContract, partOver, sentPart, softRefusals, tellSent, tellSentByBell, type Pass } from "./tests";
 import type { Prisma } from "@prisma/client";
 import { additionsOf } from "@/lib/additions";
 import { testerSendGate } from "./terms";
@@ -20,11 +19,11 @@ type U = Parameters<typeof tellSentByBell>[1];
 /**
  * Start an upload: checks the session can still send, the size (500 MB) and the count (5 recordings per session). (Owner, Oct 29, batch 11) `part: "written"` attaches it
  * to the written part instead: a screen recording (the same limits) or a file (at most 5, 500 MB each: images, PDF, plain text, zip; batch 31 section 2, was 25 MB).
+ * (Owner, Nov 11, §375) The file's own checks (type, empty, size) first; then ONE pass under the test's lock (onePass): part over → a rejection or the team's
+ * $0 closure → the limits, counting the rows read there (another tab's upload included) → the daily quota → the new row. An upload is a draft: no stop-once.
  */
 export async function startRecording(tester: U, contractId: string, body: Record<string, unknown>) {
-  const c = await ownContract(tester.id, contractId);
-  const refusal = sessionRefusal(c, c.test, displayName(c.test.developer));
-  if (refusal) throw new HttpError(409, "closed", overPressLine(c, "upload")); // (§363 / §364)
+  const c0 = await ownContract(tester.id, contractId, false);
   const part = body.part === "written" ? "written" : "recording";
   const size = Number(body.size);
   const filename = (typeof body.filename === "string" ? body.filename : "recording").replace(/[^\w.\- ]/g, "_").slice(0, 120) || "recording";
@@ -38,27 +37,26 @@ export async function startRecording(tester: U, contractId: string, body: Record
   if (!Number.isFinite(size) || size <= 0) throw new HttpError(400, "empty", "That file is empty.");
   if (video && size > MAX_RECORDING_BYTES) throw new HttpError(413, "too_large", "Recordings can be at most 500 MB.");
   if (!video && size > MAX_ATTACHMENT_BYTES) throw new HttpError(413, "too_large", "Files can be at most 500 MB.");
-  const paid = await db.submission.findUnique({ where: { contractId_kind: { contractId, kind: part } }, include: { review: true } });
-  // (Batch 30 §2; batch 35 §136) A paid part can still be added to (attachments included); only an old rejection or the team's $0 closure stays locked.
-  const locked = resendRefusal(paid?.review, part);
-  if (locked) throw new HttpError(409, "paid", locked);
   const ext = filename.includes(".") ? filename.slice(filename.lastIndexOf(".")).toLowerCase() : ".mp4";
   const storageKey = `recordings/${contractId}/${randomBytes(12).toString("hex")}${ext}`;
-  // (Owner, Nov 11, §375) The counts and the new row in one transaction under the test's lock: two tabs starting an upload at the same moment at 4 recordings
-  // make one, and the other is refused (it used to make 6).
-  const rec = await db.$transaction(async (tx) => {
-    await lockTest(tx, c.testId);
+  const rec = await onePass(c0.testId, "recording-start", body, async (tx, run): Promise<Pass<{ id: string }>> => {
+    // Their part is over, or the test closed (§363 / §364: "… so your upload didn't go through.").
+    const over = await partOver(tx, contractId, "upload", run);
+    if (over) return { stop: over };
+    // (Batch 30 §2; batch 35 §136) A paid part can still be added to (attachments included); only an old rejection or the team's $0 closure stays locked.
+    const locked = resendRefusal((await sentPart(tx, contractId, part))?.review, part);
+    if (locked) return { stop: new HttpError(409, "paid", locked) };
     // (Owner, Oct 29, batch 13 section 7) The Recording part takes up to 5 recordings (a removed one frees its slot); videos attached to the written part count separately
     // (batch 11's limits: 5 videos and 5 files there).
     const mine = await tx.recording.findMany({ where: { contractId, part: { in: ["recording", "written"] } }, select: { contentType: true, part: true, submissionId: true } });
     // (Batch 35 §136) Sent recordings count and can't be removed: with all 5 sent, the line doesn't offer Remove.
-    if (video && part === "recording" && mine.filter((r) => r.part === "recording").length >= MAX_RECORDINGS) throw new HttpError(409, "too_many", mine.some((r) => r.part === "recording" && !r.submissionId) ? TOO_MANY_RECORDINGS : ALL_RECORDINGS_SENT);
-    if (video && part === "written" && mine.filter((r) => r.part === "written" && isVideo(r.contentType)).length >= MAX_RECORDINGS) throw new HttpError(409, "too_many", `You can attach at most ${MAX_RECORDINGS} recordings to your written answers.`);
+    if (video && part === "recording" && mine.filter((r) => r.part === "recording").length >= MAX_RECORDINGS) return { stop: new HttpError(409, "too_many", mine.some((r) => r.part === "recording" && !r.submissionId) ? TOO_MANY_RECORDINGS : ALL_RECORDINGS_SENT) };
+    if (video && part === "written" && mine.filter((r) => r.part === "written" && isVideo(r.contentType)).length >= MAX_RECORDINGS) return { stop: new HttpError(409, "too_many", `You can attach at most ${MAX_RECORDINGS} recordings to your written answers.`) };
+    if (!video && mine.filter((r) => r.part === "written" && !isVideo(r.contentType)).length >= MAX_ATTACHMENTS) return { stop: new HttpError(409, "too_many", `You can attach at most ${MAX_ATTACHMENTS} files to your written answers.`) };
     // (Batch 15 section 41, M6) At most 3 GB of uploads per account a day.
     const today = (await tx.recording.aggregate({ where: { contract: { testerId: tester.id }, createdAt: { gt: new Date(Date.now() - 86_400_000) } }, _sum: { sizeBytes: true } }))._sum.sizeBytes ?? 0;
-    if (today + size > DAILY_UPLOAD_BYTES) throw new HttpError(429, "quota", UPLOAD_QUOTA_LINE);
-    if (!video && mine.filter((r) => r.part === "written" && !isVideo(r.contentType)).length >= MAX_ATTACHMENTS) throw new HttpError(409, "too_many", `You can attach at most ${MAX_ATTACHMENTS} files to your written answers.`);
-    return tx.recording.create({ data: { contractId, storageKey, filename, sizeBytes: size, contentType: type, part, aliveAt: new Date() } });
+    if (today + size > DAILY_UPLOAD_BYTES) return { stop: new HttpError(429, "quota", UPLOAD_QUOTA_LINE) };
+    return { saved: await tx.recording.create({ data: { contractId, storageKey, filename, sizeBytes: size, contentType: type, part, aliveAt: new Date() } }) };
   });
   // (Batch 35 §4) The short tag its marker carries ("[📎 map.png #k3f9]"): the end of its id, unique among the contract's uploads.
   const ids = (await db.recording.findMany({ where: { contractId }, select: { id: true } })).map((r) => r.id);
@@ -181,14 +179,16 @@ export async function sendRecording(tester: U, contractId: string, body: Record<
     // 2. Their part is over, or the test closed.
     const over = await partOver(tx, contractId, press, run);
     if (over) return { stop: over };
-    // 3a. Refused for good ((Owner, Nov 4, §183) never after a stop): an old rejection or the team's $0 closure; nothing new to send ((Owner, Nov 3, batch 35
-    // §136) sent recordings are locked, a later Send ADDS the ones not sent yet; one still uploading counts as new: step 3b waits for it).
+    // 3a. Refused for good ((Owner, Nov 4, §183) never after a stop): an old rejection or the team's $0 closure; all 5 recordings already sent.
     const shut = resendRefusal(sent?.review, "recording");
     if (shut) return { stop: new HttpError(409, "paid", shut) };
-    if (!(await tx.recording.count({ where: { contractId, part: "recording", submissionId: null, OR: [{ uploadedAt: { not: null } }, stillUploading("recording")] } }))) return { stop: new HttpError(400, "none", sent ? NO_RECORDING_TO_ADD : "Upload a recording first.") };
-    // 3b. Paused → an NDA change → new terms → (batch 13 §7) a recording still uploading: all of them go together as ONE piece, so a Send waits for it.
+    if (sent && (await tx.recording.count({ where: { contractId, part: "recording", submissionId: { not: null } } })) >= MAX_RECORDINGS) return { stop: new HttpError(409, "too_many", ALL_RECORDINGS_SENT) };
+    // 3b. Paused → an NDA change → new terms → (batch 13 §7) a recording still uploading: all of them go together as ONE piece, so a Send waits for it (an
+    // upload still running is something to send: this comes before "nothing to add").
     const soft = await softRefusals(tx, c, press, async () => ((await tx.recording.count({ where: { contractId, ...stillUploading("recording") } })) ? new HttpError(409, "uploading", STILL_UPLOADING) : null));
     if (soft) return { stop: soft };
+    // 3c. Nothing new to send ((Owner, Nov 3, batch 35 §136) sent recordings are locked, a later Send ADDS the ones not sent yet).
+    if (!(await tx.recording.count({ where: { contractId, part: "recording", submissionId: null, uploadedAt: { not: null } } }))) return { stop: new HttpError(400, "none", sent ? NO_RECORDING_TO_ADD : "Upload a recording first.") };
     // 6. The tester's one gate ((Owner, Nov 4, §183) adding to a sent recording stops once for a developer payment on it since the page loaded, whatever the
     // tester's Alerts; another tab's Send).
     const box = await testerSendGate(tx, contractId, body, sent?.id);

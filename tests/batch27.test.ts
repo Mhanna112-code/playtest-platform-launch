@@ -54,12 +54,16 @@ describe("batch 27 section 1: an open new-terms offer blocks Send and calls unti
   it("Send my updated answers and Send my recording are blocked too", async () => {
     const s = await setup({ recordingCents: "15.00" });
     const j = await joined(s.testId);
-    expect((await sact(j.sessionId, "written", j.tester.cookie, { answers: ["a", "b"], seenAt: seen(), confirmed: true })).status).toBe(200);
+    // (Owner, Nov 11, §375) Something new to send each time (a re-send of what was sent is "already sent" first, a refusal for good before the offer's).
+    const qs = ["What did you like?", "Where did you get stuck?"];
+    expect((await sact(j.sessionId, "written", j.tester.cookie, { answers: ["a", ""], for: qs, seenAt: seen(), confirmed: true })).status).toBe(200);
+    const up = await sact(j.sessionId, "recording-start", j.tester.cookie, { filename: "run.mp4", size: 1000, contentType: "video/mp4" });
+    expect((await sact(j.sessionId, "recording-done", j.tester.cookie, { recordingId: up.body.recordingId })).status).toBe(200);
     await later();
     await edit(s.testId, s.dev.cookie, { writtenCents: "12.00" });
-    expectBlocked(await sact(j.sessionId, "written", j.tester.cookie, { answers: ["a2", "b2"], seenAt: seen() }));
+    expectBlocked(await sact(j.sessionId, "written", j.tester.cookie, { answers: ["b2"], for: [qs[1]], seenAt: seen() }));
     expectBlocked(await sact(j.sessionId, "recording-send", j.tester.cookie, { seenAt: seen() }));
-    expect((await db.submission.findFirstOrThrow({ where: { contractId: j.sessionId, kind: "written" } })).answers).not.toContain("a2");
+    expect(JSON.stringify((await db.submission.findFirstOrThrow({ where: { contractId: j.sessionId, kind: "written" } })).additions ?? null)).not.toContain("b2");
   });
 
   it("every call press: Request a time, Accept, Decline, Withdraw, Cancel call, Cancel the remaining calls, Join call", async () => {

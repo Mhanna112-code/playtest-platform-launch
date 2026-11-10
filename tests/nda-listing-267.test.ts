@@ -54,6 +54,9 @@ describe("§267 a Save that changes the NDA", () => {
     const { dev, testId } = await setup();
     const j = await joined(testId);
     expect((await press(j.sessionId, j.tester.cookie, "written", { answers: ["the boats", "level two gate"], confirmed: true })).status).toBe(200);
+    // (Owner, Nov 11, §375) A recording uploaded too, so its Send has something to send ("Upload a recording first." would come before the NDA block).
+    const up = await sact(j.sessionId, "recording-start", j.tester.cookie, { filename: "run.mp4", size: 1000, contentType: "video/mp4" });
+    expect((await sact(j.sessionId, "recording-done", j.tester.cookie, { recordingId: up.body.recordingId })).status).toBe(200);
     await edit(testId, dev.cookie, { ndaText: NDA });
     expect(await db.termsOffer.count({ where: { contractId: j.sessionId } })).toBe(0);
     const c = await db.contract.findUniqueOrThrow({ where: { id: j.sessionId } });

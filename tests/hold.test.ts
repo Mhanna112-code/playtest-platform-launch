@@ -12,7 +12,7 @@ import { setStripeForTests } from "@/lib/server/stripe";
 import { runDaily, startHold } from "@/lib/server/holds";
 import { movedDue } from "@/lib/rules";
 import { json, makeUser, req } from "./helpers";
-import { act, bookCall, joined, listingBody, sact, seen, setup } from "./fixtures";
+import { act, addTo, bookCall, joined, listingBody, sact, seen, setup } from "./fixtures";
 
 const later = () => new Promise((r) => setTimeout(r, 30));
 const DAY = 86_400_000;
@@ -68,7 +68,9 @@ describe("payment hold", () => {
     expect((await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] })).status).toBe(200);
     await startHold(dev.user.id, "unpaid");
     // (Owner, Oct 28 afternoon) Sending waits for the tester too; joining, booking, posting, Pay, Reject and Next round wait.
-    expect((await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] })).body.error.message).toBe("This test is paused right now, so your Send Answers didn't go through."); // (§364 item 5)
+    // (Owner, Nov 11, §375) A re-send of what was sent is "already sent" first (a refusal for good, before the soft ones); an addition is the paused one.
+    expect((await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] })).body.error.code).toBe("locked");
+    expect((await addTo(sessionId, tester.cookie, { text: "one more thing" })).body.error.message).toBe("This test is paused right now, so your Add didn't go through."); // (§364 item 5)
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
     // (Owner, Oct 27) Pay and Reject are unavailable during ANY hold: refused, and the refusal names the press for the dashboard box.
     const waits = await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 });

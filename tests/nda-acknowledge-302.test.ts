@@ -50,10 +50,15 @@ async function joinedNda(testId: string, name: string) {
   await settle();
   return { tester: t, sessionId: r.body.sessionId as string };
 }
-/** A working tester, then the Save that makes `kind` of NDA change. */
-async function changed(kind: (typeof KINDS)[number]) {
+/** A working tester, then the Save that makes `kind` of NDA change. `withWork`: her answers sent and a recording uploaded first, so a press has something to send. */
+async function changed(kind: (typeof KINDS)[number], withWork = false) {
   const s = await setup(kind === "added" ? {} : { ndaText: NDA });
   const j = kind === "added" ? await joined(s.testId) : await joinedNda(s.testId, "Ana Silva");
+  if (withWork) {
+    expect((await sact(j.sessionId, "written", j.tester.cookie, { answers: ["a", "b"], seenAt: seen(), confirmed: true })).status).toBe(200);
+    const up = await sact(j.sessionId, "recording-start", j.tester.cookie, { filename: "run.mp4", size: 1000, contentType: "video/mp4" });
+    expect((await sact(j.sessionId, "recording-done", j.tester.cookie, { recordingId: up.body.recordingId })).status).toBe(200);
+  }
   await edit(s.testId, s.dev.cookie, { ndaText: kind === "added" ? NDA : kind === "removed" ? "" : "Keep it very secret." });
   return { ...s, ...j };
 }
@@ -61,7 +66,8 @@ const press = (sessionId: string, cookie: string, action: string, body: Record<s
 
 describe("§302 every NDA change blocks like new terms", () => {
   it.each(KINDS)("%s: every press is refused with the one terms-like line, its code and the session to go to", async (kind) => {
-    const x = await changed(kind);
+    // (Owner, Nov 11, §375) With something to send: "Send your answers first." or "Upload a recording first." (refused for good) would come before the NDA block.
+    const x = await changed(kind, true);
     expect(await db.termsOffer.count({ where: { contractId: x.sessionId } })).toBe(0);
     for (const [action, body] of [["request-time", {}], ["message", { body: "hi" }], ["written-add", { text: "more", question: "else" }], ["recording-send", {}]] as const) {
       const r = await press(x.sessionId, x.tester.cookie, action, body);

@@ -20,7 +20,7 @@ import { liftHoldIfClear, owedLines, payOwed, startHold } from "@/lib/server/hol
 import { reinstateAccount } from "@/lib/server/restrictions";
 import { setStripeForTests } from "@/lib/server/stripe";
 import { json, makeUser, req } from "./helpers";
-import { act, atHours, joined, sact, seen, settle, setup } from "./fixtures";
+import { act, addTo, atHours, joined, sact, seen, settle, setup } from "./fixtures";
 
 // Batch 6 (owner, Oct 28 afternoon): calls without a Live call part, "Full", the per-field 3-change limit, and what testers can do in a paused test.
 
@@ -207,12 +207,17 @@ describe("batch 6 item 4: a paused test, what testers can do", () => {
       if (kind === "chargeback") await startHold(dev.user.id, "chargeback");
       if (kind === "suspension") await db.user.update({ where: { id: dev.user.id }, data: { devSuspendedAt: new Date() } });
       if (kind === "team") await db.test.update({ where: { id: testId }, data: { adminPausedAt: new Date() } });
+      // (Owner, Nov 11, §375) A re-send of what was sent is "already sent" first (a refusal for good, before the soft ones); an addition and a recording
+      // with something new to send are the paused ones.
       const w = await sact(sessionId, "written", tester.cookie, { answers: ["c", "d"] });
       expect(w.status).toBe(409);
-      expect(w.body.error.message).toBe("This test is paused right now, so your Send Answers didn't go through."); // (§364 item 5)
-      expect((await sact(sessionId, "recording-send", tester.cookie, { seenAt: seen(), confirmed: true })).body.error.message).toBe("This test is paused right now, so your Send didn't go through."); // (§364 item 5)
+      expect(w.body.error.code).toBe("locked");
+      expect((await addTo(sessionId, tester.cookie, { text: "one more thing" })).body.error.message).toBe("This test is paused right now, so your Add didn't go through."); // (§364 item 5)
       // Drafts: a recording can still be uploaded (sent later).
-      expect((await sact(sessionId, "recording-start", tester.cookie, { size: 1000, contentType: "video/mp4", filename: "a.mp4" })).status).toBe(200);
+      const up = await sact(sessionId, "recording-start", tester.cookie, { size: 1000, contentType: "video/mp4", filename: "a.mp4" });
+      expect(up.status).toBe(200);
+      expect((await sact(sessionId, "recording-done", tester.cookie, { recordingId: up.body.recordingId })).status).toBe(200);
+      expect((await sact(sessionId, "recording-send", tester.cookie, { seenAt: seen(), confirmed: true })).body.error.message).toBe("This test is paused right now, so your Send didn't go through."); // (§364 item 5)
       const m = await sact(sessionId, "message", tester.cookie, { body: "Hello?" });
       // (Owner, Nov 4, §172; replaces batch 15 section 1 for the team's pause) The developer is restricted, or the team paused this test (the same rules as a
       // developer suspension): the tester's Send is turned back neutrally (never why).

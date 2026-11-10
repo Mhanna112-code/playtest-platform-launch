@@ -9,7 +9,7 @@ import { cancelLateSuspensionCalls } from "@/lib/server/restrictions";
 import { closedForSuspended } from "@/lib/closedPages";
 import { logIn } from "@/lib/server/passwords";
 import { json, makeUser, req } from "./helpers";
-import { act, atHours, bookCall, joined, sact, seen, setup } from "./fixtures";
+import { act, addTo, atHours, bookCall, joined, sact, seen, setup } from "./fixtures";
 
 const admin = async () => {
   const a = await makeUser({ name: "Admin" });
@@ -72,7 +72,9 @@ describe("a suspended developer (design doc 2 and 11.4)", () => {
     const ch = await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge", amount: "10.00", tickedCents: 1000, seenAt: seen(), confirmed: true });
     expect(ch.status).toBe(200);
     expect(ch.body.status).not.toBe("owed");
-    expect((await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] })).body.error.message).toBe("This test is paused right now, so your Send Answers didn't go through."); // (§364 item 5; §370: the button's real label)
+    // (Owner, Nov 11, §375) A re-send of what was sent is "already sent" first (a refusal for good, before the soft ones); an addition is the paused one.
+    expect((await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] })).body.error.code).toBe("locked");
+    expect((await addTo(sessionId, tester.cookie, { text: "one more thing" })).body.error.message).toBe("This test is paused right now, so your Add didn't go through."); // (§364 item 5)
     expect((await adm("unsuspend", a.cookie, { id: dev.user.id })).status).toBe(200);
     expect(await db.testEvent.count({ where: { testId, kind: "resumed" } })).toBe(1);
     expect(await db.notification.count({ where: { userId: tester.user.id, text: { contains: "is running again" } } })).toBe(1);

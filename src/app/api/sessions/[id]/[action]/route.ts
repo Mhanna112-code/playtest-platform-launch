@@ -143,7 +143,8 @@ export async function POST(req: Request, { params }: Ctx) {
     // (Owner, Nov 11, §375) Send Answers, Add to this answer and a recording's Send / Add make ONE pass under the test's lock (lib/server/tests.ts onePass): part
     // over, paused and the NDA are checked there, in the owner's order, with the same lines and codes as here (after the drafts are saved), never before it.
     const onePass = ONE_PASS.has(action);
-    if (!onePass) await finalRefusal(u.id, id, action, body);
+    // (§375) Starting an upload checks part over in its own pass under the lock too (startRecording), with the same line.
+    if (!onePass && action !== "recording-start") await finalRefusal(u.id, id, action, body);
     if (!onePass) await pausedRefusal(u.id, id, action, body);
     // (Owner, Nov 5, §267; Nov 6, §302: every NDA change) An NDA change not yet acknowledged blocks every press here but Rate and Leave (§268), the
     // Acknowledge button and the pill.

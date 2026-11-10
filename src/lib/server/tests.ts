@@ -15,7 +15,7 @@ import { getKept, patchKept, setKept } from "./kept";
 import { beforeLock } from "./pressRace";
 import { addOwnText, writtenOwnText } from "./actionText";
 import { questionChangeTexts } from "@/lib/questionHistory";
-import { itemsFor, prevSetsOf, sameQuestions, snapshotOnlyFiles } from "@/lib/answerSets";
+import { itemsFor, itemsOf, prevSetsOf, sameQuestions, snapshotOnlyFiles } from "@/lib/answerSets";
 import { ADDITIONS_MAX, ADD_UNDER_QUESTION, ANYTHING_ELSE_KEY, ANYTHING_ELSE_TITLE, QUESTION_GONE, addedToWhat, youAddedLine, additionsFull, additionsOf, addsCounted, carriedAnswers, currentQuestionsFor, latestItems, questionKey, questionKeys } from "@/lib/additions";
 import { countersOf, countingSince, countsAfter, countsOf, criticalLine, lockedFields, storedCounts, type CriticalCounts } from "@/lib/limits";
 import { alertOf } from "@/lib/alerts";
@@ -1525,11 +1525,8 @@ function addRefusal(existing: SentPart | null, c: { questions: unknown }, key: s
   const locked = resendRefusal(existing.review, "written");
   if (locked) return new HttpError(409, "paid", locked);
   const qs = writtenQuestions(c);
-  // (Owner, Nov 5, §265; replaces §136's "send your answers to the new questions first", ANSWER_NEW_QUESTIONS) The questions follow the listing, so an answered
-  // current question is added to straight away, by its words, whatever set it was sent in; an old one (not in the contract now) is refused (QUESTION_GONE).
-  const keys = questionKeys(itemsFor(qs));
-  // (Owner, Nov 4, §188) Anything else is always there (the fixed last spot of every written part), under the same rules as a question.
-  if (key !== ANYTHING_ELSE_KEY && keys.indexOf(key) < 0) return new HttpError(409, "question_gone", QUESTION_GONE);
+  // (Owner, Nov 5, §265) The questions follow the listing, so an answered current question is added to straight away, by its words, whatever set it was sent
+  // in. (Owner, Nov 11, §375) One no longer asked is the questions box (goneQuestionLines, step 4), never this refusal.
   // (Owner, Nov 5, §222; replaces §167's 10 per part) This question's 5 (Anything else's own 5). A question with no answer yet: its first answer (Answer this
   // question) is free and never refused for it.
   if (!unansweredNow(existing, qs, key) && addsCounted(existing.additions, key) >= ADDITIONS_MAX) return new HttpError(409, "add_full", additionsFull(key));
@@ -1546,14 +1543,21 @@ const placedIn = (text: string, rows: { id: string; filename: string }[]) => {
 const unsentWritten = (contractId: string) => ({ contractId, part: "written", uploadedAt: { not: null }, submissionId: null });
 
 /**
- * (Owner, Nov 5, §269) Its question was removed by a change this page hasn't shown (made after it loaded): the lines of that change, else none. Then the press
- * stops once (step 4) instead of the plain refusal QUESTION_GONE (step 3a), and the page redraws without the question. Once a box listed those lines (or the
- * change came before the page), the plain refusal.
+ * (Owner, Nov 11, §375; replaces §269's "once, then QUESTION_GONE" for Add) The question this Add is for is no longer asked: the lines the questions box lists,
+ * exactly like Send's stale questions: every questions change since the page loaded, else (the change came before it) the line for that question
+ * (questionChangeTexts, as Send's fallback). null: the question is still asked (or it is Anything else). An empty list: a key that was never a question (an
+ * old or broken page), refused with QUESTION_GONE.
  */
-async function removedSincePage(c: { testId: string; prevSets: unknown; test: { developer: Parameters<typeof displayName>[0] } }, key: string, body: Record<string, unknown>) {
-  const pageAt = seenOf(body.pageSeenAt) ?? seenOf(body.seenAt);
-  const removedSince = pageAt && prevSetsOf(c.prevSets).some((p) => new Date(p.until) > pageAt && p.items.some((it) => questionKeyOf(key) === questionKey(it.question)) && !(p.to ?? []).some((t) => questionKey(t) === questionKeyOf(key)));
-  return removedSince ? notListed(await questionChangeLines(c.testId, pageAt, displayName(c.test.developer)), body) : [];
+async function goneQuestionLines(c: { testId: string; questions: unknown; prevSets: unknown; test: { developer: Parameters<typeof displayName>[0] } }, sent: SentPart | null, key: string, body: Record<string, unknown>): Promise<TestEventLike[] | null> {
+  const qs = writtenQuestions(c);
+  if (key === ANYTHING_ELSE_KEY || questionKeys(itemsFor(qs)).includes(key)) return null;
+  const dev = displayName(c.test.developer);
+  const lines = await questionChangeLines(c.testId, seenOf(body.pageSeenAt) ?? seenOf(body.seenAt), dev);
+  if (lines.length) return lines;
+  // Its words: from Terms history, else from what was sent (a set it was answered in).
+  const sentSets = sent ? [itemsOf(sent.answers), ...additionsOf(sent.additions).map((a) => a.items ?? [])] : [];
+  const old = [...prevSetsOf(c.prevSets).map((p) => p.items), ...sentSets].flat().map((it) => it.question).find((q) => questionKey(q) === questionKeyOf(key));
+  return old ? questionChangeTexts(dev, [old], []).map((text) => ({ kind: "info", text, createdAt: new Date(), listing: true, keys: ["questions"] })) : [];
 }
 
 /**
@@ -1591,20 +1595,21 @@ export async function addWritten(tester: U, contractId: string, body: Record<str
   const done = await onePass(c0.testId, "written-add", body, async (tx, run): Promise<Pass<Awaited<ReturnType<typeof saveAddition>>>> => {
     const c = await contractIn(tx, contractId);
     const before = await sentPart(tx, contractId); // the answers sent so far (or none)
-    // 1. The draft: its question removed since the page loaded → the typed text stays kept under it (it comes back if the question does).
-    const gone = await removedSincePage(c, key, body);
-    if (gone.length && text) await setKept(tester.id, `add:${contractId}:${key}`, { text });
+    // 1. The draft: its question is no longer asked → the typed text stays kept under it (it comes back if the question does).
+    const gone = await goneQuestionLines(c, before, key, body);
+    if (gone && text) await setKept(tester.id, `add:${contractId}:${key}`, { text });
     // 2. Their part is over, or the test closed.
     const over = await partOver(tx, contractId, press, run);
     if (over) return { stop: over };
-    // 3a. Refused for good: not sent yet, rejected, the team's $0 closure, its question gone (unless removed since the page: step 4), the question's 5.
-    const final = addRefusal(before, c, key);
-    if (final && !(final.code === "question_gone" && gone.length)) return { stop: final };
+    // 3a. Refused for good: not sent yet, rejected or the team's $0 closure, the question's 5 additions; a key that was never a question (QUESTION_GONE).
+    const final = addRefusal(before, c, key) ?? (gone && !gone.length ? new HttpError(409, "question_gone", QUESTION_GONE) : null);
+    if (final) return { stop: final };
     // 3b. Paused → an NDA change → new terms → an upload still running.
     const soft = await softRefusals(tx, c, press, () => writtenUploading(tx, contractId, text));
     if (soft) return { stop: soft };
-    // 4. (§269) Its question was removed since the page loaded: the stop-once box listing what changed in the questions (whatever the Alerts).
-    if (final) return { stop: (await testerSendGate(tx, contractId, body, before?.id, { stale: gone })) ?? final };
+    // 4. (§269; §375) Its question is no longer asked: the questions box every time (whatever the Alerts, a confirmed press or a box that listed it), and the
+    // page redraws without it (`questions`); never saved.
+    if (gone) return { stop: (await testerSendGate(tx, contractId, body, before?.id, { stale: gone }))! };
     // 5. The text's own mistakes: nothing to add, too long, too short.
     const mistake = await addMistakes(tx, contractId, text);
     if (mistake) return { stop: mistake };

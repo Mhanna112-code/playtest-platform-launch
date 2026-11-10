@@ -7,7 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 import { db } from "@/lib/db";
 import { SentWork } from "@/components/SentWork";
 import { WrittenForm } from "@/app/app/sessions/[id]/SessionActions";
-import { OLD_TAG, QUESTION_GONE, addsCounted, additionsOf, carriedAnswers, isPastQuestion, questionKeys } from "@/lib/additions";
+import { OLD_TAG, addsCounted, additionsOf, carriedAnswers, isPastQuestion, questionKeys } from "@/lib/additions";
 import { PRESS_VERBS, SEND_ANSWERS, pressLabelOf } from "@/lib/pressLabels";
 import { ANSWER_ONE } from "@/lib/questions";
 import { joined, sact, seen, setup } from "./fixtures";
@@ -100,11 +100,13 @@ describe("§263 on both sides", () => {
     expect(needs).not.toContain("data-past-elsewhere");
   });
 
-  it("the server refuses an addition to a past question (not only hidden)", async () => {
+  it("the server never adds to a past question (not only hidden): (Owner, Nov 11, §375) the questions box, every time", async () => {
     const { j } = await switched();
     const r = await sact(j.sessionId, "written-add", j.tester.cookie, { text: "more on the gate", question: questionKeys([{ question: Q2 }])[0], seenAt: seen(), confirmed: true });
     expect(r.status).toBe(409);
-    expect(r.body.error.message).toBe(QUESTION_GONE);
+    expect(r.body.error.code).toBe("stop_once");
+    expect(r.body.error.questions).toBe(true);
+    expect(r.body.error.changes.map((c: { text: string }) => c.text)).toContain(`Nora Lane removed the question “${Q2}”`);
   });
 });
 

@@ -59,7 +59,8 @@ describe("the tester's one-press Alerts (section 26) and Leave (section 25)", ()
     expect((await edit(testId, dev.cookie, { writtenCents: "12.00" })).status).toBe(200);
     await settle();
     const r = await sact(sessionId, "written", tester.cookie, { answers: ["c", "d"], seenAt: loaded2 });
-    expect(r.body.error?.code).toBe("answer_terms");
+    // (Owner, Nov 11, §375) A re-send of what was sent is refused for good ("already sent") before the soft refusals (new terms): the order of the one pass.
+    expect(r.body.error?.code).toBe("locked");
     // (Batch 35 §59, replaces section 25 for Leave) Leave stops once like the other presses: the new terms send the page up to the offer box; confirmed, it leaves.
     await db.user.update({ where: { id: other.tester.user.id }, data: { testerAlertsOff: false } });
     const l0 = await sact(other.sessionId, "leave", other.tester.cookie, { seenAt: loaded });

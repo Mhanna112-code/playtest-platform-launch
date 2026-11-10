@@ -72,6 +72,7 @@ const written = (w: W) => db.submission.findUnique({ where: { contractId_kind: {
 const addDraft = async (w: W, i: number) => (await db.keptForm.findUnique({ where: { userId_key: { userId: w.tester.user.id, key: `add:${w.sessionId}:${questionKeys(itemsFor(Q))[i]}` } } }))?.data;
 const formDraft = async (w: W) => JSON.stringify((await db.keptForm.findUnique({ where: { userId_key: { userId: w.tester.user.id, key: `written:${w.sessionId}` } } }))?.data ?? null);
 const termsHistory = async (w: W) => JSON.stringify((await db.contract.findUniqueOrThrow({ where: { id: w.sessionId } })).prevSets);
+const texts = (r: Res) => (r.body.error?.changes ?? []).map((c) => c.text);
 const leave = (w: W) => sact(w.sessionId, "leave", w.tester.cookie, { seenAt: seen(), confirmed: true });
 /** A recording uploaded (not sent yet). */
 async function upload(w: W, name = "run.mp4") {
@@ -428,5 +429,57 @@ describe("(Owner, Nov 11, §375) starting an upload counts and creates under the
     expect(all.filter((r) => r.status === 200)).toHaveLength(1);
     for (const r of all.filter((x) => x.status !== 200)) expect(r.body.error?.message).toBe("You can add at most 5 recordings. Remove one first.");
     expect(await db.recording.count({ where: { contractId: w.sessionId, part: "recording" } })).toBe(5);
+  });
+});
+
+describe("(Owner, Nov 11, §375) Add on a question no longer asked: the questions box every time, like Send's stale questions", () => {
+  it("removed after the page loaded: the box (forced, `questions`), the text kept as its Add draft, nothing saved; a confirmed press with the box shown: the box again", async () => {
+    const w = await world();
+    expect((await sendA(w)).status).toBe(200);
+    await settle();
+    const loaded = seen();
+    await settle();
+    await edit(w.testId, w.dev.cookie, { questions: [Q[1], Q[2], Q[3]] });
+    const body = { text: "B adds a different note about the first level.", question: questionKeys(itemsFor(Q))[0], seenAt: loaded };
+    const r = await sact(w.sessionId, "written-add", w.tester.cookie, body) as Res;
+    expect(r.body.error?.code, JSON.stringify(r.body)).toBe("stop_once");
+    expect(r.body.error?.questions).toBe(true);
+    expect(texts(r)).toContain(`Nora Lane removed the question “${Q[0]}”`);
+    expect(await addDraft(w, 0)).toEqual({ text: body.text });
+    const again = await sact(w.sessionId, "written-add", w.tester.cookie, { ...body, confirmed: true, boxAt: seen(), shownIds: (r.body.error as { changes: { sid?: string }[] }).changes.map((c) => c.sid) }) as Res;
+    expect(again.body.error?.code).toBe("stop_once");
+    expect(again.body.error?.questions).toBe(true);
+    expect(((await written(w))!.additions as unknown[] | null)?.length ?? 0).toBe(0);
+  });
+
+  it("removed before the page loaded: the same box, with the line for that question (Send's fallback)", async () => {
+    const w = await world();
+    expect((await sendA(w)).status).toBe(200);
+    await edit(w.testId, w.dev.cookie, { questions: [Q[1], Q[2], Q[3]] });
+    await settle();
+    const r = await sact(w.sessionId, "written-add", w.tester.cookie, { text: "More.", question: questionKeys(itemsFor(Q))[0], seenAt: seen() }) as Res;
+    expect(r.body.error?.code, JSON.stringify(r.body)).toBe("stop_once");
+    expect(texts(r)).toEqual([`Nora Lane removed the question “${Q[0]}”`]);
+  });
+});
+
+describe("(Owner, Nov 11, §375) a recording's Send: an upload still running is something to send", () => {
+  it("another tab sent everything; this tab has one upload running: wait for it, not \"nothing to add\"", async () => {
+    const w = await world();
+    await upload(w);
+    expect((await sact(w.sessionId, "recording-send", w.tester.cookie, { seenAt: seen(), confirmed: true, tab: "A" })).status).toBe(200);
+    // B's upload started, not finished (its page says it's still going).
+    expect((await sact(w.sessionId, "recording-start", w.tester.cookie, { filename: "b.mp4", size: 1000, contentType: "video/mp4" })).status).toBe(200);
+    const r = await sact(w.sessionId, "recording-send", w.tester.cookie, { add: true, seenAt: seen(), tab: "B" }) as Res;
+    refused(r, "uploading", "A recording is still uploading. Send once it's done.");
+  });
+});
+
+describe("(Owner, Nov 11, §375) starting an upload: one pass under the lock", () => {
+  it("part over: the tester left → \"Your part in this test has ended, so your upload didn't go through.\"; no row", async () => {
+    const w = await world();
+    expect((await leave(w)).status).toBe(200);
+    refused(await sact(w.sessionId, "recording-start", w.tester.cookie, { filename: "a.mp4", size: 1000, contentType: "video/mp4" }) as Res, "gone", PART_ENDED("upload"));
+    expect(await db.recording.count({ where: { contractId: w.sessionId } })).toBe(0);
   });
 });
