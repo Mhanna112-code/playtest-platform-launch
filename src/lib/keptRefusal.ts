@@ -12,9 +12,15 @@ export const KEEP_MS = Number.POSITIVE_INFINITY;
 
 /** Where the pressed button was, in page coordinates (scroll included). */
 export type Spot = { top: number; left: number; width: number };
-export type Kept = { id: number; text: string; /** the server's own words (a line under the button may show just these) */ message: string; spot: Spot | null; at: number; el: Element | null; /** (batch 32 §10) ids of the button's sections, nearest first */ anchors: string[]; /** (batch 35 §85) the page it was pressed on */ path?: string };
+export type Kept = { id: number; text: string; /** the server's own words (a line under the button may show just these) */ message: string; spot: Spot | null; at: number; el: Element | null; /** (batch 32 §10) ids of the button's sections, nearest first */ anchors: string[]; /** (batch 35 §85) the page it was pressed on */ path?: string; /** (§380 KR) the pressed button's words: the same button found again after a redraw that replaced it */ button?: string };
 
-let lastPress: { el: Element | null; spot: Spot | null; at: number; anchors: string[] } | null = null;
+let lastPress: { el: Element | null; spot: Spot | null; at: number; anchors: string[]; button?: string } | null = null;
+/** (Owner, Nov 11, §380 KR) Kept across the reload a refused press makes (a part that's over: the page loads again at its top with `?failed=`). */
+export const KEPT_STORE = "pt-kept-refusal";
+/** (§380 KR) A kept line read back after that reload only within this long. */
+export const KEPT_RELOAD_MS = 30_000;
+/** (§380 KR) While the pressed button is still on the page, its own line gets this long to show before the kept one shows under it. */
+export const OWN_LINE_GRACE_MS = 500;
 let kept: Kept | null = null;
 let seq = 0;
 const subs = new Set<(k: Kept | null) => void>();
@@ -40,8 +46,13 @@ export function keptRefusalLine(label: string, message: string) {
 }
 
 /** A press anywhere on the page: remembered (where its button is), and any kept line goes. */
-export function notePress(el: Element | null, spot: Spot | null, now = Date.now(), anchors: string[] = []) {
-  lastPress = { el, spot, at: now, anchors };
+export function notePress(el: Element | null, spot: Spot | null, now = Date.now(), anchors: string[] = [], button = "") {
+  lastPress = { el, spot, at: now, anchors, button };
+  try {
+    sessionStorage.removeItem(KEPT_STORE);
+  } catch {
+    // no storage
+  }
   if (kept) {
     kept = null;
     publish();
@@ -51,7 +62,13 @@ export function notePress(el: Element | null, spot: Spot | null, now = Date.now(
 /** A press refused because the state changed (the page redraws now): keep its line where the button was. Returns the kept line (for tests). */
 export function keepRefusal(label: string, message: string, now = Date.now()): Kept | null {
   if (!message.trim()) return null;
-  kept = { id: ++seq, text: keptRefusalLine(label, message), message: message.trim(), spot: lastPress?.spot ?? null, at: now, el: lastPress?.el ?? null, anchors: lastPress?.anchors ?? [], path: typeof location === "undefined" ? undefined : location.pathname };
+  kept = { id: ++seq, text: keptRefusalLine(label, message), message: message.trim(), spot: lastPress?.spot ?? null, at: now, el: lastPress?.el ?? null, anchors: lastPress?.anchors ?? [], path: typeof location === "undefined" ? undefined : location.pathname, button: lastPress?.button ?? "" };
+  try {
+    const { text, message: m, anchors, path, button } = kept;
+    sessionStorage.setItem(KEPT_STORE, JSON.stringify({ text, message: m, anchors, path, button, at: now }));
+  } catch {
+    // no storage: the line is kept until a reload only
+  }
   publish();
   return kept;
 }
@@ -89,6 +106,38 @@ export const keptOnPage = (k: Pick<Kept, "path">, pathname: string) => !k.path |
 /** Shown while it's younger than KEEP_MS and its button is gone from the page (a button still there shows the refusal itself). */
 export function keptShows(k: Kept | null, now: number, buttonStillThere: boolean) {
   return !!k && !!k.text.trim() && now - k.at < KEEP_MS && !buttonStillThere;
+}
+
+/**
+ * (Owner, Nov 11, §380 KR) After the reload a refused press made (`?failed=`), the kept line comes back on the same page (within KEPT_RELOAD_MS), to show under
+ * the same button again. Returns it (or null).
+ */
+export function restoreKept(raw: string | null, pathname: string, now = Date.now()): Kept | null {
+  if (!raw || kept) return kept;
+  try {
+    const v = JSON.parse(raw) as { text?: unknown; message?: unknown; anchors?: unknown; path?: unknown; button?: unknown; at?: unknown };
+    if (typeof v.text !== "string" || typeof v.at !== "number" || now - v.at > KEPT_RELOAD_MS || v.path !== pathname) return null;
+    kept = { id: ++seq, text: v.text, message: typeof v.message === "string" ? v.message : v.text, spot: null, at: v.at, el: null, anchors: Array.isArray(v.anchors) ? v.anchors.map(String) : [], path: pathname, button: typeof v.button === "string" ? v.button : "" };
+    publish();
+    return kept;
+  } catch {
+    return null;
+  }
+}
+/**
+ * (Owner, Nov 11, §380 KR) The pressed button on the page now: the same element, or (a redraw replaced it) a button with the same words in the nearest section
+ * still there. The kept line goes right under it.
+ */
+export function keptButton<T extends { textContent: string | null }>(k: Pick<Kept, "anchors" | "button">, same: T | null, inSection: (id: string) => T[] | null): T | null {
+  if (same) return same;
+  const words = (k.button ?? "").replace(/\s+/g, " ").trim();
+  if (!words) return null;
+  for (const id of k.anchors) {
+    const buttons = inSection(id);
+    if (!buttons) continue;
+    return buttons.find((b) => (b.textContent ?? "").replace(/\s+/g, " ").trim() === words) ?? null;
+  }
+  return null;
 }
 
 /** The kept line now (or null), and a way to follow it. */

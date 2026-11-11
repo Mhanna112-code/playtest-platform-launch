@@ -3,7 +3,7 @@ import { withLineLinks } from "@/components/LineLinks";
 import { knownLinks } from "@/lib/lineLinkRegistry";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { KEEP_MS, currentKept, dropKept, keptPlacement, keptShows, keptOnPage, refusalTextOutsideKept, notePress, onKept, type Kept, type Spot } from "@/lib/keptRefusal";
+import { KEEP_MS, KEPT_STORE, OWN_LINE_GRACE_MS, currentKept, dropKept, keptButton, keptPlacement, keptShows, keptOnPage, refusalTextOutsideKept, notePress, onKept, restoreKept, type Kept, type Spot } from "@/lib/keptRefusal";
 import { watchNewPageVersion } from "@/lib/pageVersion";
 
 /** The things a person presses: a press on any of them clears a kept line (and is remembered, in case it's refused). */
@@ -29,17 +29,29 @@ function anchorsOf(el: Element | null): string[] {
 
 const flat = (t: string | null | undefined) => (t ?? "").replace(/\s+/g, " ").trim().toLowerCase();
 
+/** (§380 KR) The pressed button on the page now (the same element, or the same words in its section after a redraw replaced it), visible. */
+function buttonNow(k: Kept): HTMLElement | null {
+  const el = k.el as HTMLElement | null;
+  const visible = (b: HTMLElement | null) => (b && b.isConnected && b.getClientRects().length > 0 ? b : null);
+  return keptButton(k, visible(el), (id) => {
+    const section = document.getElementById(id);
+    if (!section || !section.getClientRects().length) return null;
+    return [...section.querySelectorAll<HTMLElement>(PRESSABLE)].filter((b) => !b.closest("[data-kept-refusal]") && b.getClientRects().length > 0);
+  });
+}
+
 /**
- * Is the press's own line on the page already? Its button still there, or (batch 32 §10, never twice) any other line on the page saying the same thing,
- * whatever its style (a red line, a blue notice, a stop box). Then this one stays hidden.
+ * Is the press's own line on the page already? (Batch 32 §10, never twice) any other line on the page saying the same thing, whatever its style (a red line, a
+ * blue notice, a stop box): then this one stays hidden. (Owner, Nov 11, §380 KR; replaces "its button still there") A button still there that no longer shows its
+ * line (the redraw reset it) gets the kept line right under it, on EVERY button; it gets a moment first to show its own. The top banner of a part that's over
+ * never counts: the short line shows under the button too.
  */
 function shownElsewhere(k: Kept) {
-  const el = k.el as HTMLElement | null;
-  if (el?.isConnected && el.getClientRects().length > 0) return true;
+  if (buttonNow(k) && Date.now() - k.at < OWN_LINE_GRACE_MS) return true;
   const msg = flat(k.message);
   if (!msg) return false;
   return [...document.querySelectorAll("p, li, [role='status'], [data-refusal], .err")].some(
-    (p) => !p.closest("[data-kept-refusal], [data-kept-host]") && (p as HTMLElement).getClientRects().length > 0 && flat(refusalTextOutsideKept(p)).includes(msg),
+    (p) => !p.closest("[data-kept-refusal], [data-kept-host], [data-stopped-line], [data-failed-line]") && (p as HTMLElement).getClientRects().length > 0 && flat(refusalTextOutsideKept(p)).includes(msg),
   );
 }
 
@@ -63,10 +75,16 @@ export function KeptRefusal() {
     const onPress = (e: Event) => {
       const t = e.type === "submit" ? ((e as SubmitEvent).submitter ?? (e.target as Element | null)) : (e.target as Element | null)?.closest?.(PRESSABLE) ?? null;
       if (!t || t.closest("[data-kept-refusal]")) return;
-      notePress(t, spotOf(t), Date.now(), anchorsOf(t));
+      notePress(t, spotOf(t), Date.now(), anchorsOf(t), (t.textContent ?? "").replace(/\s+/g, " ").trim());
     };
     document.addEventListener("click", onPress, true);
     document.addEventListener("submit", onPress, true);
+    // (§380 KR) A line kept across the reload a refused press made (a part that's over): back under the same button.
+    try {
+      restoreKept(sessionStorage.getItem(KEPT_STORE), location.pathname);
+    } catch {
+      // no storage
+    }
     setKept(currentKept());
     const off = onKept(setKept);
     return () => {
@@ -87,6 +105,19 @@ export function KeptRefusal() {
     // section still there. (Batch 32 §12) ONE notice element per kept line: when a live redraw throws its section away, the same element goes back in at once
     // (a MutationObserver runs before the screen repaints), so it never blinks.
     const place = () => {
+      // (§380 KR) The pressed button still on the page: right under it.
+      const button = buttonNow(kept);
+      if (button) {
+        if (!hostRef.current) {
+          const h = document.createElement("div");
+          h.setAttribute("data-kept-host", "");
+          h.className = "empty:hidden basis-full w-full";
+          hostRef.current = h;
+          setHost(h);
+        }
+        if (button.nextElementSibling !== hostRef.current) button.insertAdjacentElement("afterend", hostRef.current);
+        return;
+      }
       const { target: anchor, first } = keptPlacement(kept.anchors, (id) => { const a = document.getElementById(id); return a && a.getClientRects().length > 0 ? a : null; }, document.querySelector<HTMLElement>("main"));
       if (!anchor) {
         if (hostRef.current) dropHost();

@@ -3,7 +3,7 @@ import { RejoinTag } from "@/components/RejoinTag";
 import { NameLink } from "@/components/Cut";
 import { withDateZone } from "@/lib/server/dateZone";
 import { fmtTimeIn } from "@/lib/format";
-import { dayIn } from "@/lib/rules";
+import { dayIn, overPressLine } from "@/lib/rules";
 import { notFound, redirect } from "next/navigation";
 import { PAYOUT_SETUP_HINT } from "@/lib/payout";
 import { CALL_MIN_AHEAD_MINUTES } from "@/lib/callLead";
@@ -419,7 +419,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
       {/* (Owner, Nov 5, §267) Nor the NDA: it follows the listing with its own notice. */}
       <TesterTop sessionId={c.id} seenAt={seenAt} devName={dev} offer={offer && !refusal ? { id: offer.id, diff: offer.diff } : null} />
       {limited && <p className="info" data-limited-view="">{LIMITED_VIEW_LINE}</p>}
-      {refusal && !limited && <div className="info space-y-1" id="stopped-line" data-stopped-line="" {...(failedPress ? { "data-work-over-failed": failedPress } : {})}><p>{over ? stillWorksLine({ ...c, teamTime: c.endedAt ? stopTimeIn(c.endedAt, u.timeZone, now) : undefined }, dev, fmtDate, stillWorks, failedPress) : refusal}</p>{c.status === "left" && c.endKind !== "rated" && <p data-rejoin-link="">{/* (Owner, Oct 30) The way back after leaving: the test's page asks the developer. */}<a href={`/app/find/${c.testId}`}>Ask to rejoin on the test&apos;s page →</a></p>}
+      {refusal && !limited && <div className="info space-y-1" id="stopped-line" data-stopped-line="" {...(failedPress ? { "data-work-over-failed": failedPress } : {})}>{/* (Owner, Nov 11, §380 KR) A refused press reads the short line ("This test was stopped, so your Send Answers didn't go through."), then the banner's details. */}{over && failedPress && <p data-failed-line="">{overPressLine(c, failedPress)}</p>}<p>{over ? stillWorksLine({ ...c, teamTime: c.endedAt ? stopTimeIn(c.endedAt, u.timeZone, now) : undefined }, dev, fmtDate, stillWorks) : refusal}</p>{c.status === "left" && c.endKind !== "rated" && <p data-rejoin-link="">{/* (Owner, Oct 30) The way back after leaving: the test's page asks the developer. */}<a href={`/app/find/${c.testId}`}>Ask to rejoin on the test&apos;s page →</a></p>}
         {/* (Batch 15 sections 20 and 22) The developer's End early reason, in italics, scrolling when long (never in the bell line). */}
         {c.status === "ended" && c.endKind === "early" && c.endReason && <ReasonQuote text={c.endReason} />}
         {/* (Batch 17 §15) The developer's Stop reason, the same way (only the developer's own Stop writes the note; the team's Stop reason is never shown here). */}
