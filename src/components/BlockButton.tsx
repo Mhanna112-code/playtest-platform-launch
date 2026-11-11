@@ -5,7 +5,6 @@ import { ConfirmButton } from "@/components/ConfirmButton";
 import { Err } from "@/components/Err";
 import { api, errOf } from "@/lib/client";
 import { lockPage, unlockPage } from "@/lib/pageLock";
-import { announceBlocks } from "@/components/SessionWatch";
 
 /**
  * Block someone, on their profile only (owner, Oct 27): the confirm dialog, then the press. The only stop is a race check: if you already blocked them in
@@ -30,10 +29,8 @@ export function BlockButton({ userId, name, effect, plain }: { userId: string; n
           setErr("");
           lockPage(); // (§380 A) the whole page waits for the Block and its redraw
           try {
-            const r = await api<{ blocks?: string }>("/api/blocks", { userId });
-            // (Owner, Nov 11, §380) Every other open page of this account (other tabs at once, other browsers and devices on their next check) disables its
-            // buttons and reloads, so nothing stale about this person can be pressed; this page redraws itself.
-            announceBlocks(r?.blocks);
+            // (Owner, Nov 11, §380 G) Only this page redraws (the blocker's other pages and the blocked person's pages are left as they are: their presses are refused).
+            await api("/api/blocks", { userId });
             fin.finish();
           } catch (e) {
             setErr(errOf(e));
@@ -55,7 +52,7 @@ export function UnblockButton({ userId, say = false, name = "" }: { userId: stri
   const done = fin.done && !!fin.line;
   return (
     <span className="inline-flex flex-wrap items-center gap-2">
-      <button className="btn-secondary px-3 py-1.5 text-sm" disabled={fin.done} data-unblock="" onClick={() => api<{ blocks?: string }>("/api/blocks", { userId, action: "unblock" }).then((r) => { announceBlocks(r?.blocks); /* (§380) the other pages reload too */ fin.finish(say ? "Unblocked." : ""); }, (e) => setErr(errOf(e)))}>
+      <button className="btn-secondary px-3 py-1.5 text-sm" disabled={fin.done} data-unblock="" onClick={() => api("/api/blocks", { userId, action: "unblock" }).then(() => fin.finish(say ? "Unblocked." : ""), (e) => setErr(errOf(e)))}>
         <span className="[overflow-wrap:anywhere]">{name ? `Unblock ${name}` : "Unblock"}</span>
       </button>
       {done && <span className="text-emerald-300" role="status">Unblocked.</span>}

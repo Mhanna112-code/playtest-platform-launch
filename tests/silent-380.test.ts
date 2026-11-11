@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { POST as reviewPOST } from "@/app/api/review/route";
@@ -6,7 +8,6 @@ import { POST as excerptsPOST } from "@/app/api/excerpts/route";
 import { POST as invitePOST } from "@/app/api/invites/[id]/route";
 import { POST as blocksPOST } from "@/app/api/blocks/route";
 import { GET as statusGET } from "@/app/api/account/status/route";
-import { blocksChange } from "@/components/SessionWatch";
 import { json, makeUser, req } from "./helpers";
 import { act, atHours, bookCall, joined, sact, seen, setup } from "./fixtures";
 
@@ -17,7 +18,7 @@ const pay = (cookie: string, body: Record<string, unknown>) => reviewPOST(req("/
 const ex = (cookie: string, body: Record<string, unknown>) => excerptsPOST(req("/api/excerpts", { cookie, body })).then(json);
 const noThanks = (cookie: string, id: string) => invitePOST(req(`/api/invites/${id}`, { cookie, body: { confirmed: true } }), { params: Promise.resolve({ id }) }).then(json);
 const block = (cookie: string, userId: string, action?: string) => blocksPOST(req("/api/blocks", { cookie, body: { userId, ...(action ? { action } : {}) } })).then(json);
-const status = (cookie: string) => statusGET(req("/api/account/status", { cookie })).then(json).then((r) => r.body.blocks as string);
+const status = (cookie: string) => statusGET(req("/api/account/status", { cookie })).then(json).then((r) => r.body as Record<string, unknown>);
 const WHY = "We have what we need now.";
 
 describe("§380 silent when already done", () => {
@@ -159,30 +160,23 @@ describe("§380 silent when already done", () => {
   });
 });
 
-describe("§380 Block reaches every open page of both people", () => {
-  it("Block twice → silent; the account check's blocks value changes for the blocker (reload) and for the blocked person (redraw)", async () => {
+describe("§380 G: a Block redraws only its own page", () => {
+  it("Block twice → silent; nothing tells the other pages of either person (no blocks value in the account check)", async () => {
     const dev = await makeUser({ dev: true, name: "Nora Lane" });
     const t = await makeUser({ tester: true, name: "Ana Silva" });
-    const devBefore = await status(dev.cookie), tBefore = await status(t.cookie);
     const r = await block(dev.cookie, t.user.id);
     expect(r.status).toBe(200);
-    expect(typeof r.body.blocks).toBe("string");
+    expect(r.body.blocks).toBeUndefined();
     const again = await block(dev.cookie, t.user.id);
     expect(again.status).toBe(200);
     expect(again.body.already).toBe(true);
-    const devAfter = await status(dev.cookie), tAfter = await status(t.cookie);
-    expect(devAfter).toBe(r.body.blocks);
-    // The blocker's other pages: reload (every button disabled first); the page that pressed Block: nothing (it redraws itself).
-    expect(blocksChange(devBefore, devAfter)).toBe("reload");
-    expect(blocksChange(devBefore, devAfter, r.body.blocks)).toBe("");
-    // The blocked person's pages: the live feed carries the change, and they redraw.
-    expect(tAfter).not.toBe(tBefore);
-    expect(blocksChange(tBefore, tAfter)).toBe("redraw");
-    // Unblock: the blocker's pages reload again; the other person's redraw.
-    expect((await block(dev.cookie, t.user.id, "unblock")).status).toBe(200);
-    expect(blocksChange(devAfter, await status(dev.cookie))).toBe("reload");
-    expect(blocksChange(tAfter, await status(t.cookie))).toBe("redraw");
-    // Nothing changed: nothing happens.
-    expect(blocksChange(tAfter, tAfter)).toBe("");
+    expect((await status(dev.cookie)).blocks).toBeUndefined();
+    expect((await status(t.cookie)).blocks).toBeUndefined();
+    const watch = readFileSync(path.resolve(__dirname, "../src/components/SessionWatch.tsx"), "utf8");
+    expect(watch).not.toContain("blocksChange");
+    expect(watch).not.toContain("pt-blocks");
+    const button = readFileSync(path.resolve(__dirname, "../src/components/BlockButton.tsx"), "utf8");
+    expect(button).toContain("lockPage(); // (§380 A)"); // Block still locks its own page while on its way
+    expect(button).not.toContain("announceBlocks");
   });
 });
