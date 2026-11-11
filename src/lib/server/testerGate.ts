@@ -30,6 +30,12 @@ export const CLOSED_BY_TESTER = new Set(["you asked a different rate", "the test
 /** (Owner, Oct 28, batch 16 section 24) What the stop, a closure or an early end did by itself (requests closed, calls ahead cancelled): never a stop-once
  * reason for what still works afterwards (Charge, Let it go, Dispute, Rate); the stopped line at the top already says it. */
 const CLOSED_BY_END = new Set(["the test was stopped", "the session ended", "the test ended"]);
+/** (Owner, Nov 11, §379 item 5) A developer's call request closed by a pause or a hold (the stored reason is the same): never a stop, as CLOSED_BY_END; still a line. */
+export const CLOSED_BY_PAUSE = new Set(["the test is paused"]);
+/** (Owner, Nov 11, §379 item 5) Its one wording, the bell's and the top box's: "Nora Lane's call request for Fri, Nov 13, 3:00 PM was cancelled". */
+export const devRequestCancelledLine = (dev: string, when: string, on = "") => `${dev}'s call request${on} for ${when} was cancelled`;
+/** (Owner, Nov 11, §379 item 5) A booked call the system cancelled names why, as the bell does ("… was cancelled because the test is paused"). */
+const CANCEL_NOTE_WHY: Record<string, string> = { "The test is paused.": "the test is paused", "The test was stopped.": "the test was stopped", "The developer ended the work early.": "your session was ended" };
 /**
  * (Owner, Nov 6, §286) Whether the developer's request closed for this reason is a line in the tester's top box ("The call time with Nora Lane on … is no longer
  * available"): never one her own press closed (CLOSED_BY_TESTER), one the stop, a closure or an early end closed (its own line says it), nor one a booking dropped
@@ -91,6 +97,8 @@ export async function testerChanges(testerId: string, contractId: string, testId
     else if (r.status === "withdrawn") out.push({ kind: DROP_KINDS.devQuiet, text: `${dev} withdrew the request for ${what}`, createdAt: r.updatedAt, link });
     else if (r.status === "taken") out.push({ kind: "requested", text: `The call time with ${dev} on ${when} is no longer available: another tester took it`, createdAt: r.updatedAt, link });
     // (Owner, Nov 4, §184) One dropped when a call was booked has its own line (below), never this one too.
+    // (Owner, Nov 11, §379 item 5) Closed by a pause or a hold: a quiet line (shown, never a stop), "Nora Lane's call request for … was cancelled".
+    else if (r.status === "closed" && CLOSED_BY_PAUSE.has(r.closedReason)) out.push({ kind: DROP_KINDS.devQuiet, text: devRequestCancelledLine(dev, when), createdAt: r.updatedAt, link });
     else if (r.status === "closed" && testerSeesClosed(r.closedReason)) out.push({ kind: "requested", text: `The call time with ${dev} on ${when} is no longer available`, createdAt: r.updatedAt, link });
     // booked / declined by the tester themselves: their own action (reason E)
   }
@@ -108,7 +116,8 @@ export async function testerChanges(testerId: string, contractId: string, testId
   for (const e of await db.testEvent.findMany({ where: { testId, contractId, kind: { in: [DROP_KINDS.testerClosed, DROP_KINDS.testerQuiet] }, createdAt: { gt: seenAt } }, orderBy: { createdAt: "asc" } }))
     // (Owner, Nov 4, §185) Both quiet now: the developer's side of it ("Nora Lane's request for … closed: she is no longer free") comes with a bell instead.
     out.push({ kind: DROP_KINDS.devQuiet, text: e.text, createdAt: e.createdAt, link: e.link || TESTER_REQUESTS_BOX });
-  for (const call of calls.filter((x) => !(x.cancelledBy === "system" && byTheEnd(c, x.cancelledAt)))) out.push({ kind: "cancelled", text: `Your call with ${dev} on ${fmtDateTime(call.startsAt)} was cancelled`, createdAt: call.cancelledAt!, link: callRow(call.id) });
+  // (Owner, Nov 11, §379 item 5) A real call change keeps stopping once (Alerts On); one the system cancelled names why, like the bell.
+  for (const call of calls.filter((x) => !(x.cancelledBy === "system" && byTheEnd(c, x.cancelledAt)))) out.push({ kind: "cancelled", text: `Your call with ${dev} on ${fmtDateTime(call.startsAt)} was cancelled${call.cancelledBy === "system" && CANCEL_NOTE_WHY[call.cancelNote] ? ` because ${CANCEL_NOTE_WHY[call.cancelNote]}` : ""}`, createdAt: call.cancelledAt!, link: callRow(call.id) });
   // (Owner, Nov 6, §304) No "<dev> marked your key as working" line any more: there is no key report to answer.
   // (Batch 30 §17) The developer's Save gave this tester a key (the test had none when they joined): "<dev> gave you an access key for “<test>”" (the key is in its box).
   for (const e of await db.testEvent.findMany({ where: { testId, kind: KEY_GIVEN, contractId, createdAt: { gt: seenAt } } })) out.push({ kind: "keygiven", text: keyGivenToYouLine(dev, c.test.title), createdAt: e.createdAt });

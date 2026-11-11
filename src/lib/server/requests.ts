@@ -16,7 +16,7 @@ import { BOOKED_GROUP, CALL_REQUESTS_GROUP } from "@/lib/bell";
 /** (Owner, Nov 6, §312a) Every call-request and booked-call bell names its test: ` on “Harbor Run”` (empty without a title). */
 const onTest = (title: string | null | undefined) => (title ? ` on “${title}”` : "");
 import { devGate, recordEvent } from "./tests";
-import { FINISHED_PART_REASON, finishedPartReason, requestWords, testerGate, testerSeesClosed } from "./testerGate";
+import { CLOSED_BY_PAUSE, FINISHED_PART_REASON, devRequestCancelledLine, finishedPartReason, requestWords, testerGate, testerSeesClosed } from "./testerGate";
 import { answerTermsFirst } from "./terms";
 import { CALL_MIN_AHEAD_MINUTES, farEnoughAhead } from "@/lib/callLead";
 import { afterEndToBookLine, beforeEndLine, leadLine, tooSoonToBookLine, windowShut, windowShutLine, type CallEnd } from "@/lib/callWindow";
@@ -471,7 +471,8 @@ export async function closeRequests(where: { contractIds?: string[] }, reason: s
     const cons = new Map((await db.contract.findMany({ where: { id: { in: [...new Set(told.map((r) => r.contractId))] } }, select: { id: true, testerId: true, title: true, test: { select: { developer: true, title: true } } } })).map((c) => [c.id, c]));
     for (const r of told) {
       const c = cons.get(r.contractId);
-      if (c) await bell(c.testerId, `The call time${onTest(c.test.title)} with ${displayName(c.test.developer)} on ${T(r.startsAt)} is no longer available`, `/app/sessions/${r.contractId}#calls`, undefined, { testId: r.testId, group: CALL_REQUESTS_GROUP });
+      // (Owner, Nov 11, §379 item 5) Closed by a pause or a hold: "Nora Lane's call request on “Harbor Run” for … was cancelled".
+      if (c) await bell(c.testerId, CLOSED_BY_PAUSE.has(reason) ? devRequestCancelledLine(displayName(c.test.developer), T(r.startsAt), onTest(c.test.title)) : `The call time${onTest(c.test.title)} with ${displayName(c.test.developer)} on ${T(r.startsAt)} is no longer available`, `/app/sessions/${r.contractId}#calls`, undefined, { testId: r.testId, group: CALL_REQUESTS_GROUP });
     }
   }
   return rows;

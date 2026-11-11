@@ -136,12 +136,14 @@ describe("§286 call requests closed: withdrawn (as before), declined, taken by 
     const a = await joined(f.testId);
     expect((await devReq(f.testId, f.dev.cookie, [a.sessionId], [atHours(50)])).status).toBe(200);
     await closeRequests({ contractIds: [a.sessionId] }, "the test is paused");
-    const hers = await bells(a.tester.user.id, "no longer available");
-    expect(hers.map((n) => n.text)).toEqual([expect.stringMatching(/^The call time on “Harbor Run” with Nora Lane on .+ is no longer available$/)]);
+    // (Owner, Nov 11, §379 item 5) In the one wording: "Nora Lane's call request on “Harbor Run” for … was cancelled".
+    const hers = await bells(a.tester.user.id, "was cancelled");
+    expect(hers.map((n) => n.text)).toEqual([expect.stringMatching(/^Nora Lane's call request on “Harbor Run” for .+ was cancelled$/)]);
     expect(hers[0].groupKey).toBe("callrequests");
     expect((await devReq(f.testId, f.dev.cookie, [a.sessionId], [atHours(60)])).status).toBe(200);
     await closeRequests({ contractIds: [a.sessionId] }, "the tester left");
-    expect(await bells(a.tester.user.id, "no longer available")).toHaveLength(1);
+    expect(await bells(a.tester.user.id, "was cancelled")).toHaveLength(1);
+    expect(await bells(a.tester.user.id, "no longer available")).toHaveLength(0);
   });
 });
 
