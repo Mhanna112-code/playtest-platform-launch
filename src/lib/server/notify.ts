@@ -6,7 +6,7 @@ import { summaryDue } from "@/lib/rules";
 import { renderTimes, safeZone } from "@/lib/tz";
 import { bellKeyIn, bellStacks, stackHeading } from "@/lib/bell";
 import { appUrl } from "./auth";
-import { sendEmail } from "./email";
+import { MORNING_KIND, replacePendingMorning, sendEmail } from "./email";
 import { REMINDER_ONLY_GROUPS } from "@/lib/reminderPolicy";
 
 // Every update goes to the person's bell. Email follows their setting: each update (default), one daily summary,
@@ -46,7 +46,8 @@ export async function testIdOfLink(path: string) {
  * account's deletion or suspension, the site's own notices). Left out, the link's page decides (lineSide); a caller whose link is a shared page (the dashboard,
  * Payments, Settings) names it.
  */
-export type Opts = { recipientId?: string; side?: Side | null; always?: boolean; about?: string; own?: boolean; testId?: string; group?: string; payment?: boolean; reminder?: string; now?: boolean };
+export type Opts = { recipientId?: string; side?: Side | null; always?: boolean; about?: string; own?: boolean; testId?: string; group?: string; payment?: boolean; reminder?: string; now?: boolean;
+  /** (Owner, Nov 11, §383 7) with `now`: the email is never delivered after this moment (the call reminder: the call's start); the bell keeps the line */ expiresAt?: Date };
 
 /**
  * `reminder`: (Owner, Oct 27) names a reminder ("invite:<id>"): reminders also go in the summary email, each line once; a Weekly or Monthly email shows only the newest copy of each.
@@ -90,7 +91,7 @@ export async function notify(to: string, subject0: string, lines0: string[], pat
     await client.notification.create({ data: { side: lineSide(user.id, path, opts.side), userId: user.id, text: subject, link: path, testId: opts.testId ?? (await testIdOfLink(path)), mustEmail: !!opts.always, summarizedAt: new Date(), reminderKey: opts.reminder ?? null, ...flags(opts) } });
     if (!opts.always && !opts.payment && !EMAIL_ON.includes(user.emailPref)) return;
     try {
-      await sendEmail({ to, subject, text: [...lines.filter(Boolean), "", `${appUrl()}${path}`].join("\n") /* (Owner, Nov 6, §325) no closing "Playtest" signature */, button: { label: "Open Playtest", url: `${appUrl()}${path}` }, recipientId: user.id, reminderKey: opts.reminder });
+      await sendEmail({ to, subject, text: [...lines.filter(Boolean), "", `${appUrl()}${path}`].join("\n") /* (Owner, Nov 6, §325) no closing "Playtest" signature */, button: { label: "Open Playtest", url: `${appUrl()}${path}` }, recipientId: user.id, reminderKey: opts.reminder, expiresAt: opts.expiresAt });
     } catch (e) {
       console.error("[email] failed:", subject, (e as Error).message);
     }
@@ -260,6 +261,8 @@ const inTeam = (n: { groupKey: string | null; link: string }, t: { disputeIds: S
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 export async function sendSummaries(now = new Date(), only?: string[]) {
+  // (Owner, Nov 11, §383 7) A morning email never delivered is replaced by this one: its lines go in this email (never two for the same lines).
+  await replacePendingMorning(now, only);
   const admins = new Set((await adminUsers()).map((a) => a.id).filter((id) => !only || only.includes(id)));
   const users = await db.user.findMany({
     where: {
@@ -313,7 +316,7 @@ export async function sendSummaries(now = new Date(), only?: string[]) {
       if (olderIds.length) own.push("", line({ text: olderLine(olderIds.length), link: "/app/notifications" })); // (§328)
       const forTeam = t && teamN ? [...(own.length ? [""] : []), ad.TEAM_HEADING, ...ad.teamLines(t, u.timeZone)] : [];
       // (§306) With the team's section, the admin email's button: Open the admin console.
-      await sendEmail({ to: u.email, subject, text: [heading, "", ...own, ...forTeam].join("\n") /* (§325) no closing signature */, button: { label: forTeam.length ? "Open the admin console" : "Open Playtest", url: `${appUrl()}${forTeam.length ? "/admin" : "/app/notifications"}` }, heading, recipientId: u.id, notificationIds: items.map((n) => n.id) });
+      await sendEmail({ to: u.email, subject, text: [heading, "", ...own, ...forTeam].join("\n") /* (§325) no closing signature */, button: { label: forTeam.length ? "Open the admin console" : "Open Playtest", url: `${appUrl()}${forTeam.length ? "/admin" : "/app/notifications"}` }, heading, recipientId: u.id, notificationIds: items.map((n) => n.id), kind: MORNING_KIND });
       await db.notification.updateMany({ where: { id: { in: [...items.map((n) => n.id), ...dropped, ...repeats, ...olderIds] } }, data: { summarizedAt: now } });
       if (due) await db.user.update({ where: { id: u.id }, data: { lastSummaryAt: now } });
       if (t) await ad.teamSent([u.id], t.noShowIds, now);

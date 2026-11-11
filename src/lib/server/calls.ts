@@ -421,12 +421,12 @@ export async function remindCallsSoon(now = new Date()) {
     const c = call.contract, dev = c.test.developer, tester = c.tester;
     if (!(await db.notification.count({ where: { userId: tester.id, reminderKey: { in: [reminderKey(call.id), `call15:${call.id}`] } } }))) {
       const line = callReminderLine(displayName(dev), c.test.title, call.startsAt);
-      await notify(tester.email, line, [line], `/app/sessions/${c.id}#call-${call.id}`, { about: dev.id, reminder: reminderKey(call.id), now: true, always: true /* (Owner, Nov 6, §324) emailed at once even with email Off */ });
+      await notify(tester.email, line, [line], `/app/sessions/${c.id}#call-${call.id}`, { about: dev.id, reminder: reminderKey(call.id), now: true, always: true, expiresAt: call.startsAt /* (Owner, Nov 6, §324) emailed at once even with email Off; (§383 7) never after the call starts */ });
       n++;
     }
     if (!(await db.notification.count({ where: { userId: dev.id, reminderKey: { in: [reminderKey(call.id), `call15:${call.id}`] } } }))) {
       const line = callReminderLine(displayName(tester), c.test.title, call.startsAt);
-      await notify(dev.email, line, [line], `/app/tests/${c.testId}#call-${call.id}`, { about: tester.id, reminder: reminderKey(call.id), now: true, always: true /* (Owner, Nov 6, §324) emailed at once even with email Off */ });
+      await notify(dev.email, line, [line], `/app/tests/${c.testId}#call-${call.id}`, { about: tester.id, reminder: reminderKey(call.id), now: true, always: true, expiresAt: call.startsAt /* (Owner, Nov 6, §324) emailed at once even with email Off; (§383 7) never after the call starts */ });
       n++;
     }
   }

@@ -1217,7 +1217,8 @@ model EmailQueue {
   subject     String
   text        String
   html        String    @default("")
-  /// "pending" | "sent" | "failed" (failed for good) | "cancelled" (recipient deleted; reminder suppressed)
+  /// "pending" | "sent" | "failed" (failed for good) | "cancelled" (recipient deleted; reminder suppressed) | (§383 7) "expired" (past `expiresAt`, never sent) |
+  /// "replaced" (a morning email still waiting when the next morning's was made: its lines went into that one). Neither of the last two is a failure.
   status      String    @default("pending")
   /// Tries that failed or went through (a daily-limit wait isn't counted)
   attempts    Int       @default(0)
@@ -1234,6 +1235,10 @@ model EmailQueue {
   failedAt    DateTime?
   /// An admin cleared it from the console's failed-for-good list (the row is kept)
   clearedAt   DateTime?
+  /// (Owner, Nov 11, §383 7) Never delivered after this moment (the call reminder: the call's start): it is marked "expired" instead
+  expiresAt   DateTime?
+  /// (§383 7) "morning": the daily job's summary or short email (a still-waiting one is replaced by the next); "" for any other email
+  kind        String    @default("")
   createdAt   DateTime  @default(now())
 
   @@index([status, nextTryAt])

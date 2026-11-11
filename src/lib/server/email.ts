@@ -8,7 +8,11 @@ import { originalEmail } from "./reuseEmail";
  * (Batch 30 §19) Every email is sent as HTML in the shared branded layout (emailLayout.ts) with its plain text alongside. `button`: the email's main link as a button
  * (when its address is a line of the text, the button takes that line's place). `settings`: the footer's "Notification settings" link (default on; off for confirm / reset).
  */
-export type Email = { to: string; subject: string; text: string; button?: EmailButton; settings?: boolean; recipientId?: string; notificationIds?: string[]; reminderKey?: string; /** (Owner, Nov 6, §295) the text's first line, shown as the heading */ heading?: string };
+export type Email = { to: string; subject: string; text: string; button?: EmailButton; settings?: boolean; recipientId?: string; notificationIds?: string[]; reminderKey?: string; /** (Owner, Nov 6, §295) the text's first line, shown as the heading */ heading?: string;
+  /** (Owner, Nov 11, §383 7) never delivered after this moment (the call reminder: the call's start); marked "expired" instead, not a failure */ expiresAt?: Date;
+  /** (§383 7) MORNING_KIND for the daily job's summary or short email: one still waiting is replaced by the next morning's */ kind?: string };
+/** (§383 7) The kind of the daily job's (09:00 UTC) summary or short email. */
+export const MORNING_KIND = "morning";
 
 /** The site's address for the layout's links and logo (APP_URL; the public site when it can't be read). */
 const siteBase = () => {
@@ -157,15 +161,22 @@ export async function sendEmail(e0: Email, now = new Date()) {
   const e = e0;
   const k = key();
   const html = htmlOf(e);
+  // (Owner, Nov 11, §383 7) Already past its moment: never sent (kept as "expired" in the queue).
+  const expired = !!e.expiresAt && now.getTime() >= e.expiresAt.getTime();
   // (Owner, Nov 6, §318) Local testing with the real email key: only addresses on EMAIL_LOCAL_ONLY_TO go out; every other one lands in the dev outbox.
   if ((!k || !localSendAllowed(e.to)) && outboxEnabled()) {
+    if (expired) return { via: "expired" as const };
     await db.outboxEmail.create({ data: { to: e.to, subject: e.subject, text: e.text, html } });
     return { via: "outbox" as const };
+  }
+  if (expired) {
+    const row = await db.emailQueue.create({ data: { to: e.to, subject: e.subject, text: e.text, html, recipientId: e.recipientId, notificationIds: e.notificationIds ?? [], reminderKey: e.reminderKey, giveUpAt: now, expiresAt: e.expiresAt, kind: e.kind ?? "", status: "expired", nextTryAt: now } });
+    return { via: "expired" as const, id: row.id };
   }
   const cap = k ? await capUntil(now) : null;
   const row = await db.emailQueue.create({
     data: {
-      to: e.to, subject: e.subject, text: e.text, html, recipientId: e.recipientId, notificationIds: e.notificationIds ?? [], reminderKey: e.reminderKey, giveUpAt: new Date(now.getTime() + EMAIL_RETRY_HOURS * HOUR + (cap ? cap.getTime() - now.getTime() : 0)),
+      to: e.to, subject: e.subject, text: e.text, html, recipientId: e.recipientId, notificationIds: e.notificationIds ?? [], reminderKey: e.reminderKey, giveUpAt: new Date(now.getTime() + EMAIL_RETRY_HOURS * HOUR + (cap ? cap.getTime() - now.getTime() : 0)), expiresAt: e.expiresAt ?? null, kind: e.kind ?? "",
       // The new row is this try's claim; during a daily-limit wait it simply waits with the others.
       nextTryAt: cap ?? new Date(now.getTime() + CLAIM_MS), ...(cap ? { lastError: EMAIL_CAP_LINE, errorKind: "cap" } : {}),
     },
@@ -200,9 +211,14 @@ async function toLiveRecipient<R extends Row & ReminderContext>(row: R, now: Dat
 }
 
 /** One try of a claimed row: sent, or the failure recorded (a next try, the daily limit's wait, or failed for good). True when it went. */
-async function deliver(row0: Row & { attempts?: number; giveUpAt: Date; recipientId?: string | null; notificationIds?: string[]; reminderKey?: string | null; createdAt?: Date }, k: string, now: Date) {
+async function deliver(row0: Row & { attempts?: number; giveUpAt: Date; recipientId?: string | null; notificationIds?: string[]; reminderKey?: string | null; createdAt?: Date; expiresAt?: Date | null }, k: string, now: Date) {
   const row = await toLiveRecipient(row0, now);
   if (!row) return false;
+  // (Owner, Nov 11, §383 7) Past its moment (a call reminder once the call started): expired, never sent; not a failure.
+  if (row.expiresAt && now.getTime() >= row.expiresAt.getTime()) {
+    await expireDue(now, row.id);
+    return false;
+  }
   const r: Answer = k ? await post(row, k) : { ok: false, status: 0, body: NO_EMAIL_KEY };
   if (r.ok) {
     await db.emailQueue.update({ where: { id: row.id }, data: { status: "sent", sentAt: now, lastTriedAt: now, attempts: { increment: 1 }, lastError: "", errorKind: "", nextTryAt: now } });
@@ -238,6 +254,7 @@ async function deliver(row0: Row & { attempts?: number; giveUpAt: Date; recipien
  * once. Nothing is tried during the daily limit's wait. Returns how many went.
  */
 export async function retryEmails(now = new Date()) {
+  await expireDue(now); // (§383 7) first, whatever else waits (the daily limit too)
   const k = key();
   if (!k && outboxEnabled()) return 0;
   if (await capUntil(now)) return 0;
@@ -251,6 +268,33 @@ export async function retryEmails(now = new Date()) {
   }
   await endIncidentIfClear();
   return sent;
+}
+
+/**
+ * (Owner, Nov 11, §383 7) Waiting emails past their `expiresAt` (or the one `id`) are marked "expired": kept, never sent, and not a failure (no failed-for-good
+ * line; an incident they were part of ends when nothing else waits).
+ */
+export async function expireDue(now = new Date(), id?: string) {
+  const r = await db.emailQueue.updateMany({ where: { ...(id ? { id } : {}), status: "pending", expiresAt: { lte: now } }, data: { status: "expired", lastError: "", errorKind: "", nextTryAt: now } });
+  if (r.count) await endIncidentIfClear();
+  return r.count;
+}
+
+/**
+ * (§383 7) The daily job's morning email replaces its previous one when that one was never delivered: each still-waiting morning email of these people (all,
+ * without `only`) is marked "replaced" (not a failure) and its lines are unsent again (summarizedAt cleared), so the new email carries them, once.
+ */
+export async function replacePendingMorning(now = new Date(), only?: string[]) {
+  const rows = await db.emailQueue.findMany({ where: { kind: MORNING_KIND, status: "pending", ...(only ? { recipientId: { in: only } } : {}) }, select: { id: true, notificationIds: true } });
+  let n = 0;
+  for (const r of rows) {
+    // Like a try's claim: a row that is no longer pending (sent meanwhile) is left alone.
+    if ((await db.emailQueue.updateMany({ where: { id: r.id, status: "pending" }, data: { status: "replaced", lastError: "", errorKind: "", nextTryAt: now } })).count !== 1) continue;
+    if (r.notificationIds.length) await db.notification.updateMany({ where: { id: { in: r.notificationIds } }, data: { summarizedAt: null } });
+    n++;
+  }
+  if (n) await endIncidentIfClear();
+  return n;
 }
 
 /** Emails waiting after a failure (pending with an error). */
@@ -305,6 +349,7 @@ export async function clearFailedEmails(now = new Date()) {
 
 /** (Batch 23 section 2) /api/health's keyword: emails have been failing for 15 minutes or more (the oldest waiting email is that old). */
 export async function emailsDegraded(now = new Date()) {
-  const oldest = await db.emailQueue.findFirst({ where: WAITING, orderBy: { createdAt: "asc" }, select: { createdAt: true } });
+  // (§383 7) An email past its expiry is never a failure, even before the sweep marks it expired.
+  const oldest = await db.emailQueue.findFirst({ where: { ...WAITING, OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] }, orderBy: { createdAt: "asc" }, select: { createdAt: true } });
   return !!oldest && now.getTime() - oldest.createdAt.getTime() >= EMAIL_DEGRADED_MINUTES * 60_000;
 }
