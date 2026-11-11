@@ -475,7 +475,7 @@ describe("(Owner, Nov 11, §375) a recording's Send: an upload still running is 
     // B's upload started, not finished (its page says it's still going).
     expect((await sact(w.sessionId, "recording-start", w.tester.cookie, { filename: "b.mp4", size: 1000, contentType: "video/mp4" })).status).toBe(200);
     const r = await sact(w.sessionId, "recording-send", w.tester.cookie, { add: true, seenAt: seen(), tab: "B" }) as Res;
-    refused(r, "uploading", "A recording is still uploading. Send once it's done.");
+    refused(r, "uploading", "Wait for the upload to finish before sending."); // (§379 item 3) one wording
   });
 });
 

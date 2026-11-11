@@ -118,7 +118,8 @@ export const UPLOAD_UNFINISHED = "That upload didn't finish properly. Try again.
 export const TOO_MANY_RECORDINGS = `You can add at most ${MAX_RECORDINGS} recordings. Remove one first.`;
 /** (Batch 35 §136) All 5 recordings sent: none can be removed, so no more can be added. */
 export const ALL_RECORDINGS_SENT = `You've sent ${MAX_RECORDINGS} recordings, the most this part takes.`;
-export const STILL_UPLOADING = "A recording is still uploading. Send once it's done.";
+/** (Owner, Nov 11, §379 item 3) One wording for an upload still running, written answers and recordings alike. */
+export const STILL_UPLOADING = "Wait for the upload to finish before sending.";
 /**
  * (Owner, Nov 5; was: any upload started in the last 3 hours) An unfinished upload counts as still uploading only while its page keeps saying so (every 20 s,
  * `uploadAlive`): one cut off by a reload or a closed tab stops holding Send within 2 minutes. The daily clean-up still removes it after 3 hours.

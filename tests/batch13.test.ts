@@ -226,7 +226,7 @@ describe("batch 13 section 7: the Recording part, up to 5 recordings sent togeth
     expect((await sact(j.sessionId, "recording-remove", j.tester.cookie, { recordingId: ids[0] })).status).toBe(200);
     const pending = (await start(j.sessionId, j.tester.cookie)).body.recordingId as string;
     // Still uploading: Send waits.
-    expect((await sact(j.sessionId, "recording-send", j.tester.cookie, { seenAt: seen(), confirmed: true })).body.error.message).toBe("A recording is still uploading. Send once it's done.");
+    expect((await sact(j.sessionId, "recording-send", j.tester.cookie, { seenAt: seen(), confirmed: true })).body.error.message).toBe("Wait for the upload to finish before sending." /* (§379 item 3) */);
     await sact(j.sessionId, "recording-done", j.tester.cookie, { recordingId: pending });
     expect((await sact(j.sessionId, "recording-send", j.tester.cookie, { seenAt: seen(), confirmed: true })).status).toBe(200);
     const subs = await db.submission.findMany({ where: { contractId: j.sessionId, kind: "recording" }, include: { recordings: true } });
