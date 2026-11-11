@@ -64,6 +64,17 @@ async function changed(kind: (typeof KINDS)[number], withWork = false) {
 }
 const press = (sessionId: string, cookie: string, action: string, body: Record<string, unknown> = {}) => sact(sessionId, action, cookie, { seenAt: seen(), ...body });
 
+describe("§379 item 4: an unacknowledged NDA change blocks only sending", () => {
+  it("an upload starts, finishes and is removed; its Send is refused with the NDA line", async () => {
+    const x = await changed("changed", true);
+    const up = await sact(x.sessionId, "recording-start", x.tester.cookie, { filename: "run2.mp4", size: 1000, contentType: "video/mp4" });
+    expect(up.status, JSON.stringify(up.body)).toBe(200);
+    expect((await sact(x.sessionId, "recording-done", x.tester.cookie, { recordingId: up.body.recordingId })).status).toBe(200);
+    expect((await sact(x.sessionId, "recording-remove", x.tester.cookie, { recordingId: up.body.recordingId })).status).toBe(200);
+    expect((await press(x.sessionId, x.tester.cookie, "recording-send")).body.error).toMatchObject({ code: NDA_BLOCK_CODE, message: NDA_BLOCK_FIRST });
+  });
+});
+
 describe("§302 every NDA change blocks like new terms", () => {
   it.each(KINDS)("%s: every press is refused with the one terms-like line, its code and the session to go to", async (kind) => {
     // (Owner, Nov 11, §375) With something to send: "Send your answers first." or "Upload a recording first." (refused for good) would come before the NDA block.
@@ -192,7 +203,8 @@ describe("§302 the page's side of the refusal (as for an open offer)", () => {
 
   it("the blocked paths: every session press but Rate, Leave, Acknowledge and the page's own sends; Join call", () => {
     for (const a of ["written", "written-add", "recording-send", "request-time", "answer-request", "cancel-call", "choose", "dispute", "message", "terms"]) expect(ndaBlockedPath(`/api/sessions/s1/${a}`), a).toBe(true);
-    for (const a of ["rate", "leave", "nda-seen", "terms-pill", "recording-alive", "recording-done", "recording-abandon", "dismiss-removed"]) expect(ndaBlockedPath(`/api/sessions/s1/${a}`), a).toBe(false);
+    // (Owner, Nov 11, §379 item 4) Starting, finishing and removing an upload are never blocked: only sending is.
+    for (const a of ["rate", "leave", "nda-seen", "terms-pill", "recording-alive", "recording-start", "recording-done", "recording-remove", "recording-abandon"]) expect(ndaBlockedPath(`/api/sessions/s1/${a}`), a).toBe(false);
     expect(ndaBlockedPath("/api/calls/c1/join")).toBe(true);
     expect(ndaBlockedPath("/api/sessions/s2/request-time", "s1")).toBe(false); // another session's
     expect(ndaBlockedPath("/api/tests/t1/request-time")).toBe(false); // the developer's

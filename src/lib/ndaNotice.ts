@@ -46,8 +46,11 @@ export const NDA_BLOCK_EVENT = "nda-block";
 /** (§302) The notice's id on the session page (the bell's and the top box's link land here). */
 export const NDA_NOTICE = "nda-notice";
 
-/** (§267, §268) The session route's actions the block never applies to: Rate and Leave, the Acknowledge button, the New terms pill, and the page's own sends. */
-export const NDA_FREE: readonly string[] = ["rate", "leave", "nda-seen", "terms-pill", "dismiss-removed", "recording-alive", "recording-abandon", "recording-done"];
+/**
+ * (§267, §268) The session route's actions the block never applies to: Rate and Leave, the Acknowledge button, the New terms pill, and the page's own sends.
+ * (Owner, Nov 11, §379 item 4) An unacknowledged NDA change blocks only SENDING: starting, finishing and removing an upload go through.
+ */
+export const NDA_FREE: readonly string[] = ["rate", "leave", "nda-seen", "terms-pill", "recording-alive", "recording-abandon", "recording-start", "recording-done", "recording-remove"];
 
 /** (§302) Is this API path a press the block refuses (a session press other than NDA_FREE, or Join call)? `sessionId`: only that session's presses. */
 export function ndaBlockedPath(path: string, sessionId?: string) {
