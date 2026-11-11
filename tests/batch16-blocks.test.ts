@@ -50,15 +50,17 @@ for (const who of ["the developer blocks the tester", "the tester blocks the dev
       expect(app).toMatchObject({ status: "closed", closedReason: "blocked" });
       expect((await lines(ana.tester.user.id)).some((n) => n.text === appClosedLine("Harbor Run") && n.text === "“Harbor Run”: your application was closed.")).toBe(true);
       expect((await lines(dev.user.id)).some((n) => /application/.test(n.text) && /closed/.test(n.text))).toBe(false);
-      expect((await act(applied.testId, "application", dev.cookie, { applicationId: app.id, decision: "accept", seenAt: seen(), confirmed: true })).body.error.message).toBe("Ana Silva's application was closed.");
+      expect((await act(applied.testId, "application", dev.cookie, { applicationId: app.id, decision: "accept", seenAt: seen(), confirmed: true })).body.error.message).toBe(who === "the developer blocks the tester" ? "You blocked Ana Silva, so your Accept didn't go through." : "Ana Silva's application was closed."); // (§380 H) the developer's own block names it
       // Never revealed to either side's lines.
       for (const n of [...(await lines(ana.tester.user.id)), ...(await lines(dev.user.id))]) expect(n.text).not.toMatch(/block/i);
       // Rejoin ask: refused neutrally; Join on the hidden test and Apply: refused.
-      expect((await act(left.testId, "rejoin-ask", ana.tester.cookie, { listingVersion: 1, seenAt: seen(), confirmed: true })).body.error.message).toBe(NOT_TAKING_LINE);
+      // (Owner, Nov 11, §380 H) The tester's own block names it; the developer's reads neutral, both in the press pattern.
+      expect((await act(left.testId, "rejoin-ask", ana.tester.cookie, { listingVersion: 1, seenAt: seen(), confirmed: true })).body.error.message).toBe(who === "the developer blocks the tester" ? "This test isn't taking new testers right now, so your Ask to rejoin didn't go through." : "You blocked Nora Lane, so your Ask to rejoin didn't go through.");
+      expect(NOT_TAKING_LINE).toBe("This test isn't taking new testers right now.");
       const joinOther = (await act(other.testId, "join", ana.tester.cookie, { listingVersion: 1 })).body.error.message;
-      expect(joinOther).toBe(who === "the developer blocks the tester" ? "This test isn't taking new testers right now, so your Join didn't go through." : "You blocked Nora Lane: unblock her in Account → Blocked people to join."); // (§364 item 10; NOT_TAKING_LINE is the page's)
+      expect(joinOther).toBe(who === "the developer blocks the tester" ? "This test isn't taking new testers right now, so your Join didn't go through." : "You blocked Nora Lane, so your Join didn't go through."); // (§364 item 10; NOT_TAKING_LINE is the page's; §380 H the own block)
       // Invites can't be sent.
-      expect((await act(other.testId, "invite", dev.cookie, { seenAt: seen(), testerIds: [ana.tester.user.id] })).body.message).toBe("Ana Silva can't be invited right now.");
+      expect((await act(other.testId, "invite", dev.cookie, { seenAt: seen(), testerIds: [ana.tester.user.id] })).body.message).toBe(who === "the developer blocks the tester" ? "You blocked Ana Silva, so your Invite didn't go through." : "Ana Silva can't be invited right now."); // (§380 H)
 
       // Unblock: everything back as before (Find, links); nothing closed by the block reopens by itself.
       if (who === "the developer blocks the tester") await block(dev.cookie, ana.tester.user.id, "unblock");

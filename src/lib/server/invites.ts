@@ -6,7 +6,7 @@ import { db } from "@/lib/db";
 import type { Prisma } from "@prisma/client";
 import { displayName, fmtDate, pronouns } from "@/lib/server/dateFormat";
 import { andList, inviteTesterRefusal, inviteTestRefusal, MAX_ACTIVE_TESTS, TEST_LIMIT_LINE, termsLine, type TestEventLike } from "@/lib/rules";
-import { stoppedPressLine } from "@/lib/refusal";
+import { ownBlockCause, pressRefused, stoppedPressLine } from "@/lib/refusal";
 import { HttpError } from "./http";
 import { noFreeKeyFor } from "@/lib/keys";
 import { notify } from "./notify";
@@ -402,6 +402,11 @@ export async function inviteTesters(dev: U & { holdStartedAt?: Date | null }, te
         continue;
       }
       const active = await tx.contract.count({ where: { testerId: p.id, status: "working" } });
+      // (Owner, Nov 11, §380 H) Their own block: "You blocked Ana Silva, so your Invite didn't go through." (Invite anyway the same); the tester's block stays neutral.
+      if (await tx.block.count({ where: { blockerId: dev.id, blockedId: p.id } })) {
+        others.push(pressRefused(ownBlockCause(name), body.anyway === true ? "Invite anyway" : "Invite"));
+        continue;
+      }
       const blocked = (await tx.block.count({ where: { OR: [{ blockerId: dev.id, blockedId: p.id }, { blockerId: p.id, blockedId: dev.id }] } })) > 0;
       const why = inviteTesterRefusal(name, { suspended: !!p.testerSuspendedAt, blocked, deleted: !p.isTester, activeTests: active, pronoun: p.pronoun });
       if (why) {

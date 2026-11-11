@@ -49,6 +49,8 @@ export async function sendDirect(userId: string, otherId: string, raw: unknown, 
     await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${userId} FOR NO KEY UPDATE`;
     const a = await directAccess(userId, otherId, tx);
     if (a.other?.deletedAt) throw new HttpError(409, "closed", "This chat is closed.");
+    // (Owner, Nov 11, §380 H) A block this person made: "You blocked Nora Lane, so your Send didn't go through." (the other person's keeps its line).
+    if (a.other) await (await import("./blocks")).ownBlockStop(userId, otherId, displayName(a.other), "Send", tx);
     if (a.unable || !a.me || !a.other) throw new HttpError(409, "unable", directUnable(a.other));
     ownRestriction(a.me);
     if (a.paused) throw new HttpError(409, "chat_paused", CHAT_NOT_SENT);

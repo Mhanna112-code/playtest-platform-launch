@@ -2,7 +2,7 @@ import { db } from "@/lib/db";
 import { ACCOUNT_WAS_DELETED, displayName, fmtTime } from "@/lib/format";
 import { joinCallRefusal, testPaused } from "@/lib/rules";
 import { HttpError } from "./http";
-import { stoppedPressLine } from "@/lib/refusal";
+import { ownBlockCause, pressRefused, stoppedPressLine } from "@/lib/refusal";
 import { isUniqueClash } from "./passwords";
 import { fmtFor } from "@/lib/tz";
 import { notify } from "./notify";
@@ -41,6 +41,13 @@ export async function hiddenByBlock(testerId: string, t: { id: string; developer
   return !(await wasPartOf(testerId, t.id));
 }
 export const iBlocked = async (me: string, other: string, q: Pick<typeof db, "block"> = db) => (await q.block.count({ where: { blockerId: me, blockedId: other } })) > 0;
+/**
+ * (Owner, Nov 11, §380 H) A press refused because of a block the presser made says so: "You blocked Nora Lane, so your Join call didn't go through." Checked
+ * before the neutral lines that block would otherwise cause (the session it ended, the call or chat it closed). The other person's block: nothing here.
+ */
+export async function ownBlockStop(me: string, other: string, otherName: string, press: string, q: Pick<typeof db, "block"> = db, data: Record<string, unknown> = {}) {
+  if (await iBlocked(me, other, q)) throw new HttpError(409, "own_block", pressRefused(ownBlockCause(otherName), press), data);
+}
 
 /** Everyone this user blocked or was blocked by (for hiding tests from Find). */
 export async function blockPartners(userId: string) {
@@ -135,6 +142,11 @@ export async function joinCall(user: { id: string }, callId: string, body: Recor
   // (Batch 18 section 3; batch 21 section 2) A call the server ended (150%, the $500, or what closed it): Join is refused (and the button goes).
   const own = await db.call.findUnique({ where: { id: callId }, include: { contract: { include: { test: true } } } });
   if (own && (own.contract.testerId === user.id || own.contract.test.developerId === user.id)) await (await import("./workWindow")).finishWorkIfDue(own.contract.testId);
+  // (Owner, Nov 11, §380 H) A call closed by a block this person made: "You blocked Ana Silva, so your Join call didn't go through."
+  if (own && (own.contract.testerId === user.id || own.contract.test.developerId === user.id)) {
+    const otherId = own.contract.testerId === user.id ? own.contract.test.developerId : own.contract.testerId;
+    if (await iBlocked(user.id, otherId)) await ownBlockStop(user.id, otherId, displayName(await db.user.findUniqueOrThrow({ where: { id: otherId } })), "Join call", db, { cancelled: true });
+  }
   if (own && (own.contract.testerId === user.id || own.contract.test.developerId === user.id) && ((await callEndState(callId))?.ended || own.endedAt))
     throw new HttpError(409, "cant_join", CALL_OVER_LINE, { cancelled: true, over: true });
   const call = await db.call.findUnique({ where: { id: callId }, include: { slot: true, contract: { include: { test: { include: { developer: true } } } } } });

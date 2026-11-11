@@ -5,7 +5,7 @@ import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, fmtTime, pronouns } from "@/lib/server/dateFormat";
 import { PAUSED_RIGHT_NOW, closedToNewLine, canAskToRejoin, leftText, movedDue, MAX_ACTIVE_TESTS, termsLine, testPaused, TEST_LIMIT_LINE, type TestEventLike } from "@/lib/rules";
 import { HttpError } from "./http";
-import { asPressRefusal, joinPressRefusal } from "@/lib/refusal";
+import { NOT_TAKING_CAUSE, asPressRefusal, joinPressRefusal, ownBlockCause, pressRefused } from "@/lib/refusal";
 import { NO_FREE_KEY, noKeyWaitingLine } from "@/lib/keys";
 import { LIMITS } from "@/lib/limits";
 import { bell, notify } from "./notify";
@@ -53,7 +53,7 @@ const sameListingIgnoringMode = (saved: unknown, current: Parameters<typeof list
  * (Owner, Nov 11, §377) `q`: the press's transaction, which holds the test's lock (the one pass), so nothing here can change before the save.
  * (Owner, Nov 9, §341) `byDeveloper`: the developer's own Accept / Invite / switch to "Anyone can join" skip 9; the join itself is then refused with the key line.
  */
-export async function joinRefusal(testerId: string, testId: string, opts: { rejoin?: boolean; byDeveloper?: boolean; /** (§377) Ask to rejoin: a block either way reads the neutral line */ neutralBlocks?: boolean } = {}, q: Q = db) {
+export async function joinRefusal(testerId: string, testId: string, opts: { rejoin?: boolean; byDeveloper?: boolean } = {}, q: Q = db) {
   const t = await q.test.findUniqueOrThrow({ where: { id: testId }, include: { developer: true } });
   if (t.status === "stopped") return "This test was stopped.";
   if (t.openUntil && t.openUntil < new Date()) return closedToNewLine(t.openUntil, (d) => fmtDate(d).replace(/, \d{4}$/, "")); // (batch 15 section 18)
@@ -69,7 +69,9 @@ export async function joinRefusal(testerId: string, testId: string, opts: { rejo
   // (§341, §348) A test that uses access keys with none free (a spot open): the tester's presses read the key line, not "full"; nothing closes (applications, asks
   // and invites stay) and Find leaves it out.
   if (!opts.byDeveloper && (await (await import("./accessKeys")).noFreeKeyTests(q, [testId])).has(testId)) return NO_FREE_KEY;
-  if (await q.block.count({ where: { blockerId: testerId, blockedId: t.developerId } })) return opts.neutralBlocks ? NOT_TAKING_NEUTRAL : `You blocked ${displayName(t.developer)}: unblock ${pronouns(t.developer.pronoun).obj} in Account → Blocked people to join.`;
+  // (Owner, Nov 11, §380 H; replaces "You blocked Nora Lane: unblock her in Account → Blocked people to join.") The tester's own block, for Join, Apply and Ask to
+  // rejoin alike: "You blocked Nora Lane." (named with the press: "…, so your Apply didn't go through."). The developer's presses (byDeveloper) read it neutral.
+  if (await q.block.count({ where: { blockerId: testerId, blockedId: t.developerId } })) return opts.byDeveloper ? NOT_TAKING_NEUTRAL : `${ownBlockCause(displayName(t.developer))}.`;
   if (await q.block.count({ where: { blockerId: t.developerId, blockedId: testerId } })) return NOT_TAKING_NEUTRAL;
   if ((await q.contract.count({ where: { testerId, status: "working" } })) >= MAX_ACTIVE_TESTS) return TEST_LIMIT_LINE;
   return "";
@@ -264,13 +266,12 @@ export function clientJoinBody(body: Record<string, unknown>) {
  */
 
 /**
- * (§377) Step 1, J01, under the lock: the first refusal that applies, named with the press. Ask to rejoin keeps its own neutral line for a block either way
- * (batch 16 section 11: "This test isn't taking new testers right now.", never why), at J01's place for the blocks.
+ * (§377) Step 1, J01, under the lock: the first refusal that applies, named with the press.
  */
 async function j01(tx: Tx, testerId: string, testId: string, press: "Join" | "Apply" | "Ask to rejoin", opts: { rejoin?: boolean } = {}) {
-  const ask = press === "Ask to rejoin";
-  const line = await joinRefusal(testerId, testId, { ...opts, neutralBlocks: ask }, tx);
-  if (ask && line === NOT_TAKING_NEUTRAL) return new HttpError(409, "refused", NOT_TAKING_NEUTRAL);
+  // (Owner, Nov 11, §380 H) Ask to rejoin too: "This test isn't taking new testers right now, so your Ask to rejoin didn't go through." (the developer's block),
+  // "You blocked Nora Lane, so your Ask to rejoin didn't go through." (the tester's own).
+  const line = await joinRefusal(testerId, testId, opts, tx);
   return line ? new HttpError(409, "refused", joinPressRefusal(line, press)) : null;
 }
 
@@ -495,6 +496,10 @@ export async function decideApplication(dev: U, testId: string, body: Record<str
   // (the page redraws). Joined another way (accepted) keeps its refusal.
   const declinedAlready = (s: string) => body.action === "decline" && ["withdrawn", "closed", "declined"].includes(s);
   if (declinedAlready(a.status)) return { declined: true, already: true };
+  // (Owner, Nov 11, §380 H) Accept on an application closed by the developer's own block (or with that block on): "You blocked Ana Silva, so your Accept didn't go
+  // through." The tester's block keeps the neutral line ("Ana Silva's application was closed.").
+  if (body.action !== "decline") await (await import("./blocks")).ownBlockStop(dev.id, tester.id, name, "Accept");
+  if (body.action !== "decline" && a.status === "pending" && (await (await import("./blocks")).iBlocked(tester.id, dev.id))) throw new HttpError(409, "gone", `${name}'s application was closed.`);
   if (a.status !== "pending") throw gone(a);
   const extra: TestEventLike[] = [];
   const shownTesters = body.seenTesters && typeof body.seenTesters === "object" ? body.seenTesters as Record<string, unknown> : {};
@@ -640,7 +645,9 @@ export async function askToRejoin(tester: U, testId: string, body: Record<string
     old = await tx.contract.findUnique({ where: { testId_testerId: { testId, testerId: tester.id } } });
     if (!old || old.status === "working") return { stop: new HttpError(409, "not_again", old ? "You've already joined this test." : "You haven't been in this test.") };
     const blocks = await import("./blocks");
-    if (await blocks.blockedEitherWay(tester.id, t.developerId, tx)) return { stop: new HttpError(409, "refused", blocks.NOT_TAKING_LINE) }; // (§380 F) under the lock
+    // (§380 F) under the lock. (Owner, Nov 11, §380 H) Their own block names it; the developer's reads the neutral line, both in the press pattern.
+    if (await blocks.iBlocked(tester.id, t.developerId, tx)) return { stop: new HttpError(409, "refused", pressRefused(ownBlockCause(displayName(t.developer)), "Ask to rejoin")) };
+    if (await blocks.blockedEitherWay(tester.id, t.developerId, tx)) return { stop: new HttpError(409, "refused", pressRefused(NOT_TAKING_CAUSE, "Ask to rejoin")) };
     const rated = (await tx.rating.count({ where: { contractId: old.id } })) > 0;
     if (!canAskToRejoin(old, rated)) return { stop: new HttpError(409, "not_again", rated || old.endKind === "rated" ? "You rated this test, so you can't join it again." : "You can't ask to rejoin this test.") };
     const waiting = await stopOf(() => alreadyWaiting(tester.id, testId, tx));

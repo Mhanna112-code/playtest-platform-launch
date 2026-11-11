@@ -238,7 +238,7 @@ describe("§365 money refusals: Pay more", () => {
     for (const by of ["developer", "tester"] as const) {
       const w = await paid();
       await db.block.create({ data: by === "developer" ? { blockerId: w.dev.user.id, blockedId: w.ana.tester.user.id } : { blockerId: w.ana.tester.user.id, blockedId: w.dev.user.id } });
-      await refused(w, () => payMore(w), "This payment isn't available.");
+      await refused(w, () => payMore(w), by === "developer" ? "You blocked Ana Silva, so your Pay more didn't go through." : "This payment isn't available."); // (§380 H)
     }
     const v = await paid();
     await deleteAccount(v.ana.tester.user.id, "self");

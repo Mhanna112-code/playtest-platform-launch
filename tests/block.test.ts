@@ -67,7 +67,7 @@ describe("block", () => {
     expect((await act(testId, "join", ben.cookie, { listingVersion: 1 })).body.error.message).toBe("This test isn't taking new testers right now, so your Join didn't go through."); // (§364 item 10)
     await settle(); // Windows' clock can lag: the page load comes clearly after the block
     const inv = await act(testId, "invite", dev.cookie, { seenAt: seen(), testerIds: [ben.user.id] });
-    expect(inv.body.message).toBe("Ben Carter can't be invited right now.");
+    expect(inv.body.message).toBe("You blocked Ben Carter, so your Invite didn't go through."); // (§380 H) the developer's own block
     await block(dev.cookie, ben.user.id, "unblock");
     expect((await act(testId, "join", ben.cookie, { listingVersion: 1 })).status).toBe(200);
   });
@@ -80,7 +80,9 @@ describe("block", () => {
     expect((await join(dev.cookie, call.id)).body.error.message).toBe("Your Join call didn't go through: this call was cancelled.");
     const s2 = await setup();
     await db.test.update({ where: { id: s2.testId }, data: { developerId: dev.user.id } });
-    expect((await act(s2.testId, "join", tester.cookie, { listingVersion: 1 })).body.error.message).toBe("You blocked Nora Lane: unblock her in Account → Blocked people to join.");
+    expect((await act(s2.testId, "join", tester.cookie, { listingVersion: 1 })).body.error.message).toBe("You blocked Nora Lane, so your Join didn't go through."); // (§380 H)
+    // (§380 H) The tester's own Join call on a call their block cancelled.
+    expect((await join(tester.cookie, call.id)).body.error.message).toBe("You blocked Nora Lane, so your Join call didn't go through.");
     expect(testId).toBeTruthy();
   });
 });

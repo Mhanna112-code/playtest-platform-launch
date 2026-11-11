@@ -218,8 +218,9 @@ describe("chat after a block (owner, Oct 26)", () => {
     const fromTester = await sact(sessionId, "message", tester.cookie, { body: "After the block" });
     expect(fromTester.status).toBe(409);
     expect(fromTester.body.error).toMatchObject({ code: "closed", message: "This chat is closed." });
+    // (Owner, Nov 11, §380 H) The one who blocked reads their own block.
     const fromDev = await act(testId, "message", dev.cookie, { contractId: sessionId, body: "Hello?" });
-    expect(fromDev.body.error).toMatchObject({ code: "closed", message: "This chat is closed." });
+    expect(fromDev.body.error).toMatchObject({ code: "own_block", message: "You blocked Ana Silva, so your Send didn't go through." });
     expect(await db.message.count({ where: { contractId: sessionId } })).toBe(1);
   });
 });

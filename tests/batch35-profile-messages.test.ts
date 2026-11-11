@@ -98,8 +98,9 @@ describe("batch 35 §105: account-level direct conversations from profiles", () 
     const { default: DeveloperPage } = await import("@/app/app/developers/[id]/page");
     const developerTree = await DeveloperPage({ params: Promise.resolve({ id: dev.user.id }) });
     expect(renderToStaticMarkup(profileControl(developerTree))).not.toContain("data-profile-message");
-    expect(await send(dev, tester.user)).toMatchObject({ status: 409, body: { error: { code: "unable", message: "Unable to chat with this tester." } } });
-    expect(await send(tester, dev.user)).toMatchObject({ status: 409, body: { error: { code: "unable", message: "Unable to chat with this developer." } } });
+    // (Owner, Nov 11, §380 H) The one who blocked reads their own block; the other the neutral line.
+    expect(await send(dev, tester.user)).toMatchObject({ status: 409, body: { error: direction === "outgoing" ? { code: "own_block", message: "You blocked Alex Morgan, so your Send didn't go through." } : { code: "unable", message: "Unable to chat with this tester." } } });
+    expect(await send(tester, dev.user)).toMatchObject({ status: 409, body: { error: direction === "incoming" ? { code: "own_block", message: "You blocked Nora Lane, so your Send didn't go through." } : { code: "unable", message: "Unable to chat with this developer." } } });
     expect(await db.directMessage.count({ where: { senderId: dev.user.id } })).toBe(0);
   });
 

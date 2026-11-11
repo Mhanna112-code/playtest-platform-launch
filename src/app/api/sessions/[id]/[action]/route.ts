@@ -40,6 +40,8 @@ type Ctx = { params: Promise<{ id: string; action: string }> };
  * "work_over": the page moves to its top, where the stopped line says the same. A leave, a rating or a block keep their own (neutral) line.
  */
 const FINAL_AFTER_END = new Set<string>(WORK_OVER_ACTIONS);
+/** (§380 H) The call presses among them. */
+const CALL_PRESS_ACTIONS = new Set(["request-time", "answer-request", "cancel-call", "cancel-set"]);
 async function finalRefusal(userId: string, contractId: string, action: string, body: Record<string, unknown>) {
   if (!FINAL_AFTER_END.has(action)) return;
   const c = await db.contract.findUnique({ where: { id: contractId }, include: { test: { include: { developer: true } } } });
@@ -60,6 +62,8 @@ async function finalRefusal(userId: string, contractId: string, action: string, 
     const press = workOverPress(action, body);
     throw new HttpError(409, "work_over", workOverLine(ctx, dev, fmtDate, press), { failed: press, top: true });
   }
+  // (Owner, Nov 11, §380 H) A call press on a part the tester's OWN block ended: "You blocked Nora Lane, so your Request a time didn't go through."
+  if (c.endKind === "blocked" && CALL_PRESS_ACTIONS.has(action)) await (await import("@/lib/server/blocks")).ownBlockStop(userId, c.test.developerId, dev, workOverPress(action, body));
   // (§364 item 3) Left, rated or blocked: "Your part in this test has ended, so your Send didn't go through."
   if (testerRefusal(ctx, { openUntil: null }, dev, fmtDate, new Date())) throw new HttpError(409, "gone", overPressLine(c, workOverPress(action, body)));
 }

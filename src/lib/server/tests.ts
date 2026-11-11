@@ -1100,8 +1100,11 @@ export async function joinTest(tester: U, testId: string, body: Record<string, u
         listingVersion: t.listingVersion, terms: termsLine(asListing(t), true), questions: t.questions,
       });
     }
-    if (await tx.block.count({ where: { blockerId: tester.id, blockedId: t.developerId } })) throw new HttpError(409, "blocked", `You blocked ${displayName(dev)}: unblock ${pronouns(dev.pronoun).obj} in Account → Blocked people to join.`);
-    if (await tx.block.count({ where: { blockerId: t.developerId, blockedId: tester.id } })) throw new HttpError(409, "closed", "This test isn't taking new testers right now.");
+    // (Owner, Nov 11, §380 H) Each person's own block names it in their own press ("You blocked Nora Lane, so your Join didn't go through."; the developer's Accept:
+    // "You blocked Ana Silva, so your Accept didn't go through."); the other person's reads neutral.
+    const byDev = body.acceptedByDeveloper === true;
+    if (await tx.block.count({ where: { blockerId: tester.id, blockedId: t.developerId } })) throw new HttpError(409, "blocked", byDev ? `${displayName(tester)}'s application was closed.` : RF.pressRefused(RF.ownBlockCause(displayName(dev)), "Join"));
+    if (await tx.block.count({ where: { blockerId: t.developerId, blockedId: tester.id } })) throw new HttpError(409, "closed", byDev ? RF.pressRefused(RF.ownBlockCause(displayName(tester)), "Accept") : "This test isn't taking new testers right now.");
     gapStop(t, profile, body, "Join");
     // (Design doc 7.3) Joining needs the NDA accepted (the time it was accepted is kept with the terms).
     const ndaAt = typeof body.ndaAcceptedAt === "string" && !isNaN(new Date(body.ndaAcceptedAt).getTime()) ? new Date(body.ndaAcceptedAt) : null;

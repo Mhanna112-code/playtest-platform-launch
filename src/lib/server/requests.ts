@@ -499,6 +499,8 @@ async function refusals(c: Ctx["c"], side: Side, /** (§363) the press refused: 
   // (Owner, Nov 9, §365, found by the refusal matrix) A stopped test first: its stop ended every session, and the press reads the stopped line, not "<name>'s
   // session has ended".
   if (c.test.status === "stopped") throw new HttpError(409, "closed", stoppedPressLine(press));
+  // (Owner, Nov 11, §380 H) A block this person made (it ended the session): "You blocked Nora Lane, so your Request a time didn't go through."
+  await ownBlockOf(c, side, press);
   if (c.status !== "working") throw new HttpError(409, "closed", RF.pressRefused(side === "tester" ? RF.PART_ENDED_CAUSE : RF.sessionEndedCause(displayName(c.tester)), press)); // (§364 items 3, 4)
   pausedRefusal(c, side, press);
   // (Owner) "Closed" only means no NEW testers: testers already in carry on, so calls work. Only a stopped test refuses.
@@ -593,7 +595,9 @@ export async function devRequestTime(dev: U, testId: string, body: Record<string
     all.push(x);
   }
   if (!all.length) await refusals(out[0].c, "developer", "Request a time");
-  const gone = out.map((x) => ({ contractId: x.c.id, text: requestTesterGoneLine(displayName(x.c.tester)) }));
+  // (Owner, Nov 11, §380 H) A tester whose session ended by the developer's own block: "You blocked Ana Silva, so your Request a time didn't go through."
+  const own = new Set((await db.block.findMany({ where: { blockerId: dev.id, blockedId: { in: out.map((x) => x.c.testerId) } }, select: { blockedId: true } })).map((b) => b.blockedId));
+  const gone = out.map((x) => ({ contractId: x.c.id, text: own.has(x.c.testerId) ? RF.pressRefused(RF.ownBlockCause(displayName(x.c.tester)), "Request a time") : requestTesterGoneLine(displayName(x.c.tester)) }));
   // (Batch 16 section 21) A time of this press already requested with them (e.g. in another tab meanwhile): already done, said plainly after the gate.
   const starts = kind.rows.map((r) => r.startsAt);
   const sameAgain = async (contractId: string) => !!(await db.callRequest.findFirst({ where: { contractId, fromSide: "developer", status: "pending", startsAt: { in: starts } } }));
@@ -733,6 +737,12 @@ export async function devRequestTime(dev: U, testId: string, body: Record<string
     ...(gone.length ? { gone } : {}),
   };
 }
+/** (Owner, Nov 11, §380 H) The block this side made between the two (whatever it closed since) refuses the press with its own line. */
+async function ownBlockOf(c: Ctx["c"], side: Side, press: string) {
+  const blocks = await import("./blocks");
+  if (side === "tester") await blocks.ownBlockStop(c.testerId, c.test.developerId, displayName(c.test.developer), press);
+  else await blocks.ownBlockStop(c.test.developerId, c.testerId, displayName(c.tester), press);
+}
 /** (Owner, Nov 5, §278) "Your Request a time didn't go through for mhann: mhann's session has ended." */
 export const requestTesterGoneLine = (name: string) => RF.pressRefused(RF.sessionEndedCause(name), "Request a time"); // (Owner, Nov 9, §364 item 4) one line each
 
@@ -858,6 +868,8 @@ export async function answerRequest(user: U, contractId: string, body: Record<st
   // (Owner, Nov 11, §380) Withdraw on your own request that was declined, closed (its time passed, the part ended, a pause, a block…) or already withdrawn:
   // already what the press wanted, no refusal (the page redraws). Accepted / booked keeps its refusal.
   if (action === "withdraw" && mine && (WITHDRAWN_ALREADY.has(r.status) || (r.status === "pending" && r.startsAt < new Date()))) return { withdrawn: true, already: true };
+  // (Owner, Nov 11, §380 H) A block this person made (it closed the request): "You blocked Ana Silva, so your Accept didn't go through."
+  await ownBlockOf(c, side, action === "accept" ? "Accept" : action === "decline" ? "Decline" : "Withdraw");
   if (side === "tester") await answerTermsFirst(contractId);
   if (r.status === "pending" && r.startsAt < new Date()) await db.callRequest.update({ where: { id: r.id }, data: { status: "closed", closedReason: TIME_PASSED_REASON } });
   const fresh = await db.callRequest.findUniqueOrThrow({ where: { id: r.id } });

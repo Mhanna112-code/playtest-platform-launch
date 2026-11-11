@@ -29,6 +29,9 @@ export const ACCOUNT_PAUSED_CAUSE = "Your account is paused";
 export const ACCOUNT_SUSPENDED_CAUSE = "Your account is suspended";
 /** (§364 item 10) Join / Apply / an invite on a test that can't take testers right now (paused, or the developer blocked them: never why). */
 export const NOT_TAKING_CAUSE = "This test isn't taking new testers right now";
+/** (Owner, Nov 11, §380 H) A refusal caused by a block the presser made: "You blocked Nora Lane, so your Join didn't go through." (the other person's block keeps
+ * the neutral lines, never why). */
+export const ownBlockCause = (name: string) => `You blocked ${name}`;
 /** (§364 item 10) Open until passed. */
 export const closedToNewCause = (date: string) => `This test closed to new testers on ${date}`;
 /** (§364 item 12) Your own deleted account (an old tab's press). */
@@ -50,6 +53,9 @@ export function asPressRefusal(line: string, press: string) {
   if (closed) return pressRefused(closedToNewCause(closed[1]), press);
   if (line === "This test is paused right now." || line === `${NOT_TAKING_CAUSE}.` || / isn't taking new testers right now, so this invite was closed\.$/.test(line)) return pressRefused(NOT_TAKING_CAUSE, press);
   if (line === ANY_MORE) return pressRefused(ANY_MORE.replace(/\.$/, ""), press);
+  // (Owner, Nov 11, §380 H) The presser's own block: "You blocked Nora Lane, so your Apply didn't go through."
+  const own = /^You blocked (.+)\.$/.exec(line);
+  if (own) return pressRefused(ownBlockCause(own[1]), press);
   return line;
 }
 

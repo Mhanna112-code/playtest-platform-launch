@@ -80,6 +80,14 @@ export const CHAT_TOO_FAST = "You're sending messages very fast. Wait a minute, 
  */
 export async function sendChat(user: { id: string; name: string; email: string }, testId: string, testerId: string, raw: unknown, clientIdRaw?: unknown, page?: Record<string, unknown>) {
   const a = await chatAccess(user.id, testId, testerId);
+  // (Owner, Nov 11, §380 H) A block this person made: "You blocked Ana Silva, so your Send didn't go through." (the other person's: "This chat is closed.").
+  const ownBlock = async (tx: Pick<typeof db, "block"> = db) => {
+    const iAmDevHere = user.id === a.test.developerId;
+    const otherId = iAmDevHere ? testerId : a.test.developerId;
+    const blocks = await import("./blocks");
+    if (await blocks.iBlocked(user.id, otherId, tx)) await blocks.ownBlockStop(user.id, otherId, displayName(await db.user.findUniqueOrThrow({ where: { id: otherId } })), "Send", tx);
+  };
+  await ownBlock();
   if (a.blocked) throw new HttpError(409, "closed", "This chat is closed.");
   // (Batch 15 section 13) The same press again (its answer was lost): the message it already posted, never a second one.
   const clientId = readClientId(clientIdRaw);
@@ -107,6 +115,7 @@ export async function sendChat(user: { id: string; name: string; email: string }
   // the chat ("This chat is closed."); one a moment later comes after the message. No window is left between the check and the write.
   const m = await db.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${testId} FOR UPDATE`;
+    await ownBlock(tx); // (§380 H)
     if (await (await import("./blocks")).blockedEitherWay(testerId, a.test.developerId, tx)) throw new HttpError(409, "closed", "This chat is closed.");
     return tx.message.create({ data: { testId, testerId, contractId: a.contract.id, senderId: user.id, body, clientId } });
   }).catch(async (e) => {

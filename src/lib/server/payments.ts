@@ -744,6 +744,8 @@ export async function payExtra(dev: U & Parameters<typeof cardRefusal>[0], testI
   const devNow = await db.user.findUniqueOrThrow({ where: { id: dev.id }, select: { devSuspendedAt: true, holdStartedAt: true } });
   if (devNow.devSuspendedAt && devNow.holdStartedAt) throw new HttpError(403, "suspended", suspendedLine("extra pay")); // (§364 item 8)
   await (await import("./holds")).devHoldRefusal(dev.id, "pay", "Pay more");
+  // (Owner, Nov 11, §380 H) Their own block: "You blocked Ana Silva, so your Pay more didn't go through."; the tester's block keeps the neutral line.
+  await (await import("./blocks")).ownBlockStop(dev.id, c.testerId, displayName(c.tester), "Pay more");
   if ((await blockedEitherWay(dev.id, c.testerId)) || !testerPayable(c.tester)) throw new HttpError(409, "unavailable", "This payment isn't available.");
   const amount = toCents(body.amount);
   const note = readText(body.note, LIMITS.reason, "bad_note");
@@ -764,6 +766,7 @@ export async function payExtra(dev: U & Parameters<typeof cardRefusal>[0], testI
     await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${testId} FOR UPDATE`;
     // (Owner, Nov 11, §380 F) The block, read again under the test's lock (a Block takes every shared test's lock before writing its row): a Block a moment
     // earlier refuses this Pay more with its line; one a moment later comes after it.
+    await (await import("./blocks")).ownBlockStop(dev.id, c.testerId, displayName(c.tester), "Pay more", tx); // (§380 H)
     if (await blockedEitherWay(dev.id, c.testerId, tx)) throw new HttpError(409, "unavailable", "This payment isn't available.");
     // (Owner, Nov 3, §159) A payment on this part waiting for the bank: refused (never a stop-once: it can't go ahead), read in the locked step, so a Pay more pressed
     // the moment a Charge starts waiting can't slip through.

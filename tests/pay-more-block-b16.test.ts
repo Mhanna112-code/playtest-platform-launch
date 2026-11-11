@@ -39,7 +39,7 @@ describe("B16: Pay more is hidden on the developer's test page while a block sto
       await db.block.create({ data: by === "developer" ? { blockerId: w.dev.user.id, blockedId: w.tester.user.id } : { blockerId: w.tester.user.id, blockedId: w.dev.user.id } });
       expect(await testPage(w.testId, w.dev.user.id), by).not.toContain("data-part-pay-more");
       const r = await payMore(w.testId, w.dev.cookie, { contractId: w.sessionId, submissionId: w.sub.id, amount: "1.00" });
-      expect(r.body.error?.message).toBe("This payment isn't available.");
+      expect(r.body.error?.message).toBe(by === "developer" ? "You blocked Ana Silva, so your Pay more didn't go through." : "This payment isn't available."); // (§380 H)
     }
   });
 
