@@ -392,7 +392,7 @@ describe("§163 6: own other-tab presses on the same thing are refused at once",
     expect(a.body.error.message).toMatch(line("You already rejected Cara Diaz's written answers in another tab at <at>."));
   });
 
-  it("Pay in tab B, then Pay more in tab A on that part: stops once, then goes ahead; past what's left it's refused on the first press", async () => {
+  it("Pay in tab B, then Pay more in tab A on that part: stops once, then goes ahead; past what's left: the box first, then the amount's mistake", async () => {
     const w = await awayWorld();
     await withCard(w.dev.user.id);
     stripe();
@@ -400,12 +400,14 @@ describe("§163 6: own other-tab presses on the same thing are refused at once",
     await settle();
     expect((await pay(w.dev.cookie, { kind: "submission", id: w.cara.sub.id, amount: "10.00", tickedCents: 1000, tab: "tab-B" })).status).toBe(200);
     const more = (body: Record<string, unknown>) => act(w.testId, "pay-extra", w.dev.cookie, { contractId: w.cara.sessionId, submissionId: w.cara.sub.id, payKey: randomUUID(), tab: "tab-A", seenAt: loaded, ...body });
-    // Past what's left before the most (the part's max): refused at once, never after a stop.
-    const over = await more({ amount: "5000.00", tickedCents: 500_000, over200: true });
-    expect([over.status, over.body.error?.code]).toEqual([400, "over_cap"]);
-    const first = await more({ amount: "2.00", tickedCents: 200 });
+    // (Owner, Nov 11: refusals → box → form mistakes) Past what's left (the part's max) is the amount's own mistake: the stop-once box first, then the mistake;
+    // nothing is charged.
+    const first = await more({ amount: "5000.00", tickedCents: 500_000, over200: true });
     expect(first.body.error?.code).toBe("stop_once");
     expect(changesOf(first)).toEqual(["You paid Cara Diaz $10.00 for the written answers in another tab"]);
+    const over = await more({ amount: "5000.00", tickedCents: 500_000, over200: true, confirmed: true, boxAt: seen() });
+    expect([over.status, over.body.error?.code]).toEqual([400, "over_cap"]);
+    expect(await db.payment.count({ where: { submissionId: w.cara.sub.id, kind: "extra" } })).toBe(0);
     expect((await more({ amount: "2.00", tickedCents: 200, confirmed: true, boxAt: seen() })).status).toBe(200);
   });
 

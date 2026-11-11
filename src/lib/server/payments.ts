@@ -141,27 +141,24 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0] & { hold
     if (await devOwes(dev.id)) throw new HttpError(409, "owed_first", PAY_WAITS);
     if (piece.kind === "call" && body.typed === "rate" && rateCents != null && rateCents >= 0) amountCents = amountFromRate(rateCents, piece.minutes);
     else if (piece.kind === "call" && amountCents != null && rateCents != null) rateCents = rateFromAmount(amountCents, piece.minutes);
-    {
-      // (Batch 9 section 6; batch 11 section 6: one Pay box, an amount above the base counts as extra pay; batch 12 section 2: the unlisted call caps) Caps per piece.
-      // (Batch 12 section 2) An unlisted call's $200 an hour, said first (the room below is that cap × the minutes).
-      if (piece.kind === "call" && piece.listing == null && rateCents != null && rateCents > NO_LISTING_CALL_RATE_CAP_CENTS) throw new HttpError(400, "over_cap", "A call that isn't listed can be paid at most $200 an hour.");
-      const room = await pieceRoom({ ...piece, contractId: c.id }, tx);
-      // (§163) Over what's left: refused on the first press (never after a stop whose second press could only be refused).
-      if (amountCents != null && amountCents > room.roomCents) {
-        throw new HttpError(400, "over_cap", overRoomLine(piece, room));
-      }
-      const card = amountCents != null && amountCents > 0 ? cardRefusal(dev) : "";
-      if (card) throw new HttpError(409, "no_card", card);
-    }
+    // The card is a refusal (not a field mistake): before the box.
+    const card = amountCents != null && amountCents > 0 ? cardRefusal(dev) : "";
+    if (card) throw new HttpError(409, "no_card", card);
     // (Batch 16 section 21) Another tab's Pay on this piece (or a lowered call length) stops it once; other actions there don't.
     // (Owner, Nov 11, §380 D2; replaces "form mistakes come BEFORE the stop-once") Pay is pressable with the form incomplete: the box comes first, shown under the
     // button while the page's own red notes stay at their fields.
     await devGate(tx, c.testId, body, { paidSoFarCents: await paidSoFar(c.id, tx), name }, [], undefined, payPress);
     // (§380 D2) The safety net: the form's own mistakes (red at the field); nothing is reserved or charged.
+    // (Owner, Nov 11: refusals → box → form mistakes) The amount checks all come after the box: the unlisted call's $200 an hour and over what's left (§163) too.
     {
       const check = checkPay(amountCents, piece.listing, reason, tickedCents, over200);
       if (!check.ok) throw new HttpError(400, "bad_amount", check.message);
       if (piece.kind === "call" && rateCents != null && rateCents < 0) throw new HttpError(400, "bad_rate", "Enter a rate like 30.00.");
+      // (Batch 9 section 6; batch 11 section 6: one Pay box, an amount above the base counts as extra pay; batch 12 section 2: the unlisted call caps) Caps per piece.
+      // (Batch 12 section 2) An unlisted call's $200 an hour, said before what's left (the room below is that cap × the minutes).
+      if (piece.kind === "call" && piece.listing == null && rateCents != null && rateCents > NO_LISTING_CALL_RATE_CAP_CENTS) throw new HttpError(400, "over_cap", "A call that isn't listed can be paid at most $200 an hour.");
+      const room = await pieceRoom({ ...piece, contractId: c.id }, tx);
+      if (amountCents != null && amountCents > room.roomCents) throw new HttpError(400, "over_cap", overRoomLine(piece, room));
     }
     const rev = { amountCents: amountCents!, agreedCents: piece.listing, reason, payKey, rateCents: piece.kind === "call" ? rateCents : null };
     // (Batch 15 section 9) The charge's key: an interrupted press on this piece in the last 24 hours lends its key, so nothing is ever charged twice.
@@ -800,13 +797,12 @@ export async function payExtra(dev: U & Parameters<typeof cardRefusal>[0], testI
     // (Batch 9 section 6; batch 29 §38) Per piece: the part's max in all, listed or not.
     const room = await pieceRoom(piece, tx);
     const morePress = { ...payPressOf(c.id, at), fromNeeds: body.from === "needs" }; // (§362) Needs you's Pay (an update's), never the Testers list's Pay more
-    if (amount != null && amount > room.roomCents) {
-      // (Owner, Nov 4, batch 35 §163; replaces batch 16 section 21's stop first) More than what's left: refused on the first press, never after a stop.
-      throw new HttpError(400, "over_cap", overRoomLine(piece, room));
-    }
     await devGate(tx, testId, body, {}, [], undefined, morePress);
     // (§380 D2) The safety net: the amount's own mistakes, red at the field; nothing is reserved or charged.
     if (!check.ok) throw new HttpError(400, "bad_amount", check.message);
+    // (Owner, Nov 11: refusals → box → form mistakes; replaces §163's "refused on the first press, never after a stop") More than what's left is an amount
+    // mistake too: after the box.
+    if (amount != null && amount > room.roomCents) throw new HttpError(400, "over_cap", overRoomLine(piece, room));
     // (Batch 15 section 9) An interrupted Pay more on this piece in the last 24 hours lends its key.
     // (Batch 19 section 5) A cancelled or failed earlier attempt with this press key keeps its row: this attempt gets a key of its own.
     const stripeKey = await freshPayKey(tx, ["extra"], await pressKeyFor(at, ["extra"], extraKey, tx));

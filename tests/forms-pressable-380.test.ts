@@ -1,11 +1,13 @@
 import { readFileSync } from "node:fs";
+import type Stripe from "stripe";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { NOTHING_TO_ADD, ZERO_PAY_REASON } from "@/lib/rules";
 import { ANSWER_ONE } from "@/lib/questions";
 import { pay, payMore } from "./b15";
-import { addTo, joined, sact, seen, settle, setup } from "./fixtures";
+import { setStripeForTests } from "@/lib/server/stripe";
+import { addTo, bookCall, joined, sact, seen, settle, setup } from "./fixtures";
 
 // (Owner, Nov 11, §380 D2; replaces §380 D's "disabled until valid") Send Answers, Add to this answer, Dispute, Charge, Pay / Pay more and Send your side stay
 // pressable with their fields incomplete. One press marks the red notes at the fields on the page AND still goes to the server, whose order is refusals (final,
@@ -120,6 +122,60 @@ describe("§380 D2: Pay", () => {
     const r = await pay(w.dev.cookie, { kind: "submission", id: w.written.id, amount: "", tickedCents: null });
     expect(code(r)).toEqual([409, "reviewed"]);
     expect(await db.payment.count({ where: { submissionId: w.written.id } })).toBe(1);
+  });
+
+  it("an unlisted call over $200 an hour + a stop-once box (another tester joined): the box; then the cap; nothing paid until it's fixed", async () => {
+    const s = await setup({ liveRateCents: null });
+    const j = await joined(s.testId);
+    const call = await bookCall(s.testId, s.dev.cookie, j.sessionId, j.tester.cookie, 48);
+    await db.call.update({ where: { id: call.id }, data: { startsAt: new Date(Date.now() - 2 * 3_600_000), measuredMinutes: 30, measuredAt: new Date() } }); // held, 30 min
+    const loaded = seen();
+    await settle();
+    await joined(s.testId, "Ben Carter", "he");
+    const press = (body: Record<string, unknown>) => pay(s.dev.cookie, { kind: "call", id: call.id, seenAt: loaded, ...body });
+    const first = await press({ rate: "201.00", typed: "rate", amount: "100.50", tickedCents: 10_050, confirmed: false });
+    expect(code(first), JSON.stringify(first.body)).toEqual([409, "stop_once"]);
+    const second = await press({ rate: "201.00", typed: "rate", amount: "100.50", tickedCents: 10_050, confirmed: true, boxAt: seen() });
+    expect([second.status, second.body.error?.message]).toEqual([400, "A call that isn't listed can be paid at most $200 an hour."]);
+    // Over what's left (§163) is an amount mistake too: after the box.
+    const over = await press({ amount: "100.01", tickedCents: 10_001, confirmed: false });
+    expect(code(over), JSON.stringify(over.body)).toEqual([409, "stop_once"]);
+    expect(code(await press({ amount: "100.01", tickedCents: 10_001, confirmed: true, boxAt: seen() }))).toEqual([400, "over_cap"]);
+    expect(await db.review.count({ where: { callId: call.id } })).toBe(0);
+    expect(await db.payment.count({ where: { callId: call.id } })).toBe(0);
+    expect((await press({ rate: "200.00", amount: "100.00", tickedCents: 10_000, confirmed: true, boxAt: seen() })).status).toBe(200);
+  });
+
+  it("Pay with no card + a stop-once box: the card refusal first (never the box), nothing paid", async () => {
+    const s = await setup();
+    const j = await joined(s.testId);
+    expect((await sact(j.sessionId, "written", j.tester.cookie, { answers: [ANS, ANS], seenAt: seen(), confirmed: true })).status).toBe(200);
+    const sub = await db.submission.findFirstOrThrow({ where: { contractId: j.sessionId } });
+    await db.user.update({ where: { id: s.dev.user.id }, data: { stripePaymentMethodId: null } });
+    const loaded = seen();
+    await settle();
+    await joined(s.testId, "Ben Carter", "he");
+    setStripeForTests({} as Stripe); // payments on: the card is checked (nothing reaches Stripe before it)
+    try {
+      const r = await pay(s.dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000, seenAt: loaded, confirmed: false });
+      expect(code(r), JSON.stringify(r.body)).toEqual([409, "no_card"]);
+    } finally {
+      setStripeForTests(null);
+    }
+    expect(await db.payment.count({ where: { submissionId: sub.id } })).toBe(0);
+  });
+
+  it("Pay more past what's left + a stop-once box (another tester joined): the box; then the amount; nothing charged", async () => {
+    const w = await paidWorld();
+    const loaded = seen();
+    await settle();
+    await joined(w.testId, "Ben Carter", "he");
+    const more = (body: Record<string, unknown>) => payMore(w.testId, w.dev.cookie, { contractId: w.sessionId, submissionId: w.written.id, amount: "5000.00", tickedCents: 500_000, over200: true, seenAt: loaded, ...body });
+    const first = await more({ confirmed: false });
+    expect(code(first), JSON.stringify(first.body)).toEqual([409, "stop_once"]);
+    const second = await more({ confirmed: true, boxAt: seen() });
+    expect(code(second)).toEqual([400, "over_cap"]);
+    expect(await db.payment.count({ where: { submissionId: w.written.id, kind: "extra" } })).toBe(0);
   });
 
   it("Pay more with no amount, nothing else: the red amount, nothing charged", async () => {
