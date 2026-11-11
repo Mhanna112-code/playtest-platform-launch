@@ -757,6 +757,10 @@ export async function payExtra(dev: U & Parameters<typeof cardRefusal>[0], testI
   // (Owner, Nov 11, §386 A; replaces §368) No money moves while the test or the developer is paused: refused first (the route refuses a hold, a suspension and the
   // team's pause before this; this is the backstop).
   await moneyFrozenRefusal(dev.id, c.test, "Pay more");
+  // (Owner, Nov 11, §386 D; was after the piece's own refusals) The block right after the hold: their own block "You blocked Ana Silva, so your Pay more didn't
+  // go through." (§380 H), the tester's block the neutral line; then not paid, the $0 closures and the closing date.
+  await (await import("./blocks")).ownBlockStop(dev.id, c.testerId, displayName(c.tester), "Pay more");
+  if (await blockedEitherWay(dev.id, c.testerId)) throw new HttpError(409, "unavailable", "This payment isn't available.");
   // (Batch 9) Extra pay goes on a sent part or a held call.
   const piece = await pieceOf(body.callId ? { callId: String(body.callId) } : { submissionId: String(body.submissionId ?? "") });
   if (!piece || piece.contractId !== c.id) throw new HttpError(404, "not_found", "Choose a part they sent.");
@@ -773,9 +777,7 @@ export async function payExtra(dev: U & Parameters<typeof cardRefusal>[0], testI
     const at = await pieceCloseOut(piece.where);
     if (closedOut(at)) throw new HttpError(409, "pay_more_closed", payClosedLine(fmtDate(at!), true));
   }
-  // (Owner, Nov 11, §380 H) Their own block: "You blocked Ana Silva, so your Pay more didn't go through."; the tester's block keeps the neutral line.
-  await (await import("./blocks")).ownBlockStop(dev.id, c.testerId, displayName(c.tester), "Pay more");
-  if ((await blockedEitherWay(dev.id, c.testerId)) || !testerPayable(c.tester)) throw new HttpError(409, "unavailable", "This payment isn't available.");
+  if (!testerPayable(c.tester)) throw new HttpError(409, "unavailable", "This payment isn't available.");
   const amount = toCents(body.amount);
   const note = readText(body.note, LIMITS.reason, "bad_note");
   // (Batch 30 §2) $0 answers an updated version the tester sent after it was paid: it closes that Needs you row (an optional note), charging nothing.
