@@ -134,9 +134,10 @@ describe("batch 30 §2 (batch 35 §136): adding to a part after it's paid", () =
 
   it("a paid recording can be added to (new uploads aren't refused); an old rejection and a team closure stay locked", async () => {
     const { resendRefusal } = await import("@/lib/server/paidUpdates");
-    expect(resendRefusal({ rejected: false }, "recording")).toBe("");
-    expect(resendRefusal({ rejected: true }, "written")).toBe("Your written answers were already reviewed, so they can't be changed.");
-    expect(resendRefusal({ rejected: false, teamClosedById: "a" }, "written")).toBe(M.TEAM_CLOSED_NO_CHANGE);
+    expect(resendRefusal({ rejected: false }, "recording", "Send")).toBe("");
+    expect(resendRefusal({ rejected: true }, "written", "Send Answers")).toBe("Your written answers were already reviewed, so they can't be changed.");
+    // (Owner, Nov 11, §386 B) The team's $0 closure names the press.
+    expect(resendRefusal({ rejected: false, teamClosedById: "a" }, "written", "Send Answers")).toBe("The team closed this for $0, so your Send Answers didn't go through.");
     const s = await setup({ writtenCents: null, recordingCents: "20.00" });
     const j = await joined(s.testId);
     const start = await sact(j.sessionId, "recording-start", j.tester.cookie, { filename: "run.webm", size: 1000, contentType: "video/webm" });
@@ -329,7 +330,7 @@ describe("batch 30 §5: the team closes a developer's open reviews at $0", () =>
     // And it can't be sent again.
     const up = await sact(w.a.sessionId, "written", w.a.tester.cookie, { answers: LONG2, seenAt: seen(), confirmed: true });
     expect(up.status).toBe(409);
-    expect(up.body.error.message).toBe(M.TEAM_CLOSED_NO_CHANGE);
+    expect(up.body.error.message).toBe(M.teamClosedNoChange("Send Answers")); // (§386 B)
     // Closing again finds nothing open.
     expect((await aact(ad.cookie, "preview-team-close", { id: w.a.dev.user.id, scope: "developer" })).body.line).toBe("There are no open reviews to close.");
   });

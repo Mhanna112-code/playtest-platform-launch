@@ -1,5 +1,5 @@
 import type { Prisma } from "@prisma/client";
-import { TEAM_CLOSED_NO_CHANGE, addedWhat, updateRowLine, updatedAtCapLive } from "@/lib/moneyLines";
+import { addedWhat, teamClosedNoChange, updateRowLine, updatedAtCapLive } from "@/lib/moneyLines";
 
 type Tx = Prisma.TransactionClient;
 
@@ -7,9 +7,9 @@ type Tx = Prisma.TransactionClient;
  * (Batch 30 §2; batch 35 §136) After a part is paid, the tester can still ADD to it (more text or files, more recordings; what was sent stays). Refused only for an
  * old rejection and for a piece the team closed at $0 (final). Returns the refusal, or "".
  */
-export function resendRefusal(review: { rejected: boolean; teamClosedById?: string | null } | null | undefined, part: "written" | "recording") {
+export function resendRefusal(review: { rejected: boolean; teamClosedById?: string | null } | null | undefined, part: "written" | "recording", /** (§386 B) the press it names */ press: string) {
   if (!review) return "";
-  if (review.teamClosedById) return TEAM_CLOSED_NO_CHANGE;
+  if (review.teamClosedById) return teamClosedNoChange(press); // (Owner, Nov 11, §386 B) "The team closed this for $0, so your Add didn't go through."
   if (review.rejected) return part === "written" ? "Your written answers were already reviewed, so they can't be changed." : "Your recording was already reviewed, so it can't be changed.";
   return "";
 }

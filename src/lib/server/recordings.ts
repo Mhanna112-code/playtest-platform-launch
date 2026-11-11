@@ -42,7 +42,7 @@ export async function startRecording(tester: U, contractId: string, body: Record
     const over = await partOver(tx, contractId, "upload", run);
     if (over) return { stop: over };
     // (Batch 30 §2; batch 35 §136) A paid part can still be added to (attachments included); only an old rejection or the team's $0 closure stays locked.
-    const locked = resendRefusal((await sentPart(tx, contractId, part))?.review, part);
+    const locked = resendRefusal((await sentPart(tx, contractId, part))?.review, part, "upload");
     if (locked) return { stop: new HttpError(409, "paid", locked) };
     // (Owner, Oct 29, batch 13 section 7) The Recording part takes up to 5 recordings (a removed one frees its slot); videos attached to the written part count separately
     // (batch 11's limits: 5 videos and 5 files there).
@@ -175,7 +175,7 @@ export async function sendRecording(tester: U, contractId: string, body: Record<
     const over = await partOver(tx, contractId, press, run);
     if (over) return { stop: over };
     // 3a. Refused for good ((Owner, Nov 4, §183) never after a stop): an old rejection or the team's $0 closure; all 5 recordings already sent.
-    const shut = resendRefusal(sent?.review, "recording");
+    const shut = resendRefusal(sent?.review, "recording", press); // (§386 B) a recording's Send / Add
     if (shut) return { stop: new HttpError(409, "paid", shut) };
     if (sent && (await tx.recording.count({ where: { contractId, part: "recording", submissionId: { not: null } } })) >= MAX_RECORDINGS) return { stop: new HttpError(409, "too_many", ALL_RECORDINGS_SENT) };
     // 3b. Paused → an NDA change → new terms → (batch 13 §7) a recording still uploading: all of them go together as ONE piece, so a Send waits for it (an

@@ -1423,7 +1423,7 @@ async function keepStaleTyped(tx: Tx, testerId: string, contractId: string, forQ
  */
 function sendRefusal(existing: SentPart | null, qs: string[], answers: string[], answersNew = false, openLeft = false) {
   // (Batch 30 §2) Only an old rejection or the team's $0 closure stays locked against anything more.
-  const locked = resendRefusal(existing?.review, "written");
+  const locked = resendRefusal(existing?.review, "written", "Send Answers"); // (§386 B)
   if (locked) return new HttpError(409, "paid", locked);
   // (Owner, Nov 3, batch 35 §136; replaces batch 13 §8's "sending replaces the sent version" and batch 20 §26's updated answers) What was sent is locked: a
   // second Send is only for the answers to changed questions (after a switch), and those are ADDED under what was sent ("Added"), never in its place.
@@ -1545,7 +1545,7 @@ const questionKeyOf = (key: string) => key.replace(/-\d+$/, "");
 /** Step 3a for Add to this answer: what refuses it for good ((Owner, Nov 4, §183) never a stop whose second press could only be refused). */
 function addRefusal(existing: SentPart | null, c: { questions: unknown }, key: string) {
   if (!existing) return new HttpError(409, "not_sent", "Send your answers first.");
-  const locked = resendRefusal(existing.review, "written");
+  const locked = resendRefusal(existing.review, "written", "Add"); // (§386 B)
   if (locked) return new HttpError(409, "paid", locked);
   const qs = writtenQuestions(c);
   // (Owner, Nov 5, §265) The questions follow the listing, so an answered current question is added to straight away, by its words, whatever set it was sent

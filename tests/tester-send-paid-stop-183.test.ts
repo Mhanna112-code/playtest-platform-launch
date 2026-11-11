@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
-import { TEAM_CLOSED_NO_CHANGE } from "@/lib/moneyLines";
+import { teamClosedNoChange } from "@/lib/moneyLines";
 import { PAYMENT_RULES } from "@/lib/termsOfUse";
 import { pay, payMore } from "./b15";
 import { addTo, joined, sact, seen, settle, setup } from "./fixtures";
@@ -192,7 +192,7 @@ describe("§183 Add to this answer after a payment on the written answers", () =
     expect((await more(t, t.written.id)).status).toBe(200);
     await db.review.update({ where: { submissionId: t.written.id }, data: { teamClosedById: admin.user.id } });
     const closed = await addTo(t.sessionId, t.tester.cookie, { text: "Too late to add.", seenAt: loaded2, loadedAt: loaded2 });
-    expect(closed.body.error, JSON.stringify(closed.body)).toMatchObject({ code: "paid", message: TEAM_CLOSED_NO_CHANGE });
+    expect(closed.body.error, JSON.stringify(closed.body)).toMatchObject({ code: "paid", message: teamClosedNoChange("Add") }); // (§386 B)
   });
 });
 

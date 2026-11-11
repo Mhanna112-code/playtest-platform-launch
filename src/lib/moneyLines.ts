@@ -47,7 +47,9 @@ export const teamClosedLine = (reason: string) => `${TEAM_CLOSED_LABEL}: “${re
 export const teamDecidedLabel = (amount: string) => `The team decided: ${amount} in all`;
 export const DEV_SIDE_LABEL = "The developer's side";
 export const TEAM_CLOSED_NO_DISPUTE = "The team closed this for $0, so it can't be disputed.";
-export const TEAM_CLOSED_NO_CHANGE = "The team closed this for $0, so it can't be changed.";
+/** (Owner, Nov 11, §386 B; was "…, so it can't be changed.") The team's $0 closure names the press: "The team closed this for $0, so your Send Answers didn't go through." */
+export const TEAM_CLOSED_CAUSE = "The team closed this for $0";
+export const teamClosedNoChange = (press: string) => `${TEAM_CLOSED_CAUSE}, so your ${press} didn't go through.`;
 export const TEAM_CLOSED_NO_PAY = "The team closed this for $0.";
 /** Reason rules: 10 to 1,000 characters (testers read it). */
 export const TEAM_CLOSE_REASON = "Say why the team closes these (at least 10 characters; the testers read it).";
