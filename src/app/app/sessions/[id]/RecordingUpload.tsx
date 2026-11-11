@@ -157,7 +157,9 @@ export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, se
           disabled={busy}
           data-recording-send={sentBefore ? "add" : "send"}
           onClick={async (e) => {
-            if (!offerShown() && !checkFields(e.currentTarget.parentElement)) return; // (batch 27 section 1) an open offer comes first
+            // (Owner, Nov 11, §387 1) Pressable with the file box still red: the press marks it and still goes (the server's refusal or box shows with it).
+            // (Batch 27 section 1) An open offer comes first.
+            if (!offerShown()) checkFields(e.currentTarget.parentElement);
             setBusy(true);
             setErr("");
             setErrPress(press);

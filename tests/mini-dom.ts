@@ -79,7 +79,7 @@ export class MiniText extends MiniNode {
   set textContent(v: string) { this.nodeValue = v; }
 }
 
-type Selector = { tag?: string; id?: string; classes: string[]; attrs: { name: string; value?: string }[] };
+type Selector = { tag?: string; id?: string; classes: string[]; attrs: { name: string; value?: string }[]; /** (§387) `:disabled` (other pseudo-classes are ignored) */ disabled?: boolean };
 function parseSelector(sel: string): Selector[][] {
   return sel.split(",").map((one) => one.trim().split(/\s+/).filter(Boolean).map((part) => {
     const s: Selector = { classes: [], attrs: [] };
@@ -90,11 +90,12 @@ function parseSelector(sel: string): Selector[][] {
       else if (m[2]) s.id = m[2];
       else if (m[3]) s.classes.push(m[3]);
       else if (m[4]) s.attrs.push({ name: m[4], value: m[5] });
+      else if (m[6] === ":disabled") s.disabled = true;
     }
     return s;
   }));
 }
-const matchOne = (el: MiniElement, s: Selector) => (!s.tag || el.localName === s.tag) && (!s.id || el.getAttribute("id") === s.id) && s.classes.every((c) => (el.getAttribute("class") ?? "").split(/\s+/).includes(c)) && s.attrs.every((a) => el.hasAttribute(a.name) && (a.value === undefined || el.getAttribute(a.name) === a.value));
+const matchOne = (el: MiniElement, s: Selector) => (!s.disabled || el.hasAttribute("disabled")) && (!s.tag || el.localName === s.tag) && (!s.id || el.getAttribute("id") === s.id) && s.classes.every((c) => (el.getAttribute("class") ?? "").split(/\s+/).includes(c)) && s.attrs.every((a) => el.hasAttribute(a.name) && (a.value === undefined || el.getAttribute(a.name) === a.value));
 function matches(el: MiniElement, sel: string) {
   return parseSelector(sel).some((chain) => {
     if (!matchOne(el, chain[chain.length - 1])) return false;
@@ -126,6 +127,34 @@ export class MiniElement extends MiniNode {
     this.style = Object.assign(style, { setProperty: (k: string, v: string) => { style[k] = v; }, removeProperty: (k: string) => { delete style[k]; } });
   }
   get tagName() { return this.nodeName; }
+  /** (§387) React sets an input's type as a property; `disabled` as an attribute. */
+  get type() { return this.getAttribute("type") ?? (this.localName === "input" ? "text" : this.localName === "button" ? "submit" : ""); }
+  set type(v: string) { this.setAttribute("type", v); }
+  /** (§387) A select's options (react-dom picks the selected one through them). */
+  get options() { return this.querySelectorAll("option"); }
+  selected = false;
+  defaultSelected = false;
+  get disabled() { return this.hasAttribute("disabled"); }
+  set disabled(v: boolean) { if (v) this.setAttribute("disabled", ""); else this.removeAttribute("disabled"); }
+  get classList() {
+    const list = () => (this.getAttribute("class") ?? "").split(/\s+/).filter(Boolean);
+    const put = (l: string[]) => this.setAttribute("class", l.join(" "));
+    return {
+      add: (...c: string[]) => put([...new Set([...list(), ...c])]),
+      remove: (...c: string[]) => put(list().filter((x) => !c.includes(x))),
+      contains: (c: string) => list().includes(c),
+      toggle: (c: string, force?: boolean) => { const on = force ?? !list().includes(c); put(on ? [...new Set([...list(), c])] : list().filter((x) => x !== c)); return on; },
+    };
+  }
+  append(...nodes: (MiniNode | string)[]) { for (const n of nodes) this.appendChild(typeof n === "string" ? this.ownerDocument!.createTextNode(n) : n); }
+  insertAdjacentElement(where: string, el: MiniElement) {
+    if (where === "afterend") this.parentNode?.insertBefore(el, this.nextSibling);
+    else if (where === "beforebegin") this.parentNode?.insertBefore(el, this);
+    else if (where === "afterbegin") this.insertBefore(el, this.firstChild);
+    else this.appendChild(el);
+    return el;
+  }
+  get nextElementSibling(): MiniElement | null { for (let n = this.nextSibling; n; n = n.nextSibling) if (n.nodeType === 1) return n as MiniElement; return null; }
   get id() { return this.getAttribute("id") ?? ""; }
   set id(v: string) { this.setAttribute("id", v); }
   get className() { return this.getAttribute("class") ?? ""; }
@@ -216,10 +245,12 @@ function storage() {
 /** Puts `window` and `document` (and the few browser globals the components touch) on globalThis. Returns the document and an undo. */
 export function installMiniDom(path = "/app/sessions/s1") {
   const g = globalThis as Record<string, unknown>;
-  const before = new Map(["window", "document", "location", "sessionStorage", "localStorage", "HTMLElement", "HTMLDetailsElement", "HTMLTextAreaElement", "HTMLInputElement", "HTMLIFrameElement", "Element", "Node", "CSS", "requestAnimationFrame", "cancelAnimationFrame", "getComputedStyle", "matchMedia", "MutationObserver", "ResizeObserver", "IntersectionObserver", "IS_REACT_ACT_ENVIRONMENT"].map((k) => [k, Object.getOwnPropertyDescriptor(g, k)]));
+  const before = new Map(["window", "document", "location", "sessionStorage", "localStorage", "HTMLElement", "HTMLDetailsElement", "HTMLTextAreaElement", "HTMLInputElement", "HTMLSelectElement", "HTMLFormElement", "HTMLIFrameElement", "Element", "Node", "CSS", "requestAnimationFrame", "cancelAnimationFrame", "getComputedStyle", "matchMedia", "MutationObserver", "ResizeObserver", "IntersectionObserver", "InputEvent", "FormData", "IS_REACT_ACT_ENVIRONMENT"].map((k) => [k, Object.getOwnPropertyDescriptor(g, k)]));
   const doc = new MiniDocument();
   const win = new EventTarget() as EventTarget & Record<string, unknown>;
   class Iframe extends MiniElement {}
+  /** (§387) `x instanceof HTMLInputElement` (and the other field classes) is true only for that tag, as in a browser. */
+  const byTag = (tag: string) => class extends MiniElement { static [Symbol.hasInstance](x: unknown) { return x instanceof MiniElement && x.localName === tag; } };
   /** Watchers that never fire (nothing here lays out or mutates behind React's back). */
   class Quiet { observe() {} unobserve() {} disconnect() {} takeRecords() { return []; } }
   Object.assign(win, {
@@ -229,7 +260,7 @@ export function installMiniDom(path = "/app/sessions/s1") {
     sessionStorage: storage(),
     localStorage: storage(),
     navigator: globalThis.navigator,
-    HTMLElement: MiniElement, HTMLDetailsElement: MiniElement, HTMLTextAreaElement: MiniElement, HTMLInputElement: MiniElement, HTMLIFrameElement: Iframe, Element: MiniElement, Node: MiniNode,
+    HTMLElement: MiniElement, HTMLDetailsElement: byTag("details"), HTMLTextAreaElement: byTag("textarea"), HTMLInputElement: byTag("input"), HTMLSelectElement: byTag("select"), HTMLFormElement: byTag("form"), HTMLIFrameElement: Iframe, Element: MiniElement, Node: MiniNode,
     CSS: { escape: (s: string) => s.replace(/["\\]/g, "\\$&") },
     innerHeight: 800, innerWidth: 1200, scrollX: 0, scrollY: 0, devicePixelRatio: 1,
     scrollTo: () => {}, scrollBy: () => {},
@@ -239,9 +270,19 @@ export function installMiniDom(path = "/app/sessions/s1") {
     matchMedia: () => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {}, addListener: () => {}, removeListener: () => {} }),
     setTimeout, clearTimeout, setInterval, clearInterval, fetch: (...a: Parameters<typeof fetch>) => (globalThis.fetch as typeof fetch)(...a),
     Event, CustomEvent, MutationObserver: Quiet, ResizeObserver: Quiet, IntersectionObserver: Quiet,
+    // (§387) `e instanceof InputEvent` (FieldChecks' typing): never one here (the tests' events are plain objects).
+    InputEvent: class InputEvent { static [Symbol.hasInstance]() { return false; } },
+    // (§387) new FormData(form): the named boxes in the form, as a browser collects them.
+    FormData: class MiniFormData {
+      private list: [string, string][] = [];
+      constructor(form?: MiniElement) { for (const el of form?.querySelectorAll("input, textarea, select") ?? []) { const n = el.getAttribute("name"); if (n && !el.disabled && ((el.type !== "checkbox" && el.type !== "radio") || el.checked)) this.list.push([n, el.value]); } }
+      entries() { return this.list[Symbol.iterator](); }
+      get(k: string) { return this.list.find(([n]) => n === k)?.[1] ?? null; }
+      [Symbol.iterator]() { return this.list[Symbol.iterator](); }
+    },
   });
   doc.defaultView = win;
-  for (const k of ["location", "sessionStorage", "localStorage", "HTMLElement", "HTMLDetailsElement", "HTMLTextAreaElement", "HTMLInputElement", "HTMLIFrameElement", "Element", "Node", "CSS", "requestAnimationFrame", "cancelAnimationFrame", "getComputedStyle", "matchMedia", "MutationObserver", "ResizeObserver", "IntersectionObserver"]) {
+  for (const k of ["location", "sessionStorage", "localStorage", "HTMLElement", "HTMLDetailsElement", "HTMLTextAreaElement", "HTMLInputElement", "HTMLSelectElement", "HTMLFormElement", "HTMLIFrameElement", "Element", "Node", "CSS", "requestAnimationFrame", "cancelAnimationFrame", "getComputedStyle", "matchMedia", "MutationObserver", "ResizeObserver", "IntersectionObserver", "InputEvent", "FormData"]) {
     Object.defineProperty(g, k, { value: win[k], configurable: true, writable: true });
   }
   Object.defineProperty(g, "window", { value: win, configurable: true, writable: true });

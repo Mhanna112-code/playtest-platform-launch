@@ -330,7 +330,8 @@ export function WrittenForm({ sessionId, questions, newQs = [], initial, initial
   return (
     // (Owner, Nov 5, §261) Every answer box and the notes are read-only while Send Answers is going through (and until the redraw after it went through).
     <SendingScope.Provider value={busy}>
-    <form className="space-y-3" onSubmit={send}>
+    <form /* (Owner, Nov 11, §387 1) data-red-and-blue: the site-wide field check (FieldChecks' submit listener) marks the red notes and lets the press go to
+      the server; without it a required answer left empty, or one the server had marked red, stopped the press before it was sent (no box, no refusal). */ className="space-y-3" onSubmit={send} data-red-and-blue="" noValidate>
       {/* (Owner, Oct 30) The mistake list sits once, at the top of the written part. (Batch 16 section 10) The server's "answer every required question" goes to the first empty required box. */}
       <FormMistakes top text={msg && !msg.ok && msg.text.startsWith(FIELD) ? msg.text : ""} press={SEND_ANSWERS}
         find={(m) => (m === ANSWER_ONE || isShortLine(m) ? document.getElementById(`a${missingAt ?? 0}`) : m === ANSWER_REQUIRED ? (missingAt != null ? document.getElementById(`a${missingAt}`) : null) ?? Array.from(document.querySelectorAll<HTMLTextAreaElement>(`textarea[data-required-msg="${ANSWER_REQUIRED}"]`)).find((t) => !t.value.trim()) : null)} />
