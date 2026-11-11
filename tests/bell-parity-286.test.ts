@@ -125,7 +125,7 @@ describe("§286 call requests closed: withdrawn (as before), declined, taken by 
     await later();
     expect((await answer(a.sessionId, a.tester.cookie, (await newest(a.sessionId, "developer")).id, "accept")).status).toBe(200);
     const bens = await bells(b.tester.user.id, "another tester took it");
-    expect(bens.map((n) => n.text)).toEqual([expect.stringMatching(/^The call time on “Harbor Run” with Nora Lane on .+ is no longer available: another tester took it$/)]);
+    expect(bens.map((n) => n.text)).toEqual([expect.stringMatching(/^Nora Lane's call request on “Harbor Run” for .+ was cancelled: another tester took it$/)]);
     expect(await sessionLines(b.sessionId, b.tester.cookie, loaded)).toContain(noZone(bens[0].text.replace(" on “Harbor Run”", ""))); // (§312a) the bell names the test
     expect(bens[0]).toMatchObject({ link: `/app/sessions/${b.sessionId}#calls`, groupKey: "callrequests" });
     expect(await db.notification.count({ where: { userId: a.tester.user.id, text: { contains: "another tester took it" } } })).toBe(0);

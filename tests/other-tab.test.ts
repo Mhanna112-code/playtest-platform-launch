@@ -131,7 +131,7 @@ describe("Block has one stop: already blocked in another tab (owner, Oct 27)", (
     expect((await sact(a.sessionId, "answer-request", a.tester.cookie, { requestId: ra.id, action: "accept", seenAt: seen(), confirmed: true })).status).toBe(200);
     const s = await sact(b.sessionId, "request-time", b.tester.cookie, { startsAt: atHours(328), seenAt: benLoaded });
     expect(texts(s)).toHaveLength(1);
-    expect(texts(s)[0]).toMatch(/^The call time with Nora Lane on .+ is no longer available: another tester took it$/);
+    expect(texts(s)[0]).toMatch(/^Nora Lane's call request for .+ was cancelled: another tester took it$/);
     expect(JSON.stringify(s.body)).not.toContain("Ana");
   });
 

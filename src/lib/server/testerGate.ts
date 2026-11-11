@@ -95,7 +95,8 @@ export async function testerChanges(testerId: string, contractId: string, testId
     // (Owner, Nov 4, §185) The developer withdrawing their request is a quiet live-box line, never a stop (whatever her Alerts); answering it is one refusal
     // ("Nora Lane withdrew this request."). The quiet kind is §184's (the live box marks it quiet; no tester press stops for it).
     else if (r.status === "withdrawn") out.push({ kind: DROP_KINDS.devQuiet, text: `${dev} withdrew the request for ${what}`, createdAt: r.updatedAt, link });
-    else if (r.status === "taken") out.push({ kind: "requested", text: `The call time with ${dev} on ${when} is no longer available: another tester took it`, createdAt: r.updatedAt, link });
+    // (Owner, Nov 11) Another tester booked it: "Nora Lane's call request for Fri, Nov 13, 3:00 PM was cancelled: another tester took it" (a stop-once line, as before).
+    else if (r.status === "taken") out.push({ kind: "requested", text: `${devRequestCancelledLine(dev, when)}: another tester took it`, createdAt: r.updatedAt, link });
     // (Owner, Nov 4, §184) One dropped when a call was booked has its own line (below), never this one too.
     // (Owner, Nov 11, §379 item 5) Closed by a pause or a hold: a quiet line (shown, never a stop), "Nora Lane's call request for … was cancelled".
     else if (r.status === "closed" && CLOSED_BY_PAUSE.has(r.closedReason)) out.push({ kind: DROP_KINDS.devQuiet, text: devRequestCancelledLine(dev, when), createdAt: r.updatedAt, link });

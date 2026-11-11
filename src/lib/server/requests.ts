@@ -448,15 +448,15 @@ async function closeBatch(batchId: string, exceptId: string) {
     const done = await db.callRequest.updateMany({ where: { id: r.id, status: "pending" }, data: { status: "taken", closedReason: `Another tester took this time at ${fmtTime(new Date())}`, decidedAt: new Date() } });
     if (done.count) taken.push(r.id);
   }
-  // (Owner, Nov 6, §286) Each other tester's top box reads "The call time with Nora Lane on … is no longer available: another tester took it": her bell rings
-  // with the same words, in the day's call-request stack across tests ("Call requests · 3 today").
+  // (Owner, Nov 6, §286; Nov 11) Each other tester's top box reads "Nora Lane's call request for Fri, Nov 13, 3:00 PM was cancelled: another tester took it": her
+  // bell rings with the same words (with the test: "… call request on “Harbor Run” for …"), in the day's call-request stack across tests ("Call requests · 3 today").
   if (!taken.length) return;
   const rowsTaken = await db.callRequest.findMany({ where: { id: { in: taken } } });
   const cons = new Map((await db.contract.findMany({ where: { id: { in: rowsTaken.map((r) => r.contractId) } }, select: { id: true, testerId: true, title: true, test: { select: { developer: true, title: true } } } })).map((c) => [c.id, c]));
   for (const r of rowsTaken) {
     const c = cons.get(r.contractId);
     if (!c) continue;
-    await bell(c.testerId, `The call time${onTest(c.test.title)} with ${displayName(c.test.developer)} on ${T(r.startsAt)} is no longer available: another tester took it`, `/app/sessions/${r.contractId}#calls`, undefined, { testId: r.testId, group: CALL_REQUESTS_GROUP });
+    await bell(c.testerId, `${devRequestCancelledLine(displayName(c.test.developer), T(r.startsAt), onTest(c.test.title))}: another tester took it`, `/app/sessions/${r.contractId}#calls`, undefined, { testId: r.testId, group: CALL_REQUESTS_GROUP });
   }
 }
 
@@ -478,8 +478,12 @@ export async function closeRequests(where: { contractIds?: string[] }, reason: s
   return rows;
 }
 
-const refusalFor = (r: { status: string; updatedAt: Date; closedReason: string; fromSide: string; startsAt: Date }, otherName: string, mine: boolean) => {
-  if (r.status === "taken") return `${r.closedReason}.`;
+/** (§157) The press a call request's Accept / Decline / Withdraw is named by in its refusal. */
+const pressOf = (action: string) => (action === "accept" ? "Accept" : action === "withdraw" ? "Withdraw" : "Decline");
+
+const refusalFor = (r: { status: string; updatedAt: Date; closedReason: string; fromSide: string; startsAt: Date }, otherName: string, mine: boolean, /** the press refused */ press: string) => {
+  // (Owner, Nov 11) "Another tester took this time at 3:42 PM, so your Accept didn't go through."
+  if (r.status === "taken") return RF.pressRefused(r.closedReason, press);
   // (Owner, Nov 4, §184) Dropped when a call was booked: "This request closed: fbbb is no longer free at that time." (never with whom), or the reader's own
   // "… you have another call at that time." The reader's side: the request's sender when it's theirs.
   if (r.status === "closed" && isDropReason(r.closedReason)) return `This request closed: ${dropReasonFor(r.closedReason, (mine ? r.fromSide : r.fromSide === "developer" ? "tester" : "developer") as Side, otherName)}.`;
@@ -493,9 +497,9 @@ const refusalFor = (r: { status: string; updatedAt: Date; closedReason: string; 
 };
 
 /** (§157) Decide a request only while it is still pending (one claim); a press that lost to another tab or the other side reads what happened. */
-async function claimRequest(id: string, status: string, other: Parameters<typeof displayName>[0], mine: boolean) {
+async function claimRequest(id: string, status: string, other: Parameters<typeof displayName>[0], mine: boolean, press: string) {
   if ((await db.callRequest.updateMany({ where: { id, status: "pending" }, data: { status, decidedAt: new Date() } })).count === 1) return;
-  throw new HttpError(409, "gone", refusalFor(await db.callRequest.findUniqueOrThrow({ where: { id } }), displayName(other), mine));
+  throw new HttpError(409, "gone", refusalFor(await db.callRequest.findUniqueOrThrow({ where: { id } }), displayName(other), mine, press));
 }
 
 /** A paused test (any cause) refuses booking a call: testers read only "paused". */
@@ -891,7 +895,7 @@ export async function answerRequest(user: U, contractId: string, body: Record<st
   // already what the press wanted, no refusal (the page redraws). Accepted / booked keeps its refusal.
   if (action === "withdraw" && mine && (WITHDRAWN_ALREADY.has(r.status) || (r.status === "pending" && r.startsAt < new Date()))) return { withdrawn: true, already: true };
   // (Owner, Nov 11, §380 H) A block this person made (it closed the request): "You blocked Ana Silva, so your Accept didn't go through."
-  await ownBlockOf(c, side, action === "accept" ? "Accept" : action === "decline" ? "Decline" : "Withdraw");
+  await ownBlockOf(c, side, pressOf(action));
   if (side === "tester") await answerTermsFirst(contractId);
   if (r.status === "pending" && r.startsAt < new Date()) await db.callRequest.update({ where: { id: r.id }, data: { status: "closed", closedReason: TIME_PASSED_REASON } });
   const fresh = await db.callRequest.findUniqueOrThrow({ where: { id: r.id } });
@@ -909,7 +913,7 @@ export async function answerRequest(user: U, contractId: string, body: Record<st
   }
   // (Owner, Nov 9, §365, found by the refusal matrix) Accept on a paused test reads the paused line, even though the pause already closed its request.
   if (action === "accept") pausedRefusal(c, side, "Accept");
-  if (fresh.status !== "pending") throw new HttpError(409, "gone", refusalFor(fresh, displayName(other), mine));
+  if (fresh.status !== "pending") throw new HttpError(409, "gone", refusalFor(fresh, displayName(other), mine, pressOf(action)));
   if (action === "withdraw" ? !mine : mine) throw new HttpError(409, "not_yours", mine ? "You can't answer your own request: withdraw it instead." : "Only the person who asked can withdraw it.");
   // (Owner, Nov 4, §185) Accepting with the pair already over 3 (booked + waiting, from before the limit): refused at once, before the gate. An Accept turns this
   // request into one booked time, so it never raises the count.
@@ -930,7 +934,7 @@ export async function answerRequest(user: U, contractId: string, body: Record<st
     // (Owner, Nov 3, §157) Claimed before anything is checked or booked: of two Accepts (two tabs), or an Accept and a Withdraw / Decline at the same moment,
     // exactly one goes through; the other reads what happened (refusalFor), never the first one's booking as a clash. A check or a booking that fails afterwards
     // puts the request back as it was.
-    await claimRequest(r.id, "booked", other, mine);
+    await claimRequest(r.id, "booked", other, mine, "Accept");
     let first: Awaited<ReturnType<typeof bookAt>> | null = null;
     let times: Date[] = [];
     let row: CallRow;
@@ -999,12 +1003,12 @@ export async function answerRequest(user: U, contractId: string, body: Record<st
     const done = await db.callRequest.updateMany({ where: { id: r.id, status: "pending", times: { equals: fresh.times } }, data: keptRowsData(kept) });
     if (!done.count) {
       const now = await db.callRequest.findUniqueOrThrow({ where: { id: r.id } });
-      throw new HttpError(409, "gone", now.status !== "pending" ? refusalFor(now, displayName(other), mine) : rowsOf(now).some((x) => sameTime(x.startsAt, pick!)) ? "This request changed meanwhile. Press again." : TIME_GONE);
+      throw new HttpError(409, "gone", now.status !== "pending" ? refusalFor(now, displayName(other), mine, pressOf(action)) : rowsOf(now).some((x) => sameTime(x.startsAt, pick!)) ? "This request changed meanwhile. Press again." : TIME_GONE);
     }
     await timeAnswered(user, c, side, other, status, hit.startsAt, r.id);
     return { [status]: true, time: hit.startsAt.toISOString(), left: kept.length };
   }
-  await claimRequest(r.id, status, other, mine);
+  await claimRequest(r.id, status, other, mine, pressOf(action));
   await timeAnswered(user, c, side, other, status, hit?.startsAt ?? r.startsAt, r.id);
   return { [status]: true };
 }
