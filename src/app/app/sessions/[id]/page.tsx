@@ -23,7 +23,7 @@ import { callIsOver, callLengthLine, callMinutesOf, callOverBadge, callsLeftWarn
 import { callsLeftCents } from "@/lib/server/callMoney";
 import { testerAutoChargeLine } from "@/lib/rules";
 import { chargeClosesLine, closeOutSoon } from "@/lib/rules";
-import { closedOut, disputesClosed, pieceCloseOut } from "@/lib/server/closeOut";
+import { callChargeAt, closedOut, disputesClosed, pieceCloseOut } from "@/lib/server/closeOut";
 
 import { LabeledReason, ReasonQuote } from "@/components/ScrollText";
 import { TesterAlertsToggle } from "@/components/TesterAlertsToggle";
@@ -228,6 +228,8 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
   // (Owner, Nov 11, §386 A) No money moves while the test or its developer is paused, after the test closed too: Charge and Let it go stay on the page, a press is
   // refused, and no banner offers them.
   const moneyPaused = !!moneyFrozen(c.test.developer, c.test);
+  // (Owner, Nov 11, §386 G) Each call's automatic-charge date, moved on by a freeze after the test closed.
+  const chargeAts = new Map(await Promise.all(c.calls.filter((x) => !x.review && x.payBy).map(async (x) => [x.id, await callChargeAt(x.id, now)] as const)));
   const draftsShown = !rulesPaused || PAUSE_DEFAULTS.draftsEditable;
   const meOff = !!u.testerSuspendedAt;
   // (§167) The tester can add under a question: sent, still open, the questions unchanged since.
@@ -695,7 +697,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
                   </div>
                   <p className="text-xs text-slate-400" data-call-length-line="">{callLengthLine(x, fmtTime)}</p>
                   {/* A listed call is charged automatically after its review date; no Charge or Let it go. */}
-                  {!x.review && <>{x.rateCents != null && x.payBy && x.payBy > now && (!devGone || !!c.test.developer.stripePaymentMethodId) && <p className="text-xs text-slate-400" data-auto-charge="">{testerAutoChargeLine(dev, pieceDay(x.payBy, u.timeZone))}</p>}</>}
+                  {!x.review && <>{x.rateCents != null && chargeAts.get(x.id) && chargeAts.get(x.id)! > now && (!devGone || !!c.test.developer.stripePaymentMethodId) && <p className="text-xs text-slate-400" data-auto-charge="">{testerAutoChargeLine(dev, pieceDay(chargeAts.get(x.id)!, u.timeZone))}</p>}</>}
                   {badge.reason && !reviewShown && <ReasonQuote text={badge.reason} />}
                   {x.actualMinutes != null && x.lengthNote && <ReasonQuote text={x.lengthNote} />}
                   {reviewShown && <TesterReview timeZone={u.timeZone} dev={dev} extras={extraRows.filter((p) => p.callId === x.id)} off={meOff && !limited} sessionId={c.id} kind="call" id={x.id} review={x.review!} dispute={x.dispute} room={room.get(x.id) ?? null} closed={shutLines.get(x.id) ?? null} more={moreOf(x.id)} />}

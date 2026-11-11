@@ -211,7 +211,7 @@ describe("§311e an unlisted call: the listed call's reminders, then closed with
   it("the pages: the developer's Pay box note before the date; the tester's paid line reads the closing reason", async () => {
     expect(R.unlistedCloseLine("Nov 5")).toBe("If you don't pay by Nov 5, it closes with nothing paid.");
     const page = src("app/app/tests/[id]/page.tsx");
-    expect(page).toContain(": unlistedCloseLine(pieceDay(x.x!.payBy, u.timeZone))) : undefined}");
+    expect(page).toContain(": unlistedCloseLine(pieceDay(chargeAts.get(x.x!.id)!, u.timeZone))) : undefined}");
     // The tester's session page shows a $0 review's reason under "Paid $0", as for a listed call's "Closed with nothing to pay."; no Charge (a reviewed call).
     expect(src("app/app/sessions/[id]/page.tsx")).toContain("review.amountCents === 0 && review.reason && !byTesterChoice(review.reason) ? (");
     expect(R.UNLISTED_CALL_CLOSED).toBe("Closed with nothing paid (it wasn't listed).");

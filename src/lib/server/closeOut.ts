@@ -126,7 +126,7 @@ export async function testSpans(t: { id: string; adminPausedAt: Date | null; wor
  * one still on ends at the deletion, §386 F), the team's pauses while in force (a stopped test's ends at its stop), and outages. Overlaps count once.
  * The test's close-out, Rate and Dispute windows keep testSpans.
  */
-export async function moneySpans(t: { id: string; adminPausedAt: Date | null; workEndedAt?: Date | null; pauseClosedAt?: Date | null; status?: string; stoppedAt?: Date | null; developer: { id: string; holdStartedAt: Date | null; devSuspendedAt: Date | null; deletedAt?: Date | null } }, from: Date, now: Date) {
+export async function moneySpans(t: { id: string; adminPausedAt: Date | null; workEndedAt?: Date | null; pauseClosedAt?: Date | null; status?: string; stoppedAt?: Date | null; developer: { id: string; holdStartedAt: Date | null; devSuspendedAt: Date | null; deletedAt?: Date | null } }, from: Date, now: Date, /** (§386 G) false: the freeze alone (outages move a call's stored date themselves) */ withOutages = true) {
   const [devEvents, outages, team] = await Promise.all([
     db.accountEvent.findMany({ where: { userId: t.developer.id, kind: { in: ["hold", "hold-lifted", "suspended", "reinstated"] } }, select: { kind: true, side: true, createdAt: true } }),
     db.outage.findMany({ where: { endAt: { gt: from }, OR: [{ needsApproval: false }, { approvedAt: { not: null } }] }, select: { startAt: true, endAt: true } }),
@@ -135,7 +135,7 @@ export async function moneySpans(t: { id: string; adminPausedAt: Date | null; wo
   // (Owner, Nov 11, §386 F) A developer's deletion ends the freeze: every span still on then ends at the deletion (counted as lifted then).
   const gone = t.developer.deletedAt?.getTime();
   const upTo = (list: Span[]) => (gone == null ? list : list.filter((x) => x.start < gone).map((x) => ({ start: x.start, end: Math.min(x.open ? gone : x.end, gone), open: false })));
-  return mergeSpans([...upTo(devPauseSpans(devEvents, t.developer, now)), ...upTo(team), ...outages.map((o) => ({ start: o.startAt.getTime(), end: o.endAt.getTime(), open: false }))]);
+  return mergeSpans([...upTo(devPauseSpans(devEvents, t.developer, now)), ...upTo(team), ...(withOutages ? outages : []).map((o) => ({ start: o.startAt.getTime(), end: o.endAt.getTime(), open: false }))]);
 }
 
 export const CONTRACTS = { select: { status: true, dueAt: true, endedAt: true } } as const;
@@ -200,6 +200,26 @@ export async function pieceCloseOut(where: { submissionId?: string | null; callI
   const testEnd = windowEnd(base, spans, now, CLOSE_OUT_DAYS).end;
   const own = opens ? windowEnd(opens, spans, now, CLOSE_OUT_DAYS).end : null;
   return own && own > testEnd ? own : testEnd;
+}
+
+/**
+ * (Owner, Nov 11, §386 G) When a listed call is charged automatically (an unlisted one closes with $0): its stored date (payBy, already moved by a pause that began
+ * during the test, when that pause lifted) moved on by the frozen time that began after the test's work ended and falls after the call's countdown started (its
+ * measured length final, else its start). The same one clock as the piece windows: a span before the countdown never counts, nor one counted already. While a
+ * freeze is still on, it moves day by day. null without a date.
+ */
+export async function callChargeAt(callId: string, now = new Date()) {
+  const x = await db.call.findUnique({ where: { id: callId }, select: { payBy: true, startsAt: true, measuredAt: true, contractId: true } });
+  if (!x?.payBy) return null;
+  const c = await db.contract.findUnique({ where: { id: x.contractId }, select: { testId: true } });
+  const t = c ? await db.test.findUnique({ where: { id: c.testId }, include: { developer: true } }) : null;
+  if (!t) return x.payBy;
+  const from = x.measuredAt && x.measuredAt > x.startsAt ? x.measuredAt : x.startsAt;
+  const end = workEndOf(t)?.getTime() ?? Infinity;
+  // Only what shiftAfterPause never moved: a freeze that began after the work ended (outages move payBy themselves when recorded: left out).
+  const spans = (await moneySpans(t, from, now, false)).filter((sp) => sp.start >= end && sp.end > from.getTime());
+  if (!spans.length || x.payBy <= from) return x.payBy;
+  return windowEnd(from, mergeSpans(spans), now, (x.payBy.getTime() - from.getTime()) / DAY).end;
 }
 
 /** Has this test (or this piece) closed out? */

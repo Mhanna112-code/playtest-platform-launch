@@ -531,7 +531,7 @@ describe("batch 28 §21: a listed call not paid 7 days after it is charged autom
     const session = src("app/app/sessions/[id]/page.tsx");
     expect(session).not.toContain("callId={x.id} devName={dev}");
     expect(session).toContain("testerAutoChargeLine(dev,");
-    expect(src("app/app/tests/[id]/page.tsx")).toContain("autoChargeLine(pieceDay(x.x!.payBy, u.timeZone)"); // (batch 30 §20) one shared date helper
+    expect(src("app/app/tests/[id]/page.tsx")).toContain("autoChargeLine(pieceDay(chargeAts.get(x.x!.id)!, u.timeZone)"); // (batch 30 §20) one shared date helper
     expect(R.PAY_RULES_TICK).toContain("and listed calls 7 days after they take place.");
     expect(fs.readFileSync(path.resolve(__dirname, "../src/lib/termsOfUse.ts"), "utf8")).toContain("their card is charged automatically for its measured length at the call's rate");
   });

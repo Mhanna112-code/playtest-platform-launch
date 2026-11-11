@@ -49,7 +49,7 @@ import { ChargebackSteps } from "@/components/ChargebackSteps";
 import { chargebackSteps } from "@/lib/server/chargeback";
 import { PayBox } from "./PayBox";
 import { CONFIRM_WITH_BANK, autoChargeLine, unlistedCloseLine, bankAnchor, joinerDays, paidMostLine, pausedUntil } from "@/lib/rules";
-import { closedOut, pieceCloseOut } from "@/lib/server/closeOut";
+import { callChargeAt, closedOut, pieceCloseOut } from "@/lib/server/closeOut";
 import { BankWaiting } from "@/components/BankWaiting";
 import { HoldFold } from "@/components/HoldFold";
 import type { ReactNode } from "react";
@@ -157,6 +157,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   // (Owner, Nov 9, §368) The restricted view shows Pay during a team pause or a developer suspension (not a hold). (Owner, Nov 11, §386 A) The buttons stay, and a
   // press is refused while the money is frozen ("The team paused this test, so your Pay didn't go through."): the owner prefers refusals to hidden buttons.
   const restrictedPays = restricted && !u.holdStartedAt;
+  // (Owner, Nov 11, §386 G) Each unpaid call's automatic-charge (or $0 closing) date, moved on by a freeze after the test closed.
+  const chargeAts = new Map(await Promise.all(t.contracts.flatMap((c) => c.calls).filter((x) => !x.review && x.payBy).map(async (x) => [x.id, await callChargeAt(x.id, now)] as const)));
   const bannerCause: BannerCause | null = t.adminStoppedAt ? "team-stopped" : teamPaused ? "team-paused" : u.devSuspendedAt ? "suspended" : u.holdStartedAt ? (u.holdReason === "chargeback" ? "chargeback" : "hold") : t.status === "stopped" ? "stopped" : null;
   const bannerCauseReason = bannerCause === "team-paused" || bannerCause === "team-stopped" ? t.adminNote : bannerCause === "suspended" ? u.devSuspendNote : "";
   const keysEver = await db.accessKey.count({ where: { testId: id } });
@@ -521,7 +523,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
               <PayBox owes={owesNow} disputable={!ratedTesters.has(x.c.id)} key={`${x.x!.actualMinutes ?? 0}`} kind="call" fromNeeds id={x.x!.id} name={displayName(x.c.tester)} seenAt={seenAt} room={rooms.get(x.x!.id)?.box} confirming={confirmingPay(x.x!.id)}
                 /* (Owner, Oct 29, batch 28 §21) A listed call is charged automatically 7 days after it if it is not paid. (Owner, Nov 6, §311e) An unlisted one closes
                    with nothing paid then: the same note, in its words. */
-                note={x.x!.payBy && x.x!.payBy > now ? (x.x!.rateCents != null ? autoChargeLine(pieceDay(x.x!.payBy, u.timeZone), Math.min(callReference(x.x!.rateCents, callMinutesOf(x.x!)!).cents ?? 0, callsLeft.get(x.c.id) ?? Infinity), callMinutesOf(x.x!)!, x.x!.rateCents) : unlistedCloseLine(pieceDay(x.x!.payBy, u.timeZone))) : undefined}
+                note={chargeAts.get(x.x!.id) && chargeAts.get(x.x!.id)! > now ? (x.x!.rateCents != null ? autoChargeLine(pieceDay(chargeAts.get(x.x!.id)!, u.timeZone), Math.min(callReference(x.x!.rateCents, callMinutesOf(x.x!)!).cents ?? 0, callsLeft.get(x.c.id) ?? Infinity), callMinutesOf(x.x!)!, x.x!.rateCents) : unlistedCloseLine(pieceDay(chargeAts.get(x.x!.id)!, u.timeZone))) : undefined}
                 minutes={callMinutesOf(x.x!)!} rateCents={x.x!.rateCents} warning={callsWarn.get(x.c.id)}
                 listingCents={callReference(x.x!.rateCents, callMinutesOf(x.x!)!, x.c.liveRateCents).cents}
                 listingText={callReference(x.x!.rateCents, callMinutesOf(x.x!)!, x.c.liveRateCents).text.replace(/^(Listing|Agreed): /, "")} />

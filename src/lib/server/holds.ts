@@ -24,7 +24,7 @@ import { PAUSE_CLOSE_DAYS } from "@/lib/pause";
 import { callMinutesOf } from "@/lib/callMeasure";
 import { callReference, disputeDecisionName, disputedCentsOf, movedDue, nearestDayEnd, partOf, pausedUntil, pieceName, reversedOf, reversedPart, reversedWords, paymentWords, OWED_OVER_TICK, PAY_TICK_CENTS } from "@/lib/rules";
 import { callsLeftCents } from "./callMoney";
-import { closedOut, disputeClosedFor, pieceCloseOut } from "./closeOut";
+import { callChargeAt, closedOut, disputeClosedFor, pieceCloseOut } from "./closeOut";
 import { DAILY_LOCK_WAIT_MS, withTimersLock } from "./timers";
 import { pieceWords } from "@/lib/bankTop";
 import { describedOnce, stripeDescription } from "./paymentRows";
@@ -1610,7 +1610,7 @@ export async function reviewReminders(now: Date, co: CloseOuts = closeOutMemo(no
   const upcomingCalls = await db.call.findMany({ where: { ...scope, review: null, status: "booked", payBy: { not: null }, contract: { test: MONEY_FREE, tester: PAYABLE_TESTER } }, include: { contract: { include: { tester: true, test: true } } }, take: 2000 });
   for (const x of upcomingCalls) {
     if (x.rateCents == null && (await co.payClosed({ callId: x.id }))) continue; // an unlisted call whose Pay closed: no reminders
-    const chargeAt = x.payBy!;
+    const chargeAt = (await callChargeAt(x.id, now)) ?? x.payBy!; // (§386 G) moved by a freeze after close; its marks follow the moved date (§311g / §367)
     const sent = x.measuredAt ?? x.startsAt;
     const due = callMinutesOf(x) ? reviewMarkDue(sent, chargeAt, now, x.devMarks) : null; // (§311g) keyed by the pay date
     if (!due) continue;
@@ -1910,6 +1910,9 @@ export async function autoChargeCalls(now: Date) {
     // (§386 A) A pause that began since the list was read: it waits.
     const fresh = await db.test.findUnique({ where: { id: c.testId }, select: { adminPausedAt: true, status: true, developer: { select: { holdStartedAt: true, devSuspendedAt: true, deletedAt: true } } } });
     if (!fresh || moneyFrozen(fresh.developer, fresh)) continue;
+    // (Owner, Nov 11, §386 G) Its date moved on by a freeze after the test closed (the days the developer couldn't Pay): not yet.
+    const at = await callChargeAt(x.id, now);
+    if (at && at > now) continue;
     // (Owner, Nov 4, §177) Each line names the call it charged, with its date and time in the developer's zone: "Ana Silva's call on Tue, Oct 27, 8:00 AM was
     // charged automatically: $15.00" (a tester can have many calls on a test).
     const call = `${name}'s call on ${callAtFor(x.startsAt, dev)}`;

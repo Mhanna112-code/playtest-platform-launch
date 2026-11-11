@@ -29,11 +29,11 @@ describe("batch 30 §20 (1): a piece's review / charge date is the same on both 
   it("the developer's and the tester's pages (and dashboard) use it for written answers, recordings and listed calls", () => {
     const dev = src("app/app/tests/[id]/page.tsx");
     expect(dev).toContain("choiceNoteLine(pieceDay(chargeOpensAt(x.s!, t, x.c, now)!, u.timeZone),");
-    expect(dev).toContain("autoChargeLine(pieceDay(x.x!.payBy, u.timeZone),");
+    expect(dev).toContain("autoChargeLine(pieceDay(chargeAts.get(x.x!.id)!, u.timeZone),");
     expect(dev).not.toContain("choiceNoteLine(fmtDate(");
     const tester = src("app/app/sessions/[id]/page.tsx");
     expect(tester).toContain("chargeOpensNote(dev, pieceDay(opens, u.timeZone))");
-    expect(tester).toContain("testerAutoChargeLine(dev, pieceDay(x.payBy, u.timeZone))");
+    expect(tester).toContain("testerAutoChargeLine(dev, pieceDay(chargeAts.get(x.id)!, u.timeZone))");
     expect(src("app/app/page.tsx")).toContain("chargeOpensNote(displayName(c.test.developer), pieceDay(opens, user.timeZone))");
   });
 });

@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { awayAction, confirmStart } from "@/lib/server/confirm";
 import { confirmAllPress } from "@/lib/server/confirmAll";
 import { autoChargeCalls, liftHoldIfClear, runSweep, startHold } from "@/lib/server/holds";
-import { closeOutOf, pieceCloseOut, testerRatingClosesAt } from "@/lib/server/closeOut";
+import { callChargeAt, closeOutOf, pieceCloseOut, testerRatingClosesAt } from "@/lib/server/closeOut";
 import { testerRateState } from "@/lib/server/ratings";
 import { deleteAccount, pauseTest, reinstateAccount } from "@/lib/server/restrictions";
 import { moneyFrozen } from "@/lib/restricted";
@@ -321,5 +321,33 @@ describe.each([["suspension", "suspended"], ["hold", "hold"]] as const)("§386 F
     const r = await sact(w.sessionId, "choose", w.tester.cookie, { submissionId: w.open.id, choice: "charge", amount: "10.00", tickedCents: 1000, seenAt: seen(), confirmed: true });
     expect(r.status, JSON.stringify(r.body)).toBe(200);
     expect(await db.review.count({ where: { submissionId: w.open.id } })).toBe(1);
+  });
+});
+
+// (Owner, Nov 11, §386 G) A listed call's automatic-charge date moves on by the frozen time after it started counting, the same one clock as the piece windows:
+// a freeze after the test closed that straddles the charge date gives the developer those days back (never the first run after the lift).
+describe("§386 G the automatic call charge after a freeze that began after the test closed", () => {
+  it("a 2-day suspension straddling the charge date: charged 1 day after the lift (the day that was left), not at once", async () => {
+    await db.outage.deleteMany({}); // another file's sweep can record one that moves these real-time dates
+    const T0 = Date.now();
+    const w = await world();
+    await db.user.update({ where: { id: w.tester.user.id }, data: { stripeAccountId: "acct_" + randomUUID().slice(0, 10), payoutsReady: true } });
+    await db.test.update({ where: { id: w.testId }, data: { status: "closed", workEndedAt: new Date(T0 - 6 * DAY) } });
+    await db.contract.update({ where: { id: w.sessionId }, data: { status: "ended", endKind: "closed", endedAt: new Date(T0 - 6 * DAY) } });
+    await db.call.update({ where: { id: w.call.id }, data: { startsAt: new Date(T0 - 8 * DAY), measuredAt: new Date(T0 - 8 * DAY), payBy: new Date(T0 - DAY) } });
+    const lifted = new Date(T0 - 60_000);
+    await db.accountEvent.create({ data: { userId: w.dev.user.id, kind: "suspended", side: "developer", createdAt: new Date(T0 - 2 * DAY) } });
+    await db.accountEvent.create({ data: { userId: w.dev.user.id, kind: "reinstated", side: "developer", createdAt: lifted } });
+    expect((await callChargeAt(w.call.id, new Date(T0)))!.getTime()).toBe(lifted.getTime() + DAY);
+    await autoChargeCalls(new Date(T0));
+    expect(await db.payment.count({ where: { callId: w.call.id } })).toBe(0);
+    await autoChargeCalls(new Date(lifted.getTime() + DAY + 60_000));
+    expect(await db.payment.count({ where: { callId: w.call.id } })).toBe(1);
+  });
+
+  it("a suspension before the countdown started (or none) leaves the date as stored", async () => {
+    const w = await world();
+    await db.call.update({ where: { id: w.call.id }, data: { payBy: new Date(Date.now() + 5 * DAY) } });
+    expect((await callChargeAt(w.call.id))!.getTime()).toBe((await db.call.findUniqueOrThrow({ where: { id: w.call.id } })).payBy!.getTime());
   });
 });
