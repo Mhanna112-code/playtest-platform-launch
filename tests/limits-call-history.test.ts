@@ -57,7 +57,7 @@ describe("§186 text limits: 20,000 (was 50,000)", () => {
   it("the add form counts only its own text: 'N / 20,000', and a read-only draft keeps maxLength 20,000", () => {
     const f = src("app/app/sessions/[id]/SessionActions.tsx");
     expect(f).toContain("const length = writtenLength([text]);");
-    expect(f).toContain("return setErr(FIELD + additionTooLongLine(length));");
+    expect(f).toContain("length > WRITTEN_MAX_CHARS ? FIELD + additionTooLongLine(length)");
     expect(f).toContain("total={length} alone min short="); // (Codex 4d424d8f: an addition has its own minimum)
     expect(f).toContain("readOnly value={text} maxLength={WRITTEN_MAX_CHARS} data-add-readonly");
     expect(f).not.toContain("used: number");
