@@ -29,7 +29,7 @@ describe("§376 join-page boxes don't offer Alerts", () => {
     expect(join.match(/<ChangesBox [^>]*alertsWhere="join"/g)?.length).toBe(3);
     expect(join.match(/<ChangesBox /g)?.length).toBe(3);
     expect(src("app/app/find/[id]/NoThanksButton.tsx")).toContain('alertsWhere="join"');
-    // The dashboard's No thanks box is the developer-side box with no Alerts lines (nothing to switch off): unchanged.
-    expect(src("app/app/NoThanks.tsx")).toContain('<ChangesBox changes={box?.changes ?? null} tail={box?.tail} press="No thanks" />');
+    // (Owner, Nov 11, §380 L) The dashboard's No thanks is gone (its invite card shows only Open).
+    expect(src("app/app/page.tsx")).not.toContain("<NoThanks");
   });
 });

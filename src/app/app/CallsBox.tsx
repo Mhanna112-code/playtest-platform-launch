@@ -4,7 +4,6 @@ import Link from "next/link";
 import { ArrowRight, CalendarClock } from "lucide-react";
 import { ChangesBox } from "@/components/ChangesBox";
 import { CancelMenu } from "@/components/CancelMenu";
-import { JoinCall } from "@/components/JoinCall";
 import { LIST_PANEL } from "@/components/ScrollList";
 import { ResizeBox } from "@/components/Panel";
 import { usePress } from "@/lib/usePress";
@@ -15,7 +14,7 @@ export type DashCall = { id: string; testId: string; test: string; who: string; 
 const fmt = (iso: string) => new Date(iso).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
 /**
- * (Design doc 3; owner, Oct 27) The developer dashboard's Calls box: every booked call, soonest first. Join appears only while the call can be joined. Each row links to that call on
+ * (Design doc 3; owner, Oct 27) The developer dashboard's Calls box: every booked call, soonest first. (Owner, Nov 11, §380 L) No Join call here. Each row links to that call on
  * the test page, where it can be cancelled; while the account is suspended or on hold the test pages are closed, so the row has Cancel itself (the one press that still works). The
  * press follows the stop-once and refusal rules: its box shows right under the row.
  */
@@ -39,7 +38,7 @@ export function CallsBox({ calls, seenAt, restricted }: { calls: DashCall[]; see
                   ) : (
                     <Link href={`/app/tests/${c.testId}#call-${c.id}`} className="mr-auto flex min-w-0 max-w-full flex-wrap items-baseline gap-x-1 text-slate-200 no-underline hover:underline"><span className="min-w-0 max-w-full [overflow-wrap:anywhere]"><b className="text-white"><Cut text={c.who} /></b> · <TestName text={c.test} /></span> <span className="whitespace-nowrap">· {fmt(c.when)} · {c.minutes} min <ArrowRight className="inline h-4 w-4 text-indigo-300" /></span></Link>
                   )}
-                  {c.joinable && <JoinCall callId={c.id} />}
+                  {/* (Owner, Nov 11, §380 L) No Join call here: the row links to the call on the test page. */}
                   {restricted && <CancelMenu needsReason={c.needsReason} busy={busy} other={c.who} onCancel={(reason) => void press(`/api/tests/${c.testId}/cancel-call`, { callId: c.id, reason }, c.id).then((r) => r && finish())} />}
                 </div>
                 <CallCheck />

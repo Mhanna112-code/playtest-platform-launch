@@ -87,8 +87,8 @@ describe("batch 29 section 20: leftovers", () => {
     const join = src("components/JoinCall.tsx");
     expect(join).toContain("Answer them on the session page →");
     expect(join).toContain("setTermsAt(`/app/sessions/${e.data.sessionId}#terms-offer`)");
-    // The dashboard's Upcoming calls uses that Join call.
-    expect(src("app/app/page.tsx")).toContain("<JoinCall callId={x.id} />");
+    // (Owner, Nov 11, §380 L) The dashboard's Upcoming calls has no Join call any more (its rows link to the session page's call).
+    expect(src("app/app/page.tsx")).not.toContain("<JoinCall");
   });
 
   it("Charge after new terms: (batch 32 §7) blocked until Switch or Keep (it used to stop once with '…under your current terms, or switch first.')", async () => {

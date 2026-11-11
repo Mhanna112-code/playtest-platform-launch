@@ -147,7 +147,7 @@ describe("Tests visited: what goes on and off the list (Batch 17 §18)", () => {
   it("the Invitations panel labels its link to the join page Open", () => {
     const invites = src("app/app/page.tsx").split('id="invitations"')[1]?.split("</section>")[0];
     expect(invites).toMatch(/<Link href=\{\x60\/app\/find\/\$\{i\.testId\}\x60\}[^>]*>Open<\/Link>/);
-    expect(invites).toContain("<NoThanks inviteId={i.id} />");
+    expect(invites).not.toContain("NoThanks"); // (Owner, Nov 11, §380 L) only Open
   });
 
   it("a visit then joining: it leaves the list (and stays off after leaving the test)", async () => {

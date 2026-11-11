@@ -384,14 +384,10 @@ describe("(Nov 3, races) 6: the developer's Stop wins over the tester's Add", ()
 });
 
 describe("(Nov 3, races) 7: a suspended tester's Dismiss all and Add", () => {
-  it("Dismiss all is named as Dismiss all (no one test); Dismiss and Add name their own press", async () => {
+  it("Add names its own press (§380 L: Dismiss / Dismiss all are gone)", async () => {
     const s = await setup();
     const j = await joined(s.testId);
     await db.user.update({ where: { id: j.tester.user.id }, data: { testerSuspendedAt: new Date() } });
-    const all = await sact(j.sessionId, "dismiss-removed", j.tester.cookie, { all: true });
-    expect([all.status, all.body.error.failed]).toEqual([403, "Your Dismiss all didn't go through"]);
-    const one = await sact(j.sessionId, "dismiss-removed", j.tester.cookie, {});
-    expect(one.body.error.failed).toBe("Your Dismiss on Harbor Run didn't go through");
     const add = await addTo(j.sessionId, j.tester.cookie, { text: "x" });
     expect(add.body.error.failed).toBe("Your Add on Harbor Run didn't go through");
     expect(pressLabelOf(`/api/sessions/${j.sessionId}/dismiss-removed`, { all: true })).toBe("Dismiss all");

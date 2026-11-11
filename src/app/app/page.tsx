@@ -29,7 +29,6 @@ import { adminAway, requirePageUser } from "@/lib/server/page-auth";
 import { isAdmin } from "@/lib/server/session";
 import { sideFor } from "@/lib/sides";
 import { ProfileForm } from "./profile/ProfileForm";
-import { NoThanks } from "./NoThanks";
 import { DeveloperTiles } from "@/components/ProfileTiles";
 import { StatTile } from "@/components/StatTile";
 
@@ -46,9 +45,7 @@ import { devRestricted, restrictionsOf } from "@/lib/restricted";
 import { PayoutBanner } from "@/components/PayoutBanner";
 import { CallsBox } from "./CallsBox";
 import { CallCheck } from "@/components/CallCheck";
-import { JoinCall } from "@/components/JoinCall";
 import { ReasonQuote } from "@/components/ScrollText";
-import { DisputeSide } from "./tests/[id]/DisputeSide";
 import { disputesForSide } from "@/lib/server/disputes";
 
 import { LIST_PANEL, ScrollList } from "@/components/ScrollList";
@@ -164,7 +161,8 @@ export default async function AppHome({ searchParams }: { searchParams: Promise<
                         <Fold id={`dashboard-dispute-${d.id}`} summary={<span className="text-slate-300">Disputed what you paid for {d.what} on “<TestName text={d.testTitle} href={`/app/tests/${d.testId}`} />”</span>}>
                           <div className="space-y-1.5">
                             <ReasonQuote id={`dispute-reason-${d.id}`} label="Their reason" text={d.reason} />
-                            <DisputeSide seenAt={now.toISOString()} testId={d.testId} disputeId={d.id} />
+                            {/* (Owner, Nov 11, §380 L) Send your side is on the test page: a link to that dispute there. */}
+                            <Link href={`/app/tests/${d.testId}#item-dispute-${d.id}`} className="btn px-3 py-1.5 text-sm no-underline hover:no-underline" data-dispute-side-link="">Send your side</Link>
                           </div>
                         </Fold>
                       </div>
@@ -551,8 +549,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
                   {/* (Owner, Nov 3, long text) Only the names are cut with "…": the call's day, time and length always show (a line of their own when the names are long).
                       (Owner, Nov 5, §209; was §186's Call history "Booked (N)") It opens that call's own row in the session's Live session, with its Join call. */}
                   <Link href={`/app/sessions/${c.id}#call-${x.id}`} className="mr-auto flex min-w-0 max-w-full flex-wrap items-baseline gap-x-1 text-slate-200 no-underline hover:underline"><span className="min-w-0 max-w-full [overflow-wrap:anywhere]"><b className="text-white"><Cut text={displayName(c.test.developer)} /></b> · <TestName text={c.test.title} /></span> <span className="whitespace-nowrap">· {fmtDateTime(x.startsAt)} · {x.minutes} min <ArrowRight className="inline h-4 w-4 text-indigo-300" /></span></Link>
-                  {/* (Batch 15 sections 35 and 38) Join wherever a call is listed, from 10 minutes before to 30 minutes after its booked end. */}
-                  {callJoinable(x, now) && !testPaused(c.test.developer, c.test) && <JoinCall callId={x.id} />}
+                  {/* (Owner, Nov 11, §380 L; replaces batch 15 §35 here) The row is a link to the call on the session page, where Join call is: none here. */}
                   {/* (Batch 18 section 13; batch 21) The camera and microphone check, once per upcoming call. */}
                   <CallCheck className="w-full" />
                 </li>
@@ -579,8 +576,8 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
                 {/* (Batch 16 section 32) Re-sent on a new listing, or the test is full: said on the card. */}
                 {resentIds.has(i.id) && <span className="badge" data-invite-resent="">Sent again on the new listing · {fmtDate(i.createdAt)}</span>}
                 {i.test._count.contracts >= i.test.spots && <span className="badge" data-invite-full="">Full right now: your invite stays open</span>}
+                {/* (Owner, Nov 11, §380 L) Only Open: the join page answers the invite (Join, or No thanks there). */}
                 <Link href={`/app/find/${i.testId}`} className="btn px-3 py-1.5 text-sm no-underline hover:no-underline">Open</Link>
-                <NoThanks inviteId={i.id} />
               </li>
             ))}
           </ScrollList></ScopedPanelSearch>

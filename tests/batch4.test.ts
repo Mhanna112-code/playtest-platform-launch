@@ -334,7 +334,7 @@ describe("D) testers", () => {
     expect(src("app/app/find/[id]/page.tsx")).toContain("This test isn&apos;t available right now.");
   });
 
-  it("(batch 5 item 4) Dismiss removes a 'You were removed from this test' card after a reinstatement; no automatic re-invite", async () => {
+  it("(batch 5 item 4) a reinstatement re-invites nobody; (Owner, Nov 11, §380 L) no Dismiss any more", async () => {
     const a = await admin();
     const inviteOnly = await setup({ joinMode: "invite" });
     const t = await makeUser({ tester: true, name: "Ana Silva" });
@@ -345,14 +345,13 @@ describe("D) testers", () => {
     expect((await aact(a.cookie, "unsuspend", { id: t.user.id })).status).toBe(200);
     expect(await db.invite.count({ where: { testId: inviteOnly.testId, testerId: t.user.id, status: "sent" } })).toBe(0);
     const sid = j.body.sessionId as string;
-    expect((await sact(sid, "dismiss-removed", t.cookie, {})).status).toBe(200);
-    expect((await db.contract.findUniqueOrThrow({ where: { id: sid } })).removedDismissedAt).not.toBeNull();
+    expect((await sact(sid, "dismiss-removed", t.cookie, {})).status).toBeGreaterThanOrEqual(400);
     const dash = src("app/app/page.tsx");
     // (Codex eb8ca7cd) "Tests you were removed from" and "Tests you left" are Previous Tests now, with its Removed From / Closed / Left ticks.
     for (const w of ["PREVIOUS_TEST_FILTERS", "Send work", "Charge or cancel", "Needs review", "data-paused-tag"]) expect(dash, w).toContain(w);
     expect(src("lib/dashboardPanels.ts")).toContain('export const PREVIOUS_TEST_FILTERS = ["Removed From", "Closed", "Left"];');
   });
-  it("(owner, Nov 3) Dismiss all clears every 'Tests you were removed from' card of this tester at once, and nobody else's", async () => {
+  it("(owner, Nov 3; §380 L) Dismiss all is gone", async () => {
     const a = await admin();
     const one = await setup({ joinMode: "invite" });
     const two = await setup({ joinMode: "invite" });
@@ -368,12 +367,11 @@ describe("D) testers", () => {
       expect((await aact(a.cookie, "suspend", { id: u.user.id, note: "Testing" })).status).toBe(200);
       expect((await aact(a.cookie, "unsuspend", { id: u.user.id })).status).toBe(200);
     }
+    // (Owner, Nov 11, §380 L) Dismiss / Dismiss all are gone.
     const r = await sact(ids[0], "dismiss-removed", t.cookie, { all: true });
-    expect(r.status).toBe(200);
-    expect(r.body.dismissed).toBe(2);
-    for (const id of ids) expect((await db.contract.findUniqueOrThrow({ where: { id } })).removedDismissedAt).not.toBeNull();
-    expect((await db.contract.findUniqueOrThrow({ where: { id: otherSid } })).removedDismissedAt).toBeNull();
-    expect(src("app/app/DismissRemoved.tsx")).toContain('{all ? "Dismiss all" : "Dismiss"}');
+    expect(r.status).toBeGreaterThanOrEqual(400);
+    expect(otherSid).toBeTruthy();
+    expect(fs.existsSync(path.resolve(__dirname, "../src/app/app/DismissRemoved.tsx"))).toBe(false);
   });
 
   // (Owner, Nov 7, §331) No 2-week limit for the tester any more: every 3 days until they rate or the close-out; the last one names the date and is always emailed.
