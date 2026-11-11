@@ -101,11 +101,13 @@ describe("the developer's side of a dispute (section 27)", () => {
     await joined(testId, "Ben Okafor"); // a change after the developer's page loaded: never a stop for this press
     await db.user.update({ where: { id: dev.user.id }, data: { devSuspendedAt: new Date() } });
     expect((await disputesForSide(dev.user.id)).map((x) => x.id)).toEqual([d.id]);
-    expect((await act(testId, "dispute-side", dev.cookie, { disputeId: d.id, text: "x".repeat(2001), seenAt: adminLoaded })).status).toBe(400);
+    // (Owner, Nov 11, §380 D2) A side too long: the box first (the page's own red note shows with it); the red is the safety net after it (below).
+    expect((await act(testId, "dispute-side", dev.cookie, { disputeId: d.id, text: "x".repeat(2001), seenAt: adminLoaded })).body.error?.code).toBe("stop_once");
     // (Owner, Nov 5, §271) The suspension since the page loaded is a pause: it stops Add your side once (its own words), then the press goes ahead.
     const stopped = await act(testId, "dispute-side", dev.cookie, { disputeId: d.id, text: "They skipped the second question.", seenAt: adminLoaded });
     expect(stopped.body.error?.code, JSON.stringify(stopped.body)).toBe("stop_once");
     expect(stopped.body.error.changes.map((c: { text: string }) => c.text)).toEqual([expect.stringMatching(/^Your developer account was suspended at /)]);
+    expect((await act(testId, "dispute-side", dev.cookie, { disputeId: d.id, text: "x".repeat(2001), seenAt: adminLoaded, confirmed: true, boxAt: stopped.body.error.now })).status).toBe(400);
     expect((await act(testId, "dispute-side", dev.cookie, { disputeId: d.id, text: "They skipped the second question.", seenAt: adminLoaded, confirmed: true, boxAt: stopped.body.error.now })).status).toBe(200);
     expect((await act(testId, "dispute-side", dev.cookie, { disputeId: d.id, text: "Again", seenAt: seen() })).body.error.message).toMatch(/^You already/);
     const a = await admin();

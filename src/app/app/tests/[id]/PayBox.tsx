@@ -2,7 +2,7 @@
 import { CharacterCount } from "@/components/CharacterCount";
 import { BankWaiting, cancelOwnCheck } from "@/components/BankWaiting";
 import { useState } from "react";
-import { checkFields } from "@/components/FieldChecks";
+import { checkFields, markServerMistakes } from "@/components/FieldChecks";
 import { FormMistakes } from "@/components/FormMistakes";
 import { ChangesBox } from "@/components/ChangesBox";
 import { money, toCents } from "@/lib/format";
@@ -13,7 +13,7 @@ import { needsBank } from "@/lib/bankConfirm";
 import { useBankCheck } from "@/components/BankCheck";
 import { useHoldOpen } from "@/components/HoldFold";
 import { CANCEL_THIS_CHECK, payMoreWaits } from "@/lib/bankNotice";
-import { MIN_CHARGE_CENTS, NOT_LISTED, NO_LISTING_CALL_RATE_CAP_CENTS, OVER_PAY_TICK_LINE, PAY_TICK_CENTS, PAY_TICK_LINE, PAY_WAITS, REASON_WHEN_UNDER_LISTING, STRIPE_MAX_LINE, ZERO_PAY_REASON, overCallsLine, overMaxLine, payUnderLine } from "@/lib/rules";
+import { MIN_CHARGE_CENTS, NOT_LISTED, NO_LISTING_CALL_RATE_CAP_CENTS, OVER_PAY_TICK_LINE, PAY_TICK_CENTS, PAY_TICK_LINE, PAY_WAITS, REASON_WHEN_UNDER_LISTING, STRIPE_MAX_LINE, ZERO_PAY_REASON, checkExtraPay, checkPay, overCallsLine, overMaxLine, payUnderLine } from "@/lib/rules";
 import { amountFromRate, overCeilingLine, rateFromAmount } from "@/lib/callMeasure";
 import { DraftTag, useKept } from "@/lib/useKept";
 import { LIMITS } from "@/lib/limits";
@@ -147,7 +147,6 @@ export function PayBox(p: {
     setTicked(false);
     setOver200(false);
   };
-  const tickOk = cents === 0 || (ticked && (!over || over200));
   // (Batch 15 section 31) The room beside the amount, and the red line when the amount is above it.
   const room = p.room;
   const total = room ? room.totalCapCents ?? room.roomCents : 0;
@@ -155,6 +154,15 @@ export function PayBox(p: {
   const roomText = !room ? "" : room.ceilingBinds ? `up to ${money(room.roomCents)} (what's left of the $500 for calls)` : unlistedCall && !more ? `up to ${money(room.roomCents)} ($200/h × ${minutes} min)` : more ? `up to ${money(room.roomCents)} more (${money(total)} in all)` : `up to ${money(room.roomCents)} in all`;
   const overCap = !!room && cents != null && cents > room.roomCents;
   const overText = !room || !overCap ? "" : room.ceilingBinds ? overCeilingLine(room.roomCents) : unlistedCall ? overCallsLine(room.roomCents) : overMaxLine(room.roomCents, total);
+  /**
+   * (Owner, Nov 11, §380 D2) The server's own check of this box (rules.ts: Pay's checkPay, Pay more's checkExtraPay; $0 on an update closes it), so a press marks
+   * its first mistake red at its field at once (the amount, a tick, the note), as the server's 400 would; "" when there is none. Above what's left is red live.
+   */
+  const payMistake = () => {
+    const tick = ticked ? cents : null;
+    const m = more ? (cents === 0 && p.update && p.kind === "submission" ? null : checkExtraPay(cents, tick, over && over200)) : checkPay(cents, p.listingCents, reason, tick, over && over200);
+    return m && !m.ok ? m.message : "";
+  };
 
   // (Owner, Nov 5, §261) From the press until it ends (the server's answer, the bank's check it opens, the redraw after it went through), the rate, the amount and
   // the note are read-only: what's on its way can't change. Refused, stopped once or not confirmed by the bank, they are as before.
@@ -249,9 +257,10 @@ export function PayBox(p: {
             <input type="checkbox" id={`over-${p.id}`} className="mt-1" data-match="^Tick “I confirm" checked={over200} onChange={(e) => setOver200(e.target.checked)} /> {OVER_PAY_TICK_LINE}
           </label>
         )}
-        {/* (Owner, Nov 11, §380 D) Disabled until the amount and ticks meet their requirements ($0.50 or more, or 0; within the room; the tick; a reason where one
-            is needed), each said live beside its field. */}
-        <button className="btn-green" disabled={busy || bank.open || !!bankWaits || cents == null || (cents > 0 && cents < 50) || !tickOk || !!p.owes || overCap || reasonMissing || reason.length > LIMITS.reason || (!!more && cents === 0 && !p.update)} onClick={(e) => checkFields(e.currentTarget.closest("div.space-y-3")) && go()}>{pressName}</button>
+        {/* (Owner, Nov 11, §380 D2; replaces §380 D's disabled button and the older disabled-until-ticked) Pressable with the amount, the ticks or the note not
+            yet right: the press marks them red at their fields (the server's own checks, rules.ts) and still goes to the server, whose refusal or box shows under
+            the button with them; nothing is charged while they remain. Disabled only while a press, the bank's check or a payment waiting on it is under way. */}
+        <button className="btn-green" disabled={busy || bank.open || !!bankWaits || !!p.owes} onClick={(e) => { const root = e.currentTarget.closest("div.space-y-3"); const m = payMistake(); if (m) markServerMistakes(root, [m]); checkFields(root); go(); }}>{pressName}</button>
         {/* (Owner, Nov 5, §227) Pay what you owe is on Payments, never on the test page: the link goes there. */}
         {!done && p.owes && <span className="text-xs text-amber-200" data-owes-note="">{PAY_WAITS} <PayOwedLink /></span>}
         {!done && <span className="text-xs text-slate-500">at least $0.50 (or 0)</span>}

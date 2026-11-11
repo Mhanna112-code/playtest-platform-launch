@@ -171,12 +171,18 @@ describe("§375 each clash: the earlier step wins", () => {
     expect(await written(w)).toBeNull();
   });
 
-  it("a red mistake + another tab's Send: the red mistake (before the gate's box)", async () => {
+  // (Owner, Nov 11, §380 D2; replaces §375's "the red mistake before the gate's box") Send Answers is pressable with the form incomplete: the box comes first (the
+  // page keeps its own red notes with it); the red mistake is the safety net after it, and nothing is sent.
+  it("a red mistake + another tab's Send: the gate's box first, then the red mistake; nothing sent", async () => {
     const w = await world();
     expect((await sendA(w)).status).toBe(200);
     await settle();
     const r = await withMin("50", () => sendB(w, { answers: ["", "", "Too short.", ""] }));
-    expect(r.body.error?.code, JSON.stringify(r.body)).toBe("bad_answers");
+    expect(r.body.error?.code, JSON.stringify(r.body)).toBe("stop_once");
+    await settle();
+    const again = await withMin("50", () => sendB(w, { answers: ["", "", "Too short.", ""], confirmed: true, boxAt: new Date().toISOString() }));
+    expect(again.body.error?.code, JSON.stringify(again.body)).toBe("bad_answers");
+    expect(carriedAnswers((await written(w))!, Q)).toEqual([A1, A1, null, null]);
   });
 
   for (const race of [true, false]) {

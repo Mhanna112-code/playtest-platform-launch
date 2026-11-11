@@ -9,7 +9,7 @@ import { FormMistakes } from "@/components/FormMistakes";
 import { checkFields } from "@/components/FieldChecks";
 import { useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { api, ApiError, errOf, FIELD, offerShown, PRESS_REFUSED_EVENT } from "@/lib/client";
+import { api, ApiError, errOf, FIELD, isFieldError, offerShown, PRESS_REFUSED_EVENT } from "@/lib/client";
 import { pressRefusal, stopBox, useStopBox } from "@/lib/topStop";
 import { DISCARD_ALL_LABEL, DraftButton, DraftTag, USE_SAVED_ALL_LABEL, useKept, useKeptUnits } from "@/lib/useKept";
 import { NOTES_UNIT, answerUnit, type Units } from "@/lib/draftUnits";
@@ -209,6 +209,11 @@ export function WrittenForm({ sessionId, questions, newQs = [], initial, initial
   // (§371) On its way (kept by the part: a form swapped in meanwhile shows "Sending…" too).
   const [sending, setSending] = useCarried(carry, "sending", false);
   const [msg, setMsg] = useCarried<{ ok: boolean; text: string } | null>(carry, "msg", null);
+  // (Owner, Nov 11, §380 D2) The server's refusal for a press, kept apart from the red notes (`msg`, at the questions): an incomplete form still sends, and the
+  // refusal shows under Send Answers while the red notes stay where they are.
+  const [refused, setRefused] = useCarried(carry, "refused", "");
+  // (§380 D2) Which answer the press found red, and its text then: that box's grey "still needs" line waits until it is typed in (the red line says it meanwhile).
+  const [redFor, setRedFor] = useCarried<{ at: number; value: string } | null>(carry, "redFor", null);
   // (Batch 35 §40, §41) Sent: the page redraws in place (the scroll stays at the answers); until it has, Send stays greyed with its line under it.
   const fin = useFinished(() => { setBox(null); setBoxAt(""); });
   const busy = sending || fin.done;
@@ -247,12 +252,14 @@ export function WrittenForm({ sessionId, questions, newQs = [], initial, initial
   const boxDraft = (i: number) => (keep.restored && keep.isDraft(answerUnit(typedFor[i] ?? questions[i])) && answers[i] !== sentAt(i) ? <DraftTag disabled={busy || fin.done} kind={answerKind} field={`a${i}`} onUseSaved={() => setAnswers((all) => questions.map((_, j) => (j === i ? sentAt(i) : all[j] ?? "")))} /> : null);
   const notesDraft = keep.restored && keep.isDraft(NOTES_UNIT) ? <DraftTag disabled={busy || fin.done} kind={answerKind} field="notes" onUseSaved={() => setNotes(initialNotes)} /> : null;
   const length = writtenLength([...answers, notes]);
-  // (Owner, Nov 11, §380 D) Send Answers stays disabled until the form meets its requirements (every Required question answered, each answer at least the
-  // minimum, at least one answer, within the 20,000), each shown live under its field (the counters already say "(at least 50)"). Worked out from the questions
-  // shown now, so a form switched in place to new questions is checked again for them. The server keeps its own checks.
+  // (Owner, Nov 11, §380 D) What the form still needs (every Required question answered, each answer at least the minimum, at least one answer, within the
+  // 20,000), the first unmet one shown live under its field (the counters already say "(at least 50)"). Worked out from the questions shown now, so a form
+  // switched in place to new questions is checked again for them. (Owner, Nov 11, §380 D2; replaces §380 D's disabled button) Send Answers stays pressable:
+  // a press marks these red at their fields AND still goes to the server (its refusal or box shows under the button; it never saves while they remain).
   const live0 = canSend ? answersMissing(questions, answers) : null;
   const liveMissing = live0?.message === ANSWER_ONE && !oneNeeded ? null : live0;
-  const needLine = (i: number) => (liveMissing && liveMissing.at === i ? (liveMissing.message === ANSWER_SHORT ? answerShortLine(liveMissing.chars ?? 0) : liveMissing.message) : "");
+  const redHere = (i: number) => redFor?.at === i && redFor.value === (answers[i] ?? "");
+  const needLine = (i: number) => (liveMissing && liveMissing.at === i && !redHere(i) ? (liveMissing.message === ANSWER_SHORT ? answerShortLine(liveMissing.chars ?? 0) : liveMissing.message) : "");
   const notReady = !!liveMissing || length > WRITTEN_MAX_CHARS;
   // (Owner, Oct 28, batch 20 section 26) After a send: "Send my updated answers" waits until something differs from it (changing it back disables it again).
   const unchanged = update && sentSame && !newFiles && same;
@@ -263,26 +270,32 @@ export function WrittenForm({ sessionId, questions, newQs = [], initial, initial
     if ([...answers, notes].some((a) => a.includes("[Uploading "))) return setMsg({ ok: false, text: FIELD + "Wait for the upload to finish before sending." });
     // (Batch 27 section 1) An open new-terms offer comes first: the press goes straight to its refusal (the page goes up to Switch / Keep).
     const terms = offerShown();
-    if (!terms && length > WRITTEN_MAX_CHARS) return setMsg({ ok: false, text: FIELD + `Your written answers can be at most ${WRITTEN_MAX_CHARS.toLocaleString("en-US")} characters in all (now ${length.toLocaleString("en-US")}).` });
-    // (Batch 26 section 14) The server's rule, at once: at least one question answered, plus every Required one; red at the question.
-    const missing0 = terms ? null : answersMissing(questions, answers);
+    // (Batch 26 section 14) The server's rule, at once: at least one question answered, plus every Required one; red at the question. (Owner, Nov 11, §380 D2)
+    // The red notes show AND the press still goes to the server: its refusal or stop-once box shows under Send Answers with them (the server saves nothing
+    // while they remain; with nothing else to say it answers with the same mistake).
+    let red = "";
+    if (!terms && length > WRITTEN_MAX_CHARS) red = FIELD + `Your written answers can be at most ${WRITTEN_MAX_CHARS.toLocaleString("en-US")} characters in all (now ${length.toLocaleString("en-US")}).`;
+    const missing0 = terms || red ? null : answersMissing(questions, answers);
     const missing = missing0?.message === ANSWER_ONE && !oneNeeded ? null : missing0;
-    if (missing?.message === ANSWER_ONE) return setNeedOne(true);
-    if (missing) {
-      setMissingAt(missing.at);
-      // (Batch 30 §14) Too short: "Write at least 50 characters (12 so far)." at that answer.
-      return setMsg({ ok: false, text: FIELD + (missing.message === ANSWER_SHORT ? answerShortLine(missing.chars ?? 0) : missing.message) });
-    }
+    setNeedOne(missing?.message === ANSWER_ONE);
+    const at = missing && missing.message !== ANSWER_ONE ? missing.at : null;
+    // (Batch 30 §14) Too short: "Write at least 50 characters (12 so far)." at that answer.
+    if (missing && at != null) red = FIELD + (missing.message === ANSWER_SHORT ? answerShortLine(missing.chars ?? 0) : missing.message);
+    setMissingAt(at);
+    setRedFor(at != null ? { at, value: answers[at] ?? "" } : null);
     setSending(true);
-    setMsg(null);
+    setMsg(red ? { ok: false, text: red } : null);
+    setRefused("");
     try {
-      setMissingAt(null);
       // (Owner, Nov 5, §269) Always with the questions the boxes are for (`for`): the server reads the answers by their words, and a page whose questions are no
       // longer the contract's stops once (then takes the new questions) instead of sending them under other questions.
       await api(`/api/sessions/${sessionId}/written`, { answers, notes, seenAt, confirmed, boxAt, for: questions });
       setBox(null);
       setBoxAt("");
       setPausedNow(false);
+      setMsg(null);
+      setMissingAt(null);
+      setRedFor(null);
       // (§371) The form shown now (this one, or the one a redraw swapped in meanwhile).
       const now = shown();
       await now.clear();
@@ -296,10 +309,15 @@ export function WrittenForm({ sessionId, questions, newQs = [], initial, initial
       else {
         // (Batch 20 section 28) Which required question the server found empty: the red goes AT it.
         if (err instanceof ApiError && err.message === ANSWER_ONE) { setNeedOne(true); setSending(false); return; }
-        if (err instanceof ApiError && typeof err.data.missing === "number") setMissingAt(err.data.missing);
+        if (err instanceof ApiError && typeof err.data.missing === "number") {
+          setMissingAt(err.data.missing);
+          setRedFor({ at: err.data.missing, value: answers[err.data.missing] ?? "" });
+        }
         // (Batch 30 §14) The server found an answer too short: the same red line at it as the page's own check.
         if (err instanceof ApiError && err.message === ANSWER_SHORT && typeof err.data.chars === "number") setMsg({ ok: false, text: FIELD + answerShortLine(err.data.chars) });
-        else setMsg({ ok: false, text: errOf(err) });
+        else if (isFieldError(err)) setMsg({ ok: false, text: errOf(err) });
+        // (§380 D2) A refusal: under Send Answers, apart from the red notes at the questions (they stay).
+        else setRefused(errOf(err));
       }
       setSending(false);
     }
@@ -347,8 +365,8 @@ export function WrittenForm({ sessionId, questions, newQs = [], initial, initial
       {/* (Batch 11) (Batch 14) At most 20,000 characters for the whole written part, counted live ((Owner, Nov 4, §186) was 50,000). */}
       <p className={`text-xs ${length > WRITTEN_MAX_CHARS ? "text-rose-300" : "text-slate-500"}`} data-written-count="">{length.toLocaleString("en-US")} / {WRITTEN_MAX_CHARS.toLocaleString("en-US")}</p>
       {canSend && lines.map((l) => <p key={l} className="note" data-above-send="">{l}</p>)}
-      <span>{canSend && <button className={`btn ${unchanged ? "!bg-white/10 !text-ink-400 !shadow-none" : ""}`} disabled={busy || notReady || unchanged} title={unchanged ? NOTHING_CHANGED_LINE : undefined} data-send-ready={notReady ? undefined : ""} data-send-idle={unchanged ? "" : undefined}>{busy && !fin.done ? "Sending…" : SEND_ANSWERS}</button>}{keep.restored && [...keep.drafted].some(keep.isDraft) && <DraftButton className="ml-3 text-sm text-sky-300 underline" data-use-saved-all="" disabled={busy || fin.done} onPress={() => { setAnswers(questions.map((_, i) => initial[i] ?? "")); setNotes(initialNotes); }}>{update ? USE_SAVED_ALL_LABEL : DISCARD_ALL_LABEL}</DraftButton>}</span>
-      <Err text={msg && !msg.ok && !msg.text.startsWith(FIELD) ? msg.text : ""} press={sendPress} />
+      <span>{canSend && <button className={`btn ${unchanged ? "!bg-white/10 !text-ink-400 !shadow-none" : ""}`} disabled={busy || unchanged} title={unchanged ? NOTHING_CHANGED_LINE : undefined} data-send-ready={notReady ? undefined : ""} data-send-idle={unchanged ? "" : undefined}>{busy && !fin.done ? "Sending…" : SEND_ANSWERS}</button>}{keep.restored && [...keep.drafted].some(keep.isDraft) && <DraftButton className="ml-3 text-sm text-sky-300 underline" data-use-saved-all="" disabled={busy || fin.done} onPress={() => { setAnswers(questions.map((_, i) => initial[i] ?? "")); setNotes(initialNotes); }}>{update ? USE_SAVED_ALL_LABEL : DISCARD_ALL_LABEL}</DraftButton>}</span>
+      <Err text={refused || (msg && !msg.ok && !msg.text.startsWith(FIELD) ? msg.text : "")} press={sendPress} />
       <PausedSend sessionId={sessionId} press={sendPress} canSend={canSend} now={pausedNow} />
       {!canSend && <p className="note" data-draft-kept="">Your answers are kept as a draft. Send comes back when the test resumes.</p>}
       {/* (Owner, Oct 30, batch 32 §4) Under Send, where the press is (above the questions it could be out of view); in view when it appears. */}
@@ -390,6 +408,8 @@ export function WrittenAddForm({ sessionId, seenAt, canSend = true, known = [], 
   const [attachments, setAttachments] = useState(known);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  // (Owner, Nov 11, §380 D2) A refusal, apart from the text's red note (`err`): both show after one press.
+  const [refused, setRefused] = useState("");
   const [box, setBox] = useStopBox();
   const [boxAt, setBoxAt] = useState("");
   const [pausedNow, setPausedNow] = useState(false);
@@ -432,12 +452,15 @@ export function WrittenAddForm({ sessionId, seenAt, canSend = true, known = [], 
   const empty = !withoutAttachmentMarkers(text).trim() && !attachments.some((a) => hasMarkerFor(text, a.id, attachments));
   const remove = (id: string) => void api(`/api/sessions/${sessionId}/recording-remove`, { recordingId: id, written: true }).then(() => setAttachments((old) => old.filter((a) => a.id !== id))).catch((e) => setErr(errOf(e)));
   async function add() {
-    if (!canSend || empty || full) return;
+    if (!canSend || full) return;
     if (text.includes("[Uploading ")) return setErr(FIELD + "Wait for the upload to finish before sending.");
-    if (!offerShown() && length > WRITTEN_MAX_CHARS) return setErr(FIELD + additionTooLongLine(length));
-    if (!offerShown() && answerChars(text) < ANSWER_MIN_CHARS) return setErr(FIELD + answerShortLine(answerChars(text)));
+    // (Owner, Nov 11, §380 D2) The text's own mistakes are red at once AND the press still goes to the server: its refusal or stop-once box shows under the
+    // button with them (`refused`, apart from the red note); the server saves nothing while they remain.
+    const terms = offerShown();
+    const red = terms ? "" : empty ? FIELD + NOTHING_TO_ADD : length > WRITTEN_MAX_CHARS ? FIELD + additionTooLongLine(length) : answerChars(text) < ANSWER_MIN_CHARS ? FIELD + answerShortLine(answerChars(text)) : "";
     setBusy(true);
-    setErr("");
+    setErr(red);
+    setRefused("");
     try {
       await api(`/api/sessions/${sessionId}/written-add`, { text, question: questionKey, seenAt, confirmed: !!boxAt, boxAt, ...(first ? { first: true } : {}) });
       await keep.clear();
@@ -448,7 +471,8 @@ export function WrittenAddForm({ sessionId, seenAt, canSend = true, known = [], 
       const sb = stopBox(e);
       if (sb) { setBox(sb); setBoxAt(sb.now); if (questionsChanged(e)) redrawNow(); }
       else if (e instanceof ApiError && e.code === "paused") { rememberPaused(sessionId, `Add:${questionKey}`); setPausedNow(true); }
-      else setErr(errOf(e));
+      else if (isFieldError(e)) setErr(errOf(e));
+      else setRefused(errOf(e)); // (§380 D2) under the button; the red note stays
       setBusy(false);
     }
   }
@@ -500,9 +524,9 @@ export function WrittenAddForm({ sessionId, seenAt, canSend = true, known = [], 
         </details>
       )}
       <div className="flex flex-wrap items-center gap-3">
-        {/* (Owner, Nov 11, §380 D) Disabled until the addition meets its requirements (something to add, at least the minimum, within the limit); the counter under
-            the box says "(at least 50)" live. */}
-        {canSend && !full && <button type="button" className="btn" data-add-send="written" disabled={busy || fin.done || empty || length > WRITTEN_MAX_CHARS || answerChars(text) < ANSWER_MIN_CHARS} title={empty ? NOTHING_TO_ADD : undefined} onClick={add}>{busy && !fin.done ? (first ? "Sending…" : "Adding…") : sender}</button>}
+        {/* (Owner, Nov 11, §380 D2; replaces §380 D's disabled button) Pressable with the addition empty, short or too long: the press shows its red note and still
+            goes to the server (its refusal or box under this button). The counter under the box says "(at least 50)" live. */}
+        {canSend && !full && <button type="button" className="btn" data-add-send="written" disabled={busy || fin.done} title={empty ? NOTHING_TO_ADD : undefined} onClick={add}>{busy && !fin.done ? (first ? "Sending…" : "Adding…") : sender}</button>}
         {!fin.done && !busy && !full && <button type="button" className="btn-ghost text-sm" onClick={() => setOpen(false)}>Close</button>}
       </div>
       <PausedSend sessionId={sessionId} press={`Add:${questionKey}`} label={first ? ANSWER_PRESS : "Add"} canSend={canSend} now={pausedNow} />
@@ -511,7 +535,8 @@ export function WrittenAddForm({ sessionId, seenAt, canSend = true, known = [], 
       <ChangesBox side="tester" changes={box && !box.top ? box.changes : null} tail={box?.tail} press={first ? ANSWER_PRESS : "Add"} />
       {/* (Owner, Nov 4, batch 35 §170) A refusal names the press Add (§146), not "Your Add to my answer didn't go through". */}
       {/* (§222) A question's first answer is the press Answer this question. */}
-      <FormMistakes text={err} press={sender} named={first ? ANSWER_PRESS : PRESS_VERBS["written-add"]} find={(msg) => isShortLine(msg) ? root.current?.querySelector("textarea") : null} />
+      <Err text={refused} press={first ? ANSWER_PRESS : PRESS_VERBS["written-add"]} />
+      <FormMistakes text={err} press={sender} named={first ? ANSWER_PRESS : PRESS_VERBS["written-add"]} find={(msg) => isShortLine(msg) || msg === NOTHING_TO_ADD ? root.current?.querySelector("textarea") : null} />
     </div>
     </SendingScope.Provider>
   );
@@ -590,12 +615,13 @@ export function DisputeForm({ sessionId, kind, id, seenAt, disabledNote = "", li
       <CharacterCount value={reason} min={10} max={2000} required />
       <p className="note">You can dispute this once. Our team decides; a decision can only raise the pay, {limit}.</p>
       </>}
-      {/* (Owner, Nov 11, §380 D) Disabled until the reason meets its requirement (at least 10 characters, at most 2,000; the counter says so live). */}
+      {/* (Owner, Nov 11, §380 D2; replaces §380 D's disabled button) Pressable with the reason short or empty: the press marks it red (the counter says what it
+          needs live) and still goes to the server, whose refusal or box shows under this button with it; nothing is saved while it's red. */}
       <button
         className="btn"
-        disabled={busy || !!disabledNote || reason.trim().length < 10 || reason.length > 2000}
+        disabled={busy || !!disabledNote}
         onClick={async (e) => {
-          if (!checkFields(e.currentTarget.closest("details"))) return;
+          checkFields(e.currentTarget.closest("details")); // (§380 D2) red at the reason, and the press still goes
           setBusy(true);
           setErr("");
           try {

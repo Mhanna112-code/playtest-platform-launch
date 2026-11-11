@@ -7,7 +7,7 @@ import { FREE, holdForRedraw, lockBlocks, lockPage, pageLocked, pressAnswered, p
 import { notAPress } from "@/lib/client";
 
 // (Owner, Nov 11, §380 A, B, D) The page lock while Stop, End early or Block is on its way; Confirm with your bank only on the test page (the dashboard and
-// Payments link there, Confirm all only on the dashboard); forms whose submit stays disabled until their requirements are met.
+// Payments link there, Confirm all only on the dashboard); (§380 D2) forms stay pressable, their mistakes said live and red on the press.
 
 (globalThis as { React?: typeof React }).React = React;
 const src = (f: string) => readFileSync(path.resolve(__dirname, "../src", f), "utf8");
@@ -79,19 +79,19 @@ describe("§380 B: Confirm with your bank only on the test page", () => {
   });
 });
 
-describe("§380 D: a form's submit stays disabled until it meets its requirements", () => {
-  it("Send Answers, Add to this answer, Dispute, Charge, Pay / Pay more and Send your side", () => {
+describe("§380 D2 (replaces §380 D's disabled buttons): forms stay pressable; what's missing is said live and red on the press", () => {
+  it("Send Answers, Add to this answer, Dispute, Charge, Pay / Pay more and Send your side are never disabled by their fields (tests/forms-pressable-380.test.ts)", () => {
     const s = src("app/app/sessions/[id]/SessionActions.tsx");
     expect(s).toContain("const live0 = canSend ? answersMissing(questions, answers) : null;");
-    expect(s).toContain("disabled={busy || notReady || unchanged}");
+    expect(s).toContain("disabled={busy || unchanged}");
     expect(s).toContain("data-field-need={i}");
-    expect(s).toContain("answerChars(text) < ANSWER_MIN_CHARS} title={empty ? NOTHING_TO_ADD");
-    expect(s).toContain("disabled={busy || !!disabledNote || reason.trim().length < 10 || reason.length > 2000}");
+    expect(s).toContain('data-add-send="written" disabled={busy || fin.done} title={empty ? NOTHING_TO_ADD');
+    expect(s).toContain("disabled={busy || !!disabledNote}");
     const c = src("app/app/sessions/[id]/ChoiceBox.tsx");
-    expect(c).toContain("disabled={busy || typed == null || !!amountNeed || (over && !ticked)}");
+    expect(c).toContain("disabled={busy} onClick={(e) => charge(e.currentTarget.parentElement)}");
     expect(c).toContain('data-field-need="charge"');
-    expect(src("app/app/tests/[id]/PayBox.tsx")).toContain("(cents > 0 && cents < 50) || !tickOk");
-    expect(src("app/app/tests/[id]/DisputeSide.tsx")).toContain("disabled={text.trim().length < 10 || text.length > LIMITS.devSide}");
+    expect(src("app/app/tests/[id]/PayBox.tsx")).toContain("disabled={busy || bank.open || !!bankWaits || !!p.owes}");
+    expect(src("app/app/tests/[id]/DisputeSide.tsx")).toContain("<PressButton before={markText} seenAt={seenAt}");
   });
 });
 

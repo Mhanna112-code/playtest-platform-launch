@@ -139,27 +139,30 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0] & { hold
       if (closedOut(at)) throw new HttpError(409, "pay_closed", payClosedLine(fmtDate(at!)));
     }
     if (await devOwes(dev.id)) throw new HttpError(409, "owed_first", PAY_WAITS);
-    // Form mistakes (red at the field) come BEFORE the stop-once: a second press would only fail on them.
+    if (piece.kind === "call" && body.typed === "rate" && rateCents != null && rateCents >= 0) amountCents = amountFromRate(rateCents, piece.minutes);
+    else if (piece.kind === "call" && amountCents != null && rateCents != null) rateCents = rateFromAmount(amountCents, piece.minutes);
     {
-      if (piece.kind === "call" && body.typed === "rate" && rateCents != null && rateCents >= 0) amountCents = amountFromRate(rateCents, piece.minutes);
-      else if (piece.kind === "call" && amountCents != null && rateCents != null) rateCents = rateFromAmount(amountCents, piece.minutes);
-      const check = checkPay(amountCents, piece.listing, reason, tickedCents, over200);
-      if (!check.ok) throw new HttpError(400, "bad_amount", check.message);
-      if (piece.kind === "call" && rateCents != null) {
-        if (rateCents < 0) throw new HttpError(400, "bad_rate", "Enter a rate like 30.00.");
-        if (piece.listing == null && rateCents > NO_LISTING_CALL_RATE_CAP_CENTS) throw new HttpError(400, "over_cap", "A call that isn't listed can be paid at most $200 an hour.");
-      }
       // (Batch 9 section 6; batch 11 section 6: one Pay box, an amount above the base counts as extra pay; batch 12 section 2: the unlisted call caps) Caps per piece.
+      // (Batch 12 section 2) An unlisted call's $200 an hour, said first (the room below is that cap × the minutes).
+      if (piece.kind === "call" && piece.listing == null && rateCents != null && rateCents > NO_LISTING_CALL_RATE_CAP_CENTS) throw new HttpError(400, "over_cap", "A call that isn't listed can be paid at most $200 an hour.");
       const room = await pieceRoom({ ...piece, contractId: c.id }, tx);
       // (§163) Over what's left: refused on the first press (never after a stop whose second press could only be refused).
-      if (amountCents! > room.roomCents) {
+      if (amountCents != null && amountCents > room.roomCents) {
         throw new HttpError(400, "over_cap", overRoomLine(piece, room));
       }
-      const card = amountCents! > 0 ? cardRefusal(dev) : "";
+      const card = amountCents != null && amountCents > 0 ? cardRefusal(dev) : "";
       if (card) throw new HttpError(409, "no_card", card);
     }
     // (Batch 16 section 21) Another tab's Pay on this piece (or a lowered call length) stops it once; other actions there don't.
+    // (Owner, Nov 11, §380 D2; replaces "form mistakes come BEFORE the stop-once") Pay is pressable with the form incomplete: the box comes first, shown under the
+    // button while the page's own red notes stay at their fields.
     await devGate(tx, c.testId, body, { paidSoFarCents: await paidSoFar(c.id, tx), name }, [], undefined, payPress);
+    // (§380 D2) The safety net: the form's own mistakes (red at the field); nothing is reserved or charged.
+    {
+      const check = checkPay(amountCents, piece.listing, reason, tickedCents, over200);
+      if (!check.ok) throw new HttpError(400, "bad_amount", check.message);
+      if (piece.kind === "call" && rateCents != null && rateCents < 0) throw new HttpError(400, "bad_rate", "Enter a rate like 30.00.");
+    }
     const rev = { amountCents: amountCents!, agreedCents: piece.listing, reason, payKey, rateCents: piece.kind === "call" ? rateCents : null };
     // (Batch 15 section 9) The charge's key: an interrupted press on this piece in the last 24 hours lends its key, so nothing is ever charged twice.
     // (Batch 19 section 5) An earlier attempt with this press key whose bank check was cancelled (or that failed) keeps its row: this attempt gets a key of its own.
@@ -377,9 +380,6 @@ async function openDisputeOnce(tester: U, contractId: string, body: Record<strin
   };
   const first = await refusals(db);
   if (refusalsOnly) return null;
-  // (Owner, Nov 11, §380 DO) The red reason check after every refusal.
-  const reason = readText(body.reason, LIMITS.disputeText, "bad_reason");
-  if (reason.length < 10) throw new HttpError(400, "bad_reason", "Say why you think the pay should be higher (at least a sentence).");
   // (§369) What this press saw: what was paid on the part.
   const sawPaid = await paidOnPiece(db, where);
   // (Batch 35 §68) A payment on this piece since the page loaded stops it once even with Alerts Off.
@@ -389,6 +389,10 @@ async function openDisputeOnce(tester: U, contractId: string, body: Record<strin
     if (e instanceof HttpError && e.code === "stop_once") await refusals(db);
     throw e;
   });
+  // (Owner, Nov 11, §380 DO) The red reason check after every refusal; (§380 D2) and after the stop-once box, as the safety net: Send the dispute is pressable
+  // with the reason too short, the box shows under the button while the page's red note stays at the reason, and nothing is saved.
+  const reason = readText(body.reason, LIMITS.disputeText, "bad_reason");
+  if (reason.length < 10) throw new HttpError(400, "bad_reason", "Say why you think the pay should be higher (at least a sentence).");
   // (Owner, Nov 3, §159) Dispute and Pay more on the same part are decided in one place: the dispute is made under the test's row lock (the lock Pay more reserves
   // under), after checking again what's left to dispute.
   let roomCents = first.roomCents;
@@ -641,12 +645,15 @@ export async function addDevSide(dev: U, testId: string, body: Record<string, un
   if (!d || !c || c.testId !== testId || c.test.developerId !== dev.id) throw new HttpError(404, "not_found", "That dispute doesn't exist.");
   if (d.status !== "open") throw new HttpError(409, "decided", "This dispute was already decided.");
   // (Owner, Oct 30, batch 15 section 27) Optional, never stopped by changes (§271: only by a pause or lift, below), up to 2,000 characters (refused beyond, never cut).
-  const text = readText(body.text, LIMITS.devSide, "dev_side");
-  const ok = checkDevSide(text, !!d.devSideAt);
-  if (!ok.ok) throw new HttpError(ok.message.startsWith("You already") ? 409 : 400, "dev_side", ok.message);
+  // (Owner, Nov 11, §380 D2) The refusal first (already added), then the box, then the text's own mistake as the safety net: Send your side is pressable with
+  // the text too short; the box shows under the button while the page's red note stays at the box, and nothing is saved.
+  if (d.devSideAt) throw new HttpError(409, "dev_side", DEV_SIDE_ALREADY);
   // (Owner, Nov 5, §271) The one stop it has: a pause since the page loaded (the team's, their own hold or suspension) or the team's lift of it, once, whatever the Alerts.
   const m = await import("./stopMoment");
   m.pauseStopOnce(await m.devPauseMoments(testId, m.loadedOf(body)), body);
+  const text = readText(body.text, LIMITS.devSide, "dev_side");
+  const ok = checkDevSide(text, false);
+  if (!ok.ok) throw new HttpError(400, "dev_side", ok.message);
   // (Owner, Nov 3, §157) Claimed: once, while the dispute is open. Two presses at once (two tabs): one side is kept, the other reads "You already added your side.";
   // a decision made meanwhile: "This dispute was already decided."
   const claimed = await db.dispute.updateMany({ where: { id: d.id, devSideAt: null, status: "open" }, data: { devSide: text, devSideAt: new Date() } });
@@ -765,9 +772,9 @@ export async function payExtra(dev: U & Parameters<typeof cardRefusal>[0], testI
   const note = readText(body.note, LIMITS.reason, "bad_note");
   // (Batch 30 §2) $0 answers an updated version the tester sent after it was paid: it closes that Needs you row (an optional note), charging nothing.
   if (amount === 0 && piece.kind === "submission") return closeUpdateAtZero(dev, c, piece.where.submissionId!, note, body);
+  // (Owner, Nov 11, §380 D2) The amount's own mistakes are the safety net after the stop-once box (below, under the lock): Pay more is pressable with them.
   const check = checkExtraPay(amount, typeof body.tickedCents === "number" ? body.tickedCents : null, body.over200 === true || body.understood === true);
-  if (!check.ok) throw new HttpError(400, "bad_amount", check.message);
-  const card = cardRefusal(dev);
+  const card = amount != null && amount > 0 ? cardRefusal(dev) : "";
   if (card) throw new HttpError(409, "no_card", card);
   // (Batch 15 section 41, C1) The page's press id (a UUID) wrapped for this developer; "extra:" makes it the Pay more's own.
   const extraKey = serverKey("extra", clientPressKey(dev.id, body.payKey) ?? `press:${dev.id}:${randomUUID()}`);
@@ -793,11 +800,13 @@ export async function payExtra(dev: U & Parameters<typeof cardRefusal>[0], testI
     // (Batch 9 section 6; batch 29 §38) Per piece: the part's max in all, listed or not.
     const room = await pieceRoom(piece, tx);
     const morePress = { ...payPressOf(c.id, at), fromNeeds: body.from === "needs" }; // (§362) Needs you's Pay (an update's), never the Testers list's Pay more
-    if (amount! > room.roomCents) {
+    if (amount != null && amount > room.roomCents) {
       // (Owner, Nov 4, batch 35 §163; replaces batch 16 section 21's stop first) More than what's left: refused on the first press, never after a stop.
       throw new HttpError(400, "over_cap", overRoomLine(piece, room));
     }
     await devGate(tx, testId, body, {}, [], undefined, morePress);
+    // (§380 D2) The safety net: the amount's own mistakes, red at the field; nothing is reserved or charged.
+    if (!check.ok) throw new HttpError(400, "bad_amount", check.message);
     // (Batch 15 section 9) An interrupted Pay more on this piece in the last 24 hours lends its key.
     // (Batch 19 section 5) A cancelled or failed earlier attempt with this press key keeps its row: this attempt gets a key of its own.
     const stripeKey = await freshPayKey(tx, ["extra"], await pressKeyFor(at, ["extra"], extraKey, tx));

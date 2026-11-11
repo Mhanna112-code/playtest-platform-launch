@@ -27,9 +27,11 @@ describe("§380 DO: Dispute", () => {
 
   it("an open new-terms offer (soft) still comes after the final refusals, and the red reason check after every refusal", async () => {
     const src = (await import("node:fs")).readFileSync((await import("node:path")).resolve(__dirname, "../src/lib/server/payments.ts"), "utf8");
-    const body = src.slice(src.indexOf("async function openDisputeOnce"), src.indexOf("// (§369) What this press saw"));
+    const body = src.slice(src.indexOf("async function openDisputeOnce"), src.indexOf("// (Owner, Nov 3, §159) Dispute and Pay more on the same part are decided in one place"));
     expect(body.indexOf("const left = await disputable(review);")).toBeLessThan(body.indexOf("answerTermsFirst(contractId, q)"));
     expect(body.indexOf("if (refusalsOnly) return null;")).toBeLessThan(body.indexOf('throw new HttpError(400, "bad_reason"'));
+    // (§380 D2) and after the stop-once box: the red reason is the safety net.
+    expect(body.indexOf("await testerGate(tester.id, contractId, c.testId, body, undefined, { piece: id })")).toBeLessThan(body.indexOf('throw new HttpError(400, "bad_reason"'));
     const route = (await import("node:fs")).readFileSync((await import("node:path")).resolve(__dirname, "../src/app/api/sessions/[id]/[action]/route.ts"), "utf8");
     expect(route.indexOf("disputeRefusalsFirst(u, id, body)")).toBeLessThan(route.indexOf("await stateMoment(id, action, body);"));
     expect(route.indexOf("disputeRefusalsFirst(u, id, body)")).toBeLessThan(route.indexOf("await ndaBlockFirst(id);"));

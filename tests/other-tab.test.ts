@@ -219,8 +219,10 @@ describe("Pay after a tester left (owner bug report)", () => {
   });
 });
 
-describe("$0: a missing reason is red before the stop-once (batch 15 section 30)", () => {
-  it("reason checked first (400 at the field); with a reason, the stop-once; then it pays $0", async () => {
+// (Owner, Nov 11, §380 D2; replaces "a missing reason is red before the stop-once") Pay is pressable with the reason missing: the box comes first (the page shows
+// its own red note with it), the reason's mistake is the safety net after it, and nothing is paid until it's fixed.
+describe("$0: a missing reason (batch 15 section 30)", () => {
+  it("the stop-once first; then the reason (400 at the field); with a reason it pays $0", async () => {
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
     await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
@@ -231,9 +233,9 @@ describe("$0: a missing reason is red before the stop-once (batch 15 section 30)
     await joined(testId, "Ben Carter", "he"); // a stop-once reason
     const base = { payKey: randomUUID(), amount: "0", kind: "submission", id: sub.id, seenAt: pageLoaded };
     const r1 = await reviewPOST(req("/api/review", { cookie: dev.cookie, body: { ...base, reason: "" } })).then(json);
-    expect(r1).toMatchObject({ status: 400, body: { error: { code: "bad_amount", message: "Say why you're paying $0 (the tester reads it)." } } });
-    const r2 = await reviewPOST(req("/api/review", { cookie: dev.cookie, body: { ...base, reason: "Missing answers" } })).then(json);
-    expect(r2.body.error.code).toBe("stop_once");
+    expect(r1.body.error.code).toBe("stop_once");
+    const r2 = await reviewPOST(req("/api/review", { cookie: dev.cookie, body: { ...base, reason: "", confirmed: true } })).then(json);
+    expect(r2).toMatchObject({ status: 400, body: { error: { code: "bad_amount", message: "Say why you're paying $0 (the tester reads it)." } } });
     expect((await reviewPOST(req("/api/review", { cookie: dev.cookie, body: { ...base, reason: "Missing answers", confirmed: true } }))).status).toBe(200);
   });
 });

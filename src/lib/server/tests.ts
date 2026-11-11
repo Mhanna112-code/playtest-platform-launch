@@ -1485,13 +1485,14 @@ export async function sendWritten(tester: U, contractId: string, body: Record<st
     // new questions in place, and the next press sends normally.
     const questionsBox = stale ? await testerSendGate(tx, contractId, body, sent?.id, { stale: stale.lines }) : null;
     if (questionsBox) return { stop: questionsBox };
-    // 5. The form's own mistakes, red at the question (Required, 50 characters, 20,000 in all).
-    const mistake = formMistakes(page, sent);
-    if (mistake) return { stop: mistake };
-    // 6. The tester's one gate: the stop-once box for what the page hasn't shown ((Owner, Nov 4, §183) a developer payment on sent answers since the page
-    // loaded, whatever the Alerts; another tab's Send: "You sent your written answers in another tab").
+    // 5. The tester's one gate: the stop-once box for what the page hasn't shown ((Owner, Nov 4, §183) a developer payment on sent answers since the page
+    // loaded, whatever the Alerts; another tab's Send: "You sent your written answers in another tab"). (Owner, Nov 11, §380 D2) Before the form's own mistakes:
+    // Send Answers is pressable with the form incomplete, and the page shows this box under the button while its own red notes stay at the questions.
     const box = await testerSendGate(tx, contractId, body, sent?.id, { stale: [] });
     if (box) return { stop: box };
+    // 6. (§380 D2) The safety net: the form's own mistakes, red at the question (Required, 50 characters, 20,000 in all); nothing is saved.
+    const mistake = formMistakes(page, sent);
+    if (mistake) return { stop: mistake };
     // 7. The save.
     return { saved: await saveWritten(tx, tester, contractId, sent, page, body) };
   });
@@ -1632,12 +1633,13 @@ export async function addWritten(tester: U, contractId: string, body: Record<str
     // 4. (§269; §375) Its question is no longer asked: the questions box every time (whatever the Alerts, a confirmed press or a box that listed it), and the
     // page redraws without it (`questions`); never saved.
     if (gone) return { stop: (await testerSendGate(tx, contractId, body, before?.id, { stale: gone }))! };
-    // 5. The text's own mistakes: nothing to add, too long, too short.
-    const mistake = await addMistakes(tx, contractId, text);
-    if (mistake) return { stop: mistake };
-    // 6. The tester's one gate ((Owner, Nov 4, §183) a developer payment on these answers since the page loaded, whatever the Alerts; another tab's Add).
+    // 5. The tester's one gate ((Owner, Nov 4, §183) a developer payment on these answers since the page loaded, whatever the Alerts; another tab's Add).
+    // (Owner, Nov 11, §380 D2) Before the text's own mistakes: the box shows under the button while the page's red note stays at the box.
     const box = await testerSendGate(tx, contractId, body, before?.id, { stale: [] });
     if (box) return { stop: box };
+    // 6. (§380 D2) The safety net: the text's own mistakes (nothing to add, too long, too short); nothing is saved.
+    const mistake = await addMistakes(tx, contractId, text);
+    if (mistake) return { stop: mistake };
     // 7. The save.
     return { saved: await saveAddition(tx, tester, contractId, before!, key, text, body) };
   });

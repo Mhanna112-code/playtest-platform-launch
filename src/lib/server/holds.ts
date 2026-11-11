@@ -1942,7 +1942,9 @@ export async function chooseOutcome(tester: { id: string; email: string; name: s
   const cap = chargeAmount(s.agreedCents, paidForPart);
   if (cap === 0) throw new HttpError(409, "paid_in_full", "This part is already paid in full.");
   // Any amount up to the cap (the box starts at the cap); the tick must name the typed amount.
-  const typed = body.amount === undefined || body.amount === "" ? cap : toCents(body.amount);
+  // (Owner, Nov 11, §380 D2) Charge is pressable with the amount box empty: an empty box is its mistake ("Enter an amount like 5.00."), never the whole cap (only a
+  // press that sends no amount at all, an older page, means the cap).
+  const typed = body.amount === undefined ? cap : toCents(body.amount);
   if (choice === "charge" && (typed == null || typed <= 0)) throw new HttpError(400, "bad_amount", "Enter an amount like 5.00.");
   if (choice === "charge" && typed! > cap) throw new HttpError(400, "too_much", `At most ${money(cap)}.`);
   if (choice === "charge" && typed! > 0 && typed! < 50) throw new HttpError(400, "too_small", "The smallest card charge is $0.50.");
@@ -2098,7 +2100,9 @@ async function chooseCallOutcome(tester: { id: string; email: string; name: stri
   if (!choice) throw new HttpError(400, "bad_choice", "Choose Charge or Let it go.");
   const cap = (await callChargeCap(x)).cents;
   if (cap === 0 && choice === "charge") throw new HttpError(409, "paid_in_full", "There's nothing left to charge for this call (the $500 for calls on this test is used).");
-  const typed = body.amount === undefined || body.amount === "" ? cap : toCents(body.amount);
+  // (Owner, Nov 11, §380 D2) Charge is pressable with the amount box empty: an empty box is its mistake ("Enter an amount like 5.00."), never the whole cap (only a
+  // press that sends no amount at all, an older page, means the cap).
+  const typed = body.amount === undefined ? cap : toCents(body.amount);
   if (choice === "charge" && (typed == null || typed <= 0)) throw new HttpError(400, "bad_amount", "Enter an amount like 5.00.");
   if (choice === "charge" && typed! > cap) throw new HttpError(400, "too_much", `At most ${money(cap)}.`);
   if (choice === "charge" && typed! > 0 && typed! < 50) throw new HttpError(400, "too_small", "The smallest card charge is $0.50.");

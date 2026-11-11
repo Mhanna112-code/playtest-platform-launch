@@ -1,12 +1,12 @@
 "use client";
 import { refusalLine } from "@/lib/pressLabels";
 import { Err } from "@/components/Err";
-import { checkFields } from "@/components/FieldChecks";
+import { checkFields, markServerMistakes } from "@/components/FieldChecks";
 import { FormMistakes } from "@/components/FormMistakes";
 import { useState } from "react";
 import { api, errOf, FIELD } from "@/lib/client";
 import { money, toCents } from "@/lib/format";
-import { CHARGE_TICK_CENTS, chargeTickLabel, letGoTickLabel } from "@/lib/rules";
+import { CHARGE_TICK_CENTS, chargeTickLabel, chargeTickLine, letGoTickLabel } from "@/lib/rules";
 import { stopBox, useStopBox } from "@/lib/topStop";
 import { useCarried, useCarriedLive } from "@/lib/pressCarry";
 import { ChangesBox } from "@/components/ChangesBox";
@@ -49,9 +49,20 @@ export function ChoiceBox({ paused = false, sessionId, submissionId, callId, lin
   const typed = toCents(amount);
   // (Batch 16 section 39) No tick for ordinary amounts; above $200 the tick stays, required, naming the amount.
   const over = typed != null && typed > CHARGE_TICK_CENTS;
-  // (Owner, Nov 11, §380 D) Charge stays disabled until the amount meets its requirements ($0.50 up to the listed amount; over $200 the tick), each said live
-  // under the amount. The server keeps its own checks.
+  // (Owner, Nov 11, §380 D) What the amount still needs ($0.50 up to the listed amount), said live under it. (Owner, Nov 11, §380 D2; replaces §380 D's disabled
+  // button) Charge stays pressable: a press marks the amount (and, over $200, the tick) red and still goes to the server, whose refusal or box shows under the
+  // buttons with them; the server charges nothing while they remain.
   const amountNeed = typed == null ? (amount.trim() ? "Enter an amount like 5.00." : "") : typed < 50 ? "The smallest card charge is $0.50." : typed > cents ? `At most ${money(cents)}.` : "";
+  // (§380 D2) The amount a press found red: its grey line waits until the amount changes (the red line says it meanwhile).
+  const [redAmount, setRedAmount] = useState<string | null>(null);
+  const charge = (root: Element | null) => {
+    // The server's order for the amount: an amount at all, at most the listed one, at least $0.50; then the tick over $200.
+    const first = typed == null ? "Enter an amount like 5.00." : typed > cents ? `At most ${money(cents)}.` : typed < 50 ? "The smallest card charge is $0.50." : over && !ticked ? chargeTickLine(devName, typed) : "";
+    if (first) markServerMistakes(root, [first]);
+    checkFields(root);
+    setRedAmount(typed == null || typed > cents || typed < 50 ? amount : null);
+    go("charge");
+  };
   const go = (choice: string) => {
     setPressed(choice === "letgo" ? "Let it go" : "Charge");
     setBusy(true);
@@ -91,7 +102,7 @@ export function ChoiceBox({ paused = false, sessionId, submissionId, callId, lin
               <input type="checkbox" checked={ticked} data-match="^Tick “Charge" onChange={(e) => setTicked(e.target.checked)} /> {chargeTickLabel(devName, typed!)}
             </label>
           )}
-          <button className="btn" disabled={busy || typed == null || !!amountNeed || (over && !ticked)} onClick={(e) => checkFields(e.currentTarget.parentElement) && go("charge")}><ChargeLabel devName={devName} cents={typed} /></button>
+          <button className="btn" disabled={busy} onClick={(e) => charge(e.currentTarget.parentElement)}><ChargeLabel devName={devName} cents={typed} /></button>
           {/* (Owner, Oct 30, batch 32 §13) No pop-up: a tick next to Let it go, which stays disabled until it's ticked. */}
           <label className="inline-flex items-center gap-1" data-letgo-tick="">
             <input type="checkbox" checked={letGo} onChange={(e) => setLetGo(e.target.checked)} /> {letGoTickLabel(devName)}
@@ -99,7 +110,7 @@ export function ChoiceBox({ paused = false, sessionId, submissionId, callId, lin
           <button className="btn-secondary" disabled={busy || !letGo} onClick={() => go("letgo")}>Let it go</button>
         </div>
       )}
-      {!fin.done && amountNeed && <p className="text-xs text-slate-400" data-field-need="charge">{amountNeed}</p>}
+      {!fin.done && amountNeed && amount !== redAmount && <p className="text-xs text-slate-400" data-field-need="charge">{amountNeed}</p>}
       <ChangesBox side="tester" changes={box && !box.top ? box.changes : null} tail={box?.tail} didntGo press={pressed} />
       {/* (Batch 32 §12) Names the press ("Your Charge didn't go through: …"); "Answer the new terms first: Switch or Keep." reads exactly so. */}
       <Err text={err && !err.startsWith(FIELD) ? refusalLine(pressed, err) : ""} />

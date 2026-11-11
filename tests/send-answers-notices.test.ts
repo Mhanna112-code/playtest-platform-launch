@@ -7,7 +7,8 @@ const form = readFileSync("src/app/app/sessions/[id]/SessionActions.tsx", "utf8"
 
 it("keeps field mistakes above the answers and stacks Send Answers notices below the button", () => {
   expect(form).toMatch(/<FormMistakes top text=\{msg && !msg.ok && msg.text.startsWith\(FIELD\)/);
-  expect(form).toMatch(/SEND_ANSWERS\}<\/button>[\s\S]*?<Err text=\{msg && !msg.ok && !msg.text.startsWith\(FIELD\)[\s\S]*?<PausedSend[\s\S]*?<ChangesBox/);
+  // (Owner, Nov 11, §380 D2) The refusal is kept apart from the red notes (`refused`), so both show after one press.
+  expect(form).toMatch(/SEND_ANSWERS\}<\/button>[\s\S]*?<Err text=\{refused \|\| \(msg && !msg.ok && !msg.text.startsWith\(FIELD\)[\s\S]*?<PausedSend[\s\S]*?<ChangesBox/);
 });
 
 it("clears earlier retry and pause notices as soon as Send Answers succeeds", () => {

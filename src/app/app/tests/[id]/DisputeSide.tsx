@@ -1,10 +1,12 @@
 "use client";
 import { CharacterCount } from "@/components/CharacterCount";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { PressButton } from "@/components/PressButton";
 import { DraftTag, useKept } from "@/lib/useKept";
 import { LIMITS } from "@/lib/limits";
 import { lockText } from "@/lib/sendLock";
+import { markServerMistakes } from "@/components/FieldChecks";
+import { checkDevSide } from "@/lib/rules";
 
 /** The developer adds their side to a dispute, once. (Owner, Oct 30, batch 15 section 27) Optional, never stopped, up to 2,000 characters with a counter (refused beyond, never cut). */
 export function DisputeSide({ testId, disputeId, seenAt }: { testId: string; disputeId: string; seenAt: string }) {
@@ -15,13 +17,21 @@ export function DisputeSide({ testId, disputeId, seenAt }: { testId: string; dis
   // (Owner, Nov 5, §261) While Send your side is going through, the box is read-only.
   const [sending, setSending] = useState(false);
   const keep = useKept(`dispute:side:${disputeId}`, { text }, text === "", (v) => setText(v.text ?? ""));
+  const root = useRef<HTMLDivElement>(null);
+  // (Owner, Nov 11, §380 D2) The server's own check (rules.ts), red at the box on the press, which still goes: the server's refusal or box shows under the button.
+  const markText = () => {
+    const m = checkDevSide(text, false);
+    if (!m.ok) markServerMistakes(root.current, [m.message]);
+    return true;
+  };
   return (
-    <div className="space-y-1">
+    <div ref={root} className="space-y-1" data-mistakes-root="">
       <label className="label" htmlFor={`side-${disputeId}`}>Add your side (optional, once; the team reads both)</label>
-      {!sent && <textarea id={`side-${disputeId}`} rows={2} className="input" maxLength={LIMITS.devSide} value={text} onChange={(e) => setText(e.target.value)} {...lockText(sending)} />}
+      {!sent && <textarea id={`side-${disputeId}`} rows={2} className="input" maxLength={LIMITS.devSide} data-match="your side in a sentence" value={text} onChange={(e) => setText(e.target.value)} {...lockText(sending)} />}
       {!sent && <CharacterCount value={text} min={10} max={LIMITS.devSide} required data-side-count="" />}
-      {/* (Owner, Nov 11, §380 D) Disabled until the side meets its requirement (at least 10 characters; the counter says so live). */}
-      <PressButton disabled={text.trim().length < 10 || text.length > LIMITS.devSide} seenAt={seenAt} path={`/api/tests/${testId}/dispute-side`} body={{ disputeId, text }} doneLine="Your side is sent to the team." onSending={setSending} onDone={async () => { setSent(true); await keep.clear(); }}>Send your side</PressButton>
+      {/* (Owner, Nov 11, §380 D2; replaces §380 D's disabled button) Pressable with the side short or empty: the press marks it red (the counter says what it needs
+          live) and still goes to the server; nothing is saved while it's red. */}
+      <PressButton before={markText} seenAt={seenAt} path={`/api/tests/${testId}/dispute-side`} body={{ disputeId, text }} doneLine="Your side is sent to the team." onSending={setSending} onDone={async () => { setSent(true); await keep.clear(); }}>Send your side</PressButton>
       {!sent && keep.restored && text !== "" && <DraftTag kind="discard" onUseSaved={() => setText("")} />}
     </div>
   );
