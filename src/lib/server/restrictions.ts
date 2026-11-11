@@ -399,7 +399,7 @@ export async function allowLockedChanges(adminId: string, testId: string, seen: 
 /** (Owner, Oct 26-27) A reminder every DAY to the admins to review suspended accounts: one line covering all of them (the daily job). Deleted admins get nothing. */
 export async function suspendedAccountsReminder(now = new Date()) {
   const state = await db.appState.findUnique({ where: { key: "suspended-reminder" } });
-  if (state && now.getTime() - new Date(state.value).getTime() < DAY - 3_600_000) return 0; // daily, one line for all suspended accounts
+  if (state && !repeatDue(new Date(state.value), now, 1)) return 0; // daily, one line for all suspended accounts ((§383 8) by UTC calendar day: repeatDue)
   // (Batch 15 section 16) Each suspended SIDE counts.
   const people = await db.user.findMany({ where: { OR: [{ devSuspendedAt: { not: null } }, { testerSuspendedAt: { not: null } }], deletedAt: null }, select: { devSuspendedAt: true, testerSuspendedAt: true } });
   if (!people.length) return 0;
@@ -587,14 +587,16 @@ export async function payoutFixed(accountId: string) {
 /** (Owner, Nov 6, §317a) The payout problem's reminders: on the day it started (payoutProblem), then 3, 10 and 30 days after; then they stop. */
 export const PAYOUT_MARK_DAYS = [0, 3, 10, 30] as const;
 /**
- * (§317a) The mark due now (days after the problem started), or null: the latest mark passed, once (the last line's time, `payoutRemindedAt`, is at or after
- * it once sent); an earlier missed mark is never sent late. An hour of slack, as the daily job's time drifts. A new problem (cleared, then a new start) starts over.
+ * (§317a) The mark due now (days after the problem started), or null: the latest mark passed, once (the last line's time, `payoutRemindedAt`, reached it once
+ * sent); an earlier missed mark is never sent late. A new problem (cleared, then a new start) starts over. (Owner, Nov 11, §383 8; was an hour of slack) A mark
+ * of d days is reached d UTC calendar days after the problem started, and at least 12 hours after it (repeatDue).
  */
 export function payoutMarkDue(problemAt: Date, remindedAt: Date | null, now: Date) {
-  const passed = PAYOUT_MARK_DAYS.filter((d) => problemAt.getTime() + d * DAY - 3_600_000 <= now.getTime());
+  const reached = (at: Date, d: number) => (d === 0 ? at.getTime() >= problemAt.getTime() : repeatDue(problemAt, at, d));
+  const passed = PAYOUT_MARK_DAYS.filter((d) => reached(now, d));
   const last = passed[passed.length - 1];
   if (last === undefined) return null;
-  if (remindedAt && remindedAt.getTime() >= problemAt.getTime() + last * DAY - 3_600_000) return null;
+  if (remindedAt && reached(remindedAt, last)) return null;
   return last;
 }
 /** The daily job: the payout problem's reminders on days 3, 10 and 30 (§317a; it was every 3 days until fixed). */

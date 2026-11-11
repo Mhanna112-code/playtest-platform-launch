@@ -10,9 +10,10 @@ import { originalEmail } from "./reuseEmail";
  */
 export type Email = { to: string; subject: string; text: string; button?: EmailButton; settings?: boolean; recipientId?: string; notificationIds?: string[]; reminderKey?: string; /** (Owner, Nov 6, §295) the text's first line, shown as the heading */ heading?: string;
   /** (Owner, Nov 11, §383 7) never delivered after this moment (the call reminder: the call's start); marked "expired" instead, not a failure */ expiresAt?: Date;
-  /** (§383 7) MORNING_KIND for the daily job's summary or short email: one still waiting is replaced by the next morning's */ kind?: string };
-/** (§383 7) The kind of the daily job's (09:00 UTC) summary or short email. */
-export const MORNING_KIND = "morning";
+  /** (§383 7) MORNING_FULL / MORNING_SHORT for the daily job's summary or short email: one still waiting is replaced by the next morning's */ kind?: string };
+/** (§383 7, 8) The daily job's (09:00 UTC) full summary (Daily / Weekly / Monthly, when due) and its short email (only payment and must-send lines). */
+export const MORNING_FULL = "morning-full";
+export const MORNING_SHORT = "morning-short";
 
 /** The site's address for the layout's links and logo (APP_URL; the public site when it can't be read). */
 const siteBase = () => {
@@ -282,19 +283,22 @@ export async function expireDue(now = new Date(), id?: string) {
 
 /**
  * (§383 7) The daily job's morning email replaces its previous one when that one was never delivered: each still-waiting morning email of these people (all,
- * without `only`) is marked "replaced" (not a failure) and its lines are unsent again (summarizedAt cleared), so the new email carries them, once.
+ * without `only`) is marked "replaced" (not a failure) and its lines are unsent again (summarizedAt cleared), so the new email carries them, once. Returns the
+ * people whose replaced email was a FULL summary: (§383 8) they are due a full summary again this morning, whatever their Weekly / Monthly period.
  */
 export async function replacePendingMorning(now = new Date(), only?: string[]) {
-  const rows = await db.emailQueue.findMany({ where: { kind: MORNING_KIND, status: "pending", ...(only ? { recipientId: { in: only } } : {}) }, select: { id: true, notificationIds: true } });
+  const rows = await db.emailQueue.findMany({ where: { kind: { in: [MORNING_FULL, MORNING_SHORT] }, status: "pending", ...(only ? { recipientId: { in: only } } : {}) }, select: { id: true, notificationIds: true, kind: true, recipientId: true } });
+  const full = new Set<string>();
   let n = 0;
   for (const r of rows) {
     // Like a try's claim: a row that is no longer pending (sent meanwhile) is left alone.
     if ((await db.emailQueue.updateMany({ where: { id: r.id, status: "pending" }, data: { status: "replaced", lastError: "", errorKind: "", nextTryAt: now } })).count !== 1) continue;
     if (r.notificationIds.length) await db.notification.updateMany({ where: { id: { in: r.notificationIds } }, data: { summarizedAt: null } });
+    if (r.kind === MORNING_FULL && r.recipientId) full.add(r.recipientId);
     n++;
   }
   if (n) await endIncidentIfClear();
-  return n;
+  return full;
 }
 
 /** Emails waiting after a failure (pending with an error). */

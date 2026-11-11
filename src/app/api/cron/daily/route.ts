@@ -1,5 +1,8 @@
 import { runDaily } from "@/lib/server/holds";
 
+// (§383 8) Vercel's limit for this function: the wait for the timers lock (DAILY_LOCK_WAIT_MS, ~4¼ min at most) and the job itself fit inside it.
+export const maxDuration = 300;
+
 // The daily job (Vercel Cron or any scheduler): Authorization: Bearer CRON_SECRET.
 export async function GET(req: Request) {
   const secret = process.env.CRON_SECRET?.trim();

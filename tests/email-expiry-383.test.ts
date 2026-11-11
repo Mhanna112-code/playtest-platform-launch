@@ -108,3 +108,46 @@ describe("§383 7b: a morning email never delivered is replaced by the next one"
     expect(await db.emailQueue.count({ where: { recipientId: u.user.id } })).toBe(2);
   });
 });
+
+describe("§383 8: a replaced FULL summary makes the person due again (Weekly / Monthly lose nothing)", () => {
+  const line = (userId: string, text: string, payment = false) => db.notification.create({ data: { userId, text, link: "/app", payment } });
+
+  it("Weekly: the never-delivered weekly summary is replaced next morning by a full summary carrying its ordinary lines; a replaced short email stays short", async () => {
+    let up = false;
+    const posts = resend(() => up);
+    const u = await makeUser({ tester: true });
+    await db.user.update({ where: { id: u.user.id }, data: { emailPref: "weekly" } });
+    const day1 = new Date();
+    await line(u.user.id, "Ordinary one");
+    await sendSummaries(day1, [u.user.id]); // the weekly summary is due (none before): Resend is down
+    const first = await db.emailQueue.findFirstOrThrow({ where: { recipientId: u.user.id } });
+    expect(first).toMatchObject({ status: "pending", kind: "morning-full" });
+    await line(u.user.id, "Ordinary two");
+    up = true;
+    const day2 = new Date(day1.getTime() + DAY);
+    await sendSummaries(day2, [u.user.id]);
+    const rows = await db.emailQueue.findMany({ where: { recipientId: u.user.id }, orderBy: { createdAt: "asc" } });
+    expect(rows.map((r) => [r.status, r.kind])).toEqual([["replaced", "morning-full"], ["sent", "morning-full"]]);
+    expect(rows[1].subject).toMatch(/^Your Playtest summary/);
+    for (const l of ["Ordinary one", "Ordinary two"]) expect(rows[1].text.split(l).length - 1).toBe(1);
+    expect((await db.user.findUniqueOrThrow({ where: { id: u.user.id } })).lastSummaryAt?.getTime()).toBe(day2.getTime());
+    expect(posts.filter((p) => p.id === rows[1].id)).toHaveLength(1);
+
+    // A short email (payment lines only, the weekly summary not due) still waiting: replaced by the next short one, which carries its payment line; the
+    // ordinary line keeps waiting for the weekly summary.
+    up = false;
+    await line(u.user.id, "You were paid $8.00", true);
+    await line(u.user.id, "Ordinary three");
+    await sendSummaries(new Date(day2.getTime() + DAY), [u.user.id]);
+    const short = await db.emailQueue.findFirstOrThrow({ where: { recipientId: u.user.id, status: "pending" } });
+    expect(short.kind).toBe("morning-short");
+    up = true;
+    await sendSummaries(new Date(day2.getTime() + 2 * DAY), [u.user.id]);
+    expect((await db.emailQueue.findUniqueOrThrow({ where: { id: short.id } })).status).toBe("replaced");
+    const next = await db.emailQueue.findFirstOrThrow({ where: { recipientId: u.user.id, status: "sent", createdAt: { gt: short.createdAt } } });
+    expect(next.kind).toBe("morning-short");
+    expect(next.text.split("You were paid $8.00").length - 1).toBe(1);
+    expect(next.text).not.toContain("Ordinary three");
+    expect((await db.user.findUniqueOrThrow({ where: { id: u.user.id } })).lastSummaryAt?.getTime()).toBe(day2.getTime());
+  });
+});

@@ -6,7 +6,7 @@ import { summaryDue } from "@/lib/rules";
 import { renderTimes, safeZone } from "@/lib/tz";
 import { bellKeyIn, bellStacks, stackHeading } from "@/lib/bell";
 import { appUrl } from "./auth";
-import { MORNING_KIND, replacePendingMorning, sendEmail } from "./email";
+import { MORNING_FULL, MORNING_SHORT, replacePendingMorning, sendEmail } from "./email";
 import { REMINDER_ONLY_GROUPS } from "@/lib/reminderPolicy";
 
 // Every update goes to the person's bell. Email follows their setting: each update (default), one daily summary,
@@ -261,8 +261,10 @@ const inTeam = (n: { groupKey: string | null; link: string }, t: { disputeIds: S
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 export async function sendSummaries(now = new Date(), only?: string[]) {
-  // (Owner, Nov 11, §383 7) A morning email never delivered is replaced by this one: its lines go in this email (never two for the same lines).
-  await replacePendingMorning(now, only);
+  // (Owner, Nov 11, §383 7) A morning email never delivered is replaced by this one: its lines go in this email (never two for the same lines). (§383 8) When
+  // the replaced one was a FULL summary, the person is due a full summary again now (a Weekly / Monthly person's ordinary lines never wait another period).
+  const fullAgain = await replacePendingMorning(now, only);
+  const summaryDueNow = (u: { id: string; emailPref: string; lastSummaryAt: Date | null }) => fullAgain.has(u.id) || summaryDue(u.emailPref, u.lastSummaryAt, now);
   const admins = new Set((await adminUsers()).map((a) => a.id).filter((id) => !only || only.includes(id)));
   const users = await db.user.findMany({
     where: {
@@ -275,12 +277,12 @@ export async function sendSummaries(now = new Date(), only?: string[]) {
   });
   const line = (n: { text: string; link: string }) => `• ${n.text}${n.link ? ` ${appUrl()}${n.link}` : ""}`;
   // (§306) The "For the team" section of each admin whose summary is due (Off is never due).
-  const isDue = (u: (typeof users)[number]) => EMAIL_ON.includes(u.emailPref) && summaryDue(u.emailPref, u.lastSummaryAt, now);
+  const isDue = (u: (typeof users)[number]) => EMAIL_ON.includes(u.emailPref) && summaryDueNow(u);
   const ad = await import("./adminDaily");
   const team = await ad.teamSections(users.filter((u) => admins.has(u.id) && isDue(u)).map((u) => u.id), now);
   for (const u of users) {
     const off = !["daily", "weekly", "monthly"].includes(u.emailPref);
-    const due = !off && summaryDue(u.emailPref, u.lastSummaryAt, now);
+    const due = !off && summaryDueNow(u);
     const only = due ? {} : { OR: [{ payment: true }, { mustEmail: true }] };
     if (!off && !due && u.emailPref === "daily") continue; // (a daily person is not due again yet)
     const t = due ? team.get(u.id) : undefined;
@@ -311,12 +313,14 @@ export async function sendSummaries(now = new Date(), only?: string[]) {
       // (Owner, Nov 6, §295) The body opens with its heading, above the sections or the lines: a due Weekly / Monthly summary names its period (from the last
       // summary, or its oldest line, to now), a Daily one and every morning email the day. (Owner, Nov 6, §297) From the day after the last summary.
       const period = due && (u.emailPref === "weekly" || u.emailPref === "monthly") ? u.emailPref : "daily";
-      const heading = summaryHeading(period, u.lastSummaryAt ?? all[0]?.createdAt ?? now, now, u.timeZone, !!u.lastSummaryAt);
+      // (§383 8) A full summary standing in for a replaced one covers that one's lines too: its period starts at its oldest line.
+      const again = due && fullAgain.has(u.id);
+      const heading = summaryHeading(period, (again ? all[0]?.createdAt : u.lastSummaryAt) ?? u.lastSummaryAt ?? all[0]?.createdAt ?? now, now, u.timeZone, !again && !!u.lastSummaryAt);
       const own = sidedEmailLines(items, line, hasBoth(u), u.timeZone, await testTitlesOf(items));
       if (olderIds.length) own.push("", line({ text: olderLine(olderIds.length), link: "/app/notifications" })); // (§328)
       const forTeam = t && teamN ? [...(own.length ? [""] : []), ad.TEAM_HEADING, ...ad.teamLines(t, u.timeZone)] : [];
       // (§306) With the team's section, the admin email's button: Open the admin console.
-      await sendEmail({ to: u.email, subject, text: [heading, "", ...own, ...forTeam].join("\n") /* (§325) no closing signature */, button: { label: forTeam.length ? "Open the admin console" : "Open Playtest", url: `${appUrl()}${forTeam.length ? "/admin" : "/app/notifications"}` }, heading, recipientId: u.id, notificationIds: items.map((n) => n.id), kind: MORNING_KIND });
+      await sendEmail({ to: u.email, subject, text: [heading, "", ...own, ...forTeam].join("\n") /* (§325) no closing signature */, button: { label: forTeam.length ? "Open the admin console" : "Open Playtest", url: `${appUrl()}${forTeam.length ? "/admin" : "/app/notifications"}` }, heading, recipientId: u.id, notificationIds: items.map((n) => n.id), kind: due ? MORNING_FULL : MORNING_SHORT });
       await db.notification.updateMany({ where: { id: { in: [...items.map((n) => n.id), ...dropped, ...repeats, ...olderIds] } }, data: { summarizedAt: now } });
       if (due) await db.user.update({ where: { id: u.id }, data: { lastSummaryAt: now } });
       if (t) await ad.teamSent([u.id], t.noShowIds, now);
