@@ -28,7 +28,7 @@ import { PAYMENT_CHECKING, freshPayKey, pressKeyFor } from "./recovery";
 import { clientPressKey, serverKey } from "./pressKeys";
 import { amountFromRate, callMinutesOf, overCeilingLine, rateFromAmount } from "@/lib/callMeasure";
 import { callsLeftCents } from "./callMoney";
-import { ownOtherTabAction, payPressOf, seenOf, tabOf } from "./live";
+import { ownOtherTabAction, pageOf, payPressOf, seenOf, tabOf } from "./live";
 import { closedOut, disputeClosedFor, pieceCloseOut } from "./closeOut";
 import { TEAM_CLOSED_NO_DISPUTE, TEAM_CLOSED_NO_PAY, paidLine, updateWaiting } from "@/lib/moneyLines";
 import { PAID_GROUP } from "@/lib/bell";
@@ -113,7 +113,7 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0] & { hold
       // (§163) Settled by this developer's own Pay, Reject or Confirm with your bank in ANOTHER tab: named with that tab and its time. "You already paid $10.00 for
       // Ana Silva's written answers in another tab at 3:20 PM.", "You already rejected …", "You already confirmed Ana Silva's $10.00 charge for her written answers
       // with your bank in another tab at 3:20 PM."
-      const mine = await ownOtherTabAction(dev.id, piece.kind === "call" ? `call:${id}` : `sub:${id}`, tabOf(body), ["pay"], tx);
+      const mine = await ownOtherTabAction(dev.id, piece.kind === "call" ? `call:${id}` : `sub:${id}`, tabOf(body), ["pay"], tx, pageOf(body));
       if (mine) {
         const at = fmtTime(mine.at);
         if (mine.text.startsWith("rejected ")) throw new HttpError(409, "reviewed", `You already rejected ${name}'s ${piece.reference} in another tab at ${at}.`);

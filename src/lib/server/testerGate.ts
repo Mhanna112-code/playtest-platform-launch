@@ -11,7 +11,7 @@ import { notListed, shownIdsOf, wasListed } from "./shownLines";
 import { LISTING_SAVED, parseSaved } from "@/lib/listingPanel";
 import { questionChangeTexts } from "@/lib/questionHistory";
 import { NDA_NOTICE, ndaChangedLine } from "@/lib/ndaNotice";
-import { unanswered, answersIt, asLines, listingSaveLines, ownChanges, type Answers, seenOf, tabOf, testerPaymentChanges, withRenamed } from "./live";
+import { unanswered, answersIt, asLines, listingSaveLines, ownChanges, type Answers, pageOf, seenOf, tabOf, testerPaymentChanges, withRenamed } from "./live";
 
 // The tester's ONE set of stop-once reasons (owner rule, NEWEST+3), used by every tester button on the session page:
 // Switch / Keep, Send written, Send recording, Charge / Let it go, Dispute, Leave, Block, Request a time, Accept /
@@ -38,7 +38,7 @@ const CLOSED_BY_END = new Set(["the test was stopped", "the session ended", "the
 export const testerSeesClosed = (reason: string) => !CLOSED_BY_TESTER.has(reason) && !CLOSED_BY_END.has(reason) && !isDropReason(reason);
 const byTheEnd = (c: { status: string; endedAt: Date | null }, at: Date | null) => c.status === "ended" && !!c.endedAt && !!at && Math.abs(at.getTime() - c.endedAt.getTime()) < 60_000;
 
-export async function testerChanges(testerId: string, contractId: string, testId: string, seenAt: Date, tab = "", termsFrom: Date = seenAt): Promise<TestEventLike[]> {
+export async function testerChanges(testerId: string, contractId: string, testId: string, seenAt: Date, tab = "", termsFrom: Date = seenAt, /** (Owner, Nov 11, §380) the one-at-a-time page asking */ page = ""): Promise<TestEventLike[]> {
   const c = await db.contract.findUniqueOrThrow({ where: { id: contractId }, include: { test: { include: { developer: true } } } });
   const dev = displayName(c.test.developer);
   // (Design doc 8) The developer added their side to this tester's dispute: a stop-once reason for Dispute and the other buttons.
@@ -119,7 +119,8 @@ export async function testerChanges(testerId: string, contractId: string, testId
   out.push(...(await listingSaveLines(testId, seenAt, testerId, "session")));
   out.push(...(await testerPaymentChanges(testerId, contractId, seenAt)));
   // (§284) Her own action in another tab opens what it touched (a request, a call, a part).
-  out.push(...(await ownChanges(testerId, testId, seenAt, tab)).map((o) => { const link = ownLink(o.about?.k, (s) => testerPartRow({ kind: kinds.get(s) })); return link ? { ...o, link } : o; }));
+  // (Owner, Nov 11, §380) On the session page (one page at a time): only her own actions from other pages (the join page, an invite's No thanks).
+  out.push(...(await ownChanges(testerId, testId, seenAt, tab, db, page)).map((o) => { const link = ownLink(o.about?.k, (s) => testerPartRow({ kind: kinds.get(s) })); return link ? { ...o, link } : o; }));
   return out.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
 }
 
@@ -223,7 +224,7 @@ export async function testerGate(testerId: string, contractId: string, testId: s
   const boxSeen = seenOf(body.boxSeenAt);
   const fromBox = boxSeen && loadedAt && boxSeen > loadedAt ? boxSeen : loadedAt;
   const callsFrom = fromBox && fromBox < seenAt ? fromBox : seenAt;
-  const raw0 = await testerChanges(testerId, contractId, testId, callsFrom, tabOf(body), termsFrom);
+  const raw0 = await testerChanges(testerId, contractId, testId, callsFrom, tabOf(body), termsFrom, pageOf(body));
   // (Owner, Nov 4, §183) The developer's $0 answer to what the tester added after a Pay is a payment on that part too (it has no line elsewhere: only this press reads it).
   if (opts.sendPiece) raw0.push(...(await zeroUpdateLines(opts.sendPiece, callsFrom)));
   // (Owner, Nov 5, §269) Send / Add: what changed in the questions, one line each (ordinary lines, Alerts on, not yet shown). A stale page's are its own lines

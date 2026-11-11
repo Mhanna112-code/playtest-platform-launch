@@ -12,6 +12,7 @@ import { callMinutesOf } from "@/lib/callMeasure";
 import { sidOf } from "./shownLines";
 import { devPartRow, ownLink, testerPartRow, testerRow } from "@/lib/lineAnchors";
 import { withEventLinks } from "./liveLinks";
+import { isScope, testScope } from "@/lib/pageClaim";
 
 type Tx = Prisma.TransactionClient;
 
@@ -20,6 +21,12 @@ type Tx = Prisma.TransactionClient;
 // with the browser tab (page load) that sent it; that same tab never stops for its own presses.
 
 export const tabOf = (body: Record<string, unknown>) => (typeof body.tab === "string" ? body.tab.slice(0, 64) : "");
+/**
+ * (Owner, Nov 11, §380) The one-at-a-time page a press came from ("test:<id>", "session:<id>"; x-page), "" for any other page. That page is the only copy that can
+ * press there, so its own actions are never "in another tab" for it: a test page or session page lists (and stops for) only the person's own actions from OTHER pages
+ * (the dashboard, Payments, the join page, …), which can still race it.
+ */
+export const pageOf = (body: Record<string, unknown>) => (isScope(body.pageScope) ? body.pageScope : "");
 
 /**
  * (Owner, Oct 28, batch 16 section 21) What an action was about, kept with its log line (after META, so no new column): the press (`a`, e.g. "pay")
@@ -111,7 +118,7 @@ export const touches = (o: OwnEvent, p: Press) => !!o.about && p.acts.includes(o
 
 /** Log one thing a person did on a test (any button that changes something), with what it was about. */
 export async function logAction(userId: string, testId: string, body: Record<string, unknown>, text: string, about?: OwnAbout, tx: Tx | typeof db = db) {
-  await tx.actionLog.create({ data: { userId, testId, text: about ? `${text}${META}${JSON.stringify(about)}` : text, tab: tabOf(body) } });
+  await tx.actionLog.create({ data: { userId, testId, text: about ? `${text}${META}${JSON.stringify(about)}` : text, tab: tabOf(body), page: pageOf(body) } });
 }
 
 /** A log line's text and what it was about. */
@@ -164,20 +171,24 @@ export async function unanswered<T extends TestEventLike & { contractId?: string
  * made in ANOTHER tab than `tab` (null when none, or when the latest was this tab's or a page that sends no tab): its log text and time. A press it settled is
  * refused at once naming it ("You already paid $10.00 for Ana Silva's written answers in another tab at 3:20 PM.").
  */
-export async function ownOtherTabAction(userId: string, key: string, tab: string, acts: readonly string[], tx: Tx | typeof db = db) {
+export async function ownOtherTabAction(userId: string, key: string, tab: string, acts: readonly string[], tx: Tx | typeof db = db, page = "") {
   if (!tab) return null;
   const rows = await tx.actionLog.findMany({ where: { userId, text: { contains: `"${key}"` } }, orderBy: { createdAt: "desc" }, take: 20 });
   for (const r of rows) {
     const { text, about } = parseLog(r.text);
     if (!about || !about.k.includes(key) || !acts.includes(about.a)) continue;
-    return r.tab && r.tab !== tab ? { text, at: r.createdAt } : null;
+    // (Owner, Nov 11, §380) Made on this same one-at-a-time page (`page`): never "in another tab" (no other copy of it can press).
+    return r.tab && r.tab !== tab && !(page && r.page === page) ? { text, at: r.createdAt } : null;
   }
   return null;
 }
 
-/** This person's own actions on the test since `since`, from other tabs. */
-export async function ownChanges(userId: string, testId: string, since: Date, tab: string, tx: Tx | typeof db = db): Promise<OwnEvent[]> {
-  const rows = await tx.actionLog.findMany({ where: { userId, testId, createdAt: { gt: since }, ...(tab ? { tab: { not: tab } } : { tab: { not: "" } }) }, orderBy: { createdAt: "asc" }, take: 50 });
+/**
+ * This person's own actions on the test since `since`, from other tabs. (Owner, Nov 11, §380) `page`: the one-at-a-time page asking (test page with Edit,
+ * session page): its own actions are never lines there (only one copy of it can press), only those from other pages.
+ */
+export async function ownChanges(userId: string, testId: string, since: Date, tab: string, tx: Tx | typeof db = db, page = ""): Promise<OwnEvent[]> {
+  const rows = await tx.actionLog.findMany({ where: { userId, testId, createdAt: { gt: since }, ...(tab ? { tab: { not: tab } } : { tab: { not: "" } }), ...(page ? { page: { not: page } } : {}) }, orderBy: { createdAt: "asc" }, take: 50 });
   return rows.map((r) => {
     const { text, about } = parseLog(r.text);
     // (Batch 16 section 21; batch 29 sections 12 and 13) One wording on both sides, in the stop box and the live box: "You invited Ana Silva in another tab".
@@ -191,7 +202,7 @@ export async function ownChanges(userId: string, testId: string, since: Date, ta
  * charges...) plus the developer's own actions in another tab. The developer's own events ("You paid ...") come only
  * through the action log, so the tab that did them never stops for them.
  */
-export async function devChanges(devId: string, testId: string, since: Date, tab: string, tx: Tx | typeof db = db, opts: { all?: boolean; press?: Press } = {}): Promise<TestEventLike[]> {
+export async function devChanges(devId: string, testId: string, since: Date, tab: string, tx: Tx | typeof db = db, opts: { all?: boolean; press?: Press; /** (§380) the one-at-a-time page asking */ page?: string } = {}): Promise<TestEventLike[]> {
   // (Batch 14) The live box (`all`) also lists the quiet kinds: a tester's Switch (stacked per day), a rating… ((Owner, Nov 6, §304) no key report any more). They never stop a press.
   const found = stackSwitches(await tx.testEvent.findMany({ where: { testId, createdAt: { gt: since }, kind: { in: [...DEV_STOP_KINDS, "renamed", ...(opts.all ? DEV_QUIET_KINDS : [])] } }, orderBy: { createdAt: "asc" }, take: 100 }));
   // (Owner, Nov 6, §284) The live box: each line opens what it is about; an older event that stored no place gets it now (liveLinks.ts).
@@ -199,12 +210,16 @@ export async function devChanges(devId: string, testId: string, since: Date, tab
   // (Owner, Oct 28) The developer's OWN listing edit (from another tab) is already said once, in their own voice, by the action log ("You saved the listing in another tab: description, access keys"):
   // its listing-info event ("Nora Lane changed the description") is dropped, and a rename of their own reads "You renamed the test to ...".
   const me = displayName(await tx.user.findUniqueOrThrow({ where: { id: devId } }));
-  const mine = await ownChanges(devId, testId, since, tab, tx);
+  // (Owner, Nov 11, §380) On the test page or Edit (one page): only the developer's own actions from other pages; their own listing Saves and renames (Edit is
+  // the only place to make them) are never lines there.
+  const samePage = !!opts.page && opts.page === testScope(testId);
+  const mine = await ownChanges(devId, testId, since, tab, tx, opts.page ?? "");
   const ownRenames = events.filter((e) => e.kind === "renamed" && e.text.startsWith(`${me} `));
   const saves = ownRenames.length ? await savesUpTo(testId, ownRenames[ownRenames.length - 1].createdAt, tx) : [];
   const theirs = events.filter((e) => !e.text.startsWith("You ")).flatMap((e): (typeof e & { listing?: boolean; item?: string; eventId?: string })[] => {
     if (e.kind === "info" && e.text.startsWith(`${me} `)) return [];
     if (e.kind === "renamed" && e.text.startsWith(`${me} `)) {
+      if (samePage) return [];
       // (Batch 30, Oct 29 addition) One line per save: a rename saved in another tab with other fields is already in that save's line ("title (now “X”)").
       const title = e.text.slice(`${me} renamed the test to `.length);
       if (mine.some((o) => o.about?.a === "edit" && o.text.includes(`title (now “${title}”)`))) return [];

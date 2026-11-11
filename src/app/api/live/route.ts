@@ -32,6 +32,8 @@ export async function GET(req: Request) {
     if (isNaN(since.getTime())) throw new HttpError(400, "bad_request", "This page is out of date.");
     const tab = (req.headers.get("x-tab") ?? "").slice(0, 64);
     const [kind, id] = (q.get("scope") ?? "").split(":");
+    // (Owner, Nov 11, §380) A one-at-a-time page (test page with Edit, session page) asking about itself: its own actions are never its lines.
+    const page = req.headers.get("x-page") === q.get("scope") ? (q.get("scope") ?? "") : "";
     // The seen marker: a few seconds back (a change whose transaction is still committing already has its time but
     // isn't visible yet: it must not be skipped), or the newest line actually shown, whichever is later.
     const now = new Date();
@@ -42,7 +44,7 @@ export async function GET(req: Request) {
       const c = await db.contract.findUnique({ where: { id } });
       if (!c || c.testerId !== u.id) throw new HttpError(404, "not_found", "That session doesn't exist.");
       // The offer of new terms has its own box right below this one: the live box lists every change except the contract's.
-      changes = (await testerChanges(u.id, c.id, c.testId, since, tab)).filter((x) => x.kind !== "terms");
+      changes = (await testerChanges(u.id, c.id, c.testId, since, tab, since, page)).filter((x) => x.kind !== "terms");
       // The test was stopped, or this tester's work was ended: a line in the live box (a final refusal for later presses, never a stop-once reason).
       if (c.status === "ended" && c.endedAt && c.endedAt > since && (c.endKind === "stopped" || c.endKind === "closed" || c.endKind === "early")) {
         const t = await db.test.findUniqueOrThrow({ where: { id: c.testId } });
@@ -52,7 +54,7 @@ export async function GET(req: Request) {
       }
     } else if (kind === "test") {
       const own = await ownTest(u.id, id);
-      changes = await devChanges(u.id, id, since, tab, db, { all: true });
+      changes = await devChanges(u.id, id, since, tab, db, { all: true, page });
       ignored = new Set(own.ignoredAlerts); // (batch 35 §73) this test's Alerts
       // (Batch 20 section 24) A tester's rating, in the live box with the developer's own window: "ff rated you. You can rate them until Nov 12, 2026."
       const rated = changes.filter((c) => c.kind === "rated" && (c as { contractId?: string | null }).contractId);

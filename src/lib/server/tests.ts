@@ -7,7 +7,7 @@ import { dateZone } from "./dateZone";
 import { TEAM_LIFTED_EVENT, TEAM_PAUSED_EVENT, devLiftSince, devPauseMoments, devPauseSince, devStopSince, loadedOf } from "./stopMoment";
 import { replaceLine, takesTheirs } from "@/lib/editMerge";
 import { FIELD_NAMES, INFO_FIELDS, editedLine, saveText } from "@/lib/listingSave";
-import { CALL_ACTS, PAY_ACTS, unanswered, answersIt, devBoxRule, devChanges, devForced, logEvent, seenOf, tabOf, withRenamed, type Press } from "./live";
+import { CALL_ACTS, PAY_ACTS, unanswered, answersIt, devBoxRule, devChanges, devForced, logEvent, pageOf, seenOf, tabOf, withRenamed, type Press } from "./live";
 import { notListed, sidOf } from "./shownLines";
 import { ANSWER_ONE, NOT_REQUIRED, answerChars, answerMin, answerShortLine, answersMissing, qText, sameQuestionSet } from "@/lib/questions";
 import { answerUnit, NOTES_UNIT } from "@/lib/draftUnits";
@@ -416,7 +416,7 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     // an invite…); another tab's Save becomes the per-field lines below.
     // (Owner, Nov 5, §250) Minus what a stop box on this page already listed. Edit's own per-field and key lines (below: what THIS Save holds against what's saved)
     // are not updates but this Save's consequences: they always show.
-    const dc = seen ? withRenamed(notListed(await devChanges(dev.id, testId, seen, tabOf(body), tx, { press: EDIT_PRESS }), body), body) : [];
+    const dc = seen ? withRenamed(notListed(await devChanges(dev.id, testId, seen, tabOf(body), tx, { press: EDIT_PRESS, page: pageOf(body) }), body), body) : [];
     // The "fields you didn't touch keep the newer values" tail only when the listing itself was saved elsewhere.
     const listingEdited = events.some((e) => e.kind === "edited" || e.kind === "edited_spots");
     const current = asListing(t);
@@ -792,7 +792,7 @@ export async function devGate(tx: Tx, testId: string, body: Record<string, unkno
   }
   if (body.confirmed === true) extraChanges = extraChanges.filter((c) => c.createdAt > seenAt);
   const t = await tx.test.findUniqueOrThrow({ where: { id: testId }, select: { developerId: true } });
-  const found = await devChanges(t.developerId, testId, seenAt, tabOf(body), tx, { press });
+  const found = await devChanges(t.developerId, testId, seenAt, tabOf(body), tx, { press, page: pageOf(body) });
   // The developer's own Stop in another tab already reads "You stopped the test in another tab": the stop moment isn't said twice.
   const own = found.some((e) => e.kind === "own" && e.text === OWN_STOP_LINE);
   const additional = await unanswered(t.developerId, testId, [...extraChanges, ...moments.filter((m) => !(own && m.text.startsWith("You stopped this test")))], tx);
