@@ -69,14 +69,23 @@ describe("batch 35 §106, revised: the same separate boxes below the developer's
     expect(html.match(/class="card space-y-3"/g)!.length).toBeGreaterThanOrEqual(3);
   });
 
-  it.each(["active", "held", "suspended", "chargeback"] as const)("the existing three presses still work while %s", async (state) => {
+  it.each(["active", "held", "suspended", "chargeback"] as const)("the existing three presses still work while %s (§386 A: Confirm with your bank only when active)", async (state) => {
     const f = await fixture(state);
     const side = await act(f.testId, "dispute-side", f.dev.cookie, { disputeId: f.dispute.id, text: "They answered the first question well.", seenAt: seen(), confirmed: true });
     expect(side.status).toBe(200);
     const excerpt = await json(await excerptsPOST(req("/api/excerpts", { cookie: f.dev.cookie, body: { action: "decide", excerptId: f.excerpt.id, decision: "allow", seenAt: seen(), confirmed: true } })));
     expect(excerpt.status).toBe(200);
     const bank = await json(await confirmPOST(req("/api/payments/confirm", { cookie: f.dev.cookie, body: { paymentId: f.payment.id, start: true, seenAt: seen(), confirmed: true } })));
-    // (Codex 0c32fd48) A pending bank confirmation is allowed while suspended too (it replaced §159's refusal).
+    // (Owner, Nov 11, §386 A; replaces Codex 0c32fd48) No money moves while held or suspended: Confirm with your bank is refused (its box stays); the dispute
+    // side and the excerpt answer go on.
+    if (state !== "active") {
+      expect(bank.body.error?.message).toBe(`${state === "suspended" ? "Your account is suspended" : "Your tests are paused"}, so your Confirm with your bank didn't go through.`);
+      const html = await dashboard();
+      expect(html).toContain('data-bank-top=""');
+      expect(html).not.toContain('data-dispute-box=""');
+      expect(html).not.toContain('data-excerpt-box=""');
+      return;
+    }
     expect(bank.status).toBe(200);
     const finish = await json(await confirmPOST(req("/api/payments/confirm", { cookie: f.dev.cookie, body: { paymentId: f.payment.id, simulate: "succeeded" } })));
     expect(finish.status).toBe(200);

@@ -295,6 +295,8 @@ describe("§386 E the tester's Rate window: a developer freeze after the test cl
 // already open to Charge stays open, charged to the saved card), with the frozen time up to the deletion given back to that piece's closing. Rate stays closed.
 describe.each([["suspension", "suspended"], ["hold", "hold"]] as const)("§386 F a %s after the test closed, then the developer deleted 3 days later", (_name, kind) => {
   it("the tester's Charge works again; that piece closes 3 days later than without the freeze; Rate stays closed", async () => {
+    // Outages recorded by other files' sweeps (a heartbeat gap) would move these dates too: none here (the files run one at a time).
+    await db.outage.deleteMany({});
     const T0 = Date.now();
     const w = await world();
     // Closed 5 days ago; the piece's Charge opened 6 days ago (its closing: the test close + 14 days).
