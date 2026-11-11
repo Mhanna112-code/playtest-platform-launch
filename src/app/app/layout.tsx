@@ -21,6 +21,7 @@ import { HashJump } from "@/components/HashJump";
 import { BellLink } from "@/components/BellLink";
 import { NavMenu } from "@/components/NavMenu";
 import { unreadEntryCount } from "@/lib/server/notify";
+import { blocksKey, blocksV } from "@/lib/server/blocks";
 
 // The full Playtest Platform's header (NEWEST+8): logo, the side's links with their icons, the bell, the account pill
 // and the log-out icon; the confirm-email strip under it; a wide main column.
@@ -122,7 +123,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           only when its row is full (§187, NameLink fit) is one unbroken line, and it made main (and the page) scroll sideways on a phone. Capped at the screen,
           the rows get the screen's width and the names are cut there. */}
       <main className="mx-auto max-w-[min(72rem,100%)] space-y-6 px-4 py-8" data-app-main="">{children}</main>
-      <SessionWatch userId={u.id} name={name} side={side} restriction={restrictionKey(u, side)} />
+      <SessionWatch userId={u.id} name={name} side={side} restriction={restrictionKey(u, side)} blocks={blocksKey(await blocksV(u.id))} />
       <TimeZoneSync stored={u.timeZone} />
       <HashJump />
     </>

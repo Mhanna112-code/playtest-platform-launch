@@ -68,6 +68,7 @@ const NOT_PRESSES: Record<string, string> = {
   "/api/account/timezone": "sent by the page when the browser's time zone changes",
   "/api/notifications/read": "sent by the page when the bell's lines are shown",
   "/api/kept": "the drafts kept while typing",
+  "/api/page-claim": "(§380) opening a test page or a session page claims it for this tab (never a press, never refused)",
   "/api/calls/x/room": "the call page's own connection updates",
   "/api/stripe/webhook": "Stripe's own calls",
   "/api/test/race-release": "(§369) the test harness's release of a race hold (404 unless RACE_HOLDS=1)",
@@ -198,14 +199,14 @@ describe("§156 end to end: refusals read “Your … didn't go through: …”"
     expect(keptRefusalLine(label, r.body.error.message)).toMatch(/^Your Confirm with your bank didn't go through: /);
   });
 
-  it("a refused Block (already blocked in another tab) names Block; a suspended tester's Block and Save profile reach the dashboard top named (not “Save”)", async () => {
+  it("a refused Block names Block; a suspended tester's Block and Save profile reach the dashboard top named (not “Save”)", async () => {
     const me = await makeUser({ tester: true, name: "Ana Silva" });
     const other = await makeUser({ dev: true, name: "Nora Lane" });
     const body = { userId: other.user.id };
     expect((await json(await blocksPOST(req("/api/blocks", { cookie: me.cookie, body })))).status).toBe(200);
-    const again = await json(await blocksPOST(req("/api/blocks", { cookie: me.cookie, body })));
-    expect(again.status).toBe(409);
-    expect(html(createElement(Err, { text: again.body.error.message, press: pressLabelOf("/api/blocks", body) }))).toContain(`Your Block didn't go through: ${again.body.error.message}`);
+    // (Owner, Nov 11, §380) Already blocked is silent now; any refusal still names Block.
+    expect((await json(await blocksPOST(req("/api/blocks", { cookie: me.cookie, body })))).body.already).toBe(true);
+    expect(html(createElement(Err, { text: "This person isn't available.", press: pressLabelOf("/api/blocks", body) }))).toContain("Your Block didn't go through: This person isn't available.");
 
     const s = await makeUser({ tester: true });
     await db.user.update({ where: { id: s.user.id }, data: { testerSuspendedAt: new Date() } });

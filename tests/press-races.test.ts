@@ -375,11 +375,11 @@ describe("§157 12 and 13: a draft deleted or opened in two tabs", () => {
 });
 
 describe("§157 14: Block at the same moment", () => {
-  it("two Blocks at once: the session ends once and its line is sent once; the other reads 'You already blocked Ana Silva.'", async () => {
+  it("two Blocks at once: the session ends once and its line is sent once; (§380) the other is silent", async () => {
     const w = await sentWork();
     const me = await userRow(w.dev.user.id);
-    const { lost } = oneOut(...((await Promise.all([outcome(blockUser(me, w.tester.user.id)), outcome(blockUser(me, w.tester.user.id))])) as [Out, Out]));
-    expect(lost.message).toBe("You already blocked Ana Silva.");
+    const rs = await Promise.all([blockUser(me, w.tester.user.id), blockUser(me, w.tester.user.id)]);
+    expect(rs.filter((r) => (r as { already?: boolean }).already)).toHaveLength(1); // (Owner, Nov 11, §380)
     expect(await db.block.count({ where: { blockerId: me.id, blockedId: w.tester.user.id } })).toBe(1);
     expect(await db.notification.count({ where: { userId: w.tester.user.id, text: { startsWith: "Your session on Harbor Run ended" } } })).toBe(1);
   });

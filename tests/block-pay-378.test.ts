@@ -19,16 +19,16 @@ describe("§378 item 1: Block never stops once", () => {
     const a = await joined(s.testId);
     const pageAt = seen();
     await settle();
-    await pauseTest((await makeUser({ name: "Team Admin", email: "owner@playtest.test" })).user.id, s.testId, "Checking");
+    await pauseTest((await db.user.findUnique({ where: { email: "owner@playtest.test" } }))?.id ?? (await makeUser({ name: "Team Admin", email: "owner@playtest.test" })).user.id, s.testId, "Checking");
     await settle();
     const r = await reportPerson(a.tester.user, { userId: s.dev.user.id, note: "Something happened here, please look.", seenAt: pageAt }).then(() => null, (e) => e);
     expect(r?.code).toBe("stop_once");
     const b = await blocksPOST(req("/api/blocks", { cookie: a.tester.cookie, body: { userId: s.dev.user.id, seenAt: pageAt } })).then(json);
     expect(b.status, JSON.stringify(b.body)).toBe(200);
     expect(await db.block.count({ where: { blockerId: a.tester.user.id, blockedId: s.dev.user.id } })).toBe(1);
-    // The race refusal stays: already blocked in another tab.
+    // (Owner, Nov 11, §380) Already blocked in another tab: silent (no refusal).
     const again = await blocksPOST(req("/api/blocks", { cookie: a.tester.cookie, body: { userId: s.dev.user.id } })).then(json);
-    expect(again.body.error.code).toBe("already");
+    expect(again.body.already).toBe(true);
   });
 });
 

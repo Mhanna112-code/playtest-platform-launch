@@ -4,7 +4,8 @@ import { reloadKeepingPlace } from "@/lib/keepPlace";
 import { bankCheckOpen } from "@/lib/bankConfirm";
 import { useEffect, useRef } from "react";
 import { setPageUser, toLogin } from "@/lib/client";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { lockPage } from "@/lib/pageLock";
 import { restrictionKey } from "@/lib/restricted";
 import { sideFor } from "@/lib/sides";
 import { BELL_REFRESH, publishBell } from "./BellLink";
@@ -20,6 +21,34 @@ import { dropAllInviteTicks } from "@/lib/inviteTicks";
 // page is open moves EVERY open page of that account to the TOP of the dashboard (a tab already there scrolls to the top), where the blue box explains; when it lifts, the pages refresh.
 
 const KEY = "pt-auth";
+/** (Owner, Nov 11, §380) A Block / Unblock made in this browser: the other tabs check at once. */
+const BLOCKS_KEY = "pt-blocks";
+/** The blocks value this tab's own Block / Unblock just made: this page redraws itself, it never reloads for it. */
+let OWN_BLOCKS = "";
+
+/**
+ * (Owner, Nov 11, §380) After a Block (or Unblock) here: the other tabs of this browser check at once; every other open page of this account (any browser or
+ * device) then disables its buttons and reloads, so nothing stale about that person can be pressed.
+ */
+export function announceBlocks(v?: string) {
+  if (v) OWN_BLOCKS = v;
+  try {
+    window.localStorage.setItem(BLOCKS_KEY, JSON.stringify({ at: Date.now(), v: v ?? "" }));
+  } catch {
+    // storage blocked: the 20-second check still catches it
+  }
+}
+
+/**
+ * (Owner, Nov 11, §380) What a page does when the account's blocks changed since it was drawn (`was` → `now`, each "mine|onMe"): "reload" when this person
+ * blocked or unblocked someone (every page of theirs disables its buttons and reloads; the page that pressed it redraws itself: `own`), "redraw" when someone
+ * blocked or unblocked them (the page redraws so its buttons reflect it before a press; their refusals stay the safety net), else nothing.
+ */
+export function blocksChange(was: string, now: string, own = ""): "reload" | "redraw" | "" {
+  if (!was || !now || was === now || now === own) return "";
+  const [mineWas] = was.split("|"), [mineNow] = now.split("|");
+  return mineWas !== mineNow ? "reload" : "redraw";
+}
 
 /** Tell the other tabs: "in" (someone signed in, landing on `to`) or "out" (signed out). */
 export function announceAuth(event: "in" | "out", to = "") {
@@ -110,8 +139,12 @@ function useRestoreTyped(userId: string, side: string | null | undefined, path: 
   }, [userId, side, path]);
 }
 
-export function SessionWatch({ userId, restriction, side }: { userId: string; name?: string; restriction: string; side?: "developer" | "tester" | null }) {
+export function SessionWatch({ userId, restriction, side, blocks = "" }: { userId: string; name?: string; restriction: string; side?: "developer" | "tester" | null; /** (§380) the account's blocks when the page was drawn */ blocks?: string }) {
   const path = usePathname();
+  const router = useRouter();
+  const routerRef = useRef(router);
+  routerRef.current = router;
+  const blocksRef = useRef(blocks);
   const pathRef = useRef(path);
   pathRef.current = path;
   useRestoreTyped(userId, side, path);
@@ -124,7 +157,7 @@ export function SessionWatch({ userId, restriction, side }: { userId: string; na
   useEffect(() => {
     let alive = true;
     const check = async () => {
-      let s: { state: string; bell?: number; messages?: number; userId?: string; name?: string; suspended?: boolean; testerSuspended?: boolean; held?: boolean; holdReason?: string; developer?: boolean; tester?: boolean; side?: string };
+      let s: { state: string; blocks?: string; bell?: number; messages?: number; userId?: string; name?: string; suspended?: boolean; testerSuspended?: boolean; held?: boolean; holdReason?: string; developer?: boolean; tester?: boolean; side?: string };
       try {
         s = await (await fetch("/api/account/status", { cache: "no-store" })).json();
       } catch {
@@ -139,6 +172,20 @@ export function SessionWatch({ userId, restriction, side }: { userId: string; na
       // (Batch 29 §28) The bell's number, live on every page.
       if (s.state === "ok" && typeof s.bell === "number") publishBell(s.bell);
       if (s.state === "ok" && s.userId === userId && typeof s.messages === "number") publishMessages(s.messages);
+      // (Owner, Nov 11, §380) A block by or of this person since the page was drawn.
+      if (s.state === "ok" && s.userId === userId && typeof s.blocks === "string") {
+        const what = blocksChange(blocksRef.current, s.blocks, OWN_BLOCKS);
+        if (!blocksRef.current || s.blocks === OWN_BLOCKS) blocksRef.current = s.blocks;
+        if (what === "reload") {
+          lockPage(60_000); // every button here is disabled until the page has loaded again
+          reloadKeepingPlace();
+          return;
+        }
+        if (what === "redraw") {
+          blocksRef.current = s.blocks;
+          routerRef.current.refresh();
+        }
+      }
       if (s.state === "deleted") {
         forgetTyped();
         toLogin(true); // (batch 35 §20) once, whichever gets there first (a refused request or this check)
@@ -180,7 +227,7 @@ export function SessionWatch({ userId, restriction, side }: { userId: string; na
     };
     const t = setInterval(check, 20_000);
     const onStorage = (e: StorageEvent) => {
-      if (e.key === KEY) void check();
+      if (e.key === KEY || e.key === BLOCKS_KEY) void check();
     };
     // Back / Forward restore a page from memory: bring it up to date (signed out meanwhile -> login).
     const onShow = (e: PageTransitionEvent) => {

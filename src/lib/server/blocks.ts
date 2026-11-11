@@ -48,22 +48,39 @@ export async function blockPartners(userId: string) {
   return rows.map((r) => (r.blockerId === userId ? r.blockedId : r.blockerId));
 }
 
+/**
+ * (Owner, Nov 11, §380) Every signed-in page's account check carries this: `mine` changes when this person blocks or unblocks someone (every page of theirs then
+ * disables its buttons and reloads), `onMe` when someone blocks or unblocks them (every page of theirs redraws, so its buttons reflect the block before a press;
+ * their refusals stay the safety net). Count and newest time, so a block and an unblock between two checks still change it.
+ */
+export async function blocksV(userId: string) {
+  const [mine, onMe] = await Promise.all([
+    db.block.aggregate({ where: { blockerId: userId }, _count: true, _max: { createdAt: true } }),
+    db.block.aggregate({ where: { blockedId: userId }, _count: true, _max: { createdAt: true } }),
+  ]);
+  const v = (a: typeof mine) => `${a._count}:${a._max.createdAt?.getTime() ?? 0}`;
+  return { mine: v(mine), onMe: v(onMe) };
+}
+/** The one string a page compares (layout and account check): "mine|onMe". */
+export const blocksKey = (b: { mine: string; onMe: string }) => `${b.mine}|${b.onMe}`;
+
 export async function blockUser(me: { id: string; email: string; name: string }, otherId: string) {
   if (!otherId || otherId === me.id) throw new HttpError(400, "bad_user", "Choose someone to block.");
   const other = await db.user.findUnique({ where: { id: otherId } });
   if (!other) throw new HttpError(404, "not_found", "That person doesn't exist.");
   // (Owner, Nov 9, §360) A deleted account (an old profile tab's Block): nothing to block.
   if (other.deletedAt) throw new HttpError(409, "deleted", ACCOUNT_WAS_DELETED);
-  // (Owner, Oct 27) The only stop: already blocked (in another tab).
-  if (await iBlocked(me.id, otherId)) throw new HttpError(409, "already", `You already blocked ${displayName(other)}.`);
+  // (Owner, Nov 11, §380; replaces Oct 27's refusal) Already blocked: what Block wanted, no refusal (every page of theirs redraws).
+  if (await iBlocked(me.id, otherId)) return { blocked: true, ended: 0, already: true, blocks: blocksKey(await blocksV(me.id)) };
   // (Owner, Nov 11, §378; replaces §271 here) Block never stops once: a pause of their test (or the team's lift) since the profile loaded no longer stops it. Only
   // the race refusal above stays (already blocked in another tab). Report keeps its §271 stop.
   // (Owner, Nov 3, batch 35 §157) The block row is the claim (its unique key): of two Blocks at the same moment (two tabs) one goes on to end sessions and send the
   // lines; the other reads "You already blocked <name>." and does nothing.
-  await db.block.create({ data: { blockerId: me.id, blockedId: otherId } }).catch((e) => {
-    if (isUniqueClash(e)) throw new HttpError(409, "already", `You already blocked ${displayName(other)}.`);
+  const made = await db.block.create({ data: { blockerId: me.id, blockedId: otherId } }).then(() => true).catch((e) => {
+    if (isUniqueClash(e)) return false; // (§380) the other Block of the same moment did it: silent
     throw e;
   });
+  if (!made) return { blocked: true, ended: 0, already: true, blocks: blocksKey(await blocksV(me.id)) };
   const now = new Date();
   const contracts = await db.contract.findMany({
     where: { status: "working", OR: [{ testerId: otherId, test: { developerId: me.id } }, { testerId: me.id, test: { developerId: otherId } }] },
@@ -115,7 +132,7 @@ export async function blockUser(me: { id: string; email: string; name: string },
     }
   }
   for (const c of ended) await (await import("./tests")).spotOpened(c.testId);
-  return { blocked: true, ended: ended.length };
+  return { blocked: true, ended: ended.length, blocks: blocksKey(await blocksV(me.id)) };
 }
 
 /** The tester's line when a block closed their application: "“Harbor Run”: your application was closed." */
@@ -123,7 +140,7 @@ export const appClosedLine = (title: string) => `“${title}”: your applicatio
 
 export async function unblockUser(me: { id: string }, otherId: string) {
   await db.block.deleteMany({ where: { blockerId: me.id, blockedId: otherId } });
-  return { unblocked: true };
+  return { unblocked: true, blocks: blocksKey(await blocksV(me.id)) };
 }
 
 /** Join call: the call page (the built-in room) only when the call can be joined now; otherwise the refusal line (shown under Join). */

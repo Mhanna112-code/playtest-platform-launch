@@ -105,9 +105,10 @@ describe("Block has one stop: already blocked in another tab (owner, Oct 27)", (
     // A change since the page loaded does NOT stop Block (no other stop-once reasons).
     expect((await blocksPOST(req("/api/blocks", { cookie: tester.cookie, body: { userId: dev.user.id, seenAt: pageLoaded } })).then(json)).status).toBe(200);
     expect(await db.block.count({ where: { blockerId: tester.user.id } })).toBe(1);
+    // (Owner, Nov 11, §380) Already blocked: no refusal, the page redraws.
     const again = await blocksPOST(req("/api/blocks", { cookie: tester.cookie, body: { userId: dev.user.id } })).then(json);
-    expect(again.status).toBe(409);
-    expect(again.body.error.message).toBe("You already blocked Nora Lane.");
+    expect(again.status).toBe(200);
+    expect(again.body.already).toBe(true);
   });
 
   it("the developer accepting the tester's request stops the tester once; a taken request never names the other tester", async () => {

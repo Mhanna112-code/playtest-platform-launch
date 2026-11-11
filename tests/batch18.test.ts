@@ -55,13 +55,13 @@ describe("N) Block and Report live only on profiles", () => {
     expect(src("components/BlockButton.tsx")).toContain("ConfirmButton"); // Block keeps its confirm dialog
   });
 
-  it("Block's only stop is a race check: already blocked in another tab → a blue notice", async () => {
+  it("Block never stops; (§380) already blocked in another tab → silent", async () => {
     const dev = await makeUser({ dev: true, name: "Nora Lane" });
     const t = await makeUser({ tester: true, name: "Ana Silva" });
     expect((await blocksPOST(req("/api/blocks", { cookie: dev.cookie, body: { userId: t.user.id, seenAt: new Date(0).toISOString() } })).then(json)).status).toBe(200);
     const again = await blocksPOST(req("/api/blocks", { cookie: dev.cookie, body: { userId: t.user.id } })).then(json);
-    expect(again.status).toBe(409);
-    expect(again.body.error.message).toBe("You already blocked Ana Silva.");
+    expect(again.status).toBe(200); // (Owner, Nov 11, §380) already what Block wanted
+    expect(again.body.already).toBe(true);
   });
 
   it("Report: once per pair, ever; the reason is required; the admin sees it; the reported person is not told", async () => {
