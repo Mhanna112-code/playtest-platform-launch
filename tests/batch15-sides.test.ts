@@ -48,12 +48,12 @@ describe("chat (section 1)", () => {
 
   // (Owner, Nov 4, §172) A team pause closes that test's chat to the developer as a developer suspension does. (Owner, Nov 11, §376; reverses §172 for the tester)
   // The tester's chat stays open during the team's pause.
-  it("a tester-side suspension pauses the tester's chats only; a team pause closes the developer's side only", async () => {
+  it("a tester-side suspension pauses the tester's chats only; (§379 item 1) a team pause closes neither side", async () => {
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
     const a = await admin();
     await db.test.update({ where: { id: testId }, data: { adminPausedAt: new Date() } });
-    expect((await msg(testId, dev.cookie, sessionId, "Paused but chatting")).body.error.code).toBe("admin_paused");
+    expect((await msg(testId, dev.cookie, sessionId, "Paused but chatting")).status).toBe(200); // (Owner, Nov 11, §379 item 1) the team's pause no longer closes it
     expect((await sact(sessionId, "message", tester.cookie, { body: "Me too" })).status).toBe(200);
     await db.test.update({ where: { id: testId }, data: { adminPausedAt: null } });
     await suspendAccount(a.user.id, tester.user.id, "Checking");

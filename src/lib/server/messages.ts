@@ -34,12 +34,14 @@ export const CHAT_UNABLE = "Unable to chat with this tester.";
  */
 // (Owner, Nov 4, §172; replaces batch 15 section 1 for a team pause) The team's pause of THIS test counts as the developer being restricted in its chats (exactly as
 // a developer suspension: the developer's Send is refused); the developer's other tests' chats are unaffected. (Owner, Nov 11, §376; reverses §172 for the tester)
-// The tester's side is never closed by the developer's restriction or any pause: only by their own (`tester`).
+// The tester's side is never closed by the developer's restriction or any pause: only by their own (`tester`). (Owner, Nov 11, §379; reverses §172 for the
+// developer too) The team's pause of the test no longer closes the developer's side either: only their OWN account's restriction (a developer suspension, a payment or
+// chargeback hold: batch 15 §1) does. `teamPaused` stays for the callers that still name it.
 export async function chatRestriction(testId: string, testerId: string) {
   const test = await db.test.findUniqueOrThrow({ where: { id: testId }, select: { status: true, adminPausedAt: true, developer: { select: { devSuspendedAt: true, holdStartedAt: true, holdReason: true } } } });
   const tester = await db.user.findUniqueOrThrow({ where: { id: testerId }, select: { testerSuspendedAt: true } });
   const teamPaused = teamPausedNow(test);
-  return { developer: !!(test.developer.devSuspendedAt || test.developer.holdStartedAt || teamPaused), teamPaused, tester: !!tester.testerSuspendedAt, dev: test.developer };
+  return { developer: !!(test.developer.devSuspendedAt || test.developer.holdStartedAt), teamPaused, tester: !!tester.testerSuspendedAt, dev: test.developer };
 }
 
 /**
@@ -55,7 +57,7 @@ export async function openTesterChat(who: { id: string; devSuspendedAt?: Date | 
   // When the OTHER person is restricted the chat still opens: it can be read, and its box says messages are paused.
   if (c.testerId === who.id) {
     if (!a || a.blocked || who.testerSuspendedAt) throw new HttpError(409, "unable", CHAT_UNABLE_DEV);
-  } else if (!a || a.blocked || who.devSuspendedAt || who.holdStartedAt || teamPausedNow(c.test)) throw new HttpError(409, "unable", CHAT_UNABLE); // (§172) a test the team paused too
+  } else if (!a || a.blocked || who.devSuspendedAt || who.holdStartedAt) throw new HttpError(409, "unable", CHAT_UNABLE); // (Owner, Nov 11, §379) a test the team paused no longer closes it
   return { href: `/app/chat/${c.id}` };
 }
 
@@ -101,7 +103,7 @@ export async function sendChat(user: { id: string; name: string; email: string }
   // tester) The tester's Send goes through during every pause (the team's, the developer's hold or suspension): only their own restriction closes it.
   const r = await chatRestriction(testId, testerId);
   const iAmDev = user.id === a.test.developerId;
-  if (iAmDev && r.teamPaused && !r.dev.devSuspendedAt && !r.dev.holdStartedAt) throw new HttpError(409, "admin_paused", RF.pressRefused(RF.TEAM_PAUSED_CAUSE, "Send"), { failed: `Your Send on ${a.test.title} didn't go through`, testId });
+  // (Owner, Nov 11, §379; reverses §172 for the developer) The developer's Send goes through during the team's pause of the test: only their own suspension or hold refuses it.
   if (iAmDev ? r.developer : r.tester) throw new HttpError(403, iAmDev && !r.dev.devSuspendedAt ? "held" : "suspended", RF.pressRefused(iAmDev ? (r.dev.devSuspendedAt ? RF.ACCOUNT_SUSPENDED_CAUSE : RF.HELD_CAUSE) : RF.ACCOUNT_PAUSED_CAUSE, "Send"), /* (§364) */ { failed: `Your Send on ${a.test.title} didn't go through`, [iAmDev && !r.dev.devSuspendedAt ? "held" : "suspended"]: true });
   if (iAmDev && r.tester) throw new HttpError(409, "chat_paused", CHAT_NOT_SENT);
   const body = typeof raw === "string" ? raw.trim() : "";

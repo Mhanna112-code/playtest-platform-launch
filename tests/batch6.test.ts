@@ -221,9 +221,9 @@ describe("batch 6 item 4: a paused test, what testers can do", () => {
       expect((await sact(sessionId, "recording-send", tester.cookie, { seenAt: seen(), confirmed: true })).body.error.message).toBe("This test is paused right now, so your Send didn't go through."); // (§364 item 5)
       const m = await sact(sessionId, "message", tester.cookie, { body: "Hello?" });
       // (Owner, Nov 11, §376; reverses §172 for the tester) Chat goes on during every pause (the team's, a hold, the developer's suspension): the tester's
-      // message is sent. The developer's own side stays closed during the team's pause (§172).
+      // message is sent. (Owner, Nov 11, §379 item 1; reverses §172) The developer's side stays open during the team's pause too.
       expect(m.status).toBe(200);
-      if (kind === "team") expect((await act(testId, "message", dev.cookie, { contractId: sessionId, body: "Hi" })).body.error.code).toBe("admin_paused");
+      if (kind === "team") expect((await act(testId, "message", dev.cookie, { contractId: sessionId, body: "Hi" })).status).toBe(200);
       expect(src("app/app/chat/[id]/page.tsx")).toContain("closedNote={!blocked && paused ? CHAT_PAUSED_NOTE : undefined}");
       // Leave still works.
       expect((await sact(sessionId, "leave", tester.cookie, { seenAt: seen(), confirmed: true })).status).toBe(200);

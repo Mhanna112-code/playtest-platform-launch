@@ -1,7 +1,6 @@
 import { withDateZone } from "@/lib/server/dateZone";
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
-import { teamPausedNow } from "@/lib/restricted";
+import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { db } from "@/lib/db";
 import { displayName } from "@/lib/format";
@@ -35,8 +34,7 @@ export default async function ChatPage({ params }: { params: Promise<{ id: strin
   const otherSide = await otherSideNotice(u, dev ? "developer" : "tester");
   if (otherSide) return otherSide;
   leaveIfClosed(u, "/app/chat", dev ? "developer" : "tester");
-  // (Owner, Nov 4, §172) A test the team paused closes its chats to the developer as a suspension closes theirs: back to the test, whose banner says why.
-  if (dev && teamPausedNow(c.test)) redirect(`/app/tests/${c.testId}`);
+  // (Owner, Nov 11, §379 item 1; replaces §172 here) A test the team paused no longer closes its chats to the developer: only their own suspension or hold does.
   // (Batch 30 §8) The poll's fingerprint as of BEFORE the page reads the chat: AutoRefresh starts from it.
   const pageV = await testV(u.id, c.testId, dev ? "" : c.id);
   const other = dev ? displayName(c.tester) : displayName(c.test.developer);

@@ -38,11 +38,12 @@ async function rateOpen() {
 
 describe("§172: the developer's presses on a test the team paused are a suspended developer's", () => {
   it("the same presses still work (Stop, End early, Cancel call, the side of a dispute; §368: Pay more); every other one, chat included, goes to the banner", async () => {
-    expect([...TEAM_PAUSED_OK_ACTIONS].sort()).toEqual([...RESTRICTED_OK_ACTIONS, "pay-extra"].sort()); // (Owner, Nov 9, §368) paying goes on
+    expect([...TEAM_PAUSED_OK_ACTIONS].sort()).toEqual([...RESTRICTED_OK_ACTIONS, "pay-extra", "message"].sort()); // (Owner, Nov 9, §368) paying goes on; (Nov 11, §379 item 1) chat too
     const s = await setup();
     const a = await joined(s.testId);
     await pauseTest(await admin(), s.testId, "Checking");
-    for (const [action, body] of [["message", { contractId: a.sessionId, body: "Hi" }], ["edit", { version: 1, fields: { title: "x" } }], ["invite", { testerIds: [] }], ["next-round", {}]] as const) {
+    expect((await act(s.testId, "message", s.dev.cookie, { contractId: a.sessionId, body: "Hi", seenAt: seen() })).status).toBe(200); // (§379 item 1)
+    for (const [action, body] of [["edit", { version: 1, fields: { title: "x" } }], ["invite", { testerIds: [] }], ["next-round", {}]] as const) {
       const r = await act(s.testId, action, s.dev.cookie, { ...body, seenAt: seen() });
       if (action === "edit") { expect(r.body.error?.code).toBe("nda_only"); continue; }
       expect(r.body.error?.code, action).toBe("admin_paused");
@@ -116,15 +117,20 @@ describe("§172: the developer's presses on a test the team paused are a suspend
 });
 
 describe("§172: chat on a test the team paused pauses as under a developer suspension", () => {
-  it("(Owner, Nov 11, §376; reverses §172 for the tester) the tester's Send goes through; the developer's chat is closed; the developer's other test's chat is open", async () => {
+  it("(Owner, Nov 11, §376 and §379 item 1; reverse §172) both sides' Send go through during the team's pause; the developer's own suspension still closes theirs", async () => {
     const s = await setup();
     const a = await joined(s.testId);
     await pauseTest(await admin(), s.testId, "Checking");
-    expect(await chatRestriction(s.testId, a.tester.user.id)).toMatchObject({ developer: true, teamPaused: true, tester: false });
+    expect(await chatRestriction(s.testId, a.tester.user.id)).toMatchObject({ developer: false, teamPaused: true, tester: false });
     const t = await sact(a.sessionId, "message", a.tester.cookie, { body: "Hello?" });
     expect(t.status).toBe(200);
     const dev = await db.user.findUniqueOrThrow({ where: { id: s.dev.user.id } });
-    await expect(openTesterChat(dev, { contractId: a.sessionId })).rejects.toMatchObject({ message: CHAT_UNABLE });
+    expect(await openTesterChat(dev, { contractId: a.sessionId })).toEqual({ href: expect.stringContaining("/app/chat/") });
+    expect((await act(s.testId, "message", s.dev.cookie, { contractId: a.sessionId, body: "Hi Ana", seenAt: seen() })).status).toBe(200);
+    await db.user.update({ where: { id: s.dev.user.id }, data: { devSuspendedAt: new Date() } });
+    expect((await act(s.testId, "message", s.dev.cookie, { contractId: a.sessionId, body: "Still there?", seenAt: seen() })).status).toBeGreaterThanOrEqual(400);
+    await expect(openTesterChat(await db.user.findUniqueOrThrow({ where: { id: s.dev.user.id } }), { contractId: a.sessionId })).rejects.toMatchObject({ message: CHAT_UNABLE });
+    await db.user.update({ where: { id: s.dev.user.id }, data: { devSuspendedAt: null } });
     const other = await secondTest(s.dev.cookie);
     const b = await joined(other, "Ben Okafor");
     expect((await chatRestriction(other, b.tester.user.id)).developer).toBe(false);

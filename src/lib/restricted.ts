@@ -61,7 +61,8 @@ export const PAY_OK_ACTIONS = new Set(["pay-extra"]);
  * (Owner, Nov 9, §368) Paying goes on during a team pause and a developer suspension, the same as the tester's Charge: Pay, Pay more, a call's Pay, Confirm with your
  * bank and Confirm all go through and charge at once (a payment or chargeback hold still makes them wait for Pay what you owe).
  */
-export const TEAM_PAUSED_OK_ACTIONS = new Set([...RESTRICTED_OK_ACTIONS, ...PAY_OK_ACTIONS]);
+// (Owner, Nov 11, §379 item 1) The developer's chat Send goes through during the team's pause of their test (not during their own suspension or hold).
+export const TEAM_PAUSED_OK_ACTIONS = new Set([...RESTRICTED_OK_ACTIONS, ...PAY_OK_ACTIONS, "message"]);
 /** (§368) Is paying open for this developer while their test is paused or their account suspended? Only a hold (payment or chargeback) stops it. */
 export const payGoesOn = (u: Restrictable) => !u.holdStartedAt;
 
