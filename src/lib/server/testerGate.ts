@@ -92,9 +92,10 @@ export async function testerChanges(testerId: string, contractId: string, testId
     // (§284) The request's row in her Call requests box; once it has left (withdrawn, taken, closed), the box (lineFallbacks).
     const link = requestRow(r.id);
     if (r.status === "pending" && r.createdAt > seenAt) out.push({ kind: "requested", text: `${dev} requested ${what}`, createdAt: r.createdAt, item: r.id, link });
-    // (Owner, Nov 4, §185) The developer withdrawing their request is a quiet live-box line, never a stop (whatever her Alerts); answering it is one refusal
-    // ("Nora Lane withdrew this request."). The quiet kind is §184's (the live box marks it quiet; no tester press stops for it).
-    else if (r.status === "withdrawn") out.push({ kind: DROP_KINDS.devQuiet, text: `${dev} withdrew the request for ${what}`, createdAt: r.updatedAt, link });
+    // (Owner, Nov 11, §385; replaces §185's quiet line) The developer withdrawing their request is treated like a cancel: a stop-once line (as taken / closed),
+    // "Nora Lane's call request for Fri, Nov 13, 3:00 PM was cancelled". Answering it is one refusal ("Nora Lane withdrew this request, so your Accept didn't go
+    // through.").
+    else if (r.status === "withdrawn") out.push({ kind: "requested", text: devRequestCancelledLine(dev, when), createdAt: r.updatedAt, link });
     // (Owner, Nov 11) Another tester booked it: "Nora Lane's call request for Fri, Nov 13, 3:00 PM was cancelled: another tester took it" (a stop-once line, as before).
     else if (r.status === "taken") out.push({ kind: "requested", text: `${devRequestCancelledLine(dev, when)}: another tester took it`, createdAt: r.updatedAt, link });
     // (Owner, Nov 4, §184) One dropped when a call was booked has its own line (below), never this one too.

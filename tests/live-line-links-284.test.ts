@@ -35,7 +35,7 @@ describe("§284: every top-box line opens what it's about, ignored ones too", ()
     expect(line!.link).toBe(`req-${q.id}`);
     // Withdrawn, its row leaves: the same link, falling back to her Call requests box.
     await db.callRequest.update({ where: { id: q.id }, data: { status: "withdrawn", decidedAt: new Date() } });
-    const gone = (await live(`session:${sessionId}`, since, tester.cookie)).find((l) => / withdrew the request for /.test(l.text));
+    const gone = (await live(`session:${sessionId}`, since, tester.cookie)).find((l) => /'s call request for .+ was cancelled$/.test(l.text)); // (§385)
     expect(gone?.link).toBe(`req-${q.id}`);
     expect(lineFallbacks(`req-${q.id}`)).toEqual([`req-${q.id}`, TESTER_REQUESTS_BOX, "call-requests", "your-requests", "live"]);
   });

@@ -41,7 +41,7 @@ describe("§312a call-request and call bells name the test", () => {
     // The developer withdraws hers: the tester's bell.
     const theirs = await db.callRequest.findFirstOrThrow({ where: { contractId: a.sessionId, fromSide: "developer", status: "pending" } });
     expect((await act(f.testId, "answer-request", f.dev.cookie, { contractId: a.sessionId, requestId: theirs.id, action: "withdraw", seenAt: seen(), confirmed: true })).status).toBe(200);
-    expect((await bells(a.tester.user.id, "withdrew"))[0].text).toMatch(/^Nora Lane withdrew a call request on “Harbor Run” for .+$/);
+    expect((await bells(a.tester.user.id, "was cancelled"))[0].text).toMatch(/^Nora Lane's call request on “Harbor Run” for .+ was cancelled$/); // (§385) like a cancel
     // A booked call cancelled by the developer: the tester's bell.
     const call = await bookCall(f.testId, f.dev.cookie, a.sessionId, a.tester.cookie);
     expect((await act(f.testId, "cancel-call", f.dev.cookie, { seenAt: seen(), callId: call.id })).status).toBe(200);

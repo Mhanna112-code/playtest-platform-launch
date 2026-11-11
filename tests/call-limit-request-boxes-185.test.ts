@@ -14,8 +14,9 @@ import { json, makeUser, req } from "./helpers";
 import { act, atHours, joined, oldChooseOne, sact, seen, settle, setup } from "./fixtures";
 
 // (Owner, Nov 4, §185) Calls with one person on a test: 3 in total (booked times + waiting requests, both sides), 3 sends a day per side, two request boxes on the
-// developer's page (Requests to you / Your requests, each with a name search), the other side's withdrawal never a stop (one refusal when answered, a quiet live
-// line), new requests / answers / cancellations still stop per Alerts, and a Join or Cancel on a cancelled call refused once.
+// developer's page (Requests to you / Your requests, each with a name search), the tester's withdrawal never a stop (one refusal when answered, a quiet live
+// line; §385: the developer's is treated like a cancel, a stop-once line), new requests / answers / cancellations still stop per Alerts, and a Join or Cancel on a
+// cancelled call refused once.
 
 const auth = vi.hoisted(() => ({ user: null as User | null }));
 vi.mock("@/lib/server/page-auth", () => ({ requirePageUser: async () => auth.user, requireOpenPage: async () => auth.user, adminAway: () => {} }));
@@ -182,7 +183,7 @@ describe("§185 sends a day: at most 3 call requests a day to the same person, e
   });
 });
 
-describe("§185 withdrawals: never a stop for the other side; one refusal when answered; a quiet live line", () => {
+describe("§185 withdrawals: one refusal when answered; the tester's is a quiet live line, the developer's (§385) stops once like a cancel", () => {
   it("the tester withdraws: the developer's next press goes; his Accept on it reads 'Ana Silva withdrew this request.' once; his live line is quiet", async () => {
     const f = await setup();
     const a = await joined(f.testId);
@@ -203,7 +204,8 @@ describe("§185 withdrawals: never a stop for the other side; one refusal when a
     expect(lines[0].quiet).toBe(true);
   });
 
-  it("the developer withdraws: the tester's next press goes; her Accept reads 'Nora Lane withdrew this request.' once; her live line is quiet", async () => {
+  // (Owner, Nov 11, §385; replaces "the tester's next press goes … her live line is quiet") The developer withdrawing is treated like a cancel.
+  it("the developer withdraws: her Accept reads 'Nora Lane withdrew this request, so your Accept didn't go through.' once; her next press stops once with \"Nora Lane's call request for … was cancelled\"", async () => {
     const f = await setup();
     const a = await joined(f.testId);
     expect((await devReq(f.testId, f.dev.cookie, a.sessionId, { times: [atHours(50)] })).status).toBe(200);
@@ -214,12 +216,15 @@ describe("§185 withdrawals: never a stop for the other side; one refusal when a
     expect((await devAnswer(f.testId, f.dev.cookie, a.sessionId, r.id, "withdraw")).status).toBe(200);
     await settle();
     const accept = await sact(a.sessionId, "answer-request", a.tester.cookie, { requestId: r.id, action: "accept", seenAt: loaded, loadedAt: loaded });
-    expect(accept.body.error).toMatchObject({ code: "gone", message: "Nora Lane withdrew this request." });
-    expect((await sact(a.sessionId, "request-time", a.tester.cookie, { seenAt: loaded, loadedAt: loaded, minutes: 30, times: [atHours(60)] })).status).toBe(200);
-    const lines = (await live(`session:${a.sessionId}`, a.tester.cookie, loaded)).filter((l) => /withdrew/.test(l.text));
+    expect(accept.body.error).toMatchObject({ code: "gone", message: "Nora Lane withdrew this request, so your Accept didn't go through." });
+    const next = await sact(a.sessionId, "request-time", a.tester.cookie, { seenAt: loaded, loadedAt: loaded, minutes: 30, times: [atHours(60)] });
+    expect(next.body.error?.code, JSON.stringify(next.body)).toBe("stop_once");
+    expect(JSON.stringify(next.body)).toMatch(/Nora Lane's call request for [^"]+ was cancelled/);
+    expect((await sact(a.sessionId, "request-time", a.tester.cookie, { seenAt: loaded, loadedAt: loaded, boxAt: seen(), confirmed: true, minutes: 30, times: [atHours(60)] })).status).toBe(200);
+    const lines = (await live(`session:${a.sessionId}`, a.tester.cookie, loaded)).filter((l) => /was cancelled/.test(l.text));
     expect(lines).toHaveLength(1);
-    expect(lines[0].text).toMatch(/^Nora Lane withdrew the request for /);
-    expect(lines[0].quiet).toBe(true);
+    expect(lines[0].text).toMatch(/^Nora Lane's call request for .+ was cancelled$/);
+    expect(lines[0].quiet).toBeFalsy();
   });
 });
 
@@ -369,8 +374,9 @@ describe("§185 the other side's withdrawal and a request a booking closed: a be
     const devBells = await db.notification.findMany({ where: { userId: f.dev.user.id, groupKey: "callrequests", text: { contains: " withdrew " } } });
     expect(devBells.map((n) => n.text)).toEqual([expect.stringMatching(/^Ana Silva withdrew a call request on “.+” for .+ (AM|PM)/)]);
     expect(devBells[0].link).toBe(`/app/tests/${f.testId}`);
-    const herBells = await db.notification.findMany({ where: { userId: a.tester.user.id, groupKey: "callrequests", text: { contains: " withdrew " } } });
-    expect(herBells.map((n) => n.text)).toEqual([expect.stringMatching(/^Nora Lane withdrew a call request on “.+” for /)]);
+    // (§385) The developer's withdrawal reads like a cancel.
+    const herBells = await db.notification.findMany({ where: { userId: a.tester.user.id, groupKey: "callrequests", text: { contains: " was cancelled" } } });
+    expect(herBells.map((n) => n.text)).toEqual([expect.stringMatching(/^Nora Lane's call request on “.+” for .+ was cancelled$/)]);
     expect(herBells[0].link).toBe(`/app/sessions/${a.sessionId}`);
     // Her own withdrawal never rings her.
     expect(await db.notification.count({ where: { userId: a.tester.user.id, text: { startsWith: "Ana Silva withdrew" } } })).toBe(0);

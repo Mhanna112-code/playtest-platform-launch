@@ -184,7 +184,7 @@ describe("§157 3: a call request answered at the same moment", () => {
       expect(lost.message).toMatch(/^This time was booked at /);
     } else {
       expect(q.status).toBe("withdrawn");
-      expect(lost.message).toBe("Nora Lane withdrew this request."); // (§185) said once, no time
+      expect(lost.message).toBe("Nora Lane withdrew this request, so your Accept didn't go through."); // (§185) said once, no time; (§385) the standard form
       expect(await db.call.count({ where: { contractId: w.sessionId } })).toBe(0);
     }
   });

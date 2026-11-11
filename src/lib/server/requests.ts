@@ -487,8 +487,9 @@ const refusalFor = (r: { status: string; updatedAt: Date; closedReason: string; 
   // (Owner, Nov 4, §184) Dropped when a call was booked: "This request closed: fbbb is no longer free at that time." (never with whom), or the reader's own
   // "… you have another call at that time." The reader's side: the request's sender when it's theirs.
   if (r.status === "closed" && isDropReason(r.closedReason)) return `This request closed: ${dropReasonFor(r.closedReason, (mine ? r.fromSide : r.fromSide === "developer" ? "tester" : "developer") as Side, otherName)}.`;
-  // (Owner, Nov 4, §185) The other side's withdrawal is said only here, once: "Ana Silva withdrew this request."
-  if (r.status === "withdrawn") return mine ? "You already withdrew this request." : `${otherName} withdrew this request.`;
+  // (Owner, Nov 4, §185) The other side's withdrawal is said here, once: "Ana Silva withdrew this request." (Owner, Nov 11, §385) The developer's, read by the
+  // tester, in the standard form: "Nora Lane withdrew this request, so your Accept didn't go through."
+  if (r.status === "withdrawn") return mine ? "You already withdrew this request." : r.fromSide === "developer" ? RF.pressRefused(`${otherName} withdrew this request`, press) : `${otherName} withdrew this request.`;
   if (r.status === "declined") return mine ? `${otherName} declined this request at ${fmtTime(r.updatedAt)}.` : "You already declined this request.";
   // (Owner, Nov 3, §157) Only the side that didn't ask books a request: booked when it isn't yours means your other tab's Accept.
   if (r.status === "booked") return mine ? `This time was booked at ${fmtTime(r.updatedAt)}.` : `You already accepted this request at ${fmtTime(r.updatedAt)}.`;
@@ -901,7 +902,8 @@ export async function answerRequest(user: U, contractId: string, body: Record<st
   const fresh = await db.callRequest.findUniqueOrThrow({ where: { id: r.id } });
   // (Batch 16 section 21) Answered or withdrawn in another tab: the developer's press stops once naming it, then it's already done.
   // (Owner, Nov 4, §184) A request dropped when a call was booked: refused at once (a single refusal), never a stop first.
-  // (Owner, Nov 4, §185) Likewise one the OTHER side withdrew: never a stop for anyone; answering it is ONE refusal, "Ana Silva withdrew this request."
+  // (Owner, Nov 4, §185) Likewise one the OTHER side withdrew: answering it is ONE refusal, "Ana Silva withdrew this request." (§385: the developer's withdrawal
+  // is a stop-once line for the tester's other presses, like a cancel; never for the press answering that request.)
   const theyWithdrew = fresh.status === "withdrawn" && !mine;
   if (fresh.status !== "pending" && side === "developer" && !(fresh.status === "closed" && isDropReason(fresh.closedReason)) && !theyWithdrew) await db.$transaction((tx) => devGate(tx, c.testId, body, {}, [], undefined, { acts: CALL_ACTS, keys: [`req:${r.id}`, `c:${contractId}`] }));
   // (§187) The press names a time: on a request booked at another of its times, the line says so (not "This time was booked").
@@ -1024,12 +1026,13 @@ async function timeAnswered(user: U, c: Ctx["c"], side: Side, other: Ctx["other"
   // (Owner, Nov 4, §185) A tester's withdrawal ("withdrew_req") is a quiet live-box line for the developer (DEV_QUIET_KINDS), never a stop; a decline (an answer
   // to the developer's request) stops as a Call change.
   await db.$transaction((tx) => recordEvent(tx, c.testId, status === "withdrawn" ? "withdrew_req" : "declined_req", text, false, {}, contractId, "", requestRow(requestId))); // (Owner, Nov 6, §284) the place the line opens
-  // (Owner, Nov 4, §185) A withdrawal is never a stop for the other person (a quiet live-box line): they get a bell instead (and its email, per their settings),
-  // stacked (§286: one entry a day across tests, "Call requests · 3 today").
+  // (Owner, Nov 4, §185) A withdrawal rings the other person (and its email, per their settings), stacked (§286: one entry a day across tests, "Call requests ·
+  // 3 today"). A tester's withdrawal is a quiet live-box line for the developer, never a stop; (Owner, Nov 11, §385) the developer's is treated like a cancel:
+  // a stop-once line for the tester, and her bell in the same words, "Nora Lane's call request on “Harbor Run” for … was cancelled".
   // (Owner, Nov 6, §312a) The bells name the test ("Ana Silva withdrew a call request on “Harbor Run” for …"); the live lines don't (the page does).
   const on = onTest(side === "developer" ? c.title : c.test.title);
   if (status === "withdrawn") {
-    const line = `${displayName(user)} withdrew a call request${on} for ${when}`;
+    const line = side === "developer" ? devRequestCancelledLine(displayName(user), when, on) : `${displayName(user)} withdrew a call request${on} for ${when}`;
     await bell(other.id, line, side === "developer" ? `/app/sessions/${c.id}` : `/app/tests/${c.testId}`, undefined, { testId: c.testId, group: CALL_REQUESTS_GROUP });
   } else {
     // (Owner, Nov 6, §286) A decline rings the person who asked, in their top box's words: the developer's "Ana Silva declined a call request for …" (the line
