@@ -17,7 +17,6 @@ import { AutoRefresh } from "@/components/AutoRefresh";
 import { owedV } from "@/lib/server/pulseV";
 import { HOLD_APPROVAL_AFTER, reservedLine, reviewFirstLine } from "@/lib/rules";
 import { confirmItems } from "@/lib/server/confirm";
-import { confirmAllState } from "@/lib/server/confirmAll";
 import { ConfirmList } from "./ConfirmList";
 import { ChargebackSteps } from "@/components/ChargebackSteps";
 import { chargebackSteps } from "@/lib/server/chargeback";
@@ -147,7 +146,8 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
       </section>}
       {/* (Batch 11) Payments the developer's bank wants confirmed (made while they weren't here). (Batch 17 §11) A charge on a test links to its test page's button. */}
       {/* (Owner, Nov 3, §147) Confirm all above the list (its state first: a Confirm all check that ran out lets go before the list is read). */}
-      {dev && await (async () => { const all = await confirmAllState(u.id); return <ConfirmList items={await confirmItems(u.id)} all={all} seenAt={new Date().toISOString()} />; })()}
+      {/* (Owner, Nov 11, §380 B) Confirm all lives only on the dashboard. */}
+      {dev && <ConfirmList items={await confirmItems(u.id)} />}
       {q.error && q.error !== "off" && q.error !== "card_limit" && MESSAGES[q.error] && <p className="err" data-refusal="">{refused(q.error)}</p>}
       {q.saved === "verified" && <p className="card border-emerald-400/30 text-sm text-emerald-200">Card verified.</p>}
       {q.saved === "card" && <p className="card border-emerald-400/30 text-sm text-emerald-200">Card saved.</p>}

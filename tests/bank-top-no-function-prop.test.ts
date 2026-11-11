@@ -5,11 +5,11 @@ import { describe, expect, it } from "vitest";
 const read = (f: string) => fs.readFileSync(path.resolve(__dirname, "..", f), "utf8");
 
 describe("(Owner, Nov 5) hotfix of §230: the dashboard loads while a charge waits for the bank", () => {
-  it("the server component BankToConfirm hands BankWaiting its test links as data, never a function", () => {
+  it("the server component BankToConfirm hands its rows (BankTopLink, §380 B) their test links as data, never a function", () => {
     const s = read("src/app/app/BankToConfirm.tsx");
     expect(s.startsWith('"use client"')).toBe(false);
-    expect(s).not.toMatch(/<BankWaiting[^>]*render=\{/);
-    expect(s).toContain("tests={r.tests}");
+    expect(s).not.toMatch(/render=\{/);
+    expect(s).toContain("<BankTopLink row={r} />");
     const b = read("src/components/BankWaiting.tsx");
     // (§270) The tests and the line's people, as data, drawn by the generalized link builder.
     expect(b).toContain("render={render ?? (tests || links ? lineRender(withTests(links, tests), { newTab: true }) : undefined)}");

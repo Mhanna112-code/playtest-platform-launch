@@ -243,7 +243,7 @@ describe("§246 a row's 'what': cut at 50 (§251), opened in place", () => {
       expect(src(f), f).toContain("<WhatLine text=");
       expect(src(f), f).not.toContain("<WholeLine");
     }
-    expect(src("src/app/app/BankToConfirm.tsx")).toContain("before={lead.amount ?");
+    expect(src("src/components/BankTopLink.tsx")).toContain("<WhatLine text={whole.what || lead.what}"); // (Owner, Nov 11, §380) B: the dashboard's row is a link row
     expect(src("src/components/PaymentLists.tsx")).toContain("<span data-paid-group-what=\"\">{g.label}</span>"); // group headers aren't cut
   });
 

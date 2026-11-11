@@ -1,8 +1,7 @@
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { DashboardActionBox } from "./DashboardActionBox";
-import { BankWaiting } from "@/components/BankWaiting";
-import { bankTopV, splitLead, type BankTopRow } from "@/lib/bankTop";
-import { withLineLinks, withTests } from "@/components/LineLinks";
+import { bankTopV, type BankTopRow } from "@/lib/bankTop";
+import { BankTopLink } from "@/components/BankTopLink";
 import { bankToConfirm } from "@/lib/server/confirm";
 import { confirmAllState, type ConfirmAllState } from "@/lib/server/confirmAll";
 import { ConfirmAll } from "@/components/ConfirmAll";
@@ -33,13 +32,13 @@ export function BankToConfirmBox({ rows, seenAt = "", all }: { rows: BankTopRow[
     <DashboardActionBox id="bank-to-confirm" title="Your bank wants you to confirm" count={rows.length} kind="bank" top={all && <ConfirmAll {...all} seenAt={seenAt} />}>
       {/* (§147) An open Confirm all check is a row too (the count, the poll), drawn by Confirm all above the list. */}
       {/* (Owner, Nov 5, §246) The amount and "confirm by" always show; only the "what" between them is cut at 50 (§251) (WhatLine). */}
-      {rows.filter((r) => !r.all).map((r) => { const lead = splitLead(r.lead), whole = splitLead(r.full || r.lead); return (
+      {/* (Owner, Nov 11, §380 B) Each row is a LINK to its "Confirm with your bank" on the test page, under its piece (the one page that confirms it); a row with
+          no test (a renewal, what you owe) links to Payments. Confirm all stays here, above the rows. */}
+      {rows.filter((r) => !r.all).map((r) => (
         <li key={r.id} className="rounded-lg border border-white/10 p-3 text-sm" data-bank-top-row={r.id}>
-          {/* (Owner, Nov 5, hotfix of §230) The test links as data (`tests`): a server component can't hand a function (`render`) to the client BankWaiting, and the
-              dashboard failed to load while a charge waited for the bank. */}
-          <BankWaiting wide paymentId={r.id} cents={r.cents} seenAt={seenAt} before={lead.amount ? <><span className="whitespace-nowrap" data-bank-top-amount="">{lead.amount}</span>{lead.sep}</> : null} full={whole.what} text={lead.what} tests={r.tests} links={r.links} after={<> · <span className={r.soon ? "font-medium text-rose-300" : "text-slate-300"} data-confirm-by={r.soon ? "soon" : ""}>{r.by}</span></>} line={<>{withLineLinks(r.lead, withTests(r.links, r.tests), { newTab: true })} · <span className={r.soon ? "font-medium text-rose-300" : "text-slate-300"} data-confirm-by={r.soon ? "soon" : ""}>{r.by}</span></>} />
+          <BankTopLink row={r} />
         </li>
-      ); })}
+      ))}
     </DashboardActionBox>
   );
 }

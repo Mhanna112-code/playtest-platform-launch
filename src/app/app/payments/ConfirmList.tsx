@@ -4,7 +4,6 @@ import { BankWaiting } from "@/components/BankWaiting";
 import { CONFIRM_WITH_BANK } from "@/lib/rules";
 import { type TestLink } from "@/components/TestLinks";
 import { lineRender, withLineLinks, withTests, type LineLink } from "@/components/LineLinks";
-import { ConfirmAll, type ConfirmAllProps } from "@/components/ConfirmAll";
 
 /**
  * (Owner, Oct 29, batch 11) Payments your bank wants you to confirm (made while you weren't here: a tester's Charge, a dispute decision, a retry during a hold, a renewal).
@@ -12,12 +11,13 @@ import { ConfirmAll, type ConfirmAllProps } from "@/components/ConfirmAll";
  * (Batch 17 §11) A charge on a test is confirmed on that test page, under the piece: the row links straight to its "Confirm with your bank" (the piece marked). Only a
  * charge that belongs to no test (a renewal) is confirmed here, with the same inline check.
  */
-export function ConfirmList({ items, all, seenAt = "" }: { items: { id: string; /** (§246) the "what", its amount and "confirm by", apart */ what?: string; amount?: string; by?: string; text: string; /** (§131) the names uncut: the hover */ full?: string; href: string | null; /** (Owner, Nov 2) the tests its quoted names link to */ tests?: TestLink[]; /** (Owner, Nov 5, §270) the people and tests it names, each its own green link */ links?: LineLink[]; /** its amount (over $200: the tick) */ cents?: number }[]; /** (Owner, Nov 3, §147) Confirm all, above the list */ all?: ConfirmAllProps; /** (§159) the page's render time (Confirm all's item stops count from it) */ seenAt?: string }) {
-  if (!items.length && !all?.open) return null;
+export function ConfirmList({ items }: { items: { id: string; /** (§246) the "what", its amount and "confirm by", apart */ what?: string; amount?: string; by?: string; text: string; /** (§131) the names uncut: the hover */ full?: string; href: string | null; /** (Owner, Nov 2) the tests its quoted names link to */ tests?: TestLink[]; /** (Owner, Nov 5, §270) the people and tests it names, each its own green link */ links?: LineLink[]; /** its amount (over $200: the tick) */ cents?: number }[]; }) {
+  // (Owner, Nov 11, §380 B) No Confirm all here any more: it lives only in the dashboard's "Your bank wants you to confirm". A charge on a test is a link to
+  // its test page (the one page that confirms it); only a payment that belongs to no test (a renewal) is confirmed here.
+  if (!items.length) return null;
   return (
     <section id="confirm" className="card scroll-mt-24 space-y-3 border-sky-300/30" data-confirm-list="">
       <h2 className="font-semibold text-white">Your bank wants you to confirm</h2>
-      {all && <ConfirmAll {...all} seenAt={seenAt} />}
       <ul className="space-y-2 text-sm">
         {items.map((i) => (
           <li key={i.id} className="flex flex-wrap items-center gap-2" data-confirm-item={i.id}>

@@ -57,8 +57,8 @@ describe("batch 35 §106, revised: the same separate boxes below the developer's
       expect(html.match(new RegExp(`${marker}=""`, "g"))).toHaveLength(1);
       expect(html.indexOf(`${marker}=""`)).toBeGreaterThan(name);
     }
-    expect(html).toContain(`data-bank-waiting="${f.payment.id}"`);
-    expect(html).toContain("Confirm with your bank</button>");
+    expect(html).toContain(`data-bank-top-link="${f.payment.id}"`);
+    expect(html).toContain("Confirm with your bank →</a>"); // (Owner, Nov 11, §380 B) the dashboard links to the test page
     expect(html).toContain("Disputes: add your side");
     expect(html).toContain("Excerpt requests");
     expect(html).toContain("Allow</button>");
