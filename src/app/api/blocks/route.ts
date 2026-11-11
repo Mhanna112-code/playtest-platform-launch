@@ -12,6 +12,6 @@ export async function POST(req: Request) {
     const u = await requireActive(req, unblock ? { what: "Unblock" } : { devSide: "auto", what: "Block" });
     const id = String(body.userId ?? "");
     if (unblock) return ok(await unblockUser(u, id));
-    return ok(await blockUser(u, id)); // (Owner, Nov 11, §378) never a stop once: no page time needed
+    return ok(await blockUser(u, id, body)); // (Owner, Nov 11, §378) never a stop once: no page time needed
   });
 }

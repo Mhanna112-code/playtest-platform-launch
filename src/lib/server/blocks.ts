@@ -18,8 +18,8 @@ import { closeOffersOfEnded } from "./offerClose";
 // person, who only reads neutral lines. Unblock from Account → Blocked people (nothing reopens by itself).
 
 /** Is there a block either way between these two people? */
-export async function blockedEitherWay(a: string, b: string) {
-  return (await db.block.count({ where: { OR: [{ blockerId: a, blockedId: b }, { blockerId: b, blockedId: a }] } })) > 0;
+export async function blockedEitherWay(a: string, b: string, q: Pick<typeof db, "block"> = db) {
+  return (await q.block.count({ where: { OR: [{ blockerId: a, blockedId: b }, { blockerId: b, blockedId: a }] } })) > 0;
 }
 /** (Owner, Oct 28, batch 16 section 11) The one neutral line for a join, an apply or a rejoin ask across a block (never says why). */
 export const NOT_TAKING_LINE = "This test isn't taking new testers right now.";
@@ -40,7 +40,7 @@ export async function hiddenByBlock(testerId: string, t: { id: string; developer
   if (testerId === t.developerId || !(await blockedEitherWay(testerId, t.developerId))) return false;
   return !(await wasPartOf(testerId, t.id));
 }
-export const iBlocked = async (me: string, other: string) => (await db.block.count({ where: { blockerId: me, blockedId: other } })) > 0;
+export const iBlocked = async (me: string, other: string, q: Pick<typeof db, "block"> = db) => (await q.block.count({ where: { blockerId: me, blockedId: other } })) > 0;
 
 /** Everyone this user blocked or was blocked by (for hiding tests from Find). */
 export async function blockPartners(userId: string) {
@@ -64,7 +64,7 @@ export async function blocksV(userId: string) {
 /** The one string a page compares (layout and account check): "mine|onMe". */
 export const blocksKey = (b: { mine: string; onMe: string }) => `${b.mine}|${b.onMe}`;
 
-export async function blockUser(me: { id: string; email: string; name: string }, otherId: string) {
+export async function blockUser(me: { id: string; email: string; name: string }, otherId: string, body: Record<string, unknown> = {}) {
   if (!otherId || otherId === me.id) throw new HttpError(400, "bad_user", "Choose someone to block.");
   const other = await db.user.findUnique({ where: { id: otherId } });
   if (!other) throw new HttpError(404, "not_found", "That person doesn't exist.");
@@ -74,62 +74,64 @@ export async function blockUser(me: { id: string; email: string; name: string },
   if (await iBlocked(me.id, otherId)) return { blocked: true, ended: 0, already: true, blocks: blocksKey(await blocksV(me.id)) };
   // (Owner, Nov 11, §378; replaces §271 here) Block never stops once: a pause of their test (or the team's lift) since the profile loaded no longer stops it. Only
   // the race refusal above stays (already blocked in another tab). Report keeps its §271 stop.
-  // (Owner, Nov 3, batch 35 §157) The block row is the claim (its unique key): of two Blocks at the same moment (two tabs) one goes on to end sessions and send the
-  // lines; the other reads "You already blocked <name>." and does nothing.
-  const made = await db.block.create({ data: { blockerId: me.id, blockedId: otherId } }).then(() => true).catch((e) => {
-    if (isUniqueClash(e)) return false; // (§380) the other Block of the same moment did it: silent
+  // (Owner, Nov 11, §380 F; replaces §157's row-first claim and §375's per-session lock) ONE transaction that first takes the lock of EVERY test either of the two
+  // develops (in test-id order, so two Blocks, or a Block and any press, never deadlock), then writes the Block row, ends their sessions and closes their open
+  // invites and waiting applications. Every press about the other person checks the block (or the session's end) inside its own test lock, so there are only two
+  // orders: the press first (it goes through, then the block), or the block first (the press is refused with its existing line). The row's unique key still
+  // settles two Blocks at the same moment: the second is silent.
+  await (await import("./raceHold")).raceHold(body); // (§380 F) test-only: the order of a Block and another press
+  const now = new Date();
+  const include = { tester: true, test: { include: { developer: true } } } as const;
+  const between = { OR: [{ testerId: otherId, test: { developerId: me.id } }, { testerId: me.id, test: { developerId: otherId } }] };
+  const done = await db.$transaction(async (tx) => {
+    const tests = await tx.test.findMany({ where: { developerId: { in: [me.id, otherId] } }, select: { id: true }, orderBy: { id: "asc" } });
+    for (const t of tests) await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${t.id} FOR UPDATE`;
+    // Then both people's rows (in id order; the direct chat's Send holds its sender's): a direct message is either fully before the block or refused.
+    for (const id of [me.id, otherId].sort()) await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${id} FOR NO KEY UPDATE`;
+    if (await iBlocked(me.id, otherId, tx)) return null;
+    await tx.block.create({ data: { blockerId: me.id, blockedId: otherId } });
+    const contracts = await tx.contract.findMany({ where: { status: "working", ...between }, include });
+    await tx.contract.updateMany({ where: { id: { in: contracts.map((c) => c.id) }, status: "working" }, data: { status: "ended", endKind: "blocked", endedAt: now, endReason: "" } });
+    for (const c of contracts) await (await import("./accessKeys")).releaseTesterKeys(tx, c.id);
+    // Calls ahead between them are cancelled in the same step (a Join call or a booking after it reads them cancelled); one in progress ends just after.
+    const ahead = await tx.call.findMany({ where: { contractId: { in: contracts.map((c) => c.id) }, status: "booked", startsAt: { gt: now } }, select: { id: true, slotId: true } });
+    await tx.call.updateMany({ where: { id: { in: ahead.map((x) => x.id) }, status: "booked" }, data: { status: "cancelled", cancelledBy: "system", cancelledAt: now, cancelNote: "" } });
+    await tx.callSlot.updateMany({ where: { id: { in: ahead.map((x) => x.slotId) } }, data: { status: "removed" } });
+    const invitesClosed = await (await import("./invites")).openInviteIds(between, tx);
+    await tx.invite.updateMany({ where: { id: { in: invitesClosed }, status: "sent" }, data: { status: "cancelled" } });
+    // (Owner, Oct 28, batch 16 section 11) Pending applications and rejoin asks between them close, like invites. (Application has no relations: its tests are
+    // found by developer.)
+    const apps: { id: string; testerId: string; testId: string }[] = [];
+    for (const p of [{ tester: otherId, dev: me.id }, { tester: me.id, dev: otherId }]) {
+      const theirs = await tx.application.findMany({ where: { status: "pending", testerId: p.tester, testId: { in: (await tx.test.findMany({ where: { developerId: p.dev }, select: { id: true } })).map((t) => t.id) } }, select: { id: true, testerId: true, testId: true } });
+      apps.push(...theirs);
+    }
+    if (apps.length) await tx.application.updateMany({ where: { id: { in: apps.map((a) => a.id) } }, data: { status: "closed", closedReason: "blocked", decidedAt: now } });
+    return { contracts, invitesClosed, apps };
+  }, { maxWait: 20_000, timeout: 30_000 }).catch((e) => {
+    if (isUniqueClash(e)) return null; // (§380) the other Block of the same moment did it: silent
     throw e;
   });
-  if (!made) return { blocked: true, ended: 0, already: true, blocks: blocksKey(await blocksV(me.id)) };
-  const now = new Date();
-  const contracts = await db.contract.findMany({
-    where: { status: "working", OR: [{ testerId: otherId, test: { developerId: me.id } }, { testerId: me.id, test: { developerId: otherId } }] },
-    include: { tester: true, test: { include: { developer: true } } },
-  });
-  const ended: typeof contracts = [];
-  for (const c of contracts) {
+  if (!done) return { blocked: true, ended: 0, already: true, blocks: blocksKey(await blocksV(me.id)) };
+  const ended = done.contracts;
+  for (const c of ended) {
     // (Owner, Oct 29, batch 26 section 2) A call already in progress between them ends at once, on both pages (like a pause, but whether or not they were connected).
     const by = c.testerId === me.id ? "tester" : "developer";
     const { endCallForBlock } = await import("./calls");
     for (const call of await db.call.findMany({ where: { contractId: c.id, status: "booked", startsAt: { lte: now }, endedAt: null, measuredAt: null, actualMinutes: null } })) await endCallForBlock(call.id, by, now);
-    // (§157) Each session ends once (both people blocking each other at the same moment: one of them ends it and sends its line).
-    // (Owner, Nov 11, §375) Under the test's lock, like every other end of a session: a Send, an Add or a recording's Send holding the lock either saves before
-    // the block or reads the session as ended (refused), never a save on a blocked session because of timing.
-    const endedNow = await db.$transaction(async (tx) => {
-      await (await import("./tests")).lockTest(tx, c.testId);
-      if ((await tx.contract.updateMany({ where: { id: c.id, status: "working" }, data: { status: "ended", endKind: "blocked", endedAt: now, endReason: "" } })).count !== 1) return false;
-      await (await import("./accessKeys")).releaseTesterKeys(tx, c.id);
-      return true;
-    });
-    if (!endedNow) continue;
-    ended.push(c);
-    const calls = await db.call.findMany({ where: { contractId: c.id, status: "booked", startsAt: { gt: now } } });
-    for (const call of calls) {
-      await db.call.update({ where: { id: call.id }, data: { status: "cancelled", cancelledBy: "system", cancelledAt: now, cancelNote: "" } });
-      await db.callSlot.update({ where: { id: call.slotId }, data: { status: "removed" } });
-    }
     // Neutral lines for the blocked side (never "blocked").
     if (c.testerId === otherId) await notify(c.tester.email, `Your session on ${c.test.title} ended.`, [`Your session on ${c.test.title} ended. Work you sent is still reviewed.`], `/app/sessions/${c.id}`);
     else await notify(c.test.developer.email, `${displayName(c.tester)}'s session on ${c.test.title} ended.`, [`${displayName(c.tester)}'s session on ${c.test.title} ended.`], `/app/tests/${c.testId}#tester-${c.id}`);
   }
   await (await import("./requests")).closeRequests({ contractIds: ended.map((c) => c.id) }, "the session ended");
   await closeOffersOfEnded(db, ended.map((c) => c.id), now); // (batch 35 §118) the part ended: its offer closes
-  const invitesClosed = await (await import("./invites")).openInviteIds({ OR: [{ testerId: otherId, test: { developerId: me.id } }, { testerId: me.id, test: { developerId: otherId } }] });
-  await db.invite.updateMany({ where: { id: { in: invitesClosed }, status: "sent" }, data: { status: "cancelled" } });
-  await (await import("./invites")).tellInvitesClosed(invitesClosed); // (batch 30 §6) the neutral line (never "blocked")
-  // (Owner, Oct 28, batch 16 section 11) Pending applications and rejoin asks between them close, like invites. The tester reads the neutral line; the developer nothing.
-  // (Application has no relations: its tests are found by developer first.)
-  const pairs = [{ tester: otherId, dev: me.id }, { tester: me.id, dev: otherId }];
-  for (const p of pairs) {
-    const tests = await db.test.findMany({ where: { developerId: p.dev }, select: { id: true, title: true } });
-    const apps = await db.application.findMany({ where: { status: "pending", testerId: p.tester, testId: { in: tests.map((t) => t.id) } } });
-    if (!apps.length) continue;
-    await db.application.updateMany({ where: { id: { in: apps.map((a) => a.id) } }, data: { status: "closed", closedReason: "blocked", decidedAt: now } });
-    const tester = await db.user.findUnique({ where: { id: p.tester }, select: { email: true } });
-    for (const a of apps) {
-      const title = tests.find((t) => t.id === a.testId)?.title ?? "";
-      if (tester) await notify(tester.email, appClosedLine(title), [appClosedLine(title)], `/app/find/${a.testId}`, { testId: a.testId, group: "apps" }); // (batch 29 §23)
-    }
+  await (await import("./invites")).tellInvitesClosed(done.invitesClosed); // (batch 30 §6) the neutral line (never "blocked")
+  // The tester whose application closed reads the neutral line; the developer nothing.
+  const titles = new Map((await db.test.findMany({ where: { id: { in: done.apps.map((a) => a.testId) } }, select: { id: true, title: true } })).map((t) => [t.id, t.title]));
+  for (const a of done.apps) {
+    const tester = await db.user.findUnique({ where: { id: a.testerId }, select: { email: true } });
+    const title = titles.get(a.testId) ?? "";
+    if (tester) await notify(tester.email, appClosedLine(title), [appClosedLine(title)], `/app/find/${a.testId}`, { testId: a.testId, group: "apps" }); // (batch 29 §23)
   }
   for (const c of ended) await (await import("./tests")).spotOpened(c.testId);
   return { blocked: true, ended: ended.length, blocks: blocksKey(await blocksV(me.id)) };

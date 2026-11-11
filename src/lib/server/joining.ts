@@ -640,7 +640,7 @@ export async function askToRejoin(tester: U, testId: string, body: Record<string
     old = await tx.contract.findUnique({ where: { testId_testerId: { testId, testerId: tester.id } } });
     if (!old || old.status === "working") return { stop: new HttpError(409, "not_again", old ? "You've already joined this test." : "You haven't been in this test.") };
     const blocks = await import("./blocks");
-    if (await blocks.blockedEitherWay(tester.id, t.developerId)) return { stop: new HttpError(409, "refused", blocks.NOT_TAKING_LINE) };
+    if (await blocks.blockedEitherWay(tester.id, t.developerId, tx)) return { stop: new HttpError(409, "refused", blocks.NOT_TAKING_LINE) }; // (§380 F) under the lock
     const rated = (await tx.rating.count({ where: { contractId: old.id } })) > 0;
     if (!canAskToRejoin(old, rated)) return { stop: new HttpError(409, "not_again", rated || old.endKind === "rated" ? "You rated this test, so you can't join it again." : "You can't ask to rejoin this test.") };
     const waiting = await stopOf(() => alreadyWaiting(tester.id, testId, tx));

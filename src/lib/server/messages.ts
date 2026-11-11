@@ -103,7 +103,14 @@ export async function sendChat(user: { id: string; name: string; email: string }
   if (counts[0] + counts[1] >= CHAT_PER_MINUTE) throw new HttpError(429, "too_fast", CHAT_TOO_FAST);
   if (body.length > CHAT_MAX) throw new HttpError(400, "too_long", `Keep a message to ${CHAT_MAX.toLocaleString("en-US")} characters.`);
   if (page && iAmDev) pauseStopOnce(await devPauseMoments(testId, loadedOf(page)), page);
-  const m = await db.message.create({ data: { testId, testerId, contractId: a.contract.id, senderId: user.id, body, clientId } }).catch(async (e) => {
+  // (Owner, Nov 11, §380 F) The block, read again at write time under the test's lock (a Block takes it before writing its row): a Block a moment earlier closes
+  // the chat ("This chat is closed."); one a moment later comes after the message. No window is left between the check and the write.
+  const m = await db.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${testId} FOR UPDATE`;
+    if (await (await import("./blocks")).blockedEitherWay(testerId, a.test.developerId, tx)) throw new HttpError(409, "closed", "This chat is closed.");
+    return tx.message.create({ data: { testId, testerId, contractId: a.contract.id, senderId: user.id, body, clientId } });
+  }).catch(async (e) => {
+    if (e instanceof HttpError) throw e;
     // Two presses of the same message at once: the first one wins.
     const again = clientId ? await db.message.findFirst({ where: { senderId: user.id, clientId } }) : null;
     if (again) return again;

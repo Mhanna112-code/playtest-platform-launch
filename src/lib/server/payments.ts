@@ -759,8 +759,12 @@ export async function payExtra(dev: U & Parameters<typeof cardRefusal>[0], testI
   const at = piece.kind === "call" ? { callId: piece.where.callId! } : { submissionId: piece.where.submissionId! };
   // (Batch 15 section 41, M2) The repeat check, the room check and the reservation happen together under the test's row lock (as Pay does), and (kind, payKey) and
   // (kind, pressKey) are unique, so two presses at once can never both pass the cap or charge twice.
+  await (await import("./raceHold")).raceHold(body); // (§380 F) test-only: the order of a Pay more and a Block
   const reserved = await reserving(() => db.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${testId} FOR UPDATE`;
+    // (Owner, Nov 11, §380 F) The block, read again under the test's lock (a Block takes every shared test's lock before writing its row): a Block a moment
+    // earlier refuses this Pay more with its line; one a moment later comes after it.
+    if (await blockedEitherWay(dev.id, c.testerId, tx)) throw new HttpError(409, "unavailable", "This payment isn't available.");
     // (Owner, Nov 3, §159) A payment on this part waiting for the bank: refused (never a stop-once: it can't go ahead), read in the locked step, so a Pay more pressed
     // the moment a Charge starts waiting can't slip through.
     const waits = await bankWaitsLine(tx, at, name);
