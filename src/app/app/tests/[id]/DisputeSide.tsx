@@ -20,7 +20,8 @@ export function DisputeSide({ testId, disputeId, seenAt }: { testId: string; dis
       <label className="label" htmlFor={`side-${disputeId}`}>Add your side (optional, once; the team reads both)</label>
       {!sent && <textarea id={`side-${disputeId}`} rows={2} className="input" maxLength={LIMITS.devSide} value={text} onChange={(e) => setText(e.target.value)} {...lockText(sending)} />}
       {!sent && <CharacterCount value={text} min={10} max={LIMITS.devSide} required data-side-count="" />}
-      <PressButton disabled={!text.trim() || text.length > LIMITS.devSide} seenAt={seenAt} path={`/api/tests/${testId}/dispute-side`} body={{ disputeId, text }} doneLine="Your side is sent to the team." onSending={setSending} onDone={async () => { setSent(true); await keep.clear(); }}>Send your side</PressButton>
+      {/* (Owner, Nov 11, §380 D) Disabled until the side meets its requirement (at least 10 characters; the counter says so live). */}
+      <PressButton disabled={text.trim().length < 10 || text.length > LIMITS.devSide} seenAt={seenAt} path={`/api/tests/${testId}/dispute-side`} body={{ disputeId, text }} doneLine="Your side is sent to the team." onSending={setSending} onDone={async () => { setSent(true); await keep.clear(); }}>Send your side</PressButton>
       {!sent && keep.restored && text !== "" && <DraftTag kind="discard" onUseSaved={() => setText("")} />}
     </div>
   );

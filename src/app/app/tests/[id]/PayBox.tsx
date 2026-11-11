@@ -249,7 +249,9 @@ export function PayBox(p: {
             <input type="checkbox" id={`over-${p.id}`} className="mt-1" data-match="^Tick “I confirm" checked={over200} onChange={(e) => setOver200(e.target.checked)} /> {OVER_PAY_TICK_LINE}
           </label>
         )}
-        <button className="btn-green" disabled={busy || bank.open || !!bankWaits || cents == null || !tickOk || !!p.owes || overCap || reasonMissing || reason.length > LIMITS.reason || (!!more && cents === 0 && !p.update)} onClick={(e) => checkFields(e.currentTarget.closest("div.space-y-3")) && go()}>{pressName}</button>
+        {/* (Owner, Nov 11, §380 D) Disabled until the amount and ticks meet their requirements ($0.50 or more, or 0; within the room; the tick; a reason where one
+            is needed), each said live beside its field. */}
+        <button className="btn-green" disabled={busy || bank.open || !!bankWaits || cents == null || (cents > 0 && cents < 50) || !tickOk || !!p.owes || overCap || reasonMissing || reason.length > LIMITS.reason || (!!more && cents === 0 && !p.update)} onClick={(e) => checkFields(e.currentTarget.closest("div.space-y-3")) && go()}>{pressName}</button>
         {/* (Owner, Nov 5, §227) Pay what you owe is on Payments, never on the test page: the link goes there. */}
         {!done && p.owes && <span className="text-xs text-amber-200" data-owes-note="">{PAY_WAITS} <PayOwedLink /></span>}
         {!done && <span className="text-xs text-slate-500">at least $0.50 (or 0)</span>}

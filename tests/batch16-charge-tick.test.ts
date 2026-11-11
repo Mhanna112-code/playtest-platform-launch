@@ -48,7 +48,7 @@ describe("Charge: no tick, except above $200 (section 39)", () => {
     expect(box).toContain("const over = typed != null && typed > CHARGE_TICK_CENTS;");
     expect(box).toContain("{over && (");
     expect(box).toContain("{chargeTickLabel(devName, typed!)}");
-    expect(box).toContain("disabled={busy || typed == null || (over && !ticked)}");
+    expect(box).toContain("disabled={busy || typed == null || !!amountNeed || (over && !ticked)}"); // (Owner, Nov 11, §380 D) and the amount's own requirements
     expect(box).toContain('inputMode="decimal" data-money=""');
     expect(R.chargeTickLabel("Nora Lane", 25000)).toBe("Charge Nora Lane $250.00 now (over $200)");
     // (Section 36) What's charged is the rounded amount: 0.494 is $0.49, under the $0.50 minimum; 0.495 is $0.50.

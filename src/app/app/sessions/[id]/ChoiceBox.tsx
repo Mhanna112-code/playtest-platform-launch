@@ -49,6 +49,9 @@ export function ChoiceBox({ paused = false, sessionId, submissionId, callId, lin
   const typed = toCents(amount);
   // (Batch 16 section 39) No tick for ordinary amounts; above $200 the tick stays, required, naming the amount.
   const over = typed != null && typed > CHARGE_TICK_CENTS;
+  // (Owner, Nov 11, §380 D) Charge stays disabled until the amount meets its requirements ($0.50 up to the listed amount; over $200 the tick), each said live
+  // under the amount. The server keeps its own checks.
+  const amountNeed = typed == null ? (amount.trim() ? "Enter an amount like 5.00." : "") : typed < 50 ? "The smallest card charge is $0.50." : typed > cents ? `At most ${money(cents)}.` : "";
   const go = (choice: string) => {
     setPressed(choice === "letgo" ? "Let it go" : "Charge");
     setBusy(true);
@@ -88,7 +91,7 @@ export function ChoiceBox({ paused = false, sessionId, submissionId, callId, lin
               <input type="checkbox" checked={ticked} data-match="^Tick “Charge" onChange={(e) => setTicked(e.target.checked)} /> {chargeTickLabel(devName, typed!)}
             </label>
           )}
-          <button className="btn" disabled={busy || typed == null || (over && !ticked)} onClick={(e) => checkFields(e.currentTarget.parentElement) && go("charge")}><ChargeLabel devName={devName} cents={typed} /></button>
+          <button className="btn" disabled={busy || typed == null || !!amountNeed || (over && !ticked)} onClick={(e) => checkFields(e.currentTarget.parentElement) && go("charge")}><ChargeLabel devName={devName} cents={typed} /></button>
           {/* (Owner, Oct 30, batch 32 §13) No pop-up: a tick next to Let it go, which stays disabled until it's ticked. */}
           <label className="inline-flex items-center gap-1" data-letgo-tick="">
             <input type="checkbox" checked={letGo} onChange={(e) => setLetGo(e.target.checked)} /> {letGoTickLabel(devName)}
@@ -96,6 +99,7 @@ export function ChoiceBox({ paused = false, sessionId, submissionId, callId, lin
           <button className="btn-secondary" disabled={busy || !letGo} onClick={() => go("letgo")}>Let it go</button>
         </div>
       )}
+      {!fin.done && amountNeed && <p className="text-xs text-slate-400" data-field-need="charge">{amountNeed}</p>}
       <ChangesBox side="tester" changes={box && !box.top ? box.changes : null} tail={box?.tail} didntGo press={pressed} />
       {/* (Batch 32 §12) Names the press ("Your Charge didn't go through: …"); "Answer the new terms first: Switch or Keep." reads exactly so. */}
       <Err text={err && !err.startsWith(FIELD) ? refusalLine(pressed, err) : ""} />

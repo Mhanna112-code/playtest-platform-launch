@@ -247,6 +247,13 @@ export function WrittenForm({ sessionId, questions, newQs = [], initial, initial
   const boxDraft = (i: number) => (keep.restored && keep.isDraft(answerUnit(typedFor[i] ?? questions[i])) && answers[i] !== sentAt(i) ? <DraftTag disabled={busy || fin.done} kind={answerKind} field={`a${i}`} onUseSaved={() => setAnswers((all) => questions.map((_, j) => (j === i ? sentAt(i) : all[j] ?? "")))} /> : null);
   const notesDraft = keep.restored && keep.isDraft(NOTES_UNIT) ? <DraftTag disabled={busy || fin.done} kind={answerKind} field="notes" onUseSaved={() => setNotes(initialNotes)} /> : null;
   const length = writtenLength([...answers, notes]);
+  // (Owner, Nov 11, §380 D) Send Answers stays disabled until the form meets its requirements (every Required question answered, each answer at least the
+  // minimum, at least one answer, within the 20,000), each shown live under its field (the counters already say "(at least 50)"). Worked out from the questions
+  // shown now, so a form switched in place to new questions is checked again for them. The server keeps its own checks.
+  const live0 = canSend ? answersMissing(questions, answers) : null;
+  const liveMissing = live0?.message === ANSWER_ONE && !oneNeeded ? null : live0;
+  const needLine = (i: number) => (liveMissing && liveMissing.at === i ? (liveMissing.message === ANSWER_SHORT ? answerShortLine(liveMissing.chars ?? 0) : liveMissing.message) : "");
+  const notReady = !!liveMissing || length > WRITTEN_MAX_CHARS;
   // (Owner, Oct 28, batch 20 section 26) After a send: "Send my updated answers" waits until something differs from it (changing it back disables it again).
   const unchanged = update && sentSame && !newFiles && same;
   const sendPress = SEND_ANSWERS; // (§170, §235) refusals name the press Send Answers
@@ -315,6 +322,7 @@ export function WrittenForm({ sessionId, questions, newQs = [], initial, initial
           {/* (Batch 26 sections 11 and 14) The "*" only on a question the developer ticked Required, right after the question's words (not at the far right). */}
           <label className="label flex items-start gap-0.5" htmlFor={`a${i}`} data-question-label=""><LongText inline text={qText(q)} lines={QUESTION_LINES} label={`Question ${i + 1}`} />{qRequired(q) && <span className="req shrink-0" data-required-star="" aria-label="required" />}{newQs.includes(qText(q)) && <span className="badge ml-1 shrink-0 whitespace-nowrap border-sky-300/40 text-sky-200" data-new-question="">{NEW_QUESTION_TAG}</span>}</label>
           <AnswerBox id={`a${i}`} sessionId={sessionId} attachments={attachments} onAttach={addAttachment} onRemove={removeAttachment} required={qRequired(q)} min short={missingAt === i && !!msg && !msg.ok && isShortLine(msg.text)} total={length} value={answers[i]} onChange={(v) => setAnswers((all) => questions.map((_, j) => (j === i ? v : all[j] ?? "")))} />
+          {needLine(i) && <p className="text-xs text-slate-400" data-field-need={i}>{needLine(i)}</p> /* (§380 D) what this field still needs, live */}
           {boxDraft(i)}
         </div>
       ))}
@@ -339,7 +347,7 @@ export function WrittenForm({ sessionId, questions, newQs = [], initial, initial
       {/* (Batch 11) (Batch 14) At most 20,000 characters for the whole written part, counted live ((Owner, Nov 4, §186) was 50,000). */}
       <p className={`text-xs ${length > WRITTEN_MAX_CHARS ? "text-rose-300" : "text-slate-500"}`} data-written-count="">{length.toLocaleString("en-US")} / {WRITTEN_MAX_CHARS.toLocaleString("en-US")}</p>
       {canSend && lines.map((l) => <p key={l} className="note" data-above-send="">{l}</p>)}
-      <span>{canSend && <button className={`btn ${unchanged ? "!bg-white/10 !text-ink-400 !shadow-none" : ""}`} disabled={busy || length > WRITTEN_MAX_CHARS || unchanged} title={unchanged ? NOTHING_CHANGED_LINE : undefined} data-send-idle={unchanged ? "" : undefined}>{busy && !fin.done ? "Sending…" : SEND_ANSWERS}</button>}{keep.restored && [...keep.drafted].some(keep.isDraft) && <DraftButton className="ml-3 text-sm text-sky-300 underline" data-use-saved-all="" disabled={busy || fin.done} onPress={() => { setAnswers(questions.map((_, i) => initial[i] ?? "")); setNotes(initialNotes); }}>{update ? USE_SAVED_ALL_LABEL : DISCARD_ALL_LABEL}</DraftButton>}</span>
+      <span>{canSend && <button className={`btn ${unchanged ? "!bg-white/10 !text-ink-400 !shadow-none" : ""}`} disabled={busy || notReady || unchanged} title={unchanged ? NOTHING_CHANGED_LINE : undefined} data-send-ready={notReady ? undefined : ""} data-send-idle={unchanged ? "" : undefined}>{busy && !fin.done ? "Sending…" : SEND_ANSWERS}</button>}{keep.restored && [...keep.drafted].some(keep.isDraft) && <DraftButton className="ml-3 text-sm text-sky-300 underline" data-use-saved-all="" disabled={busy || fin.done} onPress={() => { setAnswers(questions.map((_, i) => initial[i] ?? "")); setNotes(initialNotes); }}>{update ? USE_SAVED_ALL_LABEL : DISCARD_ALL_LABEL}</DraftButton>}</span>
       <Err text={msg && !msg.ok && !msg.text.startsWith(FIELD) ? msg.text : ""} press={sendPress} />
       <PausedSend sessionId={sessionId} press={sendPress} canSend={canSend} now={pausedNow} />
       {!canSend && <p className="note" data-draft-kept="">Your answers are kept as a draft. Send comes back when the test resumes.</p>}
@@ -492,7 +500,9 @@ export function WrittenAddForm({ sessionId, seenAt, canSend = true, known = [], 
         </details>
       )}
       <div className="flex flex-wrap items-center gap-3">
-        {canSend && !full && <button type="button" className="btn" data-add-send="written" disabled={busy || fin.done || empty || length > WRITTEN_MAX_CHARS} title={empty ? NOTHING_TO_ADD : undefined} onClick={add}>{busy && !fin.done ? (first ? "Sending…" : "Adding…") : sender}</button>}
+        {/* (Owner, Nov 11, §380 D) Disabled until the addition meets its requirements (something to add, at least the minimum, within the limit); the counter under
+            the box says "(at least 50)" live. */}
+        {canSend && !full && <button type="button" className="btn" data-add-send="written" disabled={busy || fin.done || empty || length > WRITTEN_MAX_CHARS || answerChars(text) < ANSWER_MIN_CHARS} title={empty ? NOTHING_TO_ADD : undefined} onClick={add}>{busy && !fin.done ? (first ? "Sending…" : "Adding…") : sender}</button>}
         {!fin.done && !busy && !full && <button type="button" className="btn-ghost text-sm" onClick={() => setOpen(false)}>Close</button>}
       </div>
       <PausedSend sessionId={sessionId} press={`Add:${questionKey}`} label={first ? ANSWER_PRESS : "Add"} canSend={canSend} now={pausedNow} />
@@ -580,9 +590,10 @@ export function DisputeForm({ sessionId, kind, id, seenAt, disabledNote = "", li
       <CharacterCount value={reason} min={10} max={2000} required />
       <p className="note">You can dispute this once. Our team decides; a decision can only raise the pay, {limit}.</p>
       </>}
+      {/* (Owner, Nov 11, §380 D) Disabled until the reason meets its requirement (at least 10 characters, at most 2,000; the counter says so live). */}
       <button
         className="btn"
-        disabled={busy || !!disabledNote}
+        disabled={busy || !!disabledNote || reason.trim().length < 10 || reason.length > 2000}
         onClick={async (e) => {
           if (!checkFields(e.currentTarget.closest("details"))) return;
           setBusy(true);

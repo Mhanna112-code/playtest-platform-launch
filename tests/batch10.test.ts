@@ -159,7 +159,7 @@ describe("batch 10 item 2: a paused test hides what doesn't work, with a banner 
     expect(page).toContain("chat={!meOff ?");
     expect(src("app/app/chat/[id]/page.tsx")).toContain("closed={blocked || paused}");
     const actions = src("app/app/sessions/[id]/SessionActions.tsx");
-    expect(actions).toContain("{canSend && <button className={`btn ${unchanged ? \"!bg-white/10 !text-ink-400 !shadow-none\" : \"\"}`} disabled={busy || length > WRITTEN_MAX_CHARS || unchanged}"); // (batch 20 section 26)
+    expect(actions).toContain("{canSend && <button className={`btn ${unchanged ? \"!bg-white/10 !text-ink-400 !shadow-none\" : \"\"}`} disabled={busy || notReady || unchanged}"); // (batch 20 section 26; Owner, Nov 11, §380 D: disabled until the answers meet their requirements)
     expect(src("app/app/sessions/[id]/RecordingUpload.tsx")).toContain("{canSend && sendable && fresh.length > 0 && ("); // (batch 35 §136) only what isn't sent yet
     // Testers' dashboard rows keep the "Paused" tag.
     // (Owner, Nov 5, batch 35 §245) The title (at most 20 characters) whole and green (TestName).
