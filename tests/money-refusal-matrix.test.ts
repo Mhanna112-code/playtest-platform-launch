@@ -301,13 +301,13 @@ describe("§365 money refusals: Confirm with your bank", () => {
 });
 
 describe("§365 money refusals: Confirm all", () => {
-  it("nothing waiting; already confirmed in another tab", async () => {
+  it("nothing waiting; already confirmed (§380 B: the plain line, never \"in another tab\")", async () => {
     const w = await world();
     await refused(w, () => confirmAll(w.dev.cookie, { seenIds: [], seenTotalCents: 0 }), NOTHING_TO_CONFIRM);
     const p = await waitingCharge(w);
     const r = await confirmAll(w.dev.cookie, { seenIds: [p.id], seenTotalCents: 1000, tab: "B", confirmed: true });
     expect(r.status, JSON.stringify(r.body)).toBe(200);
-    await refused(w, () => confirmAll(w.dev.cookie, { seenIds: [p.id], seenTotalCents: 1000, tab: "A" }), /^You already confirmed this payment in another tab at \d{1,2}:\d{2} [AP]M\.$/);
+    await refused(w, () => confirmAll(w.dev.cookie, { seenIds: [p.id], seenTotalCents: 1000, tab: "A" }), NOTHING_TO_CONFIRM);
   });
 
   it("one already waiting for the bank", async () => {

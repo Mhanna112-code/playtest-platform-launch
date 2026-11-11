@@ -7,7 +7,7 @@ import { awayFromTest, dayIn, onTestLine, PAY_OWED_HREF } from "@/lib/rules"; //
 import { bankTopLead, confirmByText, pieceWords, type BankTopRow } from "@/lib/bankTop";
 import { HttpError } from "./http";
 import { lineLinks, linkPool } from "./lineLinks";
-import { payPressOf, seenOf } from "./live";
+import { seenOf } from "./live";
 import { notify, renderFor } from "./notify";
 import { ADD_CARD_FIRST, bankReturnUrl, checkUrlOf, fakeConfirm, fakeOn, forgetCard, getStripe, isMissing, stripeOn, type NeedsAction } from "./stripe";
 
@@ -455,23 +455,19 @@ export async function confirmStart(dev: { id: string }, paymentId: string, body:
   const p = await startable(dev.id, paymentId, typeof body.tab === "string" ? body.tab : "");
   // (Owner, Oct 29, batch 23 section 9) On the test page, the developer's stop-once check first, exactly like Pay on that piece: a stop, close or End early (batch 17 §12), a
   // dispute, the tester's Charge or Let it go, a Pay or Pay more in another tab, a call change... (Alerts apply) stops it once; the second press opens the bank's check.
-  // (Owner, Oct 29, batch 26 section 9) EXACTLY Pay's check on that piece: the same devGate call under the same test lock, the same press (payPressOf: a retried
-  // chargeback's row checks the piece of the payment the bank reversed), so whatever stops Pay on it stops Confirm, and the same Alerts types are ignored.
-  // Existing bank confirmations remain available during a suspension or test pause.
-  // Their original three-day deadline and the usual stop-once checks still apply.
+  // Existing bank confirmations remain available during a suspension or test pause; their original three-day deadline still applies.
   if (p.contractId && seenOf(body.seenAt)) {
     const c = await db.contract.findUnique({ where: { id: p.contractId }, include: { tester: true, test: { select: { title: true } } } });
     if (c) {
-      const { devGate } = await import("./tests");
-      const { paidSoFar } = await import("./payments");
-      const orig = p.kind === "chargeback" && p.repaysId && !p.submissionId && !p.callId ? await db.payment.findUnique({ where: { id: p.repaysId }, select: { submissionId: true, callId: true } }) : null;
-      const piece = { submissionId: p.submissionId ?? orig?.submissionId ?? null, callId: p.callId ?? orig?.callId ?? null };
-      await db.$transaction(async (tx) => {
-        await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${c.testId} FOR UPDATE`;
-        // (Owner, Nov 4, §171 item 7) The press-time gate stays as it was (`awayCharge`: §159's rules, not §171 A1/A2) while the owner decides the waiting-charge rules.
-        // (Owner, Nov 4, §193) Plus a charge about the same tester on another part (never the line of the charge this press confirms).
-        await devGate(tx, c.testId, body, { paidSoFarCents: await paidSoFar(c.id, tx), name: displayName(c.tester) }, [], undefined, { ...payPressOf(c.id, piece), awayCharge: true, skipTeamPause: true });
-      }).catch((e) => {
+      await (async () => {
+        // (Owner, Nov 11, §380 C; replaces §171 item 7 / §193 here) Confirm with your bank stops ONLY for a pause or its lift since the page loaded (their own hold
+        // or suspension, the team's lift; a new team pause still needs no retry: skipTeamPause). The forced dispute, team decision, tester's Charge and tester
+        // left stops (D05–D07) are Pay's and Pay more's only; no other change line stops it.
+        const m = await import("./stopMoment");
+        const loaded = m.loadedOf(body);
+        const pause = loaded ? await m.devPauseSince(c.testId, loaded, new Date(), true) : null;
+        m.pauseStopOnce([...(pause ? [pause] : []), ...(loaded ? await m.devLiftSince(c.testId, loaded) : [])], body);
+      })().catch((e) => {
         // (Owner, Nov 4, §177) Pressed away from the test's own page (the dashboard's "Your bank wants you to confirm"): each stop line names the test.
         if (e instanceof HttpError && e.code === "stop_once" && awayFromTest(body.page, c.testId) && Array.isArray(e.data?.changes)) e.data.changes = (e.data.changes as { text: string }[]).map((l) => ({ ...l, text: onTestLine(c.test.title, l.text) }));
         throw e;

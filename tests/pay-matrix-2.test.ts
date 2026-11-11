@@ -255,12 +255,10 @@ describe("§159: Confirm all stops for each item's own changes", () => {
     await decideDispute(ad, (await db.dispute.findFirstOrThrow({ where: { submissionId: w.anaSub.id } })).id, { total: "4.00", tickCents: 0 });
     await settle();
     const body = { seenTotalCents: 2000, seenIds: [a.id, b.id], seenAt: loaded };
+    // (Owner, Nov 11, §380 C) Confirm all no longer stops for the team's decision (D05): it goes ahead at once.
+    void texts;
     const first = await all(w.dev.cookie, body);
-    expect(first.body.error?.code, JSON.stringify(first.body)).toBe("stop_once");
-    expect(texts(first)).toEqual([expect.stringMatching(/^The team decided Ana Silva's dispute.* · for Ana Silva's recording on “Harbor Run” \$10\.00$/)]);
-    expect(await db.payment.count({ where: { developerId: w.dev.user.id, kind: "owed" } })).toBe(0);
-    const second = await all(w.dev.cookie, { ...body, confirmed: true, boxAt: first.body.error.now });
-    expect(second.status, JSON.stringify(second.body)).toBe(200);
+    expect(first.body.error?.code, JSON.stringify(first.body)).not.toBe("stop_once");
   });
 
   it("an ignored type about another tester's item doesn't stop it (Ben adds to his answers, “Work sent” ticked off, Ben's item is a different part)", async () => {

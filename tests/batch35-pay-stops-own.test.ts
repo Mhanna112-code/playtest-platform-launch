@@ -100,11 +100,9 @@ describe("batch 35 §155: Pay, Pay more and Confirm stop once for their own part
     const loaded = seen(); await settle();
     expect((await addTo(sessionId, tester.cookie, { text: "more", confirmed: true })).status).toBe(200);
     const start = async (body: Record<string, unknown>) => json(await confirmPOST(req("/api/payments/confirm", { cookie: dev.cookie, body: { paymentId: payment.id, start: true, ...body } })));
+    // (Owner, Nov 11, §380 C) Confirm with your bank stops only for a pause or its lift: an unseen addition no longer stops it.
     const first = await start({ seenAt: loaded });
-    expect(first.body.error?.code, JSON.stringify(first.body)).toBe("stop_once");
-    expect(texts(first)).toEqual([expect.stringMatching(/^Ana Silva added to their answer to “/)]);
-    const second = await start({ seenAt: loaded, confirmed: true, boxAt: first.body.error.now });
-    expect(second.status, JSON.stringify(second.body)).toBe(200);
+    expect(first.status, JSON.stringify(first.body)).toBe(200);
   });
 
   it("§79 kept for answering presses: Accept on a call request that just arrived goes through", async () => {

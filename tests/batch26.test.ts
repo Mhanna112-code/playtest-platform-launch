@@ -290,12 +290,9 @@ describe("batch 26 section 9: Confirm with your bank stops for exactly what Pay 
     } catch (e) {
       confirmErr = e as typeof confirmErr;
     }
-    expect(confirmErr.code).toBe("stop_once");
-    const lines = (x: { text: string }[]) => x.map((c) => c.text);
-    expect(lines(confirmErr.data!.changes)).toContain("Ben Okafor disputed what you paid for the written answers");
-    expect(lines(confirmErr.data!.changes).some((t) => t.startsWith("You paid Cam Lee $10.00"))).toBe(true);
-    // The code: one press description for Pay, Pay more and Confirm.
-    expect(src("lib/server/confirm.ts")).toContain("payPressOf(c.id, piece)");
+    // (Owner, Nov 11, §380 C) Confirm with your bank no longer runs Pay's gate: it stops only for a pause or its lift (not for a dispute or a Pay elsewhere).
+    expect(confirmErr.code).not.toBe("stop_once");
+    expect(src("lib/server/confirm.ts")).not.toContain("payPressOf(c.id, piece)");
     expect(src("lib/server/payments.ts")).toContain("const payPress = { ...payPressOf(c.id, piece.where), fromNeeds: body.from === \"needs\" };"); // (§362) plus Needs you's own stop
   });
 });

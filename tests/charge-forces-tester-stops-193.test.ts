@@ -231,22 +231,14 @@ describe("§193: an automatic call charge and the team's decision charge do the 
     for (const p of not) for (const line of charges) expect(alwaysStops(line, p), JSON.stringify([p, line.text])).toBe(false);
     // A paid line that isn't a charge (the call closed with nothing to pay, a Let it go) follows the ticks off its own part.
     expect(alwaysStops({ kind: "paid", text: "Ana Silva's call on Tue, Oct 27, 8:00 AM closed with nothing to pay", createdAt: at, contractId: "c-ana", piece: "k1" }, about[0])).toBe(false);
-    // Confirm with your bank on a waiting charge (`awayCharge`): her charge on another part forces; the line of the charge it confirms, or of a part Confirm all
-    // covers, doesn't; another tester's doesn't.
-    const away: Press = { acts: ["pay", "pay-more"], keys: ["call:k1"], stopCheck: "c-ana", awayCharge: true };
-    expect(alwaysStops(charges[0], away)).toBe(true);
-    expect(alwaysStops(charges[1], away)).toBe(false);
-    expect(alwaysStops(charges[0], { ...away, confirms: ["k1", "rec"] })).toBe(false);
-    expect(alwaysStops({ ...charges[0], contractId: "c-ben" }, away)).toBe(false);
-    // (Owner, Nov 5) A dispute by that tester forces it too (it followed the Disputes tick before); another tester's dispute doesn't.
+    // (Owner, Nov 11, §380 C) Confirm with your bank / Confirm all no longer run this gate (only a pause or its lift stops them): Pay keeps D05–D07 — her
+    // dispute, the team's decision and her leaving force Pay on her part; another tester's don't.
+    const pay: Press = { acts: ["pay", "pay-more"], keys: ["call:k1"], stopCheck: "c-ana" };
     const dispute = { kind: "dispute", text: "Ana Silva disputed the pay for her written answers", createdAt: at, contractId: "c-ana" };
-    expect(alwaysStops(dispute, away)).toBe(true);
-    expect(alwaysStops({ ...dispute, contractId: "c-ben" }, away)).toBe(false);
-    // (Owner, Nov 9, §340) That tester leaving no longer forces Confirm with your bank / Confirm all: it follows the "Testers leaving" tick. Pay still forces it.
+    expect(alwaysStops(dispute, pay)).toBe(true);
+    expect(alwaysStops({ ...dispute, contractId: "c-ben" }, pay)).toBe(false);
     const left = { kind: "left", text: "Ana Silva left the test", createdAt: at, contractId: "c-ana" };
-    expect(alwaysStops(left, away)).toBe(false);
-    expect(alwaysStops(left, { ...away, confirms: ["k1"] })).toBe(false);
-    expect(alwaysStops(left, { ...away, awayCharge: undefined })).toBe(true);
+    expect(alwaysStops(left, pay)).toBe(true);
   });
 });
 
@@ -269,10 +261,10 @@ describe("§193: Confirm with your bank on a charge made while away", () => {
     await logEvent(w.testId, "paid", "Ben Okafor charged $10.00 for his written answers", w.ben.sessionId, `part-${w.benSub.id}`);
     await anaCharges(w);
     const start = (extra: Record<string, unknown> = {}) => confirmPOST(req("/api/payments/confirm", { cookie: w.dev.cookie, headers: { "x-tab": TAB }, body: { paymentId: p.id, start: true, seenAt: loaded, ...extra } })).then(json) as Promise<Res>;
+    // (Owner, Nov 11, §380 C) Confirm with your bank no longer stops for her Charge (D06): it goes ahead at once.
+    void lines; void CHARGE;
     const first = await start();
-    expect(first.body.error?.code, JSON.stringify(first.body)).toBe("stop_once");
-    expect(lines(first)).toEqual([expect.objectContaining({ text: CHARGE, forced: true })]);
-    expect((await start({ confirmed: true, boxAt: first.body.error!.now })).status).toBe(200);
+    expect(first.body.error?.code, JSON.stringify(first.body)).not.toBe("stop_once");
   });
 });
 

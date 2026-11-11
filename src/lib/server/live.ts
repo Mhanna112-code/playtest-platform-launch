@@ -50,16 +50,7 @@ export type Press = {
    * listed whatever the Alerts ticks; lines about other testers keep following them.
    */
   wholeTester?: boolean;
-  /**
-   * (Owner, Nov 4, §171 item 7) "Confirm with your bank" on a charge made while away, and Confirm all's items: their press-time gate keeps §159's always-stop rules
-   * (not §171 A1/A2) while the owner decides the waiting-charge rules. Their open windows still get A3 and B4. Forced: the team's decision about that tester,
-   * their dispute and their other charges; (Owner, Nov 9, §340) that tester leaving follows the "Testers leaving" Alerts tick.
-   */
-  awayCharge?: boolean;
-  /** An existing individual bank confirmation needs no retry for a new team pause. */
-  skipTeamPause?: boolean;
-  /** (Owner, Nov 4, §193) With `awayCharge`: the parts (submission or call ids) this press confirms. Confirm all: every covered part; a charge line on one never forces. */
-  confirms?: readonly string[];
+  // (Owner, Nov 11, §380 C) No `awayCharge` / `confirms` / `skipTeamPause` any more: Confirm with your bank and Confirm all stop only for a pause or its lift.
   /**
    * (Owner, Nov 9, §362) Pay / Pay more pressed in the NEEDS YOU panel (the page sends `from: "needs"`): work the tester sent, updated or added on the part it pays
    * stops it once whatever the "Work sent" tick, marked forced. Only ever adds that one stop (never widens anything else); the Testers list's Pay more, Confirm
@@ -288,7 +279,7 @@ export { PAY_ACTS, alwaysStops, isTeamDecision, pressContracts } from "@/lib/pre
  * measured length became final. These follow Call changes alerts.
  */
 async function payCallLines(since: Date, press: Press | undefined, tx: Tx | typeof db): Promise<TestEventLike[]> {
-  const id = payContractOf(press) && !press!.awayCharge ? press!.keys.find((k) => k.startsWith("call:"))?.slice(5) : undefined;
+  const id = payContractOf(press) ? press!.keys.find((k) => k.startsWith("call:"))?.slice(5) : undefined;
   if (!id) return [];
   const call = await tx.call.findUnique({ where: { id }, include: { contract: { include: { tester: true } } } });
   if (!call) return [];

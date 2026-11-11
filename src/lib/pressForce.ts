@@ -16,11 +16,6 @@ export const isTeamDecision = (c: { kind: string; text: string }) => c.kind === 
 export const pressContracts = (press?: Press) => (press ? [...(press.stopCheck ? [press.stopCheck] : []), ...press.keys.filter((k) => k.startsWith("c:")).map((k) => k.slice(2))] : []);
 /** A payment press (Pay, Pay more, Confirm with your bank: `payPressOf`): its tester's contract, else null. */
 export const payContractOf = (press?: Press) => (press?.stopCheck && press.acts.some((x) => (PAY_ACTS as readonly string[]).includes(x)) ? press.stopCheck : null);
-/** (§171 A1) The line is about the very part a payment press pays ("sub:<id>" / "call:<id>" among its keys). */
-const onPart = (c: TestEventLike, press?: Press) => {
-  const id = c.piece ?? (c.kind === "sent" ? c.item : undefined);
-  return !!id && !!press && (press.keys.includes(`sub:${id}`) || press.keys.includes(`call:${id}`));
-};
 
 /** Forced checks for departures, disputes, team decisions and tester charges.
  * Ordinary same-part work and payments follow Alerts, except (§362) work on the part a Needs you Pay / Pay more pays (`fromNeeds`).
@@ -28,16 +23,7 @@ const onPart = (c: TestEventLike, press?: Press) => {
 /** (§362) Work sent, updated or added (the "sent" line; "sentpaid" at the cap) on a part this payment press pays. */
 const sentOnPart = (c: TestEventLike, press?: Press) => (c.kind === "sent" || c.kind === "sentpaid") && !!c.item && !!press && (press.keys.includes(`sub:${c.item}`) || press.keys.includes(`call:${c.item}`));
 export function alwaysStops(c: TestEventLike & { contractId?: string | null }, press?: Press) {
-  if (press?.awayCharge) {
-    // (§171 item 7) As before §171: the team's decision about that tester. (Owner, Nov 9, §340) That tester leaving no longer forces it: it follows the
-    // developer's "Testers leaving" Alerts tick, as any other leave does.
-    const pc = payContractOf(press);
-    // (Owner, Nov 4, §193) And a charge about that same tester, except a charge on a part this press itself confirms (`confirms`: the waiting charge's own line,
-    // which the box already shows as its row; Confirm all: every part it covers): stopping for it could only show the press what it is paying.
-    const ownCharge = !!c.piece && (onPart(c, press) || !!press.confirms?.includes(c.piece));
-    // (Owner, Nov 5) A dispute by that tester forces it too, like the team's decision and a charge (it followed the Disputes tick before).
-    return !!pc && ((c.kind === "dispute" || isTeamDecision(c) || (!!c.charge && !ownCharge)) && c.contractId === pc);
-  }
+  // (Owner, Nov 11, §380 C) Confirm with your bank and Confirm all no longer run this gate (they stop only for a pause or its lift): their `awayCharge` rules are gone.
   // (Owner, Nov 4, §193) A charge about the tester (their Charge on any part, an automatic call charge, the team's dispute-decision charge) stops every press about
   // that tester once, exactly like a dispute (§171 A2). Presses about the whole test and about other testers follow the Payments tick.
   if ((c.kind === "dispute" || isTeamDecision(c) || !!c.charge) && !!c.contractId && pressContracts(press).includes(c.contractId)) return true;

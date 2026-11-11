@@ -122,10 +122,9 @@ describe("§159 rule 1: the team's decision — same tester always stops, anothe
     setStripeForTests(null);
     await settle();
     const loaded = await decidedAfterLoad(w);
+    // (Owner, Nov 11, §380 C) Confirm with your bank no longer stops for the team's decision (D05): it goes ahead at once.
     const first = await confirmStart(w.dev.cookie, anaWait.id, { seenAt: loaded });
-    expect(first.body.error?.code, JSON.stringify(first.body)).toBe("stop_once");
-    expect(texts(first)).toEqual([expect.stringMatching(/^The team decided Ana Silva's dispute/)]);
-    expect((await confirmStart(w.dev.cookie, anaWait.id, { seenAt: loaded, confirmed: true, boxAt: first.body.error.now })).status).toBe(200);
+    expect(first.status, JSON.stringify(first.body)).toBe(200);
     const ben = await confirmStart(w.dev.cookie, benWait.id, { seenAt: loaded });
     expect(ben.status, JSON.stringify(ben.body)).toBe(200);
   });

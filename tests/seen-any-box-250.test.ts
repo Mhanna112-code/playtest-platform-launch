@@ -207,16 +207,11 @@ describe("§250 the dashboard: Confirm's box is seen by Confirm all and by Confi
     await settle();
     const confirm = (extra: Record<string, unknown> = {}) => confirmPOST(req("/api/payments/confirm", { cookie: w.dev.cookie, headers: { "x-tab": TAB }, body: { paymentId: w.items[0].id, start: true, seenAt: loaded, page: "/app", ...extra } })).then(json) as Promise<Res>;
     const all = (extra: Record<string, unknown> = {}) => allPOST(req("/api/payments/confirm-all", { cookie: w.dev.cookie, headers: { "x-tab": TAB }, body: { seenTotalCents: 1000, seenIds: w.items.map((p) => p.id), seenAt: loaded, ...extra } })).then(json) as Promise<Res>;
+    // (Owner, Nov 11, §380 C) Confirm with your bank and Confirm all no longer stop for the team's decision (D05): neither stops at all.
+    void sids;
     const first = await confirm();
-    expect(first.body.error?.code, JSON.stringify(first.body)).toBe("stop_once");
-    expect(first.body.error?.changes).toEqual([expect.objectContaining({ text: expect.stringMatching(/^On “Harbor Run”: the team decided Ana Silva's dispute/), forced: true, sid: expect.any(String) })]);
-    // Before §250 Confirm all stopped again for the same decision.
-    expect((await all()).body.error?.code).toBe("stop_once");
-    // With the dashboard's list: neither stops again (the forced line counts as seen once a box LISTED it).
-    const a = await all({ shownIds: sids(first) });
-    expect(a.body.error?.code, JSON.stringify(a.body)).not.toBe("stop_once");
-    const again = await confirm({ shownIds: sids(first) });
-    expect(again.body.error?.code, JSON.stringify(again.body)).not.toBe("stop_once");
+    expect(first.body.error?.code, JSON.stringify(first.body)).not.toBe("stop_once");
+    expect((await all()).body.error?.code).not.toBe("stop_once");
   });
 });
 

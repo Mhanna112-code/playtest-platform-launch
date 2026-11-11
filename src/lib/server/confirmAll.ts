@@ -1,6 +1,7 @@
 import type { Payment } from "@prisma/client";
 import { db } from "@/lib/db";
-import { fmtTimeIn, money } from "@/lib/format";
+import { money } from "@/lib/format";
+import { notListed } from "./shownLines";
 import { NO_CHECK_WAITING, OVER_PAY_TICK_LINE, PAY_TICK_CENTS } from "@/lib/rules";
 import * as T from "@/lib/confirmAllText";
 import { HttpError } from "./http";
@@ -78,40 +79,31 @@ const ROLLBACK = new Error("confirm all changed");
 class ItemStops extends Error { constructor(public changes: { text: string; at: Date | string }[]) { super("confirm all item stops"); } }
 
 /**
- * (Owner, Nov 3, §159) Confirm all stops for exactly what each item's own Confirm with your bank stops for: each covered item's pay-press gate (its contract and part:
- * payPressOf, the same Alerts filter and the always-stop rules: the team's decision about that tester, their work on that part, that tester leaving), run in the claim's
- * locked step. Every change is listed once, naming the items it is about ("… · for Ana Silva's recording on “Harbor Run” $10.00"); the second press (its box's time)
- * goes ahead. A page without a seen time (an old one) skips it, as the single Confirm does.
+ * (Owner, Nov 11, §380 C; replaces §159 / §171 item 7 / §193 here) Confirm all stops, per item, ONLY for a pause or its lift on that item's test since the page
+ * loaded (and, separately, for the list or total changing: D13). The forced dispute, team decision, tester's Charge and tester left stops (D05–D07) are Pay's and
+ * Pay more's only. Every line is listed once, naming the items it is about ("… · for Ana Silva's recording on “Harbor Run” $10.00"); the second press (its box's
+ * time) goes ahead. A page without a seen time (an old one) skips it.
  */
 async function itemStops(tx: Parameters<Parameters<typeof db.$transaction>[0]>[0], rows: Payment[], body: Record<string, unknown>) {
-  const { seenOf, payPressOf } = await import("./live");
+  const { seenOf } = await import("./live");
   if (!seenOf(body.seenAt) || (body.confirmed === true && !seenOf(body.boxAt))) return;
-  const { devGate } = await import("./tests");
+  const m = await import("./stopMoment");
+  const loaded = m.loadedOf(body);
+  if (!loaded) return;
   const found = new Map<string, { text: string; at: Date | string; items: string[] }>();
-  // (Owner, Nov 4, §193) The parts Confirm all pays: a charge line on one of them is one of its own rows, never a forced stop for another item of the same tester.
-  const confirms: string[] = [];
-  for (const p of rows) {
-    const orig = p.kind === "chargeback" && p.repaysId && !p.submissionId && !p.callId ? await tx.payment.findUnique({ where: { id: p.repaysId }, select: { submissionId: true, callId: true } }) : null;
-    const id = p.submissionId ?? p.callId ?? orig?.submissionId ?? orig?.callId;
-    if (id) confirms.push(id);
-  }
+  const moments = new Map<string, Awaited<ReturnType<typeof m.devPauseMoments>>>();
   for (const p of rows) {
     const c = p.contractId ? await tx.contract.findUnique({ where: { id: p.contractId }, select: { id: true, testId: true } }) : null;
     if (!c) continue;
-    const orig = p.kind === "chargeback" && p.repaysId && !p.submissionId && !p.callId ? await tx.payment.findUnique({ where: { id: p.repaysId }, select: { submissionId: true, callId: true } }) : null;
-    try {
-      // (Owner, Nov 4, §171 item 7) Its press-time gate stays as it was (`awayCharge`: §159's rules) while the owner decides the waiting-charge rules.
-      // (Owner, Nov 4, §193) Plus a charge about the same tester on a part Confirm all doesn't cover.
-      await devGate(tx, c.testId, body, {}, [], undefined, { ...payPressOf(c.id, { submissionId: p.submissionId ?? orig?.submissionId ?? null, callId: p.callId ?? orig?.callId ?? null }), awayCharge: true, confirms });
-    } catch (e) {
-      if (!(e instanceof HttpError && e.code === "stop_once")) throw e;
-      const name = await nameOf(p);
-      for (const l of ((e.data?.changes ?? []) as { text: string; at: Date | string }[])) {
-        const k = `${l.text}|${new Date(l.at).getTime()}`;
-        const had = found.get(k);
-        if (had) had.items.push(name);
-        else found.set(k, { ...l, items: [name] });
-      }
+    if (!moments.has(c.testId)) moments.set(c.testId, notListed(await m.devPauseMoments(c.testId, loaded), body));
+    const lines = moments.get(c.testId)!;
+    if (!lines.length) continue;
+    const name = await nameOf(p);
+    for (const l of lines) {
+      const k = `${l.text}|${l.createdAt.getTime()}`;
+      const had = found.get(k);
+      if (had) had.items.push(name);
+      else found.set(k, { text: l.text, at: l.createdAt, items: [name] });
     }
   }
   if (!found.size) return;
@@ -223,19 +215,13 @@ export async function confirmAllPress(dev: { id: string }, body: Seen & Record<s
 
 /** (Stop once) The page showed other payments, or another total: each change named, oldest first; the next press goes ahead on what's waiting now. */
 /**
- * (Owner, Nov 4, batch 35 §163) Nothing the page showed waits any more: ONE refusal. Every one confirmed by this developer in another tab: "You already confirmed
- * these payments in another tab at 3:20 PM." ("this payment" for one); otherwise "There's nothing waiting for your bank to confirm."
+ * (Owner, Nov 4, batch 35 §163) Nothing the page showed waits any more: ONE refusal, "There's nothing waiting for your bank to confirm." (Owner, Nov 11, §380 B)
+ * Its "You already confirmed these payments in another tab at 3:20 PM." variant is gone: Confirm all exists only on the dashboard.
  */
 async function nothingLeftLine(devId: string, body: Seen & Record<string, unknown>) {
-  const seenIds = Array.isArray(body.seenIds) ? (body.seenIds as unknown[]).map(String) : [];
-  const tab = typeof body.tab === "string" ? body.tab : "";
-  if (!seenIds.length || !tab) return T.NOTHING_TO_CONFIRM;
-  const { ownOtherTabAction } = await import("./live");
-  const mine = await Promise.all(seenIds.map((id) => ownOtherTabAction(devId, `pay:${id}`, tab, ["pay", "pay-more"])));
-  if (mine.some((m) => !m)) return T.NOTHING_TO_CONFIRM;
-  const last = new Date(Math.max(...mine.map((m) => m!.at.getTime())));
-  const tz = (await db.user.findUnique({ where: { id: devId }, select: { timeZone: true } }))?.timeZone ?? null;
-  return `You already confirmed ${seenIds.length === 1 ? "this payment" : "these payments"} in another tab at ${fmtTimeIn(last, tz)}.`;
+  void devId;
+  void body;
+  return T.NOTHING_TO_CONFIRM;
 }
 
 async function stopIfChanged(now: Payment[], body: Seen & { tab?: unknown }, at: Date, devId = "") {

@@ -162,6 +162,8 @@ for (const off of [true, false]) {
           const loaded = seen(); await settle();
           await anaDisputes(w);
           await settle();
+          // (Owner, Nov 11, §380 C) Confirm with your bank no longer stops for a dispute (D05): only Pay, Pay more and the rest keep it.
+          if (k === "confirm") return goesAhead(w, loaded, devPress.confirm(w));
           await stopsOnce(w, off, loaded, devPress[k](w), ["Ana Silva disputed the pay for her written answers"], DEV_TAILS[k]);
         });
         it(`the team's decision on Ana's dispute stops the developer's ${k} about her`, async () => {
@@ -170,6 +172,7 @@ for (const off of [true, false]) {
           const loaded = seen(); await settle();
           await decideDispute(w.admin, row.id, { total: "10.00", tickCents: 600 });
           await settle();
+          if (k === "confirm") return goesAhead(w, loaded, devPress.confirm(w)); // (Owner, Nov 11, §380 C) no D05 for Confirm
           await stopsOnce(w, off, loaded, devPress[k](w), [DECIDED_DEV], DEV_TAILS[k]);
         });
       }
@@ -205,6 +208,7 @@ for (const off of [true, false]) {
           await db.call.update({ where: { id: w.call.id }, data: { payBy: new Date(Date.now() - 60_000) } });
           expect(await autoChargeCalls(new Date())).toBeGreaterThanOrEqual(1);
           await settle();
+          if (k === "confirm") return goesAhead(w, loaded, devPress.confirm(w)); // (Owner, Nov 11, §380 C) no D06 for Confirm
           await stopsOnce(w, off, loaded, devPress[k](w), [/^Ana Silva's call on .+ was charged automatically: \$15\.00$/], DEV_TAILS[k]);
         });
       }
@@ -217,9 +221,9 @@ for (const off of [true, false]) {
           const loaded = seen(); await settle();
           expect((await testerPress.leave(w).go({ seenAt: seen(), confirmed: true })).status).toBe(200);
           await settle();
-          // (§340) Confirm with your bank follows the "Testers leaving" tick: through with Alerts Off, stopped (not forced) with it on.
-          if (k === "confirm" && off) return goesAhead(w, loaded, devPress.confirm(w));
-          await stopsOnce(w, off, loaded, devPress[k](w), ["Ana Silva left the test"], DEV_TAILS[k], k !== "confirm");
+          // (Owner, Nov 11, §380 C; replaces §340 here) Confirm with your bank never stops for a tester leaving (D07) any more, ticks on or off.
+          if (k === "confirm") return goesAhead(w, loaded, devPress.confirm(w));
+          await stopsOnce(w, off, loaded, devPress[k](w), ["Ana Silva left the test"], DEV_TAILS[k], true);
         });
       }
     });
@@ -304,7 +308,7 @@ for (const off of [true, false]) {
           const loaded = seen(); await settle();
           expect((await addTo(w.ben.sessionId, w.ben.tester.cookie, { text: "Something more to say here.", seenAt: seen(), confirmed: true })).status).toBe(200);
           await settle();
-          if (off) return goesAhead(w, loaded, devPress[k](w));
+          if (off || k === "confirm") return goesAhead(w, loaded, devPress[k](w)); // (Owner, Nov 11, §380 C) Confirm stops only for a pause or its lift
           await stopsOnce(w, off, loaded, devPress[k](w), ["Ben Okafor added to his answer to “What did you like?”"], DEV_TAILS[k], false);
         });
       }

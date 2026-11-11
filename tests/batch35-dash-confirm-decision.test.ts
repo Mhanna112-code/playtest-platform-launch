@@ -88,7 +88,7 @@ const confirmStart = (cookie: string, paymentId: string, seenAt: string, extra: 
   confirmPOST(req("/api/payments/confirm", { cookie, headers: { "x-tab": TAB }, body: { paymentId, start: true, seenAt, ...extra } })).then(json) as Promise<Res>;
 
 describe("§176 the dashboard's Confirm with your bank stops once for the team's decision about that tester after a redraw", () => {
-  it("loaded, the team decides her dispute, the box redraws on its own, then Confirm: stops once naming the decision (forced); the second press goes ahead", async () => {
+  it("loaded, the team decides her dispute, the box redraws on its own, then Confirm: (§380 C) it opens the check at once (a decision no longer stops it)", async () => {
     const w = await world();
     const loaded = seen(); // the dashboard's first load
     await settle();
@@ -103,19 +103,14 @@ describe("§176 the dashboard's Confirm with your bank stops once for the team's
     // Now: the box keeps its first load's time across redraws.
     const sent = keptSeenAt(redraw, loaded);
     expect(sent).toBe(loaded);
+    // (Owner, Nov 11, §380 C) Confirm with your bank no longer stops for the team's decision (D05): it opens the check at once.
     const first = await confirmStart(w.dev.cookie, w.items[0].id, sent);
-    expect(first.body.error?.code, JSON.stringify(first.body)).toBe("stop_once");
-    expect(first.body.error?.changes).toEqual([expect.objectContaining({ text: expect.stringMatching(/^The team decided Ana Silva's dispute on her written answers: raised the pay to \$9\.00/), forced: true })]);
-    // (Owner, Nov 4, §177) Pressed on the dashboard (the page it was on is sent): the line names the test.
-    const away = await confirmStart(w.dev.cookie, w.items[0].id, sent, { page: "/app" });
-    expect(away.body.error?.changes).toEqual([expect.objectContaining({ text: expect.stringMatching(/^On “Harbor Run”: the team decided Ana Silva's dispute on her written answers: raised the pay to \$9\.00/), forced: true })]);
-    const second = await confirmStart(w.dev.cookie, w.items[0].id, sent, { confirmed: true, boxAt: first.body.error!.now });
-    expect(second.status, JSON.stringify(second.body)).toBe(200);
+    expect(first.status, JSON.stringify(first.body)).toBe(200);
     // Another tester's waiting charge: the decision about Ana follows the Decisions tick (off), so it goes ahead.
     expect((await confirmStart(w.dev.cookie, w.items[1].id, sent)).status).toBe(200);
   });
 
-  it("Confirm all on the dashboard counts from the same first load: stops once for the decision about Ana", async () => {
+  it("Confirm all on the dashboard: (§380 C) the decision about Ana no longer stops it", async () => {
     const w = await world();
     const loaded = seen();
     await settle();
@@ -124,8 +119,9 @@ describe("§176 the dashboard's Confirm with your bank stops once for the team's
     await settle();
     const redraw = seen();
     const r = (await allPOST(req("/api/payments/confirm-all", { cookie: w.dev.cookie, headers: { "x-tab": TAB }, body: { seenTotalCents: 1000, seenIds: w.items.map((p) => p.id), seenAt: keptSeenAt(redraw, loaded) } })).then(json)) as Res;
-    expect(r.body.error?.code, JSON.stringify(r.body)).toBe("stop_once");
-    expect(texts(r).some((t) => t.startsWith("The team decided Ana Silva's dispute"))).toBe(true);
+    // (Owner, Nov 11, §380 C) Confirm all no longer stops for the team's decision (D05).
+    void texts;
+    expect(r.body.error?.code, JSON.stringify(r.body)).not.toBe("stop_once");
   });
 
   it("the box keeps the first load: KeepLoadTime gives its presses the earlier time; outside it (test page, Payments) the render time is unchanged", () => {

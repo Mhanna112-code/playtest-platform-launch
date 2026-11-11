@@ -303,27 +303,22 @@ describe("§171 item 7: Confirm with your bank on a charge made while away keeps
     await logEvent(w.testId, "dispute", "Ana Silva disputed the pay for her written answers", w.ana.sessionId);
     const start = (extra: Record<string, unknown> = {}) => confirmPOST(req("/api/payments/confirm", { cookie: w.dev.cookie, headers: { "x-tab": TAB }, body: { paymentId: w.items[0].id, start: true, seenAt: loaded, ...extra } })).then(json) as Promise<Res>;
     // (Owner, Nov 5, §205) A dispute by that tester now forces the stop (it followed the Disputes tick before); the payment line on its part still doesn't.
+    // (Owner, Nov 11, §380 C) Confirm with your bank no longer stops for her dispute (D05): it goes ahead at once; the window's notice still lists both.
     const first = await start();
-    expect(first.body.error?.code, JSON.stringify(first.body)).toBe("stop_once");
-    expect(lines(first).map((c) => [c.text, !!c.forced])).toEqual([["Ana Silva disputed the pay for her written answers", true]]);
-    const r = await start({ confirmed: true, boxAt: first.body.error!.now });
-    expect(r.status, JSON.stringify(r.body)).toBe(200);
+    expect(first.body.error?.code, JSON.stringify(first.body)).not.toBe("stop_once");
     const p = await peek(w.dev.cookie, { paymentId: w.items[0].id, pi: w.items[0].actionPi, since: loaded });
     expect(p.body.changes).toEqual(["Ana Silva charged $10.00 for her recording", "Ana Silva disputed the pay for her written answers"]);
   });
 
-  it("(Owner, Nov 9, §340) that tester leaving follows the Testers leaving tick: off, it goes straight through; on, it stops once (not forced)", async () => {
+  it("(§380 C) that tester leaving never stops it, ticks on or off", async () => {
     for (const ignored of [["leaving"], []]) {
       const w = await waitingWorld(ignored);
       const loaded = seen();
       await settle();
       await logEvent(w.testId, "left", "Ana Silva left the test", w.ana.sessionId);
       const r = await confirmPOST(req("/api/payments/confirm", { cookie: w.dev.cookie, headers: { "x-tab": TAB }, body: { paymentId: w.items[0].id, start: true, seenAt: loaded } })).then(json) as Res;
-      if (ignored.length) expect(r.status, JSON.stringify(r.body)).toBe(200);
-      else {
-        expect(r.body.error?.code, JSON.stringify(r.body)).toBe("stop_once");
-        expect(lines(r).map((c) => [c.text, !!c.forced])).toEqual([["Ana Silva left the test", false]]);
-      }
+      // (Owner, Nov 11, §380 C) Confirm with your bank never stops for a tester leaving (D07), ticks on or off.
+      expect(r.status, JSON.stringify(r.body)).toBe(200);
     }
   });
 });

@@ -460,7 +460,8 @@ describe("§163 6: own other-tab presses on the same thing are refused at once",
     for (const id of [v.anaWork.id, v.anaCall.id]) expect((await confirmIn(v.dev.cookie, "tab-B", { paymentId: id, simulate: "succeeded" })).status).toBe(200);
     const r = await all(v.dev.cookie, { seenTotalCents: 4000, seenIds: [v.anaWork.id, v.anaCall.id] });
     expect([r.status, r.body.error?.code]).toEqual([409, "nothing"]);
-    expect(r.body.error.message).toMatch(line("You already confirmed these payments in another tab at <at>."));
+    // (Owner, Nov 11, §380 B) Confirm all lives only on the dashboard: its "in another tab" variant (B05) is gone, the one plain line stays (D14).
+    expect(r.body.error.message).toBe("There's nothing waiting for your bank to confirm.");
   });
 
   it("the call room holds the page's ICE servers in a ref: a redraw of the page never hangs up the call", () => {

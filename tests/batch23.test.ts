@@ -361,29 +361,23 @@ async function awayCharge() {
 }
 
 describe("batch 23 section 9: Confirm with your bank runs the stop-once check first", () => {
-  it("a tester joining since the page loaded stops it once; the second press opens the bank's check", async () => {
+  // (Owner, Nov 11, §380 C) Confirm with your bank stops only for a pause or its lift: a tester joining or the test stopping since the page loaded opens the check at once.
+  it("a tester joining since the page loaded: the first press opens the bank's check", async () => {
     const x = await awayCharge();
     const pageLoaded = seen();
     await settle();
     await joined(x.testId, "Ben Okafor", "he");
     const r = await x.start({ seenAt: pageLoaded });
-    expect(r.status).toBe(409);
-    expect(r.body.error.code).toBe("stop_once");
-    expect(r.body.error.changes.map((c: { text: string }) => c.text)).toContain("Ben Okafor joined");
-    const again = await x.start({ seenAt: pageLoaded, confirmed: true, boxAt: new Date().toISOString() });
-    expect(again.status).toBe(200);
-    expect(again.body).toMatchObject({ paymentId: x.p.id, simulated: true });
+    expect(r.status).toBe(200);
+    expect(r.body).toMatchObject({ paymentId: x.p.id, simulated: true });
   });
 
-  it("the test stopped since the page loaded: stopped once, then the check opens", async () => {
+  it("the test stopped since the page loaded: the check opens at once", async () => {
     const x = await awayCharge();
     const pageLoaded = seen();
     await settle();
     expect((await act(x.testId, "stop", x.dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true, tab: "tab-B" })).status).toBe(200);
-    const r = await x.start({ seenAt: pageLoaded });
-    expect(r.body.error?.code).toBe("stop_once");
-    await settle();
-    expect((await x.start({ seenAt: pageLoaded, confirmed: true, boxAt: new Date().toISOString() })).status).toBe(200);
+    expect((await x.start({ seenAt: pageLoaded })).status).toBe(200);
   });
 
   it("nothing new: the first press opens the check; already confirmed in another tab or expired: plain refusals", async () => {
