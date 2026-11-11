@@ -129,10 +129,10 @@ describe("§365 refusal matrix: every cause × every button that reaches it", ()
     const dev = (action: string, body: Record<string, unknown>, button: string): Press => ({ side: "developer", button, go: () => act(w.testId, action, w.dev.cookie, { seenAt: seen(), confirmed: true, ...body }) });
     expect(await matrix(w.testId, (p) => (p.side === "tester" ? "Your part in this test has ended" : "Ana Silva's session has ended"), [
       ...testerPresses(w).filter((p) => !["Accept", "Decline"].includes(p.button)),
-      // (Owner, Nov 11, §380) Leave when her part already ended: silent, never refused.
-      dev("end-early", { contractIds: [w.ana.sessionId], reason: "We have enough feedback." }, "End early"),
+      // (Owner, Nov 11, §380) Leave when her part already ended: silent, never refused. (§380 I) End early on her: silent too (below).
       dev("request-time", { minutes: "30", contractIds: [w.ana.sessionId], rows: [{ startsAt: atHours(80), repeat: "once", count: 1 }] }, "Request a time"),
     ])).toEqual([]);
+    expect((await act(w.testId, "end-early", w.dev.cookie, { seenAt: seen(), confirmed: true, contractIds: [w.ana.sessionId], reason: "We have enough feedback." })).body.already).toBe(true);
   });
 
   it("paused (the developer's hold): the tester's presses; own hold: the developer's presses", async () => {
