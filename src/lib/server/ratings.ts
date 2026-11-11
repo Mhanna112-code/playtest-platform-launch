@@ -1,5 +1,4 @@
 import type { Prisma } from "@prisma/client";
-import { workEndOf } from "@/lib/pause";
 import * as RF from "@/lib/refusal";
 import { db } from "@/lib/db";
 import { notListed } from "./shownLines";
@@ -13,7 +12,8 @@ import { cancelCallsAhead, lockTest, ownContract, ownTest, recordEvent, spotOpen
 import { seenOf, unanswered, tabOf, testerPaymentChanges } from "./live";
 import { FINISHED_PART_REASON, payMoreLine, TESTER_CALL_KINDS, testerChanges, testerGate } from "./testerGate";
 import { devPauseMoments, devStopSince, loadedOf, stopBox } from "./stopMoment";
-import { closeOutOf, testerRatingClosesAt, closedOut, devPauseSpans, mergeSpans, teamPauseSpans, windowEnd, type Span } from "./closeOut";
+import { CONTRACTS, closeOutOf, testSpans, testerRatingClosesAt, closedOut, devPauseSpans, mergeSpans, teamPauseSpans, windowEnd, type Span } from "./closeOut";
+import { CLOSE_OUT_DAYS, closeOutBase } from "@/lib/rules";
 import { closeOffersOfEnded } from "./offerClose";
 import { RATE_TEAM_PAUSED, teamPausedNow } from "@/lib/restricted";
 import { testerRow } from "@/lib/lineAnchors";
@@ -95,14 +95,22 @@ export async function devRateStates(contractIds: string[], now = new Date()) {
   const spans = new Map<string, Span[]>();
   const closeOuts = new Map<string, Date | null>();
   for (const id of new Set(cs.map((c) => c.testId))) closeOuts.set(id, await closeOutOf(id, now));
-  // (Owner, Nov 12, §382 b) Outages move the developer's window whichever way it opens.
+  // (Owner, Nov 12, §382 b and c) Outages move the developer's window whichever way it opens; the tester's disputes on the part (open: up to now) pause it; the test
+  // close each test's close-out counts from, and that close-out's own pauses (team, the developer's holds and suspensions before the work ended, outages).
   const outages = (await db.outage.findMany({ where: { OR: [{ needsApproval: false }, { approvedAt: { not: null } }] }, select: { startAt: true, endAt: true } })).map((o): Span => ({ start: o.startAt.getTime(), end: o.endAt.getTime(), open: false }));
+  const disputeRows = await db.dispute.findMany({ where: { contractId: { in: contractIds }, status: { not: "withdrawn" }, createdAt: { lte: now } }, select: { contractId: true, createdAt: true, decidedAt: true, status: true } });
+  const testClose = new Map<string, { base: Date; spans: Span[] } | null>();
+  for (const id of new Set(cs.map((c) => c.testId))) {
+    const t = await db.test.findUnique({ where: { id }, include: { developer: true, contracts: CONTRACTS } });
+    const base = t ? closeOutBase(t, t.contracts, now) : null;
+    testClose.set(id, t && base ? { base, spans: await testSpans(t, base, now) } : null);
+  }
   for (const c of cs) {
     const dev = c.test.developer;
     const name = displayName(c.tester);
     // (Owner, Nov 4, §172) The window also pauses while the team paused this test (as under a developer suspension), for this test only.
-    // (Owner, Nov 9, §358) Not a hold or suspension that began after the test's work ended.
-    if (!spans.has(c.testId)) spans.set(c.testId, mergeSpans([...devPauseSpans(events.filter((e) => e.userId === dev.id), dev, now).filter((s) => s.start < (workEndOf(c.test)?.getTime() ?? Infinity)), ...(await teamPauseSpans(c.testId, c.test.adminPausedAt, now, c.test.status === "stopped" ? c.test.stoppedAt ?? now : null))]));
+    // (Owner, Nov 12, §382 c; replaces §358 here, for the Rate window only) The developer's OWN hold or suspension pauses it whenever it began, after the work ended too.
+    if (!spans.has(c.testId)) spans.set(c.testId, mergeSpans([...devPauseSpans(events.filter((e) => e.userId === dev.id), dev, now), ...(await teamPauseSpans(c.testId, c.test.adminPausedAt, now, c.test.status === "stopped" ? c.test.stoppedAt ?? now : null))]));
     const mine = ratings.find((r) => r.contractId === c.id && r.side === "developer");
     const theirs = ratings.find((r) => r.contractId === c.id && r.side === "tester");
     // Everything they sent is settled: every part and every call that took place has its Pay, Charge or Let it go.
@@ -113,11 +121,17 @@ export async function devRateStates(contractIds: string[], now = new Date()) {
     const closeOut = closeOuts.get(c.testId) ?? null;
     const lastSettled = Math.max(0, ...pieces.map((x) => x.review?.createdAt.getTime() ?? 0));
     const opensAt = !settled ? null : theirs ? new Date(Math.max(theirs.createdAt.getTime(), lastSettled)) : closedOut(closeOut, now) && pieces.length > 0 ? new Date(Math.max(closeOut!.getTime(), lastSettled)) : null; // (DEFAULT) only a tester who sent something or had a call
-    // (Owner, Nov 12, §382 b) Outages move it however it opens. No outage counted twice: one that already moved the tester's rating (applyOutage moves a rating while its first 14 days run) isn't added again
+    // (Owner, Nov 12, §382 c) The window closes at the LATER of the test's close-out and 14 days after it opened. Both move, exactly, by the developer's own holds
+    // and suspensions, the tester's disputes on this part and (§382 b) outages; the close-out also by everything that moves it before the test closes.
+    // (§382 b) No outage counted twice: one that already moved the tester's rating (applyOutage moves a rating while its first 14 days run) isn't added again
     // when the window opens at that rating.
+    const disputeSpans = disputeRows.filter((d) => d.contractId === c.id).map((d): Span => ({ start: d.createdAt.getTime(), end: Math.min((d.status === "open" ? now : d.decidedAt ?? d.createdAt).getTime(), now.getTime()), open: d.status === "open" }));
     const atRating = !!theirs && !!opensAt && opensAt.getTime() === theirs.createdAt.getTime();
     const ownOutages = atRating ? outages.filter((o) => o.start >= theirs!.createdAt.getTime() + WINDOW_DAYS * DAY) : outages;
-    const w = opensAt ? windowEnd(opensAt, mergeSpans([...spans.get(c.testId)!, ...ownOutages]), now, WINDOW_DAYS) : null;
+    const own = opensAt ? windowEnd(opensAt, mergeSpans([...spans.get(c.testId)!, ...disputeSpans, ...ownOutages]), now, WINDOW_DAYS) : null;
+    const tc = testClose.get(c.testId);
+    const byClose = opensAt && tc ? windowEnd(tc.base, mergeSpans([...tc.spans, ...spans.get(c.testId)!, ...disputeSpans]), now, CLOSE_OUT_DAYS) : null;
+    const w = own && byClose && byClose.end > own.end ? byClose : own;
     // The tester's rating shows once the developer rates or their 14 days end. A window that hadn't opened 14 days after the tester rated (the developer left work
     // unsettled that long) doesn't hold it back past those 14 days.
     const revealAt = !theirs ? null : (theirs.revealedAt ?? (opensAt && w && opensAt.getTime() <= theirs.createdAt.getTime() + WINDOW_DAYS * DAY ? w.end : new Date(theirs.createdAt.getTime() + WINDOW_DAYS * DAY)));

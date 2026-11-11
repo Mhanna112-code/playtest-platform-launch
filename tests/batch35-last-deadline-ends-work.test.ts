@@ -78,7 +78,7 @@ describe("work ends at the last tester deadline, with financial windows continui
     const developer = await act(f.testId, "request-time", f.dev.cookie, { contractIds: [f.late.sessionId], startsAt: "2026-11-12T15:00:00Z", seenAt: seen(), confirmed: true });
     expect(developer.status).toBe(409);
     const leave = await sact(f.early.sessionId, "leave", f.early.tester.cookie, { seenAt: seen(), confirmed: true });
-    expect(leave.status).toBe(409);
+    expect([leave.status, leave.body.already]).toEqual([200, true]); // (Owner, Nov 11, §380) Leave on a part already over: silent
     expect((await db.contract.findUniqueOrThrow({ where: { id: f.early.sessionId } })).status).toBe("ended");
     expect(await db.callRequest.count({ where: { testId: f.testId } })).toBe(0);
   });
