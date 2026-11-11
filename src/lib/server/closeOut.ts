@@ -123,7 +123,7 @@ export async function testSpans(t: { id: string; adminPausedAt: Date | null; wor
 /**
  * (Owner, Nov 11, §386 A; replaces §358 and §366 A for the money windows only) What moves each piece's money window (Pay, Pay more, Charge / Let it go): every span
  * the money was frozen (moneyFrozen), after the test closed or stopped too: the developer's holds and suspensions whenever they ran (not a deleted developer's
- * one still on: it never lifts and freezes nothing), the team's pauses while in force (a stopped test's ends at its stop), and outages. Overlaps count once.
+ * one still on ends at the deletion, §386 F), the team's pauses while in force (a stopped test's ends at its stop), and outages. Overlaps count once.
  * The test's close-out, Rate and Dispute windows keep testSpans.
  */
 export async function moneySpans(t: { id: string; adminPausedAt: Date | null; workEndedAt?: Date | null; pauseClosedAt?: Date | null; status?: string; stoppedAt?: Date | null; developer: { id: string; holdStartedAt: Date | null; devSuspendedAt: Date | null; deletedAt?: Date | null } }, from: Date, now: Date) {
@@ -132,8 +132,10 @@ export async function moneySpans(t: { id: string; adminPausedAt: Date | null; wo
     db.outage.findMany({ where: { endAt: { gt: from }, OR: [{ needsApproval: false }, { approvedAt: { not: null } }] }, select: { startAt: true, endAt: true } }),
     teamPauseSpans(t.id, t.adminPausedAt, now, t.status === "stopped" ? workEndOf(t) ?? now : null),
   ]);
-  const dev = t.developer.deletedAt ? { holdStartedAt: null, devSuspendedAt: null } : t.developer;
-  return mergeSpans([...devPauseSpans(devEvents, dev, now), ...team, ...outages.map((o) => ({ start: o.startAt.getTime(), end: o.endAt.getTime(), open: false }))]);
+  // (Owner, Nov 11, §386 F) A developer's deletion ends the freeze: every span still on then ends at the deletion (counted as lifted then).
+  const gone = t.developer.deletedAt?.getTime();
+  const upTo = (list: Span[]) => (gone == null ? list : list.filter((x) => x.start < gone).map((x) => ({ start: x.start, end: Math.min(x.open ? gone : x.end, gone), open: false })));
+  return mergeSpans([...upTo(devPauseSpans(devEvents, t.developer, now)), ...upTo(team), ...outages.map((o) => ({ start: o.startAt.getTime(), end: o.endAt.getTime(), open: false }))]);
 }
 
 export const CONTRACTS = { select: { status: true, dueAt: true, endedAt: true } } as const;

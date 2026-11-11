@@ -86,16 +86,19 @@ export function restrictionKey(u: Restrictable & { isDeveloper?: boolean; isTest
  * chargeback hold, or their developer-side suspension, during the test AND after it closed or stopped (a hold or suspension can start after). While frozen the
  * developer's Pay, Pay more, Confirm with your bank and Confirm all, the tester's Charge and Let it go, and a listed call's automatic charge are refused or wait;
  * each piece's own dates and closing date move on by the frozen time. Pay what you owe, the chargeback steps, the subscription and both sides of a dispute go on.
- * A deleted developer's hold or suspension never lifts: it freezes nothing (their saved card is charged, as before). The cause that names a refusal: a
- * suspension first (as before), then a hold, then the team's pause.
+ * The cause that names a refusal: a suspension first (as before), then a hold, then the team's pause.
+ * (Owner, Nov 11, §386 F) A developer's deletion ends the freeze: a deleted account can never be reinstated or have its hold lifted, so nothing is frozen once the
+ * developer is deleted (even with a suspension, a hold or the team's pause still on the rows), and each frozen span ends at the deletion (closeOut moneySpans).
+ * The batch 12 deletion rule then applies: pieces already open to Charge stay open (charged to the saved card); work under review never opens Charge.
  */
 export type MoneyFreeze = "suspension" | "hold" | "team";
 export function moneyFrozen(
   dev: { holdStartedAt?: Date | string | null; devSuspendedAt?: Date | string | null; deletedAt?: Date | string | null },
   test?: { adminPausedAt?: Date | string | null; status?: string | null } | null,
 ): MoneyFreeze | null {
-  if (!dev.deletedAt && dev.devSuspendedAt) return "suspension";
-  if (!dev.deletedAt && dev.holdStartedAt) return "hold";
+  if (dev.deletedAt) return null; // (§386 F)
+  if (dev.devSuspendedAt) return "suspension";
+  if (dev.holdStartedAt) return "hold";
   if (test && teamPausedNow(test)) return "team";
   return null;
 }

@@ -47,9 +47,10 @@ const PAUSE_FREE = { developer: { deletedAt: null }, OR: [{ status: "stopped" },
  * developer's hold or suspension freezes nothing. The automatic call charge, Charge opening and the money reminders (Pay now, Charge or let go, closing soon,
  * the review and call pay reminders) wait while frozen; afterwards they name the moved dates.
  */
-const MONEY_LIVE = { OR: [{ developer: { deletedAt: { not: null } } }, { developer: { holdStartedAt: null, devSuspendedAt: null } }], AND: [{ OR: [{ status: "stopped" }, { adminPausedAt: null }] }] } satisfies Prisma.TestWhereInput;
+// (§386 F) A deleted developer's tests are never frozen (the deletion ends the freeze).
+const MONEY_LIVE = { OR: [{ developer: { deletedAt: { not: null } } }, { developer: { holdStartedAt: null, devSuspendedAt: null }, OR: [{ status: "stopped" }, { adminPausedAt: null }] }] } satisfies Prisma.TestWhereInput;
 /** (§386 A) MONEY_LIVE for the reminders and Charge opening: never a deleted developer's test (as PAUSE_FREE). */
-const MONEY_FREE = { ...MONEY_LIVE, developer: { deletedAt: null } } satisfies Prisma.TestWhereInput;
+const MONEY_FREE = { developer: { deletedAt: null, holdStartedAt: null, devSuspendedAt: null }, OR: [{ status: "stopped" }, { adminPausedAt: null }] } satisfies Prisma.TestWhereInput;
 
 export async function onHold(devId: string) {
   const u = await db.user.findUnique({ where: { id: devId }, select: { holdStartedAt: true } });

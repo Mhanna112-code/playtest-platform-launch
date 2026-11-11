@@ -101,12 +101,15 @@ describe("batch 12 item 1: a developer can always delete their account", () => {
     expect(await db.payment.findFirstOrThrow({ where: { submissionId: sub.id, kind: "review" } })).toMatchObject({ status: "charged" });
   });
 
+  // (Owner, Nov 11, §386 A) A Charge pressed during a hold is refused now; one recorded as waiting before §386 (§113) is still charged by the delete.
   it("on a payment hold: a Charge already waiting for the lift when they delete is charged to the saved card by the delete", async () => {
     const { dev, sessionId, tester, sub } = await sentWork();
     await db.submission.update({ where: { id: sub.id }, data: { choiceOfferedAt: new Date(), choiceBy: new Date(Date.now() + 7 * DAY) } });
     await db.user.update({ where: { id: dev.user.id }, data: { stripeCustomerId: "cus_" + randomUUID(), stripePaymentMethodId: "pm_x", holdStartedAt: new Date(), holdReason: "unpaid" } });
     setStripeForTests({ paymentIntents: { create: async () => { throw new Error("not charged during the hold"); } } } as unknown as Stripe);
-    expect((await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge", tickedCents: 1000, seenAt: seen(), confirmed: true })).status).toBe(200);
+    expect((await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge", tickedCents: 1000, seenAt: seen(), confirmed: true })).body.error.message).toBe("This test is paused, so your Charge didn't go through.");
+    await db.review.create({ data: { contractId: sessionId, submissionId: sub.id, amountCents: 1000, agreedCents: 1000, reason: "Charged by the tester after 7 days without a review.", payKey: `choice:${sub.id}` } });
+    await db.payment.create({ data: { kind: "review", submissionId: sub.id, contractId: sessionId, developerId: dev.user.id, testerId: tester.user.id, amountCents: 1000, feeCents: 0, testerCents: 0, status: "deferred" } });
     expect(await db.payment.count({ where: { submissionId: sub.id, status: "deferred" } })).toBe(1); // waits for the lift while the account exists
     const made: unknown[] = [];
     setStripeForTests({ paymentIntents: { create: async (p: unknown) => { made.push(p); return { id: "pi_" + randomUUID(), status: "succeeded" }; } } } as unknown as Stripe);

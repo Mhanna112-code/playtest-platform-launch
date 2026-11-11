@@ -6,7 +6,7 @@ import { confirmAllPress } from "@/lib/server/confirmAll";
 import { autoChargeCalls, liftHoldIfClear, runSweep, startHold } from "@/lib/server/holds";
 import { closeOutOf, pieceCloseOut, testerRatingClosesAt } from "@/lib/server/closeOut";
 import { testerRateState } from "@/lib/server/ratings";
-import { pauseTest, reinstateAccount } from "@/lib/server/restrictions";
+import { deleteAccount, pauseTest, reinstateAccount } from "@/lib/server/restrictions";
 import { moneyFrozen } from "@/lib/restricted";
 import { CHOICE_PAUSED_NOTE, PAUSED_FOR_TESTERS, RATE_TEST_PAUSED } from "@/lib/rules";
 import { makeUser } from "./helpers";
@@ -175,6 +175,7 @@ describe("§386 A pages: the buttons stay, the banners don't offer paying", () =
     expect(moneyFrozen({ holdStartedAt: new Date(), devSuspendedAt: new Date() }, { adminPausedAt: new Date(), status: "open" })).toBe("suspension");
     expect(moneyFrozen({ holdStartedAt: new Date() }, { status: "stopped" })).toBe("hold");
     expect(moneyFrozen({ holdStartedAt: new Date(), deletedAt: new Date() }, null)).toBeNull();
+    expect(moneyFrozen({ devSuspendedAt: new Date(), deletedAt: new Date() }, { adminPausedAt: new Date(), status: "open" })).toBeNull(); // (§386 F)
   });
 });
 
@@ -287,5 +288,36 @@ describe("§386 E the tester's Rate window: a developer freeze after the test cl
     await suspended(w.dev.user.id, "10-25", "10-27");
     expect(await testerRatingClosesAt(w.sessionId, NOW)).toEqual(at("11-15"));
     expect(await closeOutOf(w.testId, NOW)).toEqual(at("11-15"));
+  });
+});
+
+// (Owner, Nov 11, §386 F) A developer's deletion ends the freeze (a deleted account is never reinstated nor its hold lifted): the batch 12 rule applies again (a piece
+// already open to Charge stays open, charged to the saved card), with the frozen time up to the deletion given back to that piece's closing. Rate stays closed.
+describe.each([["suspension", "suspended"], ["hold", "hold"]] as const)("§386 F a %s after the test closed, then the developer deleted 3 days later", (_name, kind) => {
+  it("the tester's Charge works again; that piece closes 3 days later than without the freeze; Rate stays closed", async () => {
+    const T0 = Date.now();
+    const w = await world();
+    // Closed 5 days ago; the piece's Charge opened 6 days ago (its closing: the test close + 14 days).
+    await db.test.update({ where: { id: w.testId }, data: { status: "closed", workEndedAt: new Date(T0 - 5 * DAY) } });
+    await db.contract.update({ where: { id: w.sessionId }, data: { status: "ended", endKind: "closed", endedAt: new Date(T0 - 5 * DAY), dueAt: new Date(T0 - 7 * DAY) } });
+    await db.submission.update({ where: { id: w.open.id }, data: { payBy: new Date(T0 - 6 * DAY) } });
+    const before = (await pieceCloseOut({ submissionId: w.open.id }, new Date(T0)))!;
+    expect(before).toEqual(new Date(T0 + 9 * DAY));
+    // The freeze began 3 days ago (after the close) and is still on the rows when the account is deleted.
+    const start = new Date(T0 - 3 * DAY);
+    await db.accountEvent.create({ data: { userId: w.dev.user.id, kind, side: kind === "suspended" ? "developer" : "", createdAt: start } });
+    await db.user.update({ where: { id: w.dev.user.id }, data: kind === "suspended" ? { devSuspendedAt: start } : { holdStartedAt: start, holdReason: "unpaid" } });
+    expect(errOf(await sact(w.sessionId, "choose", w.tester.cookie, { submissionId: w.open.id, choice: "charge", amount: "10.00", tickedCents: 1000, seenAt: seen(), confirmed: true }))).toBe("This test is paused, so your Charge didn't go through.");
+    await deleteAccount(w.dev.user.id, "admin", "Closed by the team");
+    const gone = (await db.user.findUniqueOrThrow({ where: { id: w.dev.user.id } })).deletedAt!;
+    const later = new Date(gone.getTime() + 30 * DAY);
+    // Exactly the frozen time up to the deletion moves it: 3 days (and never more as time goes on).
+    expect((await pieceCloseOut({ submissionId: w.open.id }, later))!.getTime()).toBe(before.getTime() + (gone.getTime() - start.getTime()));
+    expect((await pieceCloseOut({ submissionId: w.open.id }, later))!.getTime()).toBe((await pieceCloseOut({ submissionId: w.open.id }, new Date(gone.getTime() + DAY)))!.getTime());
+    expect((await testerRateState(w.sessionId)).kind).toBe("hidden"); // a deletion closes ratings
+    await settle();
+    const r = await sact(w.sessionId, "choose", w.tester.cookie, { submissionId: w.open.id, choice: "charge", amount: "10.00", tickedCents: 1000, seenAt: seen(), confirmed: true });
+    expect(r.status, JSON.stringify(r.body)).toBe(200);
+    expect(await db.review.count({ where: { submissionId: w.open.id } })).toBe(1);
   });
 });
