@@ -12,7 +12,7 @@ import { createPortal } from "react-dom";
 import { api, ApiError, errOf, FIELD, isFieldError, offerShown, PRESS_REFUSED_EVENT } from "@/lib/client";
 import { pressRefusal, stopBox, useStopBox } from "@/lib/topStop";
 import { DISCARD_ALL_LABEL, DraftButton, DraftTag, USE_SAVED_ALL_LABEL, useKept, useKeptUnits } from "@/lib/useKept";
-import { NOTES_UNIT, answerUnit, type Units } from "@/lib/draftUnits";
+import { NOTES_UNIT, answerUnit, sentUnits, type Units } from "@/lib/draftUnits";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { ANSWER_MIN_CHARS, ANSWER_ONE, ANSWER_REQUIRED, ANSWER_SHORT, answerChars, answerShortLine, answersMissing, qRequired, qText } from "@/lib/questions";
 import { ChangesBox } from "@/components/ChangesBox";
@@ -298,7 +298,9 @@ export function WrittenForm({ sessionId, questions, newQs = [], initial, initial
       setRedFor(null);
       // (§371) The form shown now (this one, or the one a redraw swapped in meanwhile).
       const now = shown();
-      await now.clear();
+      // (Owner, Nov 11, §379 item 6) Only the boxes whose text this press sent lose their draft; any other typed text stays kept (an empty box another tab
+      // typed into, a question that came back with its draft meanwhile). The server already moved an answered question's text to its Add draft (keepTyped).
+      await now.clear(sentUnits(questions, answers, notes, !only));
       setSending(false);
       now.finish("Sent your answers.");
     } catch (err) {

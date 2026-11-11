@@ -36,6 +36,17 @@ export const testFieldsOf = (unit: string): readonly string[] => TEST_GROUPS[uni
 /** Written answers: the unit of a question's box, and of Anything else. */
 export const answerUnit = (question: string) => `a:${qText(question)}`;
 export const NOTES_UNIT = "notes";
+/**
+ * (Owner, Nov 11, §379 item 6) The draft units a Send Answers that went through clears: each question box whose text it sent (`questions`: the ones it sent,
+ * `answers`: what it sent for each), and the notes when its form has them (`withNotes`) and they held text. Every other box keeps its draft: an empty box that
+ * another tab typed into, a question that came back with its draft while the press was on its way. (A question answered meanwhile in another tab is among the
+ * sent ones: the server moved its text into that question's "Add to this answer" draft, so the form's copy goes; a removed or reworded one never gets here: the
+ * press stopped with the questions box and the server kept its text as "Draft (not sent)" in Terms history.)
+ */
+export const sentUnits = (questions: string[], answers: string[], notes: string, withNotes: boolean): string[] => [
+  ...questions.flatMap((q, i) => ((answers[i] ?? "").trim() ? [answerUnit(q)] : [])),
+  ...(withNotes && notes.trim() ? [NOTES_UNIT] : []),
+];
 
 /** Which forms keep their draft by field. */
 export const keptByUnit = (key: string) => key.startsWith("test:") || key.startsWith("written:");

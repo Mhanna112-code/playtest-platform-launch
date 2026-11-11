@@ -344,17 +344,20 @@ export function useKeptUnits(key: string, units: Units, saved: Units, restore: (
   /** Sent: forget the draft (wait for this before the page moves on). `only`: just these units (Edit's Save: the units it saved; other tabs' drafts of other fields stay). */
   const clear = useCallback(
     async (only?: Iterable<string>) => {
-      cleared.current = true;
-      pending.current.clear();
-      if (off) return;
       if (only) {
+        // (Owner, Nov 11, §379 item 6) Just these units: another unit's typing not written yet is never dropped with them (it is written as usual).
         const list = [...only];
+        for (const u of list) pending.current.delete(u);
+        if (off) return;
         const next = new Set(draftedRef.current);
         for (const u of list) next.delete(u);
         setDraftedUnits(next);
         if (list.length) await post(Object.fromEntries(list.map((u) => [u, null])));
         return;
       }
+      cleared.current = true;
+      pending.current.clear();
+      if (off) return;
       setDraftedUnits(new Set());
       await fetch("/api/kept", { method: "POST", headers: { "content-type": "application/json", ...uidHeader() }, body: JSON.stringify({ key, data: null }), keepalive: true }).catch(() => null);
     },
