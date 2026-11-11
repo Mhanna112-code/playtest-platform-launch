@@ -155,12 +155,19 @@ describe("§157 3: a call request answered at the same moment", () => {
     return { ...w, q, dev: { ...w.dev, row: await userRow(w.dev.user.id) }, tester: { ...w.tester, row: await userRow(w.tester.user.id) } };
   }
 
-  it("two Accepts (two tabs): booked once; the other reads 'You already accepted this request at …'", async () => {
+  // (Owner, Nov 11, §380 DO) The time clash is checked before the stop-once box, so the second Accept usually reads the clash with the call the first one just
+  // booked ("You already have a call at …"); it reads "You already accepted …" only when it got past that check before the booking. Two Accepts from two tabs
+  // is no longer a normal path (one page at a time, §380): what matters is that exactly one call is booked and nothing else changes.
+  it("two Accepts (two tabs): booked once; the other reads the clash with that call (or 'You already accepted this request at …')", async () => {
     const w = await requested();
     const accept = () => outcome(answerRequest(w.tester.row, w.sessionId, { requestId: w.q.id, action: "accept" }));
     const { lost } = oneOut(...((await Promise.all([accept(), accept()])) as [Out, Out]));
-    expect(lost.message).toMatch(/^You already accepted this request at \d{1,2}:\d{2} [AP]M\.$/);
-    expect(await db.call.count({ where: { contractId: w.sessionId } })).toBe(1);
+    expect(lost.message).toMatch(/^(You already have a call at .+\.|You already accepted this request at \d{1,2}:\d{2} [AP]M\.)$/);
+    const calls = await db.call.findMany({ where: { contractId: w.sessionId } });
+    expect(calls).toHaveLength(1);
+    expect(await db.callRequest.findUniqueOrThrow({ where: { id: w.q.id } })).toMatchObject({ status: "booked", callId: calls[0].id });
+    expect(await db.callRequest.count({ where: { contractId: w.sessionId } })).toBe(1);
+    expect(await db.callSet.count({ where: { contractId: w.sessionId } })).toBe(0);
   });
 
   it("Accept and Withdraw at once: exactly one happens; the other names it", async () => {
