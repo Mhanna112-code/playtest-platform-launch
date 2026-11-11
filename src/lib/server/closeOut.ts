@@ -105,7 +105,7 @@ export async function teamPauseSpans(testId: string, adminPausedAt: Date | null,
 }
 
 /** Everything that moves a test's close-out: the team's pauses, the developer's holds and suspensions, and outages. */
-async function testSpans(t: { id: string; adminPausedAt: Date | null; workEndedAt?: Date | null; pauseClosedAt?: Date | null; status?: string; stoppedAt?: Date | null; developer: { id: string; holdStartedAt: Date | null; devSuspendedAt: Date | null } }, from: Date, now: Date) {
+export async function testSpans(t: { id: string; adminPausedAt: Date | null; workEndedAt?: Date | null; pauseClosedAt?: Date | null; status?: string; stoppedAt?: Date | null; developer: { id: string; holdStartedAt: Date | null; devSuspendedAt: Date | null } }, from: Date, now: Date) {
   const [devEvents, outages, team] = await Promise.all([
     db.accountEvent.findMany({ where: { userId: t.developer.id, kind: { in: ["hold", "hold-lifted", "suspended", "reinstated"] } }, select: { kind: true, side: true, createdAt: true } }),
     db.outage.findMany({ where: { endAt: { gt: from }, OR: [{ needsApproval: false }, { approvedAt: { not: null } }] }, select: { startAt: true, endAt: true } }),
@@ -120,7 +120,7 @@ async function testSpans(t: { id: string; adminPausedAt: Date | null; workEndedA
   return mergeSpans([...[...devPauseSpans(devEvents, t.developer, now), ...team].filter((s) => s.start < end).map(clip), ...outages.map((o) => ({ start: o.startAt.getTime(), end: o.endAt.getTime(), open: false }))]);
 }
 
-const CONTRACTS = { select: { status: true, dueAt: true, endedAt: true } } as const;
+export const CONTRACTS = { select: { status: true, dueAt: true, endedAt: true } } as const;
 
 /** The test's close-out date: Pay more and the testers' Rate close then (null while testers can still join or work: it isn't known yet). */
 export async function closeOutOf(testId: string, now = new Date()) {
@@ -133,7 +133,7 @@ export async function closeOutOf(testId: string, now = new Date()) {
 
 /** The tester's rating countdown pauses while their disputes await a team decision. Payment and dispute close-outs are unchanged. */
 export async function testerRatingClosesAt(contractId: string, now = new Date()) {
- const c=await db.contract.findUnique({where:{id:contractId},select:{testId:true}});
+ const c=await db.contract.findUnique({where:{id:contractId},select:{testId:true,tester:{select:{id:true,testerSuspendedAt:true}}}});
  if(!c)return null;
  const t=await db.test.findUnique({where:{id:c.testId},include:{developer:true,contracts:CONTRACTS}});
  if(!t)return null;
@@ -141,7 +141,10 @@ export async function testerRatingClosesAt(contractId: string, now = new Date())
  if(!base)return null;
  const disputes=await db.dispute.findMany({where:{contractId,createdAt:{lte:now}},select:{createdAt:true,decidedAt:true,status:true}});
  const disputeSpans=disputes.filter(d=>d.status!=="withdrawn").map(d=>({start:d.createdAt.getTime(),end:Math.min((d.status === "open" ? now : d.decidedAt ?? d.createdAt).getTime(),now.getTime()),open:d.status==="open"}));
- const spans=mergeSpans([...await testSpans(t,base,now),...disputeSpans]);
+ // (Owner, Nov 11, §382 a) The tester's own suspension extends their Rate like Charge (§378, pieceCloseOut): its spans pause the same window, so only the part after
+ // test close can move it past the close-out.
+ const tEvents=await db.accountEvent.findMany({where:{userId:c.tester.id,kind:{in:["suspended","reinstated"]}},select:{kind:true,side:true,createdAt:true}});
+ const spans=mergeSpans([...await testSpans(t,base,now),...disputeSpans,...testerPauseSpans(tEvents,c.tester.testerSuspendedAt,now)]);
  return windowEnd(base,spans,now,CLOSE_OUT_DAYS).end;
 }
 
