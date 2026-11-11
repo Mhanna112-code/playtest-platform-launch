@@ -72,9 +72,11 @@ afterAll(() => {
   dom.undo();
 });
 
-beforeEach(() => {
+beforeEach(async () => {
   pending = [];
   carry.resetCarried();
+  // (§380 E) Each test is a fresh page: a press that went through keeps the page locked until its redraw, which these panels never make.
+  (await import("@/lib/pageLock")).releaseAll();
 });
 
 /** The written part as the session page draws it (page.tsx): the form keyed "first" before anything is sent, "open" after. */

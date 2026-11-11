@@ -55,16 +55,25 @@ function apply(d: Document | undefined = engagedOn ?? doc()) {
   noteIdle();
   if (!d) return;
   const on = explicit || presses > 0 || redraw || !!grace;
+  // (A document without a head or a body, e.g. a test's small one, only misses the grey look.)
+  const mark = (f: () => void) => {
+    try {
+      f();
+    } catch {
+      // no head / body to mark
+    }
+  };
   if (on && !engagedOn) {
-    ensureStyle(d);
-    d.body.setAttribute(ATTR, "");
-    d.body.setAttribute("aria-busy", "true");
+    mark(() => ensureStyle(d));
+    mark(() => d.body.setAttribute(ATTR, ""));
+    mark(() => d.body.setAttribute("aria-busy", "true"));
     for (const t of EVENTS) d.addEventListener(t, block, true);
     engagedOn = d;
     safety = setTimeout(() => releaseAll(), MAX_MS);
   } else if (!on && engagedOn) {
-    engagedOn.body.removeAttribute(ATTR);
-    engagedOn.body.removeAttribute("aria-busy");
+    const e = engagedOn;
+    mark(() => e.body.removeAttribute(ATTR));
+    mark(() => e.body.removeAttribute("aria-busy"));
     for (const t of EVENTS) engagedOn.removeEventListener(t, block, true);
     engagedOn = null;
     if (safety) clearTimeout(safety);
