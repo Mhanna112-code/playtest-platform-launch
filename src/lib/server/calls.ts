@@ -25,7 +25,7 @@ const canSee = (slot: { allowedTesterIds: string[] }, testerId: string) => slot.
 export async function devCancelCall(dev: U, testId: string, body: Record<string, unknown>) {
   await ownTest(dev.id, testId);
   const callId = String(body.callId ?? "");
-  const reason = readText(body.reason, LIMITS.reason, "reason"); // (batch 15 section 20) refused over 1,000, never cut
+  let reason = "";
   const call = await db.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${testId} FOR UPDATE`;
     const c = await tx.call.findUnique({ where: { id: callId }, include: { contract: { include: { tester: true, test: { select: { title: true } } } } } });
@@ -35,10 +35,13 @@ export async function devCancelCall(dev: U, testId: string, body: Record<string,
     // page is refused once, never a stop first; the row then leaves the booked list with the page's redraw (the call is in the Live session's Cancelled, §209).
     // (Owner, Nov 11, §380; replaces §364 item 13) Already cancelled (by the other side, a pause, a stop or a block): already what the press wanted, no refusal.
     if (c.status === "cancelled") return null;
-    const ok = checkCancel(c.startsAt, new Date(), reason);
-    if (!ok.ok) throw new HttpError(400, "reason", ok.message);
     // (Batch 16 section 21) Another tab's call action with this tester stops it once.
     await devGate(tx, testId, body, {}, [], undefined, { acts: CALL_ACTS, keys: [`call:${c.id}`, `c:${c.contractId}`] });
+    // (Owner, Nov 11, §380 D2b) The reason's own mistakes after the box (refusals → box → field mistakes): Cancel is pressable with the reason missing; nothing is
+    // cancelled while it's red.
+    reason = readText(body.reason, LIMITS.reason, "reason"); // (batch 15 section 20) refused over 1,000, never cut
+    const ok = checkCancel(c.startsAt, new Date(), reason);
+    if (!ok.ok) throw new HttpError(400, "reason", ok.message);
     await tx.call.update({ where: { id: c.id }, data: { status: "cancelled", cancelledBy: "developer", cancelledAt: new Date(), cancelNote: reason } });
     await tx.callSlot.update({ where: { id: c.slotId }, data: { status: "removed" } });
     await recordEvent(tx, testId, "cancelled", `You cancelled the call with ${name} on ${fmtDateTime(c.startsAt)}`, false, {}, c.contractId);
@@ -79,15 +82,17 @@ export async function testerCancelCall(tester: U, contractId: string, body: Reco
   const c0 = await ownContract(tester.id, contractId);
   await answerTermsFirst(contractId); // (batch 27 section 1) an open new-terms offer blocks Cancel call until it's answered
   const callId = String(body.callId ?? "");
-  const reason = readText(body.reason, LIMITS.reason, "reason"); // (batch 15 section 20) refused over 1,000, never cut
+  let reason = "";
   const call = await db.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${c0.testId} FOR UPDATE`;
     const call = await tx.call.findUnique({ where: { id: callId } });
     if (!call || call.contractId !== contractId) throw new HttpError(404, "not_found", "That call doesn't exist.");
     if (call.status === "cancelled") return null; // (Owner, Nov 11, §380) already cancelled: silent
+    await testerGate(tester, c0, body);
+    // (Owner, Nov 11, §380 D2b) The reason's own mistakes after the box; nothing is cancelled while it's red.
+    reason = readText(body.reason, LIMITS.reason, "reason"); // (batch 15 section 20) refused over 1,000, never cut
     const ok = checkCancel(call.startsAt, new Date(), reason);
     if (!ok.ok) throw new HttpError(400, "reason", ok.message);
-    await testerGate(tester, c0, body);
     await tx.call.update({ where: { id: call.id }, data: { status: "cancelled", cancelledBy: "tester", cancelledAt: new Date(), cancelNote: reason } });
     await tx.callSlot.update({ where: { id: call.slotId }, data: { status: "open" } });
     await recordEvent(tx, c0.testId, "cancelled", `${displayName(tester)} cancelled ${pronouns(tester.pronoun).poss} call on ${fmtDateTime(call.startsAt)}`, false, {}, contractId, "", callRow(call.id)); // (Owner, Nov 6, §284) the place the line opens

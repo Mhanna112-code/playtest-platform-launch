@@ -103,7 +103,9 @@ export function ProfileForm({ init, first, admin = false, side = "tester", seenA
   }
 
   return (
-    <form className="card space-y-5" onSubmit={save}>
+    // (Owner, Nov 11, §380 D2b) Save profile goes to the server with fields still red (data-red-and-blue): its refusal or stop-once box shows with the red notes,
+    // and nothing is saved while one remains.
+    <form className="card space-y-5" onSubmit={save} data-red-and-blue="" noValidate>
       <div>
         <label className="label req" htmlFor="name">Name</label>
         {/* (Owner, Nov 5, §261) The name and the bio are read-only while Save profile / Continue is going through. */}

@@ -12,11 +12,12 @@ export async function POST(req: Request) {
     if (isAdmin(u)) throw new HttpError(409, "admin_only", ADMIN_ONLY_LINE);
     const b = await readJson(req);
     const side = b.side === "developer" || b.side === "tester" ? b.side : null;
-    if (!side) throw new HttpError(400, "bad_side", "Choose developer or tester.");
     const has = side === "developer" ? u.isDeveloper : u.isTester;
-    if (!has && b.add !== true) throw new HttpError(409, "no_side", "Your account doesn't have that side yet.");
+    if (side && !has && b.add !== true) throw new HttpError(409, "no_side", "Your account doesn't have that side yet.");
     // (Owner, Oct 28, batch 16 section 27) Settings changed in another tab or device since this page opened: the first press stops once.
     await accountGate(u.id, b, "settings");
+    // (Owner, Nov 11, §380 D2b) The choice's own mistake after the box; nothing is saved.
+    if (!side) throw new HttpError(400, "bad_side", "Choose developer or tester.");
     await db.user.update({ where: { id: u.id }, data: { side, ...(side === "developer" ? { isDeveloper: true } : { isTester: true }) } });
     if (side === "tester") await db.testerProfile.upsert({ where: { userId: u.id }, update: {}, create: { userId: u.id, devices: [], languages: [], categories: [] } });
     if (!has) {

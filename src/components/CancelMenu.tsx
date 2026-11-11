@@ -38,7 +38,9 @@ export function CancelMenu(p: { needsReason: boolean; busy: boolean; other: stri
         {/* (Owner, Nov 6, §293) At the field, in small grey: the reason is optional until 24 hours before the call (then required, marked as such). */}
         {!p.needsReason && <p className="mt-0.5 text-[11px] text-slate-500" data-why-optional="">Optional until {CANCEL_HOURS} hours before the call</p>}
         </span>
-        <button className="btn-secondary px-3 py-1 text-xs" disabled={p.busy} onClick={() => { if (!checkFields(root.current)) return; setMine(true); p.onCancel(reason); }}>{p.label ?? "Cancel this call"}</button>
+        {/* (Owner, Nov 11, §380 D2b) Pressable with the reason missing: the press marks it red AND still goes to the server, whose refusal or stop-once box shows
+            under the row with it; nothing is cancelled while it's red. */}
+        <button className="btn-secondary px-3 py-1 text-xs" disabled={p.busy} onClick={() => { checkFields(root.current); setMine(true); p.onCancel(reason); }}>{p.label ?? "Cancel this call"}</button>
         <p className="w-full text-xs text-slate-400">
           {p.rule ?? (p.needsReason
             ? `Less than ${CANCEL_HOURS} hours ahead: say why. ${p.other} is told.`

@@ -127,9 +127,11 @@ const PROFILE_FIELD_SIDE: Record<string, Side> = { devices: "tester", languages:
 export async function saveProfile(userId: string, body: Record<string, unknown>) {
   // (Owner, Nov 5, batch 35 §245; was cut at 80) At most 20 characters: over it is refused at Name ("Keep your name to 20 characters."), never cut silently.
   const name = typeof body.name === "string" ? body.name.trim() : "";
-  // (Owner, Oct 27) A name is at least 1 character.
-  if (name.length < 1) throw new HttpError(400, "bad_name", "Enter your name (others see it).");
-  if (name.length > LIMITS.personName) throw new HttpError(400, "bad_name", NAME_TOO_LONG);
+  // (Owner, Oct 27) A name is at least 1 character. (Owner, Nov 11, §380 D2b) Checked after the stop-once box (below; an admin's setup has no box).
+  const nameMistake = () => {
+    if (name.length < 1) throw new HttpError(400, "bad_name", "Enter your name (others see it).");
+    if (name.length > LIMITS.personName) throw new HttpError(400, "bad_name", NAME_TOO_LONG);
+  };
   const pronoun = ["she", "he", "they"].includes(body.pronoun as string) ? (body.pronoun as string) : "";
   const isDeveloper = body.isDeveloper === true;
   const isTester = body.isTester === true;
@@ -138,10 +140,10 @@ export async function saveProfile(userId: string, body: Record<string, unknown>)
   const me = await db.user.findUnique({ where: { id: userId } });
   const admin = !!me && isAdmin(me);
   if (admin) {
+    nameMistake();
     const user = await db.user.update({ where: { id: userId }, data: { name, pronoun } });
     return user;
   }
-  if (!isDeveloper && !isTester) throw new HttpError(400, "bad_role", "Choose developer, tester, or both.");
   // (Batch 35 §134) Which side's profile this Save is for. The developer's bio is saved only by the developer form, which names its side (an older page never
   // showed it). A developer-side Save of an account with both sides no longer asks for the tester's devices and languages.
   const first = !me?.isDeveloper && !me?.isTester;
@@ -150,8 +152,6 @@ export async function saveProfile(userId: string, body: Record<string, unknown>)
   const testerPart = isTester && (first || side === "tester");
   const devPart = isDeveloper && !first && asked === "developer";
   const devices = pick(body.devices, DEVICES), categories = pick(body.categories, CATEGORIES), languages = pick(body.languages, LANGUAGES);
-  if (testerPart && devices.length === 0) throw new HttpError(400, "bad_devices", DEVICES_MISSING);
-  if (testerPart && languages.length === 0) throw new HttpError(400, "bad_languages", LANGUAGES_MISSING);
   const bio = str(body.bio, LIMITS.bio);
   const emailPref = ["daily", "weekly", "monthly", "off"].includes(body.emailPref as string) ? (body.emailPref as string) : undefined;
   // (Owner, Oct 28, batch 16 section 27) What this press sends, in the short form the stop box and the change log use (lists in the options' order).
@@ -164,6 +164,12 @@ export async function saveProfile(userId: string, body: Record<string, unknown>)
   // A change made in another tab or device since this page opened stops the first Save once (a field changed to exactly this value isn't listed). (Batch 35 §134)
   // The other side's own fields aren't on this page, so their changes don't stop it.
   await accountGate(userId, body, "profile", sent, first ? null : side);
+  // (Owner, Nov 11, §380 D2b; were before the box) The form's own mistakes after the stop-once box (refusals → box → field mistakes): Save profile is pressable
+  // with them, the page marks them red, and nothing is saved while one remains.
+  nameMistake();
+  if (!isDeveloper && !isTester) throw new HttpError(400, "bad_role", "Choose developer, tester, or both.");
+  if (testerPart && devices.length === 0) throw new HttpError(400, "bad_devices", DEVICES_MISSING);
+  if (testerPart && languages.length === 0) throw new HttpError(400, "bad_languages", LANGUAGES_MISSING);
   const before = await db.user.findUniqueOrThrow({ where: { id: userId }, include: { profile: true } });
   const tab = typeof body.tab === "string" ? body.tab : "";
   const saved = await db.$transaction(async (tx) => {

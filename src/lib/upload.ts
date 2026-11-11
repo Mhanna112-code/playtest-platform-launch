@@ -1,6 +1,9 @@
 "use client";
 import { api } from "@/lib/client";
-import { videoTypeOf } from "@/lib/videoFormats";
+import { uploadMistake, videoTypeOf } from "@/lib/videoFormats";
+
+/** (Owner, Nov 11, §380 D2b) The picked file's own mistake (type, empty, over 500 MB), the server's line; "" when there is none. The picker marks it red. */
+export const fileMistake = (file: Blob, filename: string, part: "recording" | "written") => uploadMistake({ filename, contentType: file.type, size: file.size, part })?.message ?? "";
 
 /**
  * Upload one file to a session through the recording upload (start -> PUT to storage -> done). (Owner, Oct 29, batch 11) `part: "written"` attaches it to the written
@@ -11,7 +14,14 @@ export async function uploadToSession(sessionId: string, file: Blob, filename: s
   const given = file.type.split(";")[0];
   const contentType = videoTypeOf(filename, given) ?? (given || "application/octet-stream");
   // (Batch 35 §4) `tag`: the short tag of a written answer's marker ("[📎 map.png #k3f9]"), unique among the contract's uploads.
+  // (Owner, Nov 11, §380 D2b) Asked even with a mistake in the file (only its details go, never its bytes): the server answers its refusals first, then the
+  // same mistake. Nothing is uploaded while one remains (a server that let it through anyway is answered with the mistake, and its row dropped).
+  const mistake = fileMistake(file, filename, part);
   const { recordingId, tag, uploadUrl } = await api<{ recordingId: string; tag: string; uploadUrl: string }>(`/api/sessions/${sessionId}/recording-start`, { filename, size: file.size, contentType, part });
+  if (mistake) {
+    await api(`/api/sessions/${sessionId}/recording-abandon`, { recordingId }).catch(() => null);
+    throw new Error(mistake);
+  }
   // (Owner, Nov 5) While the file goes up, the page says so every 20 s (an unfinished upload holds Send only while it does); leaving the page mid-upload
   // drops it at once, so a reload or a closed tab never leaves Send refused.
   const alive = setInterval(() => void fetch(`/api/sessions/${sessionId}/recording-alive`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ recordingId }) }).catch(() => null), 20_000);

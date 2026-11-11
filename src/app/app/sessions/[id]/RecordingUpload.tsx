@@ -1,12 +1,12 @@
 "use client";
 import { VIDEO_ACCEPT } from "@/lib/videoFormats";
 import { Err } from "@/components/Err";
-import { checkFields } from "@/components/FieldChecks";
+import { checkFields, markServerMistakes } from "@/components/FieldChecks";
 import { FormMistakes } from "@/components/FormMistakes";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api, errOf, FIELD, offerShown } from "@/lib/client";
 import { pressRefusal, stopBox, useStopBox } from "@/lib/topStop";
-import { uploadToSession } from "@/lib/upload";
+import { fileMistake, uploadToSession } from "@/lib/upload";
 import { ScreenRecorder } from "@/components/ScreenRecorder";
 import { RecordingVideo } from "@/components/RecordingVideo";
 import { ChangesBox } from "@/components/ChangesBox";
@@ -87,24 +87,29 @@ export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, se
 
   // (§156) A refusal names the press it came from: the file box's upload, or Send / Add.
   const [errPress, setErrPress] = useState("");
+  const rootRef = useRef<HTMLDivElement>(null);
   async function upload(file: File) {
     setErr("");
     setErrPress(UPLOAD_PRESS);
-    if (file.size > 500 * 1024 * 1024) return setErr(FIELD + "Recordings can be at most 500 MB.");
+    // (Owner, Nov 11, §380 D2b) The file's own mistake (type, empty, 500 MB) is red at the picker at once, and the press still asks the server (the file's
+    // details only): its refusal shows with the red; nothing is uploaded while the mistake remains.
+    const mistake = fileMistake(file, file.name, "recording");
+    if (mistake) markServerMistakes(rootRef.current, [mistake]);
     setBusy(true);
     try {
       await uploadToSession(sessionId, file, file.name, "recording", setProgress);
       setProgress(null);
       fin.finish("Uploaded.");
     } catch (e) {
-      setErr(errOf(e));
+      // (§380 D2b) The same mistake back from the server is already red at the picker.
+      if (!(mistake && (e as Error).message === mistake)) setErr(errOf(e));
       setBusy(false);
       setProgress(null);
     }
   }
 
   return (
-    <div className="space-y-2" data-mistakes-root="">
+    <div ref={rootRef} className="space-y-2" data-mistakes-root="">
       {/* One list: what was sent first, then each addition under "Added"; then what isn't sent yet. (Owner, Nov 4, §182) It sits in "Your recording", a fold
           (open at first, kept open or closed), in the list panel (scrolls inside, the grip drags it, its height kept). */}
       {uploaded.length > 0 && (

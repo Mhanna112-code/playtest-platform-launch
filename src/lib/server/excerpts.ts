@@ -93,20 +93,26 @@ export async function requestExcerpt(tester: { id: string; name: string; email: 
   if (t.ndaText) throw new HttpError(409, "nda", NDA_NO_EXCERPT);
   const choices = await excerptChoices(sub);
   if (!choices.length) throw new HttpError(409, "not_paid", "Only written answers the developer paid for can be shown as excerpts.");
+  // (Owner, Nov 11, §380 D2b) The excerpt's own mistakes (the pick, its length, words added) come after every refusal: Ask the developer is pressable with
+  // them, the page marks them red, and the server answers its refusal first. No row is made while one remains (they're checked before the create, below).
   const pick = choices.find((c) => c.index === Number(body.index));
-  if (!pick) throw new HttpError(400, "bad_pick", "Pick one of your answers.");
   const text = squash(excerptPlain(typeof body.text === "string" ? body.text : "")); // (batch 35 §126) any file marker left out
-  if (text.length < EXCERPT_MIN || text.length > EXCERPT_MAX) throw new HttpError(400, "bad_length", excerptLength);
-  // (Owner, Nov 4, §196) Trimmed in a delete-only box: a part left out of the middle reads " … ". Each "…"-separated piece must be in the answer, in order; the
-  // 10 to 500 above counts the stored text, ellipses included. Anything added is refused with the same line.
-  if (!fromAnswer(pick.text, text)) throw new HttpError(400, "not_from_answer", "Trim the excerpt from your answer: it can only leave words out, not add any.");
+  const mistake = (): HttpError | null => {
+    if (!pick) return new HttpError(400, "bad_pick", "Pick one of your answers.");
+    if (text.length < EXCERPT_MIN || text.length > EXCERPT_MAX) return new HttpError(400, "bad_length", excerptLength);
+    // (Owner, Nov 4, §196) Trimmed in a delete-only box: a part left out of the middle reads " … ". Each "…"-separated piece must be in the answer, in order; the
+    // 10 to 500 above counts the stored text, ellipses included. Anything added is refused with the same line.
+    if (!fromAnswer(pick.text, text)) return new HttpError(400, "not_from_answer", "Trim the excerpt from your answer: it can only leave words out, not add any.");
+    return null;
+  };
   const hideProduct = false; // (batch 18 section 7) always "From <test>"
   const x = await db.$transaction(async (tx) => {
     // One tester's requests one at a time: the count and the one-per-part rule hold under two quick presses.
     await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${tester.id} FOR UPDATE`;
     // (Batch 35 §126) No duplicates: the same text as one of theirs pending or shown for this part's question is refused.
     // (Owner, Nov 2) Matched by the session (contract) and the question's text, across all of its parts and rounds: an updated answer is a new submission.
-    const same = await tx.excerpt.findMany({ where: replacedBy({ testerId: tester.id, contractId: sub.contractId, question: pick.question }, ["pending", "shown"]), select: { id: true, text: true, status: true } });
+    // (§380 D2b) Without a valid pick there is no question: only the part's and the account's refusals apply.
+    const same = pick ? await tx.excerpt.findMany({ where: replacedBy({ testerId: tester.id, contractId: sub.contractId, question: pick.question }, ["pending", "shown"]), select: { id: true, text: true, status: true } }) : [];
     const dup = same.filter((e) => squash(e.text) === text);
     if (dup.some((e) => e.status === "pending")) throw new HttpError(409, "same_pending", SAME_PENDING);
     if (dup.length) throw new HttpError(409, "same_shown", SAME_SHOWN);
@@ -115,6 +121,9 @@ export async function requestExcerpt(tester: { id: string; name: string; email: 
     // (Batch 35 §126) A different text for a question already shown is a replacement: the shown one(s) go on Allow, so they don't count toward the limit.
     const replaced = same.filter((e) => e.status === "shown").length;
     if ((await tx.excerpt.count({ where: { testerId: tester.id, status: { in: ["pending", "shown"] } } })) - replaced >= MAX_EXCERPTS) throw new HttpError(409, "too_many", TOO_MANY_EXCERPTS);
+    // (§380 D2b) The field mistakes last, before anything is made.
+    const m = mistake();
+    if (m || !pick) throw m ?? new HttpError(400, "bad_pick", "Pick one of your answers.");
     return tx.excerpt.create({ data: { testerId: tester.id, testId: t.id, contractId: sub.contractId, submissionId: sub.id, question: pick.question, text, hideProduct } });
   });
   await bell(t.developerId, `${displayName(tester)} asked to show an excerpt from “${t.title}” on ${pronouns(tester.pronoun).poss} profile`, `/app/tests/${t.id}#excerpt-${x.id}`, undefined, { side: "developer", testId: t.id, group: "excerpts" }); // (Owner, Nov 6, §286) one "Excerpts" entry a day across tests, as the tester's

@@ -12,10 +12,11 @@ export async function POST(req: Request) {
     const u = await requireUser(req);
     const b = await readJson(req);
     const emailPref = ["daily", "weekly", "monthly", "off"].includes(b.emailPref as string) ? (b.emailPref as string) : "";
-    if (!emailPref) throw new HttpError(400, "bad_pref", "Choose how often to be emailed.");
     // (Owner, Nov 3, batch 35 §157) Like the other settings: a change made in another tab or device since this page opened stops the first Save once ("Email:
     // Daily → Off"); the same value saved elsewhere isn't news. The change is recorded for the other tabs.
-    await accountGate(u.id, b, "settings", { emailPref: prefLabel(emailPref) });
+    await accountGate(u.id, b, "settings", emailPref ? { emailPref: prefLabel(emailPref) } : {});
+    // (Owner, Nov 11, §380 D2b) The field's own mistake after the box; nothing is saved.
+    if (!emailPref) throw new HttpError(400, "bad_pref", "Choose how often to be emailed.");
     const was = (await db.user.findUniqueOrThrow({ where: { id: u.id }, select: { emailPref: true } })).emailPref;
     await db.user.update({ where: { id: u.id }, data: { emailPref } });
     await logAccountChange(u.id, typeof b.tab === "string" ? b.tab : "", { scopes: ["settings"], field: "emailPref", label: "Email", before: prefLabel(was), after: prefLabel(emailPref) });

@@ -26,3 +26,25 @@ export function videoTypeOf(filename: string, type: string): string | null {
   if (!byExt) return null;
   return known ? type : byExt.type;
 }
+
+/** (Batch 11; batch 31 section 2) What a file attached to a written part can be besides a video: images, PDF, plain text, zip. */
+export const ATTACHMENT_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp", "application/pdf", "text/plain", "application/zip", "application/x-zip-compressed"];
+/** A recording, and any file attached to a written part: at most 500 MB. */
+export const UPLOAD_MAX_BYTES = 500 * 1024 * 1024;
+
+/**
+ * (Owner, Nov 11, §380 D2b) An upload's own mistakes, from the file's details alone (name, type, size; never its bytes): the type, an empty file, over 500 MB.
+ * The picker marks it red at once and the press still asks the server (with the details only), which answers its refusals first (part over, closed at $0, the
+ * limits) and then this same mistake; nothing is uploaded while it remains.
+ */
+export function uploadMistake(f: { filename: string; contentType: string; size: number; part: "recording" | "written" }): { status: 400 | 413; code: string; message: string } | null {
+  const given = f.contentType.split(";")[0].trim().toLowerCase();
+  const videoType = videoTypeOf(f.filename, given);
+  const type = videoType ?? given;
+  const video = !!videoType;
+  if (!video && (f.part !== "written" || type.startsWith("video/") || !ATTACHMENT_TYPES.includes(type)))
+    return { status: 400, code: "bad_type", message: f.part === "written" && !type.startsWith("video/") ? ATTACH_FORMATS_LINE : VIDEO_FORMATS_LINE };
+  if (!Number.isFinite(f.size) || f.size <= 0) return { status: 400, code: "empty", message: "That file is empty." };
+  if (f.size > UPLOAD_MAX_BYTES) return { status: 413, code: "too_large", message: video ? "Recordings can be at most 500 MB." : "Files can be at most 500 MB." };
+  return null;
+}

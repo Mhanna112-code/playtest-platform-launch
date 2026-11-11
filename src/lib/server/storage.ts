@@ -4,16 +4,17 @@ import path from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { HttpError } from "./http";
+import { UPLOAD_MAX_BYTES } from "@/lib/videoFormats";
 
 // Recordings: Cloudflare R2 (S3 API, presigned URLs, the browser uploads straight to R2) when the four R2_* variables
 // are set; otherwise saved on local disk under UPLOAD_DIR (default ./uploads) through the app, for development.
 
-export const MAX_RECORDING_BYTES = 500 * 1024 * 1024;
+export const MAX_RECORDING_BYTES = UPLOAD_MAX_BYTES;
 export const MAX_RECORDINGS = 5;
 /** (Owner, Oct 29, batch 11; batch 31 section 2: was 25 MB) Files attached to a written part: at most 5, 500 MB each (images, PDF, plain text, zip). Recordings attached to it count as recordings. */
-export const MAX_ATTACHMENT_BYTES = 500 * 1024 * 1024;
+export const MAX_ATTACHMENT_BYTES = UPLOAD_MAX_BYTES;
 export const MAX_ATTACHMENTS = 5;
-export const ATTACHMENT_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp", "application/pdf", "text/plain", "application/zip", "application/x-zip-compressed"];
+export { ATTACHMENT_TYPES } from "@/lib/videoFormats"; // (§380 D2b) shared with the upload boxes (uploadMistake)
 export const isVideo = (contentType: string) => contentType.startsWith("video/");
 
 const r2 = () => {

@@ -169,10 +169,11 @@ describe("§196 the tester's box", () => {
     expect(html).not.toContain("Open the box taller"); // (owner, Nov 5) removed: the corner drags it
   });
 
-  it("\"Use original answer\" (greyed while nothing is left out), the counter red outside 10 to 500, Ask the developer greyed", () => {
+  // (Owner, Nov 11, §380 D2b; was "Ask the developer greyed") Ask the developer stays pressable outside 10 to 500: the press marks the box red and still asks.
+  it("\"Use original answer\" (greyed while nothing is left out), the counter red outside 10 to 500, Ask the developer still pressable", () => {
     expect(html).toMatch(/<button type="button" class="[^"]*" disabled="" data-excerpt-restore="">Use original answer<\/button>/);
     expect(html).toContain(`<p class="text-xs text-rose-300" data-excerpt-count="">${LONG.length} / 500 (at least 10)</p>`);
-    expect(html).toMatch(/<button type="button" class="btn [^"]*" disabled="">Ask the developer<\/button>/);
+    expect(html).toMatch(/<button type="button" class="btn [^"]*">Ask the developer<\/button>/);
     expect(html).not.toContain("data-excerpt-shown-as"); // no gap: no "Shown as:"
   });
 });

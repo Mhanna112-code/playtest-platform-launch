@@ -3,6 +3,7 @@ import { useFinished } from "@/lib/usePress";
 import { Fragment, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { Err } from "@/components/Err";
 import { FormMistakes } from "@/components/FormMistakes";
+import { markServerMistakes } from "@/components/FieldChecks";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { api, errOf } from "@/lib/client";
 import { ChangesBox, type Change } from "@/components/ChangesBox";
@@ -17,6 +18,8 @@ import { useStopOnce } from "@/lib/useStopOnce";
 // (Owner, Nov 5, §271) A request and Allow / Deny stop once for a pause of the test since the page loaded (or the team's lift of it), whatever the Alerts.
 
 const MIN = 10, MAX = 500;
+/** The server's own line for the excerpt's length (excerpts.ts excerptLength). */
+export const EXCERPT_LENGTH_LINE = `An excerpt is ${MIN} to ${MAX} characters.`;
 
 /** (§196) The trim box: about 5 lines, scrolling inside; (owner, Nov 5) no "Open the box taller" button: its corner drags it taller, up to the text boxes' height cap. */
 export const TRIM_BOX_SHUT = "calc(5lh + 1rem)";
@@ -88,7 +91,11 @@ export function ExcerptPicker({ submissionId, choices, defaultOpen = false }: { 
     el.value = shown;
     el.setSelectionRange(at, at);
   };
+  const root = useRef<HTMLDivElement>(null);
   async function send() {
+    // (Owner, Nov 11, §380 D2b) Pressable with the excerpt too short or too long: the press marks it red (the server's own line) AND still asks the server, whose
+    // refusal shows under the button with it; nothing is asked while it's red.
+    if (n < MIN || n > MAX) markServerMistakes(root.current, [EXCERPT_LENGTH_LINE]);
     setBusy(true);
     setErr("");
     try {
@@ -104,7 +111,7 @@ export function ExcerptPicker({ submissionId, choices, defaultOpen = false }: { 
     }
   }
   return (
-    <div className="min-w-0 space-y-2" data-excerpt-picker="" data-mistakes-root="">
+    <div ref={root} className="min-w-0 space-y-2" data-excerpt-picker="" data-mistakes-root="">
       {!open && <button type="button" className="btn-secondary px-3 py-1.5 text-sm" onClick={() => setOpen(true)}>Show an excerpt on your profile</button>}
       {open && (
         <div className="min-w-0 space-y-2 rounded-lg border border-white/10 p-3 text-sm">
@@ -151,7 +158,7 @@ export function ExcerptPicker({ submissionId, choices, defaultOpen = false }: { 
           )}
           <p className={`text-xs ${n < MIN || n > MAX ? "text-rose-300" : "text-slate-500"}`} data-excerpt-count="">{n} / {MAX} (at least {MIN})</p>
           <div className="flex gap-2">
-            <button type="button" className="btn px-3 py-1.5 text-sm" disabled={busy || n < MIN || n > MAX} onClick={send}>{busy ? "Sending…" : "Ask the developer"}</button>
+            <button type="button" className="btn px-3 py-1.5 text-sm" disabled={busy} onClick={send}>{busy ? "Sending…" : "Ask the developer"}</button>
             <button type="button" className="btn-ghost px-3 py-1.5 text-sm" onClick={() => setOpen(false)}>Cancel</button>
           </div>
         </div>

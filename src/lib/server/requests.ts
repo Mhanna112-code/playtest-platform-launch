@@ -1053,16 +1053,17 @@ export async function cancelCallSet(user: U, contractId: string, body: Record<st
   const { c, side, other } = await ctx(user.id, contractId);
   if (side === "tester") await answerTermsFirst(contractId);
   const setId = String(body.setId ?? "");
-  const reason = readText(body.reason, LIMITS.reason, "reason"); // (batch 15 section 20) refused over 1,000, never cut
   const now = new Date();
   const ahead = () => db.call.findMany({ where: { contractId, setId, status: "booked", startsAt: { gt: now } }, orderBy: { startsAt: "asc" } });
   const first = await ahead();
   // (Owner, Nov 11, §380; replaces §364 item 13) Nothing of the set left ahead (cancelled by the other side, a pause, a stop or a block): silent.
   if (!first.length) return { cancelled: true, already: true };
-  const ok = checkCancel(first[0].startsAt, now, reason);
-  if (!ok.ok) throw new HttpError(400, "reason", ok.message);
   if (side === "developer") await db.$transaction((tx) => devGate(tx, c.testId, body, {}, [], undefined, { acts: CALL_ACTS, keys: [`set:${setId}`, `c:${contractId}`] }));
   else await testerGate(c.testerId, contractId, c.testId, body, undefined, CALL_PRESS);
+  // (Owner, Nov 11, §380 D2b) The reason's own mistakes after the box (refusals → box → field mistakes); nothing is cancelled while it's red.
+  const reason = readText(body.reason, LIMITS.reason, "reason"); // (batch 15 section 20) refused over 1,000, never cut
+  const ok = checkCancel(first[0].startsAt, now, reason);
+  if (!ok.ok) throw new HttpError(400, "reason", ok.message);
   const calls = await ahead();
   if (!calls.length) return { cancelled: true, already: true }; // (§380)
   const set = await db.callSet.findUnique({ where: { id: setId } });

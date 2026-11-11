@@ -45,7 +45,7 @@ export function PasswordForm({ hasPassword, seenAt: seen0 }: { hasPassword: bool
     }
   }
   return (
-    <form className="card space-y-5" onSubmit={submit} noValidate aria-label="Password">
+    <form className="card space-y-5" onSubmit={submit} noValidate aria-label="Password" data-red-and-blue="" /* (§380 D2b) the box with the red notes; nothing saved while red */>
       <h2 className="font-semibold text-white">{hasPassword ? "Change your password" : "Choose a password"}</h2>
       {hasPassword && (
         <div>

@@ -23,7 +23,7 @@ import { QuestionBox } from "@/components/QuestionBox";
 import { WRITTEN_MAX_CHARS, additionTooLongLine, writtenLength } from "@/lib/rules";
 import { wrapSelection } from "@/lib/markdown";
 import { additionRule, answerRule, limitEdit, limitedChange } from "@/lib/typingLimit";
-import { uploadToSession } from "@/lib/upload";
+import { fileMistake, uploadToSession } from "@/lib/upload";
 import { attachmentTag, hasMarkerFor, removeAttachmentMarker, tagMarker, type AnswerAttachment } from "@/lib/answerAttachments";
 import { AnswerWithAttachments } from "@/components/AnswerSets";
 import { fileSize } from "@/lib/format";
@@ -64,6 +64,7 @@ function PausedSend({ sessionId, press, label = press, canSend, now }: { session
 /** (Owner, Oct 29, batch 11) Bold, Italic and Code block for a written answer (stored as Markdown; the developer sees it formatted). */
 function FormatBar({ target, onChange, sessionId, onAttach, known, locked = false }: { target: React.RefObject<HTMLTextAreaElement | null>; onChange: (v: string) => void; sessionId: string; onAttach: (item: AnswerAttachment) => void; /** the uploads this form knows (a tag from an older server is made unique among them) */ known: AnswerAttachment[]; /** (§261) the form's Send is going through */ locked?: boolean }) {
   const [err, setErr] = useState("");
+  const [red, setRed] = useState("");
   const pending = useRef("");
   const recordingAt = useRef<number | null>(null);
   const progress = (filename: string, pct: number) => { const el = target.current; if (!el) return; const next = `[Uploading ${filename}… ${pct}%]`; onChange(pending.current ? el.value.replace(pending.current, next) : el.value.slice(0, recordingAt.current ?? el.selectionStart) + next + el.value.slice(recordingAt.current ?? el.selectionStart)); pending.current = next; recordingAt.current = null; };
@@ -83,8 +84,9 @@ function FormatBar({ target, onChange, sessionId, onAttach, known, locked = fals
       <button type="button" className="btn-ghost px-2 py-0.5 text-xs font-bold" title="Bold" onClick={() => apply("bold")} {...lockPick(locked)}>B</button>
       <button type="button" className="btn-ghost px-2 py-0.5 text-xs italic" title="Italic" onClick={() => apply("italic")} {...lockPick(locked)}>I</button>
       <button type="button" className="btn-ghost px-2 py-0.5 font-mono text-xs" title="Code block" onClick={() => apply("code")} {...lockPick(locked)}>{"</>"}</button>
-      <label className="btn-ghost cursor-pointer px-2 py-0.5 text-xs" title="Attach a file"><Paperclip className="h-3.5 w-3.5" aria-hidden="true" /><input type="file" aria-label="Attach a file" disabled={!!pending.current} {...lockPick(locked)} className="sr-only" accept={`image/png,image/jpeg,image/gif,image/webp,application/pdf,text/plain,.zip,${VIDEO_ACCEPT}`} onChange={async (e) => { const file = e.target.files?.[0]; e.target.value = ""; if (!file || pending.current) return; setErr(""); progress(file.name, 0); try { const { id, tag } = await uploadToSession(sessionId, file, file.name, "written", (pct) => progress(file.name, pct)); finish(id, file.name, file, tag); } catch (e) { failed(); setErr(errOf(e)); } }} /></label>
-      {/* (Owner, Oct 30) The form's mistake list shows once, at Send: an attach problem is one line here. */}
+      <label className="btn-ghost cursor-pointer px-2 py-0.5 text-xs" title="Attach a file"><Paperclip className="h-3.5 w-3.5" aria-hidden="true" /><input type="file" aria-label="Attach a file" disabled={!!pending.current} {...lockPick(locked)} className="sr-only" accept={`image/png,image/jpeg,image/gif,image/webp,application/pdf,text/plain,.zip,${VIDEO_ACCEPT}`} onChange={async (e) => { const file = e.target.files?.[0]; e.target.value = ""; if (!file || pending.current) return; setErr(""); /* (Owner, Nov 11, §380 D2b) the file's own mistake is red here at once, and the press still asks the server (details only, never the bytes): its refusal shows with it */ const mistake = fileMistake(file, file.name, "written"); setRed(mistake); progress(file.name, 0); try { const { id, tag } = await uploadToSession(sessionId, file, file.name, "written", (pct) => progress(file.name, pct)); finish(id, file.name, file, tag); } catch (e) { failed(); if (!(mistake && (e as Error).message === mistake)) setErr(errOf(e)); } }} /></label>
+      {/* (Owner, Oct 30) The form's mistake list shows once, at Send: an attach problem is one line here. (§380 D2b) The file's own mistake in red, a refusal in blue. */}
+      {red && <p className="w-full text-xs text-rose-300" data-attach-mistake="">{red}</p>}
       <Err text={err} press="Attach a file" />
       {/* (Owner, Oct 30) No ⏺ in the written answers: recordings belong to the recorded part. 📎 attaches files (videos too). */}
     </div>

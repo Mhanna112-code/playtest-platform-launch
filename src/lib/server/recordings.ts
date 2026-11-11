@@ -5,22 +5,24 @@ import { db } from "@/lib/db";
 import { displayName, pronouns } from "@/lib/format";
 import { HttpError } from "./http";
 import { NO_RECORDING_TO_ADD, SENT_RECORDING_LOCKED } from "@/lib/rules";
-import { ATTACHMENT_TYPES, MAX_ATTACHMENTS, MAX_ATTACHMENT_BYTES, MAX_RECORDING_BYTES, MAX_RECORDINGS, deleteObject, deleteStored, headObject, isVideo, listStored, r2On, uploadTarget } from "./storage";
+import { MAX_ATTACHMENTS, MAX_ATTACHMENT_BYTES, MAX_RECORDING_BYTES, MAX_RECORDINGS, deleteObject, deleteStored, headObject, isVideo, listStored, r2On, uploadTarget } from "./storage";
 import { contractIn, onePass, ownContract, partOver, sentPart, softRefusals, tellSent, tellSentByBell, type Pass } from "./tests";
 import type { Prisma } from "@prisma/client";
 import { additionsOf } from "@/lib/additions";
 import { testerSendGate } from "./terms";
 import { resendRefusal } from "./paidUpdates";
 import { attachmentTag, hasMarkerFor } from "@/lib/answerAttachments";
-import { ATTACH_FORMATS_LINE, VIDEO_FORMATS_LINE, videoTypeOf } from "@/lib/videoFormats";
+import { uploadMistake, videoTypeOf } from "@/lib/videoFormats";
 
 type U = Parameters<typeof tellSentByBell>[1];
 
 /**
  * Start an upload: checks the session can still send, the size (500 MB) and the count (5 recordings per session). (Owner, Oct 29, batch 11) `part: "written"` attaches it
  * to the written part instead: a screen recording (the same limits) or a file (at most 5, 500 MB each: images, PDF, plain text, zip; batch 31 section 2, was 25 MB).
- * (Owner, Nov 11, §375) The file's own checks (type, empty, size) first; then ONE pass under the test's lock (onePass): part over → a rejection or the team's
- * $0 closure → the limits, counting the rows read there (another tab's upload included) → the new row (no daily quota any more: the owner removed it, Nov 11). An upload is a draft: no stop-once.
+ * (Owner, Nov 11, §375) ONE pass under the test's lock (onePass): part over → a rejection or the team's $0 closure → the limits, counting the rows read there
+ * (another tab's upload included) → the new row (no daily quota any more: the owner removed it, Nov 11). An upload is a draft: no stop-once. (Owner, Nov 11,
+ * §380 D2b; was "the file's own checks first") The file's own mistakes (type, empty, 500 MB: uploadMistake, the same check the picker makes) come after the
+ * refusals, just before the row: the press sends only the file's details, and nothing is made (or uploaded) while one remains.
  */
 export async function startRecording(tester: U, contractId: string, body: Record<string, unknown>) {
   const c0 = await ownContract(tester.id, contractId, false);
@@ -32,11 +34,7 @@ export async function startRecording(tester: U, contractId: string, body: Record
   const videoType = videoTypeOf(filename, given);
   const type = videoType ?? given;
   const video = !!videoType;
-  if (!video && (part !== "written" || isVideo(type) || !ATTACHMENT_TYPES.includes(type)))
-    throw new HttpError(400, "bad_type", part === "written" && !isVideo(type) ? ATTACH_FORMATS_LINE : VIDEO_FORMATS_LINE);
-  if (!Number.isFinite(size) || size <= 0) throw new HttpError(400, "empty", "That file is empty.");
-  if (video && size > MAX_RECORDING_BYTES) throw new HttpError(413, "too_large", "Recordings can be at most 500 MB.");
-  if (!video && size > MAX_ATTACHMENT_BYTES) throw new HttpError(413, "too_large", "Files can be at most 500 MB.");
+  const mistake = uploadMistake({ filename, contentType: given, size, part });
   const ext = filename.includes(".") ? filename.slice(filename.lastIndexOf(".")).toLowerCase() : ".mp4";
   const storageKey = `recordings/${contractId}/${randomBytes(12).toString("hex")}${ext}`;
   const rec = await onePass(c0.testId, "recording-start", body, async (tx, run): Promise<Pass<{ id: string }>> => {
@@ -52,7 +50,9 @@ export async function startRecording(tester: U, contractId: string, body: Record
     // (Batch 35 §136) Sent recordings count and can't be removed: with all 5 sent, the line doesn't offer Remove.
     if (video && part === "recording" && mine.filter((r) => r.part === "recording").length >= MAX_RECORDINGS) return { stop: new HttpError(409, "too_many", mine.some((r) => r.part === "recording" && !r.submissionId) ? TOO_MANY_RECORDINGS : ALL_RECORDINGS_SENT) };
     if (video && part === "written" && mine.filter((r) => r.part === "written" && isVideo(r.contentType)).length >= MAX_RECORDINGS) return { stop: new HttpError(409, "too_many", `You can attach at most ${MAX_RECORDINGS} recordings to your written answers.`) };
-    if (!video && mine.filter((r) => r.part === "written" && !isVideo(r.contentType)).length >= MAX_ATTACHMENTS) return { stop: new HttpError(409, "too_many", `You can attach at most ${MAX_ATTACHMENTS} files to your written answers.`) };
+    if (!video && part === "written" && mine.filter((r) => r.part === "written" && !isVideo(r.contentType)).length >= MAX_ATTACHMENTS) return { stop: new HttpError(409, "too_many", `You can attach at most ${MAX_ATTACHMENTS} files to your written answers.`) };
+    // (§380 D2b) The file's own mistakes, last: no row while one remains.
+    if (mistake) return { stop: new HttpError(mistake.status, mistake.code, mistake.message) };
     return { saved: await tx.recording.create({ data: { contractId, storageKey, filename, sizeBytes: size, contentType: type, part, aliveAt: new Date() } }) };
   });
   // (Batch 35 §4) The short tag its marker carries ("[📎 map.png #k3f9]"): the end of its id, unique among the contract's uploads.

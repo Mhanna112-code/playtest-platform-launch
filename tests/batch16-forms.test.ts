@@ -52,7 +52,7 @@ const SAME_TEXT: [string, string, string][] = [
   ["components/CallRequests.tsx", "lib/server/requests.ts", "Enter the call's length in minutes."],
   ["app/app/tests/[id]/DevCallPanel.tsx", "lib/server/requests.ts", "Enter the call's length in minutes."],
   ["app/app/tests/[id]/TopPanel.tsx", "lib/server/tests.ts", "Say why you're ending their work (they read it)."],
-  ["app/app/sessions/[id]/RecordingUpload.tsx", "lib/server/recordings.ts", "Recordings can be at most 500 MB."],
+  // (§380 D2b) The upload's own lines are one shared check now (videoFormats.ts uploadMistake, used by the picker and the server): forms-pressable-380.
   ["components/ReportButton.tsx", "lib/server/reports.ts", "Say what happened (the team reads it)."],
 ];
 

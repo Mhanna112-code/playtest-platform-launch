@@ -35,6 +35,7 @@ export function AlertSettings({ emailPref, side = null, seenAt: seen0 }: { email
       <summary className="flex cursor-pointer items-center gap-2 font-semibold text-white"><BellRing className="h-5 w-5 text-volt-300" /> How you&apos;re notified</summary>
       <form
         className="mt-4 space-y-4 text-sm"
+        data-red-and-blue="" /* (§380 D2b) the box with any red note; nothing saved while red */
         onSubmit={async (e) => {
           e.preventDefault();
           setBusy(true);
