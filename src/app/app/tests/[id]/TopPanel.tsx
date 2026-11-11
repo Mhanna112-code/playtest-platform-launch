@@ -1,4 +1,5 @@
 "use client";
+import { lockPage, unlockPage } from "@/lib/pageLock";
 import { Cut } from "@/components/Cut";
 import { fmtDateIn } from "@/lib/format";
 import { SubscribersTag } from "@/components/SubscribeLink";
@@ -61,7 +62,7 @@ export function TopPanel(p: { timeZone?: string | null; joinClosedLine?: string;
     setGoneLines(g);
     if (g.length) setPicked((now) => now.filter((id) => !g.some((x) => x.contractId === id)));
   };
-  const { press, changes, error, busy, at, finish, clear, doneLine } = usePress(p.seenAt, (data) => { takeGone(data); router.refresh(); }, { perKey: true, onFresh: () => { setPicked([]); setReason(""); setStopReason(""); setOpen(""); setGoneLines([]); } });
+  const { press, changes, error, busy, at, finish, clear, doneLine } = usePress(p.seenAt, (data) => { takeGone(data); router.refresh(); }, { perKey: true, onFresh: () => { setPicked([]); setReason(""); setStopReason(""); setOpen(""); setGoneLines([]); unlockPage(); /* (§380 A) the redraw landed */ } });
   // (Batch 16 section 10) End early's mistakes are red at their box and listed under its button, not as a plain line.
   const box = (k: keyof typeof TOP_PRESS) => (at === k ? <ChangesBox press={TOP_PRESS[k]} changes={changes} error={k === "end-early" && error.startsWith(FIELD) ? "" : error} didntGo={k === "stop" || k === "end-early"} /> : null);
   const [open, setOpen] = useState<"" | "end">("");
@@ -94,12 +95,17 @@ export function TopPanel(p: { timeZone?: string | null; joinClosedLine?: string;
   const sendingAs = (action: string) => going === action || (busy && at === action);
   async function go(action: string, body: Record<string, unknown> = {}) {
     setGoing(action);
-    try { await goNow(action, body); } finally { setGoing(""); }
+    // (Owner, Nov 11, §380 A) While a Stop or End early is on its way, EVERY button on the page is disabled until it goes through and the page redraws (a quick
+    // Pay can't go out before the redraw). Refused or stopped: unlocked at once; gone through: unlocked when the redraw lands (onFresh) or the page moves on.
+    const whole = action === "stop" || action === "end-early";
+    if (whole) lockPage();
+    let went = false;
+    try { went = await goNow(action, body); } finally { setGoing(""); if (whole && !went) unlockPage(); }
   }
   async function goNow(action: string, body: Record<string, unknown>) {
     if (action === "end-early") setGoneLines([]);
     const r = await press<{ id?: string; count?: number; gone?: GoneLine[]; done?: string }>(`/api/tests/${p.id}/${action}`, body, action);
-    if (!r) return;
+    if (!r) return false;
     if (action === "end-early") takeGone(r);
     if (action === "end-early") await keepEnd.clear();
     if (action === "stop") await keepStop.clear();
@@ -112,6 +118,7 @@ export function TopPanel(p: { timeZone?: string | null; joinClosedLine?: string;
     // (Batch 35 §40, §41) Everything else redraws the page in place; the buttons stay greyed until it has.
     // (§278) Some ticked testers were already out: the done line names whose work ended, their refusal lines beside it.
     else finish(action === "end-early" && r.gone?.length ? (r.done ?? "") : "");
+    return true;
   }
 
   return (
