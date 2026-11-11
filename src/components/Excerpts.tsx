@@ -5,7 +5,7 @@ import { Err } from "@/components/Err";
 import { FormMistakes } from "@/components/FormMistakes";
 import { markServerMistakes } from "@/components/FieldChecks";
 import { ConfirmButton } from "@/components/ConfirmButton";
-import { api, errOf } from "@/lib/client";
+import { api, errOf, isFieldError } from "@/lib/client";
 import { ChangesBox, type Change } from "@/components/ChangesBox";
 import { AnswerText, ValueText } from "@/components/QA";
 import { allKept, deletedRange, deleteFrom, excerptOf, GAP, insertedRange, keptChars, restoreAt, runsOf, squash } from "@/lib/excerptTrim";
@@ -188,7 +188,11 @@ export function ExcerptDecision({ excerptId, seenAt }: { excerptId: string; /** 
     } catch (e) {
       const stop = (e as { code?: string; data?: { changes?: Change[] } }).code === "stop_once" ? (e as { data: { changes?: Change[] } }).data.changes ?? [] : null;
       if (stop) setBox({ changes: stop, at: new Date().toISOString() });
-      else setErr(errOf(e));
+      else {
+        // (Owner, Nov 11, §387 2) One answer under the buttons: a refusal replaces the box (a form mistake keeps it).
+        if (!isFieldError(e)) setBox(null);
+        setErr(errOf(e));
+      }
       setBusy(false);
     }
   };

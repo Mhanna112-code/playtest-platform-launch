@@ -105,6 +105,8 @@ type Case = {
   url: RegExp;
   /** The field the server marks red for the second press (the first field by default). */
   field?: (c: MiniElement) => MiniElement;
+  /** (§387 2) No stop-once box of its own under the button (Cancel's menu: the row draws it; Contact us has none). */
+  noBox?: boolean;
 };
 
 const firstField = (c: MiniElement) => c.querySelectorAll("textarea, input, select").find((x) => x.getAttribute("type") !== "checkbox" && x.getAttribute("type") !== "file" && x.getAttribute("type") !== "hidden")!;
@@ -173,6 +175,7 @@ const CASES: Case[] = [
   },
   {
     name: "Cancel a call (the reason required under 24 hours)",
+    noBox: true,
     el: async () => {
       const { CancelMenu } = await import("@/components/CancelMenu");
       const { api } = await import("@/lib/client");
@@ -183,6 +186,7 @@ const CASES: Case[] = [
   },
   {
     name: "Cancel the remaining calls",
+    noBox: true,
     el: async () => {
       const { CancelMenu } = await import("@/components/CancelMenu");
       const { api } = await import("@/lib/client");
@@ -219,6 +223,7 @@ const CASES: Case[] = [
   },
   {
     name: "Contact us (nothing chosen or typed)",
+    noBox: true,
     el: async () => R.createElement((await import("@/app/app/help/ContactForm")).ContactForm, { topics: ["A payment", "Something else"] }),
     button: /Send to the team$/,
     url: /\/api\/help$/,
@@ -312,4 +317,33 @@ describe("§387 1: every pressable form reaches the server with a field red (a r
     }
     expect(missing).toEqual([]);
   });
+});
+
+const STOP = { status: 409, data: { error: { code: "stop_once", message: "Since you opened this page", changes: [{ text: "Nora Lane changed the pay", at: SEEN, kind: "info" }], now: SEEN } } };
+const REFUSED = { status: 409, data: { error: { code: "refused", message: "This test was stopped, so nothing can go through." } } };
+const boxOf = (c: MiniElement) => c.querySelectorAll("[data-stop-box]").find((b) => /Since you opened this page|Changed in another tab|Since this page loaded/.test(textOf(b))) ?? null;
+
+describe("§387 2: the server's answer under the button is one thing; the box names the button as it reads", () => {
+  for (const k of CASES.filter((x) => !x.noBox)) {
+    it(k.name, async () => {
+      const m = await mount(await k.el());
+      try {
+        await k.open?.(m.container);
+        reply = STOP;
+        await press(m.container, k.button);
+        const box = boxOf(m.container);
+        expect(box, `${k.name}: the box`).toBeTruthy();
+        // "Press <the button's own words> again to go ahead." (Dispute's said "Press Dispute again" under "Send the dispute").
+        const label = textOf(buttonNamed(m.container, k.button));
+        expect(textOf(box!.querySelector("[data-press-again]")), k.name).toBe(`Press ${label} again to go ahead.`);
+        reply = REFUSED;
+        await press(m.container, k.button);
+        expect(presses(k.url)).toBe(2);
+        expect(textOf(m.container), `${k.name}: the refusal shows`).toContain("This test was stopped, so nothing can go through.");
+        expect(boxOf(m.container), `${k.name}: the refusal replaced the box`).toBeNull();
+      } finally {
+        await m.done();
+      }
+    });
+  }
 });

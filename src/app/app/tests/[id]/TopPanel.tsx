@@ -64,7 +64,7 @@ export function TopPanel(p: { timeZone?: string | null; joinClosedLine?: string;
   };
   const { press, changes, error, busy, at, finish, clear, doneLine } = usePress(p.seenAt, (data) => { takeGone(data); router.refresh(); }, { perKey: true, onFresh: () => { setPicked([]); setReason(""); setStopReason(""); setOpen(""); setGoneLines([]); unlockPage(); /* (§380 A) the redraw landed */ } });
   // (Batch 16 section 10) End early's mistakes are red at their box and listed under its button, not as a plain line.
-  const box = (k: keyof typeof TOP_PRESS) => (at === k ? <ChangesBox press={TOP_PRESS[k]} changes={changes} error={k === "end-early" && error.startsWith(FIELD) ? "" : error} didntGo={k === "stop" || k === "end-early"} /> : null);
+  const box = (k: keyof typeof TOP_PRESS) => (at === k ? <ChangesBox press={TOP_PRESS[k]} button={k === "end-early" ? "End their work now" : undefined} changes={changes} error={k === "end-early" && error.startsWith(FIELD) ? "" : error} didntGo={k === "stop" || k === "end-early"} /> : null);
   const [open, setOpen] = useState<"" | "end">("");
   // End early: the full app's ticks and "All", one reason, and a confirm dialog before it presses.
   const [picked, setPicked] = useState<string[]>([]);

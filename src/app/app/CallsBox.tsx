@@ -3,7 +3,7 @@ import { Cut, TestName } from "@/components/Cut";
 import Link from "next/link";
 import { ArrowRight, CalendarClock } from "lucide-react";
 import { ChangesBox } from "@/components/ChangesBox";
-import { CancelMenu } from "@/components/CancelMenu";
+import { CANCEL_THIS_CALL, CancelMenu } from "@/components/CancelMenu";
 import { LIST_PANEL } from "@/components/ScrollList";
 import { ResizeBox } from "@/components/Panel";
 import { usePress } from "@/lib/usePress";
@@ -42,7 +42,7 @@ export function CallsBox({ calls, seenAt, restricted }: { calls: DashCall[]; see
                   {restricted && <CancelMenu needsReason={c.needsReason} busy={busy} other={c.who} onCancel={(reason) => void press(`/api/tests/${c.testId}/cancel-call`, { callId: c.id, reason }, c.id).then((r) => r && finish())} />}
                 </div>
                 <CallCheck />
-                {at === c.id && <ChangesBox changes={changes} error={error} />}
+                {at === c.id && <ChangesBox changes={changes} error={error} button={CANCEL_THIS_CALL} />}
               </li>
             ))}
           </ul>

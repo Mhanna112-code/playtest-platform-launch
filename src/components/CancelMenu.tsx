@@ -11,6 +11,11 @@ import { lockText } from "@/lib/sendLock";
  * call. The press's stop-once box or refusal shows under the call's row (the caller's `box`). (Batch 16 section 10) A missing reason is red at the box,
  * with the server's own line (checkCancel), and listed under the button.
  */
+/** (§387 2) The menu's buttons as they read: a box under the row says "Press Cancel this call again" (the press is named Cancel call). */
+export const CANCEL_THIS_CALL = "Cancel this call";
+export const CANCEL_REMAINING = "Cancel the remaining calls";
+/** (§387 2) A call panel's box key ("cancel-<id>", "cancel-set-<id>") → the button pressed, for "Press … again". */
+export const cancelButton = (key: string) => (key.startsWith("cancel-set-") ? CANCEL_REMAINING : key.startsWith("cancel-") ? CANCEL_THIS_CALL : undefined);
 export const CANCEL_REASON_LINE = "The call is less than 24 hours away: say why you're cancelling (the other side sees it).";
 export function CancelMenu(p: { needsReason: boolean; busy: boolean; other: string; onCancel: (reason: string) => void; label?: string; rule?: string }) {
   const [reason, setReason] = useState("");

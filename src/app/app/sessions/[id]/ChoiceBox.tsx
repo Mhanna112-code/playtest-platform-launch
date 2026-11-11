@@ -18,6 +18,8 @@ import { lockText } from "@/lib/sendLock";
  * (Owner, Nov 3, long text) "Charge <developer> $X": a long name (an unbroken one too) wraps inside the button instead of pushing it past the box, and the
  * amount stays whole on one line.
  */
+/** (§387 2) Charge's button as it reads ("Charge Nora Lane $10.00"), for the box's "Press … again". */
+const chargeText = (devName: string, cents: number | null) => `Charge ${devName}${cents == null ? "" : ` ${money(cents)}`}`;
 function ChargeLabel({ devName, cents }: { devName: string; cents: number | null }) {
   return <span className="min-w-0 [overflow-wrap:anywhere]">Charge {devName} {cents == null ? "" : <span className="whitespace-nowrap">{money(cents)}</span>}</span>;
 }
@@ -111,7 +113,7 @@ export function ChoiceBox({ paused = false, sessionId, submissionId, callId, lin
         </div>
       )}
       {!fin.done && amountNeed && amount !== redAmount && <p className="text-xs text-slate-400" data-field-need="charge">{amountNeed}</p>}
-      <ChangesBox side="tester" changes={box && !box.top ? box.changes : null} tail={box?.tail} didntGo press={pressed} />
+      <ChangesBox side="tester" changes={box && !box.top ? box.changes : null} tail={box?.tail} didntGo press={pressed} button={pressed === "Charge" ? chargeText(devName, typed) : "Let it go"} /* (§387 2) the button's words */ />
       {/* (Batch 32 §12) Names the press ("Your Charge didn't go through: …"); "Answer the new terms first: Switch or Keep." reads exactly so. */}
       <Err text={err && !err.startsWith(FIELD) ? refusalLine(pressed, err) : ""} />
       <FormMistakes text={err.startsWith(FIELD) ? err : ""} press="Charge" />

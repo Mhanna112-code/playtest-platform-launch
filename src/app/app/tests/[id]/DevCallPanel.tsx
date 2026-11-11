@@ -14,7 +14,7 @@ import { LivePanel } from "@/components/LivePanel";
 import { CallTimer } from "@/components/CallTimer";
 import { ReportProblem } from "@/components/ReportProblem";
 import { CallPresence } from "@/components/CallPresence";
-import { CancelMenu } from "@/components/CancelMenu";
+import { CancelMenu, cancelButton } from "@/components/CancelMenu";
 import type { RowJson } from "@/lib/callRows";
 import type { Slot } from "@/lib/callClash";
 import { alignedClash, formClashInputs, madeBy, newRow, RequestRows, rowsPayload, sentLine, useWindowShutLine, type PressMade, type RowState } from "@/components/RequestRows";
@@ -105,7 +105,7 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
   const [open, setOpen] = useState<Record<string, boolean>>({});
   // (Batch 16 section 10) A mistake in the request form is red at its box and listed under Request a time (not as a plain line).
   const red = error.startsWith(FIELD);
-  const box = (k: string) => (at === k ? <div className="basis-full"><ChangesBox changes={changes} error={k === "request" && red ? "" : error} link={typeof errData.requestId === "string" ? `req-${errData.requestId}` : undefined} {...(k === "request" && typeof errData.tail === "string" ? { tail: errData.tail } : {}) /* (§350) the server's own tail: "Press again to send to the others (…)" */} /></div> : null);
+  const box = (k: string) => (at === k ? <div className="basis-full"><ChangesBox changes={changes} button={cancelButton(k)} error={k === "request" && red ? "" : error} link={typeof errData.requestId === "string" ? `req-${errData.requestId}` : undefined} {...(k === "request" && typeof errData.tail === "string" ? { tail: errData.tail } : {}) /* (§350) the server's own tail: "Press again to send to the others (…)" */} /></div> : null);
   const go = async (path: string, body: Record<string, unknown>, key: string) => {
     const r = await press<{ message?: string }>(`/api/tests/${testId}/${path}`, body, key);
     if (r) finish(); // (batch 35 §40, §41) the page redraws in place; the buttons stay greyed until it has

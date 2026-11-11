@@ -8,7 +8,7 @@ import { CallTimer } from "@/components/CallTimer";
 import { ReportProblem } from "@/components/ReportProblem";
 import { CallPresence, CallTimelineLine } from "@/components/CallPresence";
 import { LIVE_SECTIONS, LiveSection } from "@/components/LivePanel";
-import { CancelMenu } from "@/components/CancelMenu";
+import { CancelMenu, cancelButton } from "@/components/CancelMenu";
 import { CallCheck } from "@/components/CallCheck";
 import { LIST_PANEL } from "@/components/ScrollList";
 
@@ -26,7 +26,7 @@ const fmt = (iso: string) => new Date(iso).toLocaleString("en-US", { weekday: "s
  */
 export function TesterCallPanel(p: { sessionId: string; seenAt: string; mine: Mine[]; sets?: TesterSet[]; refusal: string; lateNote?: string; devName: string; noReport?: boolean }) {
   const { press, changes, error, busy, at, finish } = usePress(p.seenAt);
-  const box = (k: string) => (at === k ? <div className="basis-full"><ChangesBox side="tester" changes={changes} error={error} /></div> : null);
+  const box = (k: string) => (at === k ? <div className="basis-full"><ChangesBox side="tester" changes={changes} error={error} button={cancelButton(k)} /></div> : null);
   async function go(action: string, body: Record<string, unknown>, key = action) {
     const r = await press(`/api/sessions/${p.sessionId}/${action}`, body, key);
     if (r) finish(); // (batch 35 §40, §41) the page redraws in place; the buttons stay greyed until it has

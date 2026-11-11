@@ -1,7 +1,7 @@
 "use client";
 import { NameLink } from "@/components/Cut";
 import { ChangesBox } from "@/components/ChangesBox";
-import { CancelMenu } from "@/components/CancelMenu";
+import { CANCEL_THIS_CALL, CancelMenu } from "@/components/CancelMenu";
 import { usePress } from "@/lib/usePress";
 import { ResizeBox } from "@/components/Panel";
 import { LIST_PANEL } from "@/components/ScrollList";
@@ -29,7 +29,7 @@ export function RestrictedCalls({ testId, seenAt, calls, embedded = false, perso
             {/* (Owner, Nov 4, §187) Inside the person's own Needs you drop-down their name is on the drop-down, once: not on every row. */}
             <span className="mr-auto min-w-0 text-slate-200">{fmt(c.when)} · {!person && <><NameLink fit text={c.who} href={c.whoHref} /> · </>}{c.minutes} min</span>
             <CancelMenu needsReason={c.needsReason} busy={busy} other={c.who} onCancel={async (why) => { if (await press(`/api/tests/${testId}/cancel-call`, { callId: c.id, reason: why }, c.id)) finish(); }} />
-            {at === c.id && <div className="basis-full"><ChangesBox changes={changes} error={error} press="Cancel call" /></div>}
+            {at === c.id && <div className="basis-full"><ChangesBox changes={changes} error={error} press="Cancel call" button={CANCEL_THIS_CALL} /></div>}
           </li>
         ))}
       </ul>

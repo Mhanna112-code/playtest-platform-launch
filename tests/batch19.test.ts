@@ -392,7 +392,7 @@ describe("batch 19 section 5: the smaller bugs", () => {
     expect(box).toContain("Press Let it go again to go ahead.");
     const choice = src("app/app/sessions/[id]/ChoiceBox.tsx");
     expect(choice).toContain('setPressed(choice === "letgo" ? "Let it go" : "Charge");');
-    expect(choice).toContain("didntGo press={pressed} />");
+    expect(choice).toContain("didntGo press={pressed} button=");
   });
 });
 

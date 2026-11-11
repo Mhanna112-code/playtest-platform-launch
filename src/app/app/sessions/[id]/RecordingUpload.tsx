@@ -182,7 +182,7 @@ export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, se
       )}
       {canSend && !sendable && fresh.length > 0 && <p className="note" data-draft-kept="">Your recordings are kept. {sentBefore ? "Adding" : "Sending"} comes back when the test resumes.</p>}
       {sending(fin.line) && <PressDone line={fin.line} />}
-      <ChangesBox side="tester" changes={box && !box.top ? box.changes : null} tail={box?.tail} />
+      <ChangesBox side="tester" changes={box && !box.top ? box.changes : null} tail={box?.tail} button={press} /* (§387 2) "Press Send my recording again" */ />
       {/* (Batch 16 section 10) A file mistake is red at the file box, and listed here. */}
       <FormMistakes text={err} press={err.startsWith(FIELD) ? press : errPress || press} />
     </div>

@@ -46,7 +46,10 @@ const DEFAULT_TAILS = new Set(["Press again to go ahead.", "Press again to go ah
  * toggle wording on the tester side); and last, in bold, "Press <button> again to go ahead.". A refusal names the press first: "Your Pay didn't go through: <reason>".
  * `press` is the button's label; without one, the label of the press that was just stopped or refused (from its API path).
  */
-export function ChangesBox({ changes, error, tail = "Press again to go ahead.", link, didntGo = false, press, side = "developer", detail, seeIt, alertsWhere, heading }: { changes: Change[] | null; error?: string; tail?: string; link?: string; didntGo?: boolean; press?: string; side?: "developer" | "tester"; /** (Batch 16 section 19) more under a line (Edit: Before / What you typed) */ detail?: (c: Change) => React.ReactNode; /** (Batch 30 §10) a listing save's line ends "· See it" (where the listing is on this page) */ seeIt?: string; /** (Owner, Nov 11, §376; replaces batch 30 §10's "on your dashboard" hint) a join-page box (Join, Apply, Ask to rejoin, No thanks, Withdraw): it always stops, whatever the Alerts, so it never offers them */ alertsWhere?: "join"; /** (Batch 34 §1) the admin pages' heading: "Since this page loaded:" */ heading?: string }) {
+export function ChangesBox({ changes, error, tail = "Press again to go ahead.", link, didntGo = false, press, button, side = "developer", detail, seeIt, alertsWhere, heading }: { changes: Change[] | null; error?: string; tail?: string; link?: string; didntGo?: boolean; press?: string;
+  /** (Owner, Nov 11, §387 2) The button's own label when it differs from the press's name: "Press <button> again to go ahead." names what the button reads
+   * ("Send the dispute"), while "Your Dispute didn't go through." keeps the press's name. */
+  button?: string; side?: "developer" | "tester"; /** (Batch 16 section 19) more under a line (Edit: Before / What you typed) */ detail?: (c: Change) => React.ReactNode; /** (Batch 30 §10) a listing save's line ends "· See it" (where the listing is on this page) */ seeIt?: string; /** (Owner, Nov 11, §376; replaces batch 30 §10's "on your dashboard" hint) a join-page box (Join, Apply, Ask to rejoin, No thanks, Withdraw): it always stops, whatever the Alerts, so it never offers them */ alertsWhere?: "join"; /** (Batch 34 §1) the admin pages' heading: "Since this page loaded:" */ heading?: string }) {
   const ref = useRef<HTMLDivElement>(null);
   // (Batch 34 §14) The developer's test page gives every box its Listing panel ("#listing").
   const pageSeeIt = useSeeItTarget();
@@ -68,7 +71,8 @@ export function ChangesBox({ changes, error, tail = "Press again to go ahead.", 
   if (!changes && error && error.startsWith("\u0001")) return <p ref={ref as unknown as React.RefObject<HTMLParagraphElement>} className="err-field basis-full">{error.slice(1)}</p>;
   const name = press ?? (label || lastPressLabel());
   const named = name && name !== "press" ? name : "";
-  const action = DEFAULT_TAILS.has(tail) ? (named ? `Press ${pressVerb(named)} again to go ahead.` : "Press again to go ahead.") : tail;
+  const again = button || (named ? pressVerb(named) : "");
+  const action = DEFAULT_TAILS.has(tail) ? (again ? `Press ${again} again to go ahead.` : "Press again to go ahead.") : tail;
   // (Owner, Nov 3, §160) Only the lines an Alerts tick could have switched off offer to turn their type off; a box of forced lines shows no turn-off hint at all.
   const alerts = changes ? optionalAlerts(changes) : [];
   return (

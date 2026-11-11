@@ -336,7 +336,7 @@ export async function openDispute(tester: U, contractId: string, body: Record<st
     // (Owner, Nov 10, §369) A payment on the part came between the checks and the lock: nothing was written. The press ends as a later one would: nothing left
     // to dispute is its own refusal (checked again first); otherwise the §362 stop-once naming the payment.
     if (body.__moved !== true) return openDispute(tester, contractId, { ...body, __moved: true });
-    throw new HttpError(409, "no_dispute", "A payment on this part came just now: nothing was disputed. Press Dispute again.");
+    throw new HttpError(409, "no_dispute", "A payment on this part came just now: nothing was disputed. Press Send the dispute again."); // (§387 2) the button as it reads
   }
 }
 

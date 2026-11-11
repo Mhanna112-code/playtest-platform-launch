@@ -537,7 +537,7 @@ export function WrittenAddForm({ sessionId, seenAt, canSend = true, known = [], 
       <PausedSend sessionId={sessionId} press={`Add:${questionKey}`} label={first ? ANSWER_PRESS : "Add"} canSend={canSend} now={pausedNow} />
       {!canSend && !full && <p className="note" data-draft-kept="">What you add is kept as a draft. Adding comes back when the test resumes.</p>}
       <PressDone line={fin.line} />
-      <ChangesBox side="tester" changes={box && !box.top ? box.changes : null} tail={box?.tail} press={first ? ANSWER_PRESS : "Add"} />
+      <ChangesBox side="tester" changes={box && !box.top ? box.changes : null} tail={box?.tail} press={first ? ANSWER_PRESS : "Add"} button={sender} /* (§387 2) "Press Add to my answer again" */ />
       {/* (Owner, Nov 4, batch 35 §170) A refusal names the press Add (§146), not "Your Add to my answer didn't go through". */}
       {/* (§222) A question's first answer is the press Answer this question. */}
       <Err text={refused} press={first ? ANSWER_PRESS : PRESS_VERBS["written-add"]} />
@@ -580,7 +580,7 @@ export function LeaveButton({ sessionId, seenAt, title, notice }: { sessionId: s
         Leave this test
       </ConfirmButton>
       <PressDone line={fin.line} />
-      <ChangesBox side="tester" changes={box && !box.top ? box.changes : null} tail={box?.tail} press="Leave" didntGo />
+      <ChangesBox side="tester" changes={box && !box.top ? box.changes : null} tail={box?.tail} press="Leave" button="Leave this test" didntGo />
       <Err text={err ? refusalLine("Leave", err) : ""} />
     </div>
   );
@@ -629,6 +629,7 @@ export function DisputeForm({ sessionId, kind, id, seenAt, disabledNote = "", li
           checkFields(e.currentTarget.closest("details")); // (§380 D2) red at the reason, and the press still goes
           setBusy(true);
           setErr("");
+          setMeanwhile("");
           try {
             await api(`/api/sessions/${sessionId}/dispute`, { kind, id, reason, seenAt, confirmed, boxAt });
             const now = shown(); // (§371) the form shown now
@@ -644,8 +645,13 @@ export function DisputeForm({ sessionId, kind, id, seenAt, disabledNote = "", li
             } else if (e instanceof ApiError && e.code === "no_dispute" && / meanwhile \(/.test(e.message)) {
               // (Owner, Nov 3, §159) A payment since the page loaded left nothing to dispute: one refusal naming it, in the blue box (never a stop to press again).
               setBox(null);
+              setBoxAt("");
               setMeanwhile(e.message);
-            } else setErr(errOf(e));
+            } else {
+              // (Owner, Nov 11, §387 2) One answer under the button: a refusal replaces the box (a form mistake keeps it, red at the reason).
+              if (pressRefusal(e)) { setBox(null); setBoxAt(""); }
+              setErr(errOf(e));
+            }
             setBusy(false);
           }
         }}
@@ -655,7 +661,7 @@ export function DisputeForm({ sessionId, kind, id, seenAt, disabledNote = "", li
       <PressDone line={fin.line} />
       {!fin.done && disabledNote && <p className="note" data-owed-note="">{disabledNote}</p>}
       {keep.restored && reason !== "" && <DraftTag disabled={busy || fin.done} kind="discard" onUseSaved={() => setReason("")} />}
-      <ChangesBox side="tester" changes={box && !box.top ? box.changes : null} tail={box?.tail} press={DISPUTE_PRESS} />
+      <ChangesBox side="tester" changes={box && !box.top ? box.changes : null} tail={box?.tail} press={DISPUTE_PRESS} button="Send the dispute" /* (§387 2) the button's label in "Press … again" */ />
       {/* (Owner, Nov 4, batch 35 §170) A refusal names the press Dispute (its route's label), not the button's words: "Your Dispute didn't go through: …". */}
       {meanwhile && <p className="info" data-dispute-meanwhile="">{refusalLine(DISPUTE_PRESS, meanwhile)}</p>}
       <FormMistakes text={err} press="Send the dispute" named={DISPUTE_PRESS} />

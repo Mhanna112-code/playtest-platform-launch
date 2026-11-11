@@ -77,7 +77,9 @@ async function fingerprint(testId: string) {
 }
 
 /** The box's tail as the page draws it under the pressed button ("Press Pay again to go ahead."). */
-const tailOf = (p: Press) => `Press ${pressVerb(pressLabelOf(p.path, p.body))} again to go ahead.`;
+// (Owner, Nov 11, §387 2) "Press … again" names the button as it reads where that differs from the press's name.
+const BUTTON_OF: Record<string, string> = { Add: "Add to my answer", Leave: "Leave this test", Dispute: "Send the dispute", "End early": "End their work now" };
+const tailOf = (p: Press) => { const v = pressVerb(pressLabelOf(p.path, p.body)); return `Press ${/\/recording-send$/.test(p.path) ? `${v} my recording` : BUTTON_OF[v] ?? v} again to go ahead.`; };
 
 /**
  * The first press (from a page loaded at `loaded`) stops with exactly `lines` (strings, or patterns for a line naming a time) and `tail`, changing nothing; then the
@@ -113,7 +115,7 @@ const devPress = {
   endEarly: (w: W): Press => { const body = { contractIds: [w.ana.sessionId], reason: "We have enough feedback now." }; return { path: `/api/tests/${w.testId}/end-early`, body, go: (x) => act(w.testId, "end-early", w.dev.cookie, { ...body, ...x }) as Promise<Res> }; },
   request: (w: W): Press => { const body = { minutes: "30", contractIds: [w.ana.sessionId], rows: [{ startsAt: atHours(72), repeat: "once", count: 1 }] }; return { path: `/api/tests/${w.testId}/request-time`, body, go: (x) => act(w.testId, "request-time", w.dev.cookie, { ...body, ...x }) as Promise<Res> }; },
 };
-const DEV_TAILS: Record<keyof typeof devPress, string> = { pay: "Press Pay again to go ahead.", payMore: "Press Pay more again to go ahead.", confirm: "Press Confirm with your bank again to go ahead.", endEarly: "Press End early again to go ahead.", request: "Press Request a time again to go ahead." };
+const DEV_TAILS: Record<keyof typeof devPress, string> = { pay: "Press Pay again to go ahead.", payMore: "Press Pay more again to go ahead.", confirm: "Press Confirm with your bank again to go ahead.", endEarly: "Press End their work now again to go ahead.", request: "Press Request a time again to go ahead." };
 // Ana's presses on her session.
 const testerPress = {
   add: (w: W): Press => ({ path: `/api/sessions/${w.ana.sessionId}/written-add`, body: {}, go: (x) => addTo(w.ana.sessionId, w.ana.tester.cookie, { text: "One more thing about the harbour.", ...x }) as Promise<Res> }),
@@ -121,7 +123,7 @@ const testerPress = {
   leave: (w: W): Press => ({ path: `/api/sessions/${w.ana.sessionId}/leave`, body: {}, go: (x) => sact(w.ana.sessionId, "leave", w.ana.tester.cookie, x) as Promise<Res> }),
   dispute: (w: W): Press => { const body = { kind: "submission", id: w.anaSub.id, reason: "I answered every question fully and in detail." }; return { path: `/api/sessions/${w.ana.sessionId}/dispute`, body, go: (x) => sact(w.ana.sessionId, "dispute", w.ana.tester.cookie, { ...body, ...x }) as Promise<Res> }; },
 };
-const TESTER_TAILS: Record<keyof typeof testerPress, string> = { add: "Press Add again to go ahead.", request: "Press Request a time again to go ahead.", leave: "Press Leave again to go ahead.", dispute: "Press Dispute again to go ahead." };
+const TESTER_TAILS: Record<keyof typeof testerPress, string> = { add: "Press Add to my answer again to go ahead.", request: "Press Request a time again to go ahead.", leave: "Press Leave this test again to go ahead.", dispute: "Press Send the dispute again to go ahead." };
 
 /** Ana disputes her written answers (from a page of hers loaded before), returning the dispute row. */
 async function anaDisputes(w: W) {
@@ -262,7 +264,7 @@ for (const off of [true, false]) {
           const loaded = seen(); await settle();
           expect((await more(w, w.anaRec.id)).status).toBe(200);
           await settle();
-          await stopsOnce(w, off, loaded, recSend(w, add), ["Nora Lane paid you $2.00 more for your recording"], add ? "Press Add again to go ahead." : "Press Send again to go ahead.");
+          await stopsOnce(w, off, loaded, recSend(w, add), ["Nora Lane paid you $2.00 more for your recording"], add ? "Press Add my recording again to go ahead." : "Press Send my recording again to go ahead.");
         });
       }
       it("Ana's Dispute on her written answers after a Pay more on them", async () => {
