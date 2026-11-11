@@ -1504,11 +1504,26 @@ export function closesInLine(title: string, at: Date, now: Date, who: "tester" |
   return who === "developer" ? `⏱ ${title} closes to new testers in ${left}.` : `⏱ Your deadline on ${title} is in ${left}: send your work before then.`;
 }
 
-/** Summary emails: daily, weekly or monthly since the last one. */
+/** (Owner, Nov 11, §383) A repeat never comes sooner than this after the last one (a first line at 22:00 UTC isn't followed by a repeat at 09:00 the next morning). */
+export const REPEAT_MIN_GAP_MS = 12 * 3_600_000;
+/** (§383) The UTC calendar day a moment falls on (days since Jan 1, 1970). */
+export const utcDayNo = (d: Date) => Math.floor(d.getTime() / 86_400_000);
+/**
+ * (Owner, Nov 11, §383) THE rule for every repeating line and email (the daily "Pay now" and "Charge or let go" lines, the every-3-days Rate and payout-waiting
+ * reminders, invite and applications-waiting reminders, the Daily / Weekly / Monthly summary): due when there was none before (`last` null), or when the last one
+ * was `everyDays` or more UTC calendar days earlier AND at least 12 hours ago. By calendar day, so the daily job (09:00 UTC) never drifts an hour earlier each
+ * day or sends twice in one day (it replaces the 23 h / 20 h / 3 days − 1 h / 1-hour-slack windows).
+ */
+export function repeatDue(last: Date | null | undefined, now: Date, everyDays = 1) {
+  if (!last) return true;
+  return utcDayNo(now) - utcDayNo(last) >= everyDays && now.getTime() - last.getTime() >= REPEAT_MIN_GAP_MS;
+}
+
+/** Summary emails: daily, weekly or monthly since the last one (§383: by UTC calendar day, repeatDue). */
 export function summaryDue(pref: string, last: Date | null, now: Date) {
   const days = pref === "daily" ? 1 : pref === "weekly" ? 7 : pref === "monthly" ? 30 : 0;
   if (!days) return false;
-  return !last || now.getTime() - last.getTime() >= days * 86_400_000 - 3_600_000;
+  return repeatDue(last, now, days);
 }
 
 /** One line per failed payment in the hold box. */
