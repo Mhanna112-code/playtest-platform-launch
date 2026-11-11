@@ -1909,6 +1909,8 @@ export function canAskToRejoin(c: { status: string; endKind: string; endedAt: Da
 
 /** (Batch 17 section 2) Your own side suspended (or, for a developer, on a hold): Rate is hidden and an old page's press is refused. */
 export const RATE_INACTIVE = "You can rate once your account is active again.";
+/** (Owner, Nov 11, §386 E) The tester's hidden Rate while the test or its developer is paused (never why). */
+export const RATE_TEST_PAUSED = "You can rate once this test resumes.";
 /** (Batch 17 section 1) The tester's Rate is disabled, with the first of these lines that applies. */
 export const RATE_CHARGE_FIRST = "Charge or let go of your unreviewed work first.";
 export const RATE_MY_DISPUTE = "Rating opens once the team decides your dispute.";

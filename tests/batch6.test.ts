@@ -16,7 +16,7 @@ import * as R from "@/lib/rules";
 import { CRITICAL_KEYS, countsAfter, countsOf, criticalLine, lockedFields } from "@/lib/limits";
 import { rateLabel } from "@/lib/server/requests";
 import { decideDispute, review } from "@/lib/server/payments";
-import { liftHoldIfClear, owedLines, payOwed, startHold } from "@/lib/server/holds";
+import { liftHoldIfClear, owedLines, startHold } from "@/lib/server/holds";
 import { reinstateAccount } from "@/lib/server/restrictions";
 import { setStripeForTests } from "@/lib/server/stripe";
 import { json, makeUser, req } from "./helpers";

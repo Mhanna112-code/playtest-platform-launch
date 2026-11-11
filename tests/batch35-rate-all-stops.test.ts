@@ -89,6 +89,7 @@ describe("batch 35 §93: tester Rate uses every shared tester stop", () => {
     expect((await rate(x, loaded)).status).toBe(200);
   });
 
+  // (Owner, Nov 11, §386 E) A pause still on refuses the tester's Rate ("This test is paused …"): the "pause" case lifts it again before rating.
   it.each(["terms", "listing", "call", "stop", "pause", "own"])("§90: already shown %s never stops despite older load/render markers", async (kind) => {
     const x = await ready(); const loaded = seen(); await settle();
     if (kind === "terms") await edit(x, { writtenCents: "12.00" });
@@ -99,6 +100,8 @@ describe("batch 35 §93: tester Rate uses every shared tester stop", () => {
     if (kind === "pause") {
       const a = await makeUser();
       await (await import("@/lib/server/restrictions")).pauseTest(a.user.id, x.testId, "Checking the test");
+      expect((await rate(x, loaded, { seenAt: seen(), boxSeenAt: loaded })).body.error.message).toBe("This test is paused, so your Rate didn't go through."); // (§386 E)
+      await (await import("@/lib/server/restrictions")).unpauseTest(x.testId);
     }
     await settle();
     const r = await rate(x, loaded, { seenAt: seen(), boxSeenAt: loaded });
@@ -140,6 +143,9 @@ describe("batch 35 §93: tester Rate uses every shared tester stop", () => {
     const a = await makeUser();
     const { pauseTest } = await import("@/lib/server/restrictions");
     await pauseTest(a.user.id, x.testId, "Checking the test");
+    // (§386 E) The pause itself refuses Rate while it lasts; after the lift, neither the unseen pause nor the ignored edit stops it.
+    expect((await rate(x, loaded)).body.error.message).toBe("This test is paused, so your Rate didn't go through.");
+    await (await import("@/lib/server/restrictions")).unpauseTest(x.testId);
     const first = await rate(x, loaded);
     expect(first.status, JSON.stringify(first.body)).toBe(200);
   });

@@ -7,7 +7,7 @@ import { displayName, fmtDateIn, money, pronouns } from "@/lib/format";
 import { isUniqueClash } from "./passwords";
 import { HttpError } from "./http";
 import { bell, notify } from "./notify";
-import { finishedAndRatedLine, ratedYouLine, ratingClosedLine, RATE_CHARGE_FIRST, RATE_INACTIVE, RATE_MY_DISPUTE, chargeIsOpen, chargeOpensAt, ratePendingLine, rateOpensOnLine, rateOpensReviewLine, rateTheirDisputeLine, type TestEventLike } from "@/lib/rules";
+import { finishedAndRatedLine, ratedYouLine, ratingClosedLine, RATE_CHARGE_FIRST, RATE_INACTIVE, RATE_MY_DISPUTE, RATE_TEST_PAUSED, chargeIsOpen, chargeOpensAt, ratePendingLine, rateOpensOnLine, rateOpensReviewLine, rateTheirDisputeLine, type TestEventLike } from "@/lib/rules";
 import { cancelCallsAhead, lockTest, ownContract, ownTest, recordEvent, spotOpened } from "./tests";
 import { seenOf, unanswered, tabOf, testerPaymentChanges } from "./live";
 import { FINISHED_PART_REASON, payMoreLine, TESTER_CALL_KINDS, testerChanges, testerGate } from "./testerGate";
@@ -15,7 +15,7 @@ import { devPauseMoments, devStopSince, loadedOf, stopBox } from "./stopMoment";
 import { CONTRACTS, closeOutOf, testSpans, testerRatingClosesAt, closedOut, devPauseSpans, mergeSpans, teamPauseSpans, windowEnd, type Span } from "./closeOut";
 import { CLOSE_OUT_DAYS, closeOutBase, repeatDue, REPEAT_MIN_GAP_MS } from "@/lib/rules";
 import { closeOffersOfEnded } from "./offerClose";
-import { RATE_TEAM_PAUSED, teamPausedNow } from "@/lib/restricted";
+import { RATE_TEAM_PAUSED, TESTER_FROZEN_CAUSE, moneyFrozen, teamPausedNow } from "@/lib/restricted";
 import { testerRow } from "@/lib/lineAnchors";
 
 // (Owner, Oct 22, NEWEST+5) Ratings. (Owner, Oct 28, batch 17 sections 1, 2, 14, 16 and 17: the rules below replace the earlier ones where they differ.)
@@ -63,6 +63,9 @@ export async function testerRateState(contractId: string, now = new Date()): Pro
   // (Batch 17 section 19) The test's close-out ends the tester's Rate: "Rating closed on <date>." (shown as a note, refused on the server).
   const closeOut = await testerRatingClosesAt(contractId, now);
   if (closedOut(closeOut, now)) return { kind: "closed", line: ratingClosedLine(fmtDateIn(closeOut!, c.tester.timeZone)) };
+  // (Owner, Nov 11, §386 E) While the test or its developer is paused (the team's pause, the developer's hold or suspension; during the test or after it closed) the
+  // tester's Rate is hidden and refused, as during their own suspension (never why); its window moves on by the pause (testerRatingClosesAt).
+  if (moneyFrozen(c.test.developer, c.test)) return { kind: "hidden", line: RATE_TEST_PAUSED };
   // A part or listed call they can still Charge or Let it go (Charge never happens on its own: they settle it first).
   // (Batch 30 §3) Late work never has a Charge to settle.
   if ([...c.submissions, ...done].some((x) => !x.review && x.choiceOfferedAt && !("late" in x && x.late))) return { kind: "disabled", line: RATE_CHARGE_FIRST };
@@ -296,6 +299,7 @@ function refuse(s: RateState, already: string, why: { gone: string; own: string 
   if (s.kind === "rated") throw new HttpError(409, "rated", already);
   if (s.line === ACCOUNT_DELETED_RATE) throw new HttpError(409, "not_yet", RF.pressRefused(why.gone, "Rate"));
   if (s.line === RATE_TEAM_PAUSED) throw new HttpError(409, "inactive", RF.pressRefused(RF.TEAM_PAUSED_CAUSE, "Rate"));
+  if (s.line === RATE_TEST_PAUSED) throw new HttpError(409, "paused", RF.pressRefused(TESTER_FROZEN_CAUSE, "Rate")); // (§386 E) "This test is paused, so your Rate didn't go through."
   if (s.line === RATE_INACTIVE) throw new HttpError(409, "inactive", RF.pressRefused(why.own, "Rate"));
   throw new HttpError(409, "not_yet", s.line);
 }

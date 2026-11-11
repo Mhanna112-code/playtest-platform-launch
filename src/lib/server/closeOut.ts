@@ -163,7 +163,9 @@ export async function testerRatingClosesAt(contractId: string, now = new Date())
  // (Owner, Nov 11, §382 a) The tester's own suspension extends their Rate like Charge (§378, pieceCloseOut): its spans pause the same window, so only the part after
  // test close can move it past the close-out.
  const tEvents=await db.accountEvent.findMany({where:{userId:c.tester.id,kind:{in:["suspended","reinstated"]}},select:{kind:true,side:true,createdAt:true}});
- const spans=mergeSpans([...await testSpans(t,base,now),...disputeSpans,...testerPauseSpans(tEvents,c.tester.testerSuspendedAt,now)]);
+ // (Owner, Nov 11, §386 E; replaces §358 for this window only) The developer-side freeze (moneySpans: the team's pause, the developer's holds and suspensions)
+ // pauses it after the test closed too, on the same one clock from the test close (so only the part after it counts); the close-out itself doesn't move.
+ const spans=mergeSpans([...await moneySpans(t,base,now),...disputeSpans,...testerPauseSpans(tEvents,c.tester.testerSuspendedAt,now)]);
  return windowEnd(base,spans,now,CLOSE_OUT_DAYS).end;
 }
 

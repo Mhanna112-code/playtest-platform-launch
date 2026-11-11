@@ -155,7 +155,7 @@ describe("batch 7 item 4: stop-once on every press still allowed", () => {
   for (const state of ["stopped", "paused"] as const) {
     // (Owner, Oct 29, batch 29 section 11; reverses batch 16 section 25 again) In these states what still works follows the running test's stop-once rules; Rate keeps
     // its own list. Refusals are unchanged.
-    it(`tester, ${state} test: Charge, Dispute${state === "paused" ? " and Cancel call" : ""} stop once for the new payment, then go through; Rate stops once for it too`, async () => {
+    it(`tester, ${state} test: ${state === "paused" ? "Charge and Rate are refused (§386); Dispute and Cancel call" : "Charge, Dispute"} stop once for the new payment, then go through${state === "paused" ? "" : "; Rate stops once for it too"}`, async () => {
       const { dev, testId } = await setup({ recordingCents: "5.00" });
       const { tester, sessionId } = await joined(testId);
       await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
@@ -168,13 +168,19 @@ describe("batch 7 item 4: stop-once on every press still allowed", () => {
       await settle();
       const rec = await paidLater(sessionId);
       const press = (action: string, body: Record<string, unknown>) => sact(sessionId, action, tester.cookie, { seenAt: loaded, ...body });
-      // (Batch 17 section 1) Rate waits while a piece can be charged.
-      expect((await press("rate", { stars: 4 })).body.error.message).toBe("Charge or let go of your unreviewed work first.");
-      stops(await press("choose", { submissionId: sub.id, choice: "charge", tickedCents: 1000 }), "charge");
-      const charged = await press("choose", { submissionId: sub.id, choice: "charge", tickedCents: 1000, confirmed: true, boxAt: seen() });
-      expect(charged.status, JSON.stringify(charged.body)).toBe(200);
-      expect((await press("choose", { submissionId: sub.id, choice: "letgo" })).body.error.message).toBe("You already chose for this."); // refusals unchanged
-      stops(await press("rate", { stars: 4 }), "rate"); // a payment about the work arrived since the page loaded
+      if (state === "paused") {
+        // (Owner, Nov 11, §386 A and E) No money moves while the test is paused (here, the developer's hold): Charge and Rate are refused, never why.
+        expect((await press("rate", { stars: 4 })).body.error.message).toBe("This test is paused, so your Rate didn't go through.");
+        expect((await press("choose", { submissionId: sub.id, choice: "charge", tickedCents: 1000 })).body.error.message).toBe("This test is paused, so your Charge didn't go through.");
+      } else {
+        // (Batch 17 section 1) Rate waits while a piece can be charged.
+        expect((await press("rate", { stars: 4 })).body.error.message).toBe("Charge or let go of your unreviewed work first.");
+        stops(await press("choose", { submissionId: sub.id, choice: "charge", tickedCents: 1000 }), "charge");
+        const charged = await press("choose", { submissionId: sub.id, choice: "charge", tickedCents: 1000, confirmed: true, boxAt: seen() });
+        expect(charged.status, JSON.stringify(charged.body)).toBe(200);
+        expect((await press("choose", { submissionId: sub.id, choice: "letgo" })).body.error.message).toBe("You already chose for this."); // refusals unchanged
+        stops(await press("rate", { stars: 4 }), "rate"); // a payment about the work arrived since the page loaded
+      }
       stops(await press("dispute", { kind: "submission", id: rec.id, reason: "I recorded the whole session" }), "dispute");
       const disputed = await press("dispute", { kind: "submission", id: rec.id, reason: "I recorded the whole session", confirmed: true, boxAt: seen() });
       expect(disputed.status, JSON.stringify(disputed.body)).toBe(200);

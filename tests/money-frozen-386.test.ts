@@ -4,10 +4,11 @@ import { db } from "@/lib/db";
 import { awayAction, confirmStart } from "@/lib/server/confirm";
 import { confirmAllPress } from "@/lib/server/confirmAll";
 import { autoChargeCalls, liftHoldIfClear, runSweep, startHold } from "@/lib/server/holds";
-import { closeOutOf, pieceCloseOut } from "@/lib/server/closeOut";
+import { closeOutOf, pieceCloseOut, testerRatingClosesAt } from "@/lib/server/closeOut";
+import { testerRateState } from "@/lib/server/ratings";
 import { pauseTest, reinstateAccount } from "@/lib/server/restrictions";
 import { moneyFrozen } from "@/lib/restricted";
-import { CHOICE_PAUSED_NOTE, PAUSED_FOR_TESTERS } from "@/lib/rules";
+import { CHOICE_PAUSED_NOTE, PAUSED_FOR_TESTERS, RATE_TEST_PAUSED } from "@/lib/rules";
 import { makeUser } from "./helpers";
 import { bookCall, joined, sact, seen, settle, setup } from "./fixtures";
 import { DAY, pay, payMore } from "./b15";
@@ -233,5 +234,58 @@ describe("§386 A windows: a freeze after the test closed moves each piece's own
     const v = await closed();
     await db.user.update({ where: { id: v.dev.user.id }, data: { devSuspendedAt: at("11-10") } });
     expect(await pieceCloseOut({ submissionId: v.early.id }, at("11-20"))).toEqual(at("11-25")); // 5 days were left on Nov 10: counted from "now"
+  });
+});
+
+// (Owner, Nov 11, §386 E) The tester's Rate is hidden and refused while frozen, like during their own suspension, never saying why; its window moves on by a
+// developer-side freeze after the test closed (one clock from the test close); the close-out doesn't move.
+describe.each(CAUSES)("§386 E %s: the tester's Rate is hidden and refused, during the test and after it closed", (_name, freeze) => {
+  for (const after of [false, true]) {
+    it(after ? "after the test closed" : "during the test", async () => {
+      const w = await world();
+      // Everything she sent settled, so her Rate is open.
+      await db.submission.deleteMany({ where: { id: { in: [w.written.id, w.open.id] } } });
+      await db.call.update({ where: { id: w.call.id }, data: { status: "cancelled" } });
+      if (after && freeze !== teamPause) await close(w);
+      expect((await testerRateState(w.sessionId)).kind).toBe("open");
+      await freeze(w);
+      if (after && freeze === teamPause) await close(w);
+      await settle();
+      expect(await testerRateState(w.sessionId)).toMatchObject({ kind: "hidden", line: RATE_TEST_PAUSED });
+      const r = await sact(w.sessionId, "rate", w.tester.cookie, { stars: 4, seenAt: seen() });
+      expect(r.body.error?.message, JSON.stringify(r.body)).toBe("This test is paused, so your Rate didn't go through.");
+      expect(await db.rating.count({ where: { contractId: w.sessionId } })).toBe(0);
+    });
+  }
+});
+
+describe("§386 E the tester's Rate window: a developer freeze after the test closed moves it; one before doesn't; the close-out doesn't move", () => {
+  const at = (d: string) => new Date(`2020-${d}T12:00:00Z`);
+  const NOW = at("12-31");
+  async function closed() {
+    const s = await setup();
+    const j = await joined(s.testId, "Ana Silva");
+    await db.contract.update({ where: { id: j.sessionId }, data: { dueAt: at("10-20"), status: "ended", endKind: "closed", endedAt: at("11-01") } });
+    await db.test.update({ where: { id: s.testId }, data: { status: "closed", openUntil: at("10-20"), workEndedAt: at("11-01") } });
+    return { ...s, ...j };
+  }
+  const suspended = async (devId: string, from: string, to: string) => {
+    await db.accountEvent.create({ data: { userId: devId, kind: "suspended", side: "developer", createdAt: at(from) } });
+    await db.accountEvent.create({ data: { userId: devId, kind: "reinstated", side: "developer", createdAt: at(to) } });
+  };
+
+  it("a 2-day suspension after the test close moves the tester's Rate close by 2 days", async () => {
+    const w = await closed();
+    expect(await testerRatingClosesAt(w.sessionId, NOW)).toEqual(at("11-15"));
+    await suspended(w.dev.user.id, "11-03", "11-05");
+    expect(await testerRatingClosesAt(w.sessionId, NOW)).toEqual(at("11-17"));
+    expect(await closeOutOf(w.testId, NOW)).toEqual(at("11-15"));
+  });
+
+  it("a suspension before the test close doesn't move it", async () => {
+    const w = await closed();
+    await suspended(w.dev.user.id, "10-25", "10-27");
+    expect(await testerRatingClosesAt(w.sessionId, NOW)).toEqual(at("11-15"));
+    expect(await closeOutOf(w.testId, NOW)).toEqual(at("11-15"));
   });
 });

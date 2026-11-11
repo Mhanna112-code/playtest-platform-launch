@@ -72,6 +72,11 @@ describe("what still works follows the running test's stop-once rules (batch 29 
         expect(c.body.error.message).toBe(`Your account is paused, so your Let it go didn't go through.`); // (§364 item 8)
         return;
       }
+      if (state === "paused") {
+        // (Owner, Nov 11, §386 A) No money moves while the test is paused: Charge and Let it go are refused (never why), before any stop box.
+        expect(c.body.error.message).toBe("This test is paused, so your Let it go didn't go through.");
+        return;
+      }
       expect(c.body.error?.code, JSON.stringify(c.body)).toBe("stop_once");
       const c2 = await sact(b.sessionId, "choose", b.tester.cookie, { submissionId: b.sub.id, choice: "letgo", seenAt: b.opened, confirmed: true, boxAt: seen() });
       expect(c2.status, JSON.stringify(c2.body)).toBe(200);

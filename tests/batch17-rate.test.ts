@@ -252,7 +252,8 @@ describe("section 14: Rate stops only for changes about that person", () => {
 
   // (Owner, Nov 4, §172; replaces batch 17 §14) A team pause is a developer suspension for that test: the developer's Rate waits (its own refusal, the team's wording);
   // the tester still rates (a developer suspension never stops the tester's Rate).
-  it("a test the team paused: the developer's Rate waits for the lift; the tester rates straight through", async () => {
+  // (Owner, Nov 11, §386 E) The tester's Rate is hidden and refused too while the test is paused (never why), and goes through after the lift.
+  it("a test the team paused: the developer's Rate waits for the lift; so does the tester's (§386 E)", async () => {
     const x = await bothCanRate();
     await pauseTest((await admin()).id, x.testId, "Checking");
     const refused = await act(x.testId, "rate", x.dev.cookie, { contractId: x.sessionId, stars: 5, seenAt: seen() });
@@ -260,6 +261,8 @@ describe("section 14: Rate stops only for changes about that person", () => {
     const y = await sent();
     await pay(y.dev.cookie, { kind: "submission", id: y.sub.id, amount: "10.00", tickedCents: 1000 });
     await pauseTest((await admin()).id, y.testId, "Checking");
+    expect((await sact(y.sessionId, "rate", y.tester.cookie, { stars: 5, seenAt: seen() })).body.error.message).toBe("This test is paused, so your Rate didn't go through.");
+    await (await import("@/lib/server/restrictions")).unpauseTest(y.testId);
     expect((await sact(y.sessionId, "rate", y.tester.cookie, { stars: 5, seenAt: seen() })).status).toBe(200);
   });
 });

@@ -78,7 +78,7 @@ describe("§172: the developer's presses on a test the team paused are a suspend
     expect(await db.payment.count({ where: { submissionId: x.sub.id, kind: "extra" } })).toBe(0);
   });
 
-  it("Rate: hidden and refused with the team's wording (never 'suspended'); the tester's Rate is unaffected", async () => {
+  it("Rate: hidden and refused with the team's wording (never 'suspended'); (§386 E: the tester's Rate is hidden too, tests/money-frozen-386.test.ts)", async () => {
     const x = await rateOpen();
     await pauseTest(await admin(), x.testId, "Checking");
     const st = (await devRateStates([x.sessionId])).get(x.sessionId)!;

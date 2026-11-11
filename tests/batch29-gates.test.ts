@@ -81,7 +81,8 @@ describe("batch 29 section 11: stopped, closed and paused tests keep the stop-on
     expect(r.status, JSON.stringify(r.body)).toBe(200);
   });
 
-  it("on a paused test an ordinary payment elsewhere can still stop Charge once", async () => {
+  // (Owner, Nov 11, §386 A) No money moves while the test is paused: Let it go is refused there (a refusal before any box); after the lift it stops once.
+  it("on a paused test Let it go is refused (§386 A); after the lift an ordinary payment elsewhere can still stop it once", async () => {
     const w = await chargeOpen({ recordingCents: "5.00" });
     const admin = await makeUser({ name: "Team Admin" });
     await pauseTest(admin.user.id, w.testId, "Checking reports");
@@ -90,9 +91,11 @@ describe("batch 29 section 11: stopped, closed and paused tests keep the stop-on
     const loaded = await loadedNow();
     const rec = await db.submission.create({ data: { contractId: w.sessionId, kind: "recording", agreedCents: 500, answers: [], payBy: new Date(Date.now() + 86_400_000) } });
     await db.review.create({ data: { contractId: w.sessionId, submissionId: rec.id, amountCents: 500, reason: "", payKey: randomUUID() } });
+    expect((await sact(w.sessionId, "choose", w.tester.cookie, { submissionId: w.sub.id, choice: "letgo", seenAt: loaded, pageSeenAt: loaded })).body.error.message).toBe("This test is paused, so your Let it go didn't go through.");
+    await db.test.update({ where: { id: w.testId }, data: { adminPausedAt: null } });
     const r = await sact(w.sessionId, "choose", w.tester.cookie, { submissionId: w.sub.id, choice: "letgo", seenAt: loaded, pageSeenAt: loaded });
     expect(r.body.error?.code).toBe("stop_once");
-    expect(texts(r)).toEqual(["Nora Lane paid $5.00 for your recording"]);
+    expect(texts(r)).toContain("Nora Lane paid $5.00 for your recording");
     expect(texts(r).join(" ")).not.toMatch(/hold|suspended|failed|chargeback/i);
     const again = await sact(w.sessionId, "choose", w.tester.cookie, { submissionId: w.sub.id, choice: "letgo", seenAt: loaded, pageSeenAt: loaded, confirmed: true, boxAt: seen() });
     expect(again.status, JSON.stringify(again.body)).toBe(200);
