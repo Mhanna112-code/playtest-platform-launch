@@ -53,18 +53,27 @@ export async function requirePerk(devId: string, perk: Perk) {
 
 /** Tests that count as open: Open, Full or Paused (status "open"). Drafts, Stopped and Closed don't. */
 // (Batch 15 section 18, DEFAULT) A test whose joining has closed (Open until passed) no longer counts toward the open tests.
-export const openTestCount = (devId: string, exceptId = "") => db.test.count({ where: { developerId: devId, status: "open", OR: [{ openUntil: null }, { openUntil: { gt: new Date() } }], ...(exceptId ? { id: { not: exceptId } } : {}) } });
+export const openTestCount = (devId: string, exceptId = "", q: Pick<typeof db, "test"> = db) => q.test.count({ where: { developerId: devId, status: "open", OR: [{ openUntil: null }, { openUntil: { gt: new Date() } }], ...(exceptId ? { id: { not: exceptId } } : {}) } });
 /**
  * (Section 2) The free plan runs one open test at a time. (Owner, Oct 29, batch 12 section 4) Subscribers (and everyone during a free launch) at most MAX_OPEN_TESTS (10).
  * Counted on the server at the press: a test stopped in another tab meanwhile simply lets the post through (a drop in the count is never a stop-once reason).
  */
-export async function canOpenAnother(devId: string, exceptId = "") {
-  const open = await openTestCount(devId, exceptId);
+export async function canOpenAnother(devId: string, exceptId = "", q: Pick<typeof db, "test"> = db) {
+  const open = await openTestCount(devId, exceptId, q);
   if (await hasPerks(await userOf(devId))) {
     if (open >= MAX_OPEN_TESTS) throw new HttpError(409, "too_many_open", TOO_MANY_OPEN_LINE);
     return;
   }
   if (open >= 1) throw new HttpError(409, "subscription", SECOND_TEST_LINE, { perk: "several" });
+}
+
+/**
+ * (Owner, Nov 11, §380 N) The developer's open-test limit, counted inside a lock on their account row: of two posts (or Accept testers again) at once in two tabs,
+ * the second counts the first's test. Called inside the press's own transaction, before it opens the test.
+ */
+export async function canOpenAnotherLocked(tx: Pick<typeof db, "test" | "$queryRaw">, devId: string, exceptId = "") {
+  await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${devId} FOR UPDATE`;
+  await canOpenAnother(devId, exceptId, tx);
 }
 
 async function tell(dev: Dev, line: string, always = false) {

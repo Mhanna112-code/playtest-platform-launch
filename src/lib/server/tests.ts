@@ -1,7 +1,7 @@
 import { ndaOnlyEdit, NDA_ONLY_EDIT } from "@/lib/ndaEditing";
 import { stoppedPressLine } from "@/lib/refusal";
 import * as RF from "@/lib/refusal";
-import { overPressLine } from "@/lib/rules";
+import { MAX_ACTIVE_TESTS, TEST_LIMIT_LINE, overPressLine } from "@/lib/rules";
 import { additionTerms } from "./submissionAdditions";
 import { dateZone } from "./dateZone";
 import { TEAM_LIFTED_EVENT, TEAM_PAUSED_EVENT, devLiftSince, devPauseMoments, devPauseSince, devStopSince, loadedOf } from "./stopMoment";
@@ -309,6 +309,7 @@ export async function postDraft(dev: U, testId: string, body: Record<string, unk
   return db.$transaction(async (tx) => {
     const t = await lockTest(tx, testId);
     if (t.status !== "draft") throw new HttpError(409, "not_draft", "This test is already open.");
+    await (await import("./subscription")).canOpenAnotherLocked(tx, dev.id, testId); // (Owner, Nov 11, §380 N) counted under the account's lock
     await requireUniqueTitle(tx, dev.id, l.title, testId);
     if (keys.length) await tx.accessKey.createMany({ data: keys.map((value) => ({ testId, value })) });
     // It opens now: the deadline buffer and the dashboard order count from here; (batch 15 section 18) so do the tester days.
@@ -348,6 +349,7 @@ export async function createTest(dev: U, body: Record<string, unknown>) {
   await requireCardToPost(dev.id);
   await postPerks(dev.id, l.joinMode);
   return db.$transaction(async (tx) => {
+    await (await import("./subscription")).canOpenAnotherLocked(tx, dev.id); // (Owner, Nov 11, §380 N) counted under the account's lock
     await requireUniqueTitle(tx, dev.id, l.title);
     const t = await tx.test.create({ data: { ...listingData(l), developerId: dev.id, status: "open", testerDays: testerDaysFor(l.openUntil, dev) } });
     if (keys.length) await tx.accessKey.createMany({ data: keys.map((value) => ({ testId: t.id, value })) });
@@ -670,6 +672,7 @@ export async function openDraft(dev: U, testId: string, body: Record<string, unk
   return db.$transaction(async (tx) => {
     const now = await lockTest(tx, testId);
     if (now.status !== "draft") throw new HttpError(409, "not_draft", now.status === "stopped" ? stoppedPressLine("Accept testers again") : "This test is already open."); // (§363)
+    await (await import("./subscription")).canOpenAnotherLocked(tx, dev.id, testId); // (Owner, Nov 11, §380 N) counted under the account's lock
     return recordEvent(tx, testId, "opened", "The test opened for testers", true, { status: "open", testerDays: testerDaysFor(t.openUntil, dev) });
   });
 }
@@ -1120,8 +1123,13 @@ export type Joined = Awaited<ReturnType<typeof saveJoin>>;
  */
 export async function saveJoin(tx: Tx, t: Prisma.TestGetPayload<object>, tester: U, body: Record<string, unknown>, options: { quietJoinEvent?: boolean } = {}) {
   const testId = t.id;
-  const dev = await tx.user.findUniqueOrThrow({ where: { id: t.developerId } });
+  // (Owner, Nov 11, §380 N) The tester's 10 working tests, counted inside a lock on their account row (after the test's lock, as a Block takes them): of two joins
+  // at once on two tests (Join, an Accept, an Ask to rejoin accepted), the second counts the first.
+  await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${tester.id} FOR UPDATE`;
   const old = await tx.contract.findUnique({ where: { testId_testerId: { testId, testerId: tester.id } } });
+  if (old?.status !== "working" && (await tx.contract.count({ where: { testerId: tester.id, status: "working" } })) >= MAX_ACTIVE_TESTS)
+    throw new HttpError(409, "test_limit", body.acceptedByDeveloper === true ? `${displayName(tester)} can't join more tests right now.` : TEST_LIMIT_LINE);
+  const dev = await tx.user.findUniqueOrThrow({ where: { id: t.developerId } });
   const ndaAt = typeof body.ndaAcceptedAt === "string" && !isNaN(new Date(body.ndaAcceptedAt).getTime()) ? new Date(body.ndaAcceptedAt) : null;
   // (Batch 15 section 18) The tester's deadline: the day they join + the test's tester days (counted in the developer's time zone, like Open until).
   const snap = contractSnapshot({ ...asListing(t), listingVersion: t.listingVersion, testerDays: t.testerDays, tz: dev.timeZone }, new Date(), body.keepPrivate === true, ndaAt ?? new Date());
