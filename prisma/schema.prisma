@@ -1032,6 +1032,13 @@ model PageClaim {
   scope     String
   tabId     String
   claimedAt DateTime @default(now())
+  /// (§380 J) the holder's last heartbeat (or press); a holder silent for a while is gone
+  beatAt    DateTime?
+  /// (§380 J) a press of the holder is on its way (or its redraw hasn't landed)
+  busy      Boolean   @default(false)
+  /// (§380 J) a newer copy waiting for the holder to finish and hand over ("" none), since wantAt
+  wantTab   String    @default("")
+  wantAt    DateTime?
 
   @@id([userId, scope])
 }

@@ -52,6 +52,7 @@ function ensureStyle(d: Document) {
 }
 
 function apply(d: Document | undefined = engagedOn ?? doc()) {
+  noteIdle();
   if (!d) return;
   const on = explicit || presses > 0 || redraw || !!grace;
   if (on && !engagedOn) {
@@ -129,3 +130,18 @@ export const pageLocked = () => !!engagedOn;
 /** (§380 J) A press of this page is on its way, or its redraw hasn't landed yet: a new copy of the page waits for it before taking over. */
 export const pressInFlight = () => presses > 0 || redraw || !!grace;
 
+/** (§380 J) Told when the page's presses are all over (answered, and their redraw landed): a one-at-a-time page then says so (OnePage), or hands over. */
+const idle = new Set<() => void>();
+let wasInFlight = false;
+function noteIdle() {
+  const now = presses > 0 || redraw || !!grace;
+  const ended = wasInFlight && !now;
+  wasInFlight = now;
+  if (ended) for (const f of [...idle]) f();
+}
+export function onPressIdle(f: () => void) {
+  idle.add(f);
+  return () => {
+    idle.delete(f);
+  };
+}

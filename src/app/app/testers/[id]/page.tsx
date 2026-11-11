@@ -1,6 +1,8 @@
 import { withDateZone } from "@/lib/server/dateZone";
 import { fmtDateIn, pronouns } from "@/lib/format";
 import { AutoRefresh } from "@/components/AutoRefresh";
+import { OnePage } from "@/components/OnePage";
+import { profileScope } from "@/lib/pageClaim";
 import { publicProfileV } from "@/lib/server/pageFreshness";
 import { ProfileMessageButton } from "@/components/ProfileMessageButton";
 import Link from "next/link";
@@ -43,7 +45,8 @@ export default async function TesterProfilePage({ params }: { params: Promise<{ 
   const otherSide = await otherSideNotice(viewer); // (batch 34 §5) a page of the other side: only the switch notice
   if (otherSide) return otherSide;
   const freshV = await publicProfileV(viewer, id);
-  const watch = <AutoRefresh query={`fresh=publicProfile&person=${encodeURIComponent(id)}`} v={freshV} />;
+  // (Owner, Nov 11, §380 K) A profile page (the person's own or another person's): one page at a time, across devices (the team's own pages are not).
+  const watch = <><AutoRefresh query={`fresh=publicProfile&person=${encodeURIComponent(id)}`} v={freshV} />{!isAdmin(viewer) && <OnePage scope={profileScope("tester", id)} />}</>;
   const p = await db.user.findUnique({ where: { id }, include: { profile: true } });
   if (!p || !p.isTester) notFound();
   // (Owner, Nov 9, §360) A deleted account: "This account was deleted." instead of its profile (no Report, Block or Chat with); the team still sees its admin boxes.

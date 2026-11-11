@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { LIVE_TICK, noteRedrawAsked, onBoxLines, rideLiveClock } from "@/lib/liveSync";
+import { leaveMovedPage, pageHeaders } from "@/lib/client";
 
 /**
  * (Owner's repro, Oct 29, batch 30 §8) The join page follows the tester's own application or ask to rejoin, starting from the fingerprint the server rendered (`v`):
@@ -21,10 +22,15 @@ export function JoinWatch({ testId, v }: { testId: string; v: string }) {
     const check = async () => {
       if (document.visibilityState === "hidden") return;
       try {
-        const r = await fetch(`/api/pulse?join=${encodeURIComponent(testId)}`, { cache: "no-store" });
+        // (Owner, Nov 11, §380 K) The join page is one page per test: this copy learns here that it was opened somewhere else.
+        const r = await fetch(`/api/pulse?join=${encodeURIComponent(testId)}`, { cache: "no-store", headers: pageHeaders() });
         if (!r.ok || !alive) return;
-        const j = (await r.json()) as { v: string; back: { line: string; href: string } | null };
+        const j = (await r.json()) as { v: string; back: { line: string; href: string } | null; moved?: boolean };
         if (!alive) return;
+        if (j.moved) {
+          leaveMovedPage();
+          return;
+        }
         if (j.back) {
           setBack(j.back);
           window.location.href = j.back.href;

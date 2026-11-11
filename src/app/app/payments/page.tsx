@@ -14,6 +14,8 @@ import { PAYMENTS_OFF, PAYOUT_ALREADY_CONNECTED, stripeOn } from "@/lib/server/s
 import { owedForBox } from "@/lib/server/holds";
 import { OwedBox } from "@/components/OwedBox";
 import { AutoRefresh } from "@/components/AutoRefresh";
+import { OnePage } from "@/components/OnePage";
+import { ownPageScope } from "@/lib/pageClaim";
 import { owedV } from "@/lib/server/pulseV";
 import { HOLD_APPROVAL_AFTER, reservedLine, reviewFirstLine } from "@/lib/rules";
 import { confirmItems } from "@/lib/server/confirm";
@@ -123,6 +125,8 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <AutoRefresh query="fresh=payments" v={freshV} />
+      {/* (Owner, Nov 11, §380 K) Payments: one page at a time, across devices. */}
+      <OnePage scope={ownPageScope("payments")} />
       <h1 className="text-3xl font-bold tracking-tight text-white">Payments</h1>
       {/* (Batch 16 section 27) Changes made in another tab or device update this page silently. */}
       <AccountRefresh />

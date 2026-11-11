@@ -8,6 +8,8 @@ import { sideFor } from "@/lib/sides";
 import { ReasonQuote } from "@/components/ScrollText";
 import { ScrollList } from "@/components/ScrollList";
 import { AccountRefresh } from "@/components/AccountRefresh";
+import { OnePage } from "@/components/OnePage";
+import { ownPageScope } from "@/lib/pageClaim";
 
 export const metadata = { title: "Profile · Playtest" };
 export const dynamic = "force-dynamic";
@@ -37,6 +39,8 @@ export default async function ProfilePage() {
   const rating = await ratingSummary(u.id, side); // (Owner, Nov 5, §276) "Your ratings" on this side's profile: the ones they got on this side only
   return (
     <div className="mx-auto max-w-2xl">
+      {/* (Owner, Nov 11, §380 K) The profile settings page: one page at a time, across devices (no poll of its own: OnePage asks). */}
+      <OnePage scope={ownPageScope("profile")} poll />
       {side === "developer" ? (
         <>
           <h1 className="mb-2 text-2xl font-semibold">Your developer profile</h1>

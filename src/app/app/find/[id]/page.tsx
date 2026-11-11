@@ -19,6 +19,8 @@ import { isAdmin } from "@/lib/server/session";
 import { LiveTop } from "@/components/LiveTop";
 import { PageLoaded } from "@/components/PageLoaded";
 import { AutoRefresh } from "@/components/AutoRefresh";
+import { OnePage } from "@/components/OnePage";
+import { joinScope } from "@/lib/pageClaim";
 import { applyDeclinedLine, invitesV, joinPageV, rejoinDeclinedLine } from "@/lib/server/pulseV";
 import { JoinWatch } from "./JoinWatch";
 import { ANSWER_MIN_LINE, qRequired, qText } from "@/lib/questions";
@@ -264,6 +266,8 @@ export default async function ListingPage({ params, searchParams }: { params: Pr
       {mine && mine.status !== "working" && !ratedHere && !canRejoin && !invite && !blocked && <p className="info">You can&apos;t ask to rejoin this test.</p>}
       {/* (Owner's repro, Oct 29, batch 30 §8) Their application or ask, followed live: accepted (the line and Go to your session →), declined (the line below). */}
       {t.developerId !== u.id && !isAdmin(u) && <JoinWatch testId={t.id} v={joinFp} />}
+      {/* (Owner, Nov 11, §380 K) The tester's join page: one page per test at a time, across devices. */}
+      {t.developerId !== u.id && !isAdmin(u) && <OnePage scope={joinScope(t.id)} />}
       {t.developerId !== u.id && !isAdmin(u) && myApp?.status === "declined" && <p className="info" data-app-declined="">{myApp.kind === "rejoin" ? rejoinDeclinedLine : applyDeclinedLine(t.title)}</p>}
       {/* (Batch 17 section 8) The team never gets Join / Apply. */}
       {isAdmin(u) && t.developerId !== u.id ? null : t.developerId === u.id ? (

@@ -1,6 +1,8 @@
 import { withDateZone } from "@/lib/server/dateZone";
 import { fmtDateIn } from "@/lib/format";
 import { AutoRefresh } from "@/components/AutoRefresh";
+import { OnePage } from "@/components/OnePage";
+import { ownPageScope } from "@/lib/pageClaim";
 import { blockedV } from "@/lib/server/pageFreshness";
 import Link from "next/link";
 import { Ban } from "lucide-react";
@@ -26,6 +28,8 @@ export default async function BlockedPage() {
   return (
     <div className="mx-auto max-w-2xl space-y-5">
       <AutoRefresh query="fresh=blocked" v={freshV} />
+      {/* (Owner, Nov 11, §380 K) Blocked people: one page at a time, across devices. */}
+      <OnePage scope={ownPageScope("blocked")} />
       <div className="space-y-1">
         <p className="text-sm"><Link href="/app/account" className="text-slate-400 hover:text-white">← Account</Link></p>
         <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-white"><Ban className="h-6 w-6 text-rose-300" /> Blocked people</h1>

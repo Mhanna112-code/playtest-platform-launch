@@ -1,5 +1,7 @@
 import { withDateZone } from "@/lib/server/dateZone";
 import { AutoRefresh } from "@/components/AutoRefresh";
+import { OnePage } from "@/components/OnePage";
+import { ownPageScope } from "@/lib/pageClaim";
 import { notificationsV } from "@/lib/server/pageFreshness";
 import { notificationScopeFor, testTitlesOf } from "@/lib/server/notify";
 import { isAdmin } from "@/lib/server/session";
@@ -56,6 +58,8 @@ export default async function Notifications() {
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <AutoRefresh query="fresh=notifications" v={freshV} />
+      {/* (Owner, Nov 11, §380 K) Notifications and alerts (a settings page): one page at a time, across devices. */}
+      <OnePage scope={ownPageScope("notifications")} />
       <AlertSettings emailPref={u.emailPref} side={side} seenAt={new Date().toISOString()} />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="flex items-center gap-2 text-3xl font-bold tracking-tight text-white"><Bell className="h-7 w-7 text-indigo-300" /> Notifications</h1>

@@ -69,6 +69,7 @@ const NOT_PRESSES: Record<string, string> = {
   "/api/notifications/read": "sent by the page when the bell's lines are shown",
   "/api/kept": "the drafts kept while typing",
   "/api/page-claim": "(§380) opening a test page or a session page claims it for this tab (never a press, never refused)",
+  "/api/page-handover": "(§380 J) the copy holding a one-at-a-time page says its press is over, or hands the page to a newer copy",
   "/api/calls/x/room": "the call page's own connection updates",
   "/api/stripe/webhook": "Stripe's own calls",
   "/api/test/race-release": "(§369) the test harness's release of a race hold (404 unless RACE_HOLDS=1)",

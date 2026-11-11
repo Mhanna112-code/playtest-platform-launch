@@ -84,6 +84,13 @@ export function leaveMovedPage(w: (Window & typeof globalThis) | undefined = typ
   if (!w || LEFT_MOVED) return false;
   LEFT_MOVED = true;
   PAGE_SCOPE = "";
+  // (Owner, Nov 11, §380 J) What was typed here and not yet kept is kept first (every form sends its draft: lib/useKept.tsx flushKept), at most a moment.
+  const waits: Promise<unknown>[] = [];
+  try {
+    w.dispatchEvent?.(new CustomEvent("kept-flush", { detail: { waits } }));
+  } catch {
+    // no forms to ask
+  }
   try {
     w.document.querySelectorAll<HTMLButtonElement | HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("button, input, select, textarea").forEach((el) => {
       el.disabled = true;
@@ -92,7 +99,9 @@ export function leaveMovedPage(w: (Window & typeof globalThis) | undefined = typ
   } catch {
     // nothing to disable: the tab still moves
   }
-  w.location.replace(PAGE_MOVED_PATH);
+  const go = () => w.location.replace(PAGE_MOVED_PATH);
+  if (waits.length) void Promise.race([Promise.all(waits), new Promise((r) => setTimeout(r, 1500))]).then(go);
+  else go();
   return true;
 }
 /** Tests: a fresh page. */
@@ -143,7 +152,7 @@ export async function api<T = unknown>(path: string, body?: unknown, method?: st
   const locks = body !== undefined && typeof window !== "undefined" && !FREE && !notAPress(path, body);
   if (locks) pressStarted();
   try {
-    const r = await callApi<T>(path, body, method);
+    const r = await callApi<T>(path, body, method, locks);
     if (locks) pressAnswered(true, bankWaits(r));
     return r;
   } catch (e) {
@@ -172,7 +181,7 @@ export function freePress<T>(f: () => T): T {
     FREE--;
   }
 }
-async function callApi<T = unknown>(path: string, body?: unknown, method?: string): Promise<T> {
+async function callApi<T = unknown>(path: string, body?: unknown, method?: string, press = false): Promise<T> {
   // (§302) The NDA block first, as the server checks it first.
   if (body !== undefined && blockedByNda(path)) throw new ApiError(409, NDA_BLOCK_CODE, NDA_BLOCK_FIRST);
   if (body !== undefined && blockedByTerms(path)) throw new ApiError(409, ANSWER_TERMS_CODE, ANSWER_TERMS_FIRST);
@@ -188,7 +197,7 @@ async function callApi<T = unknown>(path: string, body?: unknown, method?: strin
   try {
     res = await fetch(path, {
       method: method ?? (body === undefined ? "GET" : "POST"),
-      headers: { "x-timezone": Intl.DateTimeFormat().resolvedOptions().timeZone, ...(body === undefined ? {} : { "content-type": "application/json" }), "x-tab": TAB, ...(PAGE_LOAD ? { "x-load": PAGE_LOAD } : {}), ...(PAGE_USER ? { "x-uid": PAGE_USER } : {}), ...(PAGE_SCOPE ? { "x-page": PAGE_SCOPE } : {}) },
+      headers: { "x-timezone": Intl.DateTimeFormat().resolvedOptions().timeZone, ...(body === undefined ? {} : { "content-type": "application/json" }), "x-tab": TAB, ...(PAGE_LOAD ? { "x-load": PAGE_LOAD } : {}), ...(PAGE_USER ? { "x-uid": PAGE_USER } : {}), ...(PAGE_SCOPE ? { "x-page": PAGE_SCOPE } : {}), ...(press && PAGE_SCOPE ? { "x-press": "1" } : {}) /* (§380 J) a new copy waits for it */ },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch {
