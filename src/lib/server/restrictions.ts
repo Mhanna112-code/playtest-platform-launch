@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 import { PAYOUT_LINE, payoutWaitLine } from "@/lib/payout";
 import { displayName, fmtDateTime, money, pronouns } from "@/lib/server/dateFormat";
-import { callCancelledLine } from "@/lib/rules";
+import { callCancelledLine, repeatDue, utcDayNo } from "@/lib/rules";
 import { HttpError } from "./http";
 import { adminUsers, bell, notify } from "./notify";
 import { cancelCallsAhead, recordEvent, spotOpened, tellCancelled } from "./tests";
@@ -613,15 +613,19 @@ export async function payoutReminders(now = new Date()) {
  * (Owner, Oct 29, batch 32 §1) Money waiting for a tester's payout setup: a bell line (and the payment email) as soon as a share waits, then every 3 days until
  * the setup is done ("$8.00 is waiting for you: finish your payout setup to receive it."). Runs with the sweep; the last line's time is its reminder key's.
  */
-export async function payoutWaitReminders(now = new Date()) {
-  const rows = await db.payment.groupBy({ by: ["testerId"], where: { transferStatus: "waiting", status: "charged", testerCents: { gt: 0 }, kind: { not: "subscription" } }, _sum: { testerCents: true } });
+export async function payoutWaitReminders(now = new Date(), opts: { /** (§383) false from the 5-minute sweep: only the first line of a wait */ repeats?: boolean } = {}) {
+  const rows = await db.payment.groupBy({ by: ["testerId"], where: { transferStatus: "waiting", status: "charged", testerCents: { gt: 0 }, kind: { not: "subscription" } }, _sum: { testerCents: true }, _min: { createdAt: true } });
   if (!rows.length) return 0;
   const people = await db.user.findMany({ where: { id: { in: rows.map((r) => r.testerId) }, deletedAt: null, NOT: { payoutsReady: true, stripeAccountId: { not: null } } }, select: { id: true } });
-  const since = new Date(now.getTime() - REMIND_DAYS * DAY + 3_600_000);
-  const recent = new Set((await db.notification.findMany({ where: { userId: { in: people.map((u) => u.id) }, reminderKey: "payoutwait", createdAt: { gt: since } }, select: { userId: true } })).map((n) => n.userId));
+  // (Owner, Nov 11, §383) Each person's last line. The FIRST line of a wait (no line since the oldest share now waiting was made) goes at once, from the sweep too,
+  // unless they already had one today (UTC); the repeats come only from the daily job, 3 calendar days after the last and at least 12 hours later (repeatDue).
+  const lastAt = new Map((await db.notification.findMany({ where: { userId: { in: people.map((u) => u.id) }, reminderKey: "payoutwait" }, orderBy: { createdAt: "desc" }, distinct: ["userId"], select: { userId: true, createdAt: true } })).map((x) => [x.userId, x.createdAt]));
   let n = 0;
   for (const u of people) {
-    if (recent.has(u.id)) continue;
+    const last = lastAt.get(u.id) ?? null;
+    const since = rows.find((r) => r.testerId === u.id)?._min.createdAt ?? null;
+    const first = !last || (!!since && since.getTime() > last.getTime() && utcDayNo(last) !== utcDayNo(now));
+    if (!first && !((opts.repeats ?? true) && repeatDue(last, now, REMIND_DAYS))) continue;
     const cents = rows.find((r) => r.testerId === u.id)?._sum.testerCents ?? 0;
     await bell(u.id, payoutWaitLine(money(cents)), "/app/payments#payout", undefined, { side: "tester", payment: true, group: "payout", reminder: "payoutwait" });
     n++;

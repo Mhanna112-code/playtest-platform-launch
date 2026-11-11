@@ -13,7 +13,7 @@ import { seenOf, unanswered, tabOf, testerPaymentChanges } from "./live";
 import { FINISHED_PART_REASON, payMoreLine, TESTER_CALL_KINDS, testerChanges, testerGate } from "./testerGate";
 import { devPauseMoments, devStopSince, loadedOf, stopBox } from "./stopMoment";
 import { CONTRACTS, closeOutOf, testSpans, testerRatingClosesAt, closedOut, devPauseSpans, mergeSpans, teamPauseSpans, windowEnd, type Span } from "./closeOut";
-import { CLOSE_OUT_DAYS, closeOutBase } from "@/lib/rules";
+import { CLOSE_OUT_DAYS, closeOutBase, repeatDue, REPEAT_MIN_GAP_MS } from "@/lib/rules";
 import { closeOffersOfEnded } from "./offerClose";
 import { RATE_TEAM_PAUSED, teamPausedNow } from "@/lib/restricted";
 import { testerRow } from "@/lib/lineAnchors";
@@ -369,15 +369,18 @@ export async function devRate(dev: { id: string; name: string; email: string }, 
 /** (§367) The close-out date the tester's last rating reminder on this contract named ("ratec:<contract>:<ms>" in the test's marks), or null. */
 const ratingNamed = (marks: string[], contractId: string) => { const t = marks.filter((x) => x.startsWith(`ratec:${contractId}:`)).pop(); return t ? Number(t.slice(t.lastIndexOf(":") + 1)) : null; };
 
-export async function ratingReminders(now = new Date()) {
-  const every = 3 * DAY - 3_600_000;
+export async function ratingReminders(now = new Date(), opts: { /** (§383) false from the 5-minute sweep: only the opening and §367's fresh line */ repeats?: boolean } = {}) {
+  // (Owner, Nov 11, §383) Every 3 UTC calendar days and at least 12 hours after the last (repeatDue; it was 3 days − 1 hour, drifting earlier), from the daily job
+  // only. The developer's opening line (maybeOpenDevRating) and §367's fresh line when the date moved later still come from the sweep straight away.
+  const EVERY_DAYS = 3;
+  const repeats = opts.repeats ?? true;
   let n = 0;
   const sinceLast = async (userId: string, testId: string, fallback: Date) => {
     const last = await db.notification.findFirst({ where: { userId, testId, text: { startsWith: "Reminder: rate " } }, orderBy: { createdAt: "desc" }, select: { createdAt: true } });
     return last && last.createdAt > fallback ? last.createdAt : fallback;
   };
   // Tester: prompted once (when their Rate opens), then every 3 days until they rate or the close-out, whatever the test's state (batch 29 §21: running tests too).
-  const prompted = await db.contract.findMany({ where: { tester: { deletedAt: null }, ratePromptedAt: { not: null, lt: new Date(now.getTime() - every) } }, orderBy: { ratePromptedAt: "desc" }, take: 500, include: { tester: { select: { testerSuspendedAt: true } }, test: { include: { developer: true } } } });
+  const prompted = await db.contract.findMany({ where: { tester: { deletedAt: null }, ratePromptedAt: { not: null, lt: new Date(now.getTime() - REPEAT_MIN_GAP_MS) } }, orderBy: { ratePromptedAt: "desc" }, take: 500, include: { tester: { select: { testerSuspendedAt: true } }, test: { include: { developer: true } } } });
   const rated = new Set((await db.rating.findMany({ where: { contractId: { in: prompted.map((c) => c.id) }, side: "tester" }, select: { contractId: true } })).map((r) => r.contractId));
   for (const c of prompted) {
     if (rated.has(c.id) || c.tester.testerSuspendedAt) continue;
@@ -387,10 +390,10 @@ export async function ratingReminders(now = new Date()) {
     const closes = await testerRatingClosesAt(c.id, now);
     const named = ratingNamed(c.test.notifiedMarks, c.id);
     const moved = !!closes && named != null && closes.getTime() > named;
-    if (!moved && now.getTime() - (await sinceLast(c.testerId, c.testId, c.ratePromptedAt!)).getTime() < every) continue;
+    if (!moved && !(repeats && repeatDue(await sinceLast(c.testerId, c.testId, c.ratePromptedAt!), now, EVERY_DAYS))) continue;
     if ((await rateBlocker(c.id, "tester", now)) !== "") continue; // disabled, or (§331) closed at the close-out: no reminder
     // (Owner, Nov 7, §331) The last one before the close-out (the next 3-day slot would fall after it) ignores email Off.
-    const last = !!closes && now.getTime() + every >= closes.getTime();
+    const last = !!closes && now.getTime() + EVERY_DAYS * DAY >= closes.getTime();
     await bell(c.testerId, `Reminder: rate ${displayName(c.test.developer)} on “${c.test.title}”${closes ? `: rating closes on ${T(closes, "date")}` : ""}`, RATINGS_HREF, undefined, { side: "tester", ...RATINGS, testId: c.testId, reminder: `rate:${c.id}`, ...(last ? { always: true } : {}) });
     if (closes && named !== closes.getTime()) await db.test.update({ where: { id: c.testId }, data: { notifiedMarks: { push: `ratec:${c.id}:${closes.getTime()}` } } });
     n++;
@@ -406,12 +409,13 @@ export async function ratingReminders(now = new Date()) {
     const s = states.get(r.contractId);
     if (!s || s.kind !== "open" || s.paused) continue;
     if (await maybeOpenDevRating(r.contractId, now)) continue; // the opening line itself (once)
+    if (!repeats) continue; // (§383) the repeats: the daily job only
     const c = await db.contract.findUnique({ where: { id: r.contractId }, include: { tester: true, test: true } });
     if (!c || (await db.user.findUnique({ where: { id: c.test.developerId }, select: { deletedAt: true } }))?.deletedAt) continue; // (batch 29 §21) on a running test too
-    if (now.getTime() - (await sinceLast(c.test.developerId, c.testId, s.opensAt!)).getTime() < every) continue;
+    if (!repeatDue(await sinceLast(c.test.developerId, c.testId, s.opensAt!), now, EVERY_DAYS)) continue;
     // (Owner, Nov 7, §329) The LAST reminder before their 14 days end (the next 3-day slot would fall after the end) ignores email Off (`always`): it reaches the
     // end-of-day email. The others follow the email setting. (The line already names the end date.)
-    const last = now.getTime() + every >= s.endsAt!.getTime();
+    const last = now.getTime() + EVERY_DAYS * DAY >= s.endsAt!.getTime();
     await bell(c.test.developerId, `Reminder: rate ${displayName(c.tester)} for “${c.test.title}” (until ${T(s.endsAt!, "date")})`, RATINGS_HREF, undefined, { side: "developer", ...RATINGS, testId: c.testId, reminder: `rate-dev:${c.id}`, ...(last ? { always: true } : {}) });
     n++;
   }

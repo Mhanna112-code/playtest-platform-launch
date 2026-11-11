@@ -8,7 +8,7 @@ import { T } from "@/lib/tz";
 import { APPS_WAITING_GROUP } from "@/lib/bell";
 import { db } from "@/lib/db";
 import { callAtFor, displayName, fmtDate, fmtDateTime, money, pronouns, toCents } from "@/lib/server/dateFormat";
-import { owedReceiptWhat, pressAgainLine, bankChangedLine, reviewFirstLine, CHARGEBACKS_REVIEW_FROM, OWED_ALL_WAITING, OWED_BANK_WAITING, reservedAddedLine, AUTO_CHARGED_CALL, AUTO_NOTHING_CALL, UNLISTED_CALL_CLOSED, UNLISTED_CALL_TAIL, AUTO_CHARGE_NO_CHOICE, MIN_CHARGE_CENTS, CHARGE_TICK_CENTS, chargeTickLine, chargeClosedLine, CLOSE_OUT_REMINDER_DAYS, testerPayable, HOLD_APPROVAL_AFTER, MANY_HOLDS_LABEL, autoPayFor, chargeAmount, paidMeanwhileLine, CHARGED_BY_TESTER, byTesterChoice, chargedDelayedLine, openUntilMarkDue, datedMarkDue, ownDeadlineMarkDue, reviewMarkDue, INVITE_REMIND_DAYS, failedLine, joinClosingLine, ownDeadlineLine, LET_GO_BY_TESTER, REVIEW_DAYS, chargeIsOpen, chargeOpensAt, pauseShiftMs, PAYABLE_TESTER, PIECE_LOCKED, ownChargeWaitingLine, chargedByTester, chargebackWonRefundLine, chargebackWonLine, CHARGEBACK_FEE_CENTS, chargebackOwedLine, chargebackReversedLine, bankLoweredLine, bankRaisedLine, raiseNote, raiseOf, raiseName, RAISE_NOTE } from "@/lib/rules";
+import { owedReceiptWhat, pressAgainLine, bankChangedLine, reviewFirstLine, CHARGEBACKS_REVIEW_FROM, OWED_ALL_WAITING, OWED_BANK_WAITING, reservedAddedLine, AUTO_CHARGED_CALL, AUTO_NOTHING_CALL, UNLISTED_CALL_CLOSED, UNLISTED_CALL_TAIL, AUTO_CHARGE_NO_CHOICE, MIN_CHARGE_CENTS, CHARGE_TICK_CENTS, chargeTickLine, chargeClosedLine, CLOSE_OUT_REMINDER_DAYS, testerPayable, HOLD_APPROVAL_AFTER, MANY_HOLDS_LABEL, autoPayFor, chargeAmount, paidMeanwhileLine, CHARGED_BY_TESTER, byTesterChoice, chargedDelayedLine, openUntilMarkDue, datedMarkDue, ownDeadlineMarkDue, reviewMarkDue, INVITE_REMIND_DAYS, repeatDue, utcDayNo, REPEAT_MIN_GAP_MS, failedLine, joinClosingLine, ownDeadlineLine, LET_GO_BY_TESTER, REVIEW_DAYS, chargeIsOpen, chargeOpensAt, pauseShiftMs, PAYABLE_TESTER, PIECE_LOCKED, ownChargeWaitingLine, chargedByTester, chargebackWonRefundLine, chargebackWonLine, CHARGEBACK_FEE_CENTS, chargebackOwedLine, chargebackReversedLine, bankLoweredLine, bankRaisedLine, raiseNote, raiseOf, raiseName, RAISE_NOTE } from "@/lib/rules";
 import { HttpError } from "./http";
 import { adminUsers, bell, notify, renderFor, sendSummaries, teamEmails } from "./notify";
 import { appUrl } from "./auth";
@@ -1337,15 +1337,17 @@ export async function runSweep(now = new Date(), co = closeOutMemo(now)) {
   await chargeReadyDeferred();
   // (Owner, Nov 4, §192) A bank's amount change that waited for a repayment in progress (a reservation that lapsed, a check cancelled), and a refund left half-made.
   await settleDisputeAmounts(now).catch((e) => console.error("[stripe] dispute amounts:", (e as Error).message));
-  const choices = (await openCharges(now, co)) + (await autoChargeCalls(now));
+  // (Owner, Nov 11, §383) The sweep sends only the FIRST line of each repeating reminder (Charge opening, a share starting to wait, Rate opening) and §367's fresh
+  // line when a closing date moved later; the repeats come only from the daily job (`repeats` false here), by calendar day (repeatDue).
+  const choices = (await openCharges(now, co, false)) + (await autoChargeCalls(now));
   // (Batch 29 §22, §31) The one-a-day money lines across tests: the tester's "Charge or let go", the developer's "Pay now".
-  await testerChargeLines(now, co);
-  await payNowLines(now, co);
+  await testerChargeLines(now, co, false);
+  await payNowLines(now, co, false);
   await closeOutReminders(now, co);
   await reviewReminders(now, co);
-  await (await import("./ratings")).ratingReminders(now);
-  // (Batch 32 §1) Money waiting for payout setup: told within 5 minutes of a share starting to wait (then every 3 days: the line's own key decides).
-  await (await import("./restrictions")).payoutWaitReminders(now).catch((e) => console.error("[payouts] waiting line:", (e as Error).message));
+  await (await import("./ratings")).ratingReminders(now, { repeats: false });
+  // (Batch 32 §1) Money waiting for payout setup: told within 5 minutes of a share starting to wait (§383: the every-3-days repeats come from the daily job).
+  await (await import("./restrictions")).payoutWaitReminders(now, { repeats: false }).catch((e) => console.error("[payouts] waiting line:", (e as Error).message));
   return { choices };
 }
 
@@ -1371,12 +1373,12 @@ async function runDailyLocked(now: Date) {
   await chargeReadyDeferred();
   await settleDisputeAmounts(now).catch((e) => console.error("[stripe] dispute amounts:", (e as Error).message)); // (§192)
   // 1. Sent work past its review window: Charge / Let it go opens (batch 19 section 4: also every 5 minutes, runSweep).
-  out.choices += await openCharges(now, co);
+  out.choices += await openCharges(now, co, true);
   // 1b. (Owner, Oct 29, batch 28 §21) A LISTED call not paid 7 days after it is charged automatically (rate × measured minutes, within the $500 for calls).
   out.choices += await autoChargeCalls(now);
   // 1c. (Batch 29 §22, §31) The tester's one daily "Charge or let go" line, the developer's one daily "Pay now" line, and the developer's closing-soon countdown.
-  await testerChargeLines(now, co);
-  await payNowLines(now, co);
+  await testerChargeLines(now, co, true);
+  await payNowLines(now, co, true);
   await closeOutReminders(now, co);
   // 3a. (Owner, Nov 6, §306) The team's admin email is no longer sent here: its lines are the "For the team" section of each admin's ONE end-of-day email
   // (sendSummaries, last in this job; see adminDaily.ts), following each admin's own email setting (Off: none).
@@ -1422,7 +1424,10 @@ async function runDailyLocked(now: Date) {
   // (Batch 15 section 18) Open until passed: pending applications and open invites close.
   await (await import("./tests")).closeJoiningAfterOpenUntil(now);
   // 7. (Owner, Oct 26) Invites: a bell reminder DAILY until the tester joins, says "No thanks", or the invite expires (all of a day's stack into one line across tests).
-  const invites = await db.invite.findMany({ where: { status: "sent", createdAt: { lt: new Date(now.getTime() - INVITE_REMIND_DAYS * 86_400_000 + 3_600_000) }, OR: [{ remindedAt: null }, { remindedAt: { lt: new Date(now.getTime() - INVITE_REMIND_DAYS * 86_400_000 + 3_600_000) } }] }, include: { test: { include: { developer: true } } }, take: 500 });
+  // (Owner, Nov 11, §383) By calendar day (repeatDue): a calendar day after the invite or the last reminder, and at least 12 hours later.
+  const gap = new Date(now.getTime() - REPEAT_MIN_GAP_MS);
+  const invites = (await db.invite.findMany({ where: { status: "sent", createdAt: { lt: gap }, OR: [{ remindedAt: null }, { remindedAt: { lt: gap } }] }, include: { test: { include: { developer: true } } }, take: 500 }))
+    .filter((i) => repeatDue(i.remindedAt ?? i.createdAt, now, INVITE_REMIND_DAYS));
   for (const i of invites) {
     const testersIn = await db.contract.count({ where: { testId: i.testId, status: "working" } });
     if (i.test.status !== "open" || testersIn >= i.test.spots || (i.test.openUntil && i.test.openUntil < now)) continue; // expired
@@ -1488,7 +1493,7 @@ export async function owedForBox(devId: string) {
 }
 
 /** 1. Sent work not paid within the review window (REVIEW_DAYS, 7): the developer's daily "pay it", Charge / Let it go opening for the tester, and its reminders. */
-async function openCharges(now: Date, co: CloseOuts) {
+async function openCharges(now: Date, co: CloseOuts, /** (§383) the daily job: the "pay it" line's repeats too */ repeats: boolean) {
   let n = 0;
   const due = await db.submission.findMany({
     // (Owner, Oct 29, batch 11) A deleted tester's sent work is still reviewed (and reminded) when their payout account was connected; Charge never opens for it.
@@ -1511,8 +1516,9 @@ async function openCharges(now: Date, co: CloseOuts) {
     if (payShut && chargeShut) continue;
     // (Owner, Oct 29, batch 29 §31) While the tester can charge or let it go, the developer's daily line is ONE "Pay now" line across all their tests (payNowLines).
     // With no Charge for the tester (a deleted tester, or their Charge closed) the piece keeps its own daily "… wasn't reviewed by <date>: pay it." (batch 28).
+    // (Owner, Nov 11, §383) The first at once (the sweep too); the repeats only from the daily job, a calendar day after the last (repeatDue).
     const gone = !!c.tester.deletedAt;
-    if (!payShut && (gone || chargeShut) && (!s.devRemindedAt || now.getTime() - s.devRemindedAt.getTime() >= 23 * 3_600_000)) {
+    if (!payShut && (gone || chargeShut) && (!s.devRemindedAt || (repeats && repeatDue(s.devRemindedAt, now)))) {
       const line = unreviewedLine(c.test.title, displayName(c.tester), s.kind === "recording" ? "recording" : "written answers", chargeOpensAt(s, c.test, c, now)!, null, c.tester.pronoun);
       await bell(c.test.developerId, line, `/app/tests/${c.testId}#piece-${s.id}`, undefined, { group: "unreviewed", reminder: `unreviewed:${s.id}`, always: true }); // (§311d) end-of-day email even with Off
       await db.submission.update({ where: { id: s.id }, data: { devRemindedAt: now } });
@@ -1721,21 +1727,30 @@ async function chargeablePieces(co: CloseOuts, where: Prisma.SubmissionWhereInpu
     orderBy: { choiceOfferedAt: "asc" },
     take: 5000,
   });
-  const out: (OpenPiece & { devId: string; devEmail: string; testerId: string; testerEmail: string; testerSuspended: boolean; marks: string[] })[] = [];
+  const out: (OpenPiece & { devId: string; devEmail: string; testerId: string; testerEmail: string; testerSuspended: boolean; marks: string[]; offered: Date | null })[] = [];
   for (const s of subs) {
     const c = s.contract;
     if (c.tester.deletedAt || (await co.chargeClosed({ submissionId: s.id }))) continue;
     const paid = (await db.payment.aggregate({ where: { submissionId: s.id, status: { in: ["charged", "not_set_up"] } }, _sum: { amountCents: true } }))._sum.amountCents ?? 0;
     const cents = chargeAmount(s.agreedCents, paid);
     if (cents <= 0) continue;
-    out.push({ id: s.id, who: firstName(c.tester), part: s.kind === "recording" ? "recording" : "written answers", title: c.test.title, testId: c.testId, cents, closes: await co.at({ submissionId: s.id }), devId: c.test.developerId, devEmail: c.test.developer.email, testerId: c.testerId, testerEmail: c.tester.email, testerSuspended: !!c.tester.testerSuspendedAt, marks: s.devMarks });
+    out.push({ id: s.id, who: firstName(c.tester), part: s.kind === "recording" ? "recording" : "written answers", title: c.test.title, testId: c.testId, cents, closes: await co.at({ submissionId: s.id }), devId: c.test.developerId, devEmail: c.test.developer.email, testerId: c.testerId, testerEmail: c.tester.email, testerSuspended: !!c.tester.testerSuspendedAt, marks: s.devMarks, offered: s.choiceOfferedAt });
   }
   return out;
 }
 /** (§367) The Charge closing date the tester's last daily line named for this piece ("tc:<ms>" in its marks), or null. */
 const chargeNamed = (marks: string[]) => { const t = marks.filter((x) => x.startsWith("tc:")).pop(); return t ? Number(t.slice(3)) : null; };
-/** At most one such line a day per person: none with this reminder key in the last ~day. */
-const lineDue = async (userId: string, key: string, now: Date) => !(await db.notification.findFirst({ where: { userId, reminderKey: key, createdAt: { gt: new Date(now.getTime() - 23 * 3_600_000) } }, select: { id: true } }));
+/** (Owner, Nov 11, §383) When this person's last line with this reminder key was made (null: never). */
+const lastLineAt = async (userId: string, key: string) => (await db.notification.findFirst({ where: { userId, reminderKey: key }, orderBy: { createdAt: "desc" }, select: { createdAt: true } }))?.createdAt ?? null;
+/** (§383) The mark a piece gets once a "Pay now" line has named it (in its devMarks, beside the "tc:" and review marks). */
+const PAY_NOW_MARK = "pn";
+/**
+ * (Owner, Nov 11, §383) Is a daily money line due? The FIRST line, when a piece is new to the series (`fresh`: its Charge opened since the last line), goes at
+ * once, from the sweep too, unless this person already had that line today (UTC): one line a day, as before. The REPEATS come only from the daily job (`repeats`),
+ * a calendar day after the last line and at least 12 hours later (repeatDue).
+ */
+const dailyLineDue = (last: Date | null, fresh: boolean, repeats: boolean, now: Date) =>
+  (fresh && (!last || utcDayNo(last) !== utcDayNo(now))) || (repeats && repeatDue(last, now, 1));
 
 /**
  * (Owner, Oct 29, batch 29 §31; replaces the per-piece daily "“<test>”: <tester>'s <part> wasn't reviewed by <date>: …" line) ONE bell line a day across all the
@@ -1743,8 +1758,8 @@ const lineDue = async (userId: string, key: string, now: Date) => !(await db.not
  * It stops when nothing is past its review date. Listed calls aren't in it (charged automatically, batch 28 §21); unlisted work isn't either. Emailed whatever the
  * setting (money). Waits while the test is paused, like the line it replaces.
  */
-async function payNowLines(now: Date, co: CloseOuts) {
-  const byDev = new Map<string, OpenPiece[]>();
+async function payNowLines(now: Date, co: CloseOuts, /** (§383) the daily job: the repeats too */ repeats: boolean) {
+  const byDev = new Map<string, (OpenPiece & { marks: string[]; offered: Date | null })[]>();
   const emails = new Map<string, string>();
   for (const p of await chargeablePieces(co, { contract: { test: PAUSE_FREE } })) {
     if (await co.payClosed({ submissionId: p.id })) continue;
@@ -1752,9 +1767,18 @@ async function payNowLines(now: Date, co: CloseOuts) {
     emails.set(p.devId, p.devEmail);
   }
   for (const [devId, list] of byDev) {
-    if (!(await lineDue(devId, "paynow", now))) continue;
+    // (§383) New to the series: a piece no "Pay now" line named yet (its "pn" mark), whose Charge opened after the last line (a piece open before §383 lacks the "pn" mark but opened before the last line).
+    const last = await lastLineAt(devId, "paynow");
+    const fresh = list.filter((p) => !p.marks.includes(PAY_NOW_MARK) && (!last || !p.offered || p.offered.getTime() > last.getTime()));
+    const unnamed = list.filter((p) => !p.marks.includes(PAY_NOW_MARK));
+    if (!dailyLineDue(last, fresh.length > 0, repeats, now)) {
+      // A piece whose Charge opened on a day that already had its line: named in the next daily line (a repeat), never a second line today.
+      for (const p of fresh) await db.submission.update({ where: { id: p.id }, data: { devMarks: { push: PAY_NOW_MARK } } });
+      continue;
+    }
     const line = payNowLine(list);
     await notify(emails.get(devId)!, line, [line + "."], "/app#needs-you", { side: "developer", always: true, payment: true, group: "unreviewed", reminder: "paynow" }); // (batch 30 §6) Needs review, marked
+    for (const p of unnamed) await db.submission.update({ where: { id: p.id }, data: { devMarks: { push: PAY_NOW_MARK } } });
   }
 }
 
@@ -1764,8 +1788,8 @@ async function payNowLines(now: Date, co: CloseOuts) {
  * opening the dashboard's "Charge or cancel" box. The first comes the day a piece's Charge opens; it stops when nothing is open. Emailed whatever the setting (money);
  * waits while the tester side is suspended. Never names a hold, a suspension or a failure.
  */
-async function testerChargeLines(now: Date, co: CloseOuts) {
-  const byTester = new Map<string, (OpenPiece & { marks: string[] })[]>();
+async function testerChargeLines(now: Date, co: CloseOuts, /** (§383) the daily job: the repeats too */ repeats: boolean) {
+  const byTester = new Map<string, (OpenPiece & { marks: string[]; offered: Date | null })[]>();
   const emails = new Map<string, string>();
   for (const p of await chargeablePieces(co, {})) {
     if (p.testerSuspended) continue;
@@ -1775,11 +1799,18 @@ async function testerChargeLines(now: Date, co: CloseOuts) {
   for (const [testerId, list] of byTester) {
     // (Owner, Nov 9, §367) A piece's Charge closing date moved LATER than the date her last line named (a pause or its lift, an outage, Open until extended, a
     // rejoin): ONE fresh line now naming the new date, even within the day; then the daily line goes on. Each piece keeps the date its last line named ("tc:<ms>").
-    const moved = list.some((p) => { const n = chargeNamed(p.marks); return n != null && !!p.closes && p.closes.getTime() > n; });
-    if (!moved && !(await lineDue(testerId, "chargeday", now))) continue;
+    const moved = list.some((p) => { const n = chargeNamed(p.marks); return !!n && !!p.closes && p.closes.getTime() > n; }); // ("tc:0": no date named yet, never "moved")
+    // (Owner, Nov 11, §383) New to the series: a piece no line named yet (no "tc:" mark; "tc:0" when it had no closing date), whose Charge opened after the last line.
+    const last = await lastLineAt(testerId, "chargeday");
+    const fresh = list.filter((p) => chargeNamed(p.marks) == null && (!last || !p.offered || p.offered.getTime() > last.getTime()));
+    if (!moved && !dailyLineDue(last, fresh.length > 0, repeats, now)) {
+      // Opened on a day that already had its line: named in the next daily line, never a second line today (the date it will name is recorded now).
+      for (const p of fresh) await db.submission.update({ where: { id: p.id }, data: { devMarks: { push: `tc:${p.closes?.getTime() ?? 0}` } } });
+      continue;
+    }
     const line = chargeDayLine(list);
     await notify(emails.get(testerId)!, line, [line + "."], "/app#charge-or-cancel", { side: "tester", always: true, payment: true, group: "charge", reminder: "chargeday" });
-    for (const p of list) if (p.closes && chargeNamed(p.marks) !== p.closes.getTime()) await db.submission.update({ where: { id: p.id }, data: { devMarks: { push: `tc:${p.closes.getTime()}` } } });
+    for (const p of list) if (chargeNamed(p.marks) !== (p.closes?.getTime() ?? 0)) await db.submission.update({ where: { id: p.id }, data: { devMarks: { push: `tc:${p.closes?.getTime() ?? 0}` } } });
   }
 }
 
@@ -2176,12 +2207,13 @@ export async function finishChoicePay(paymentId: string, r: { status: string; fe
  * same-day lines; waits while the test is paused). (The paused-tests reminder is in pauseClosure.ts.)
  */
 async function dailyReminders(now: Date) {
-  const since = new Date(now.getTime() - 20 * 3_600_000);
   // (Batch 34 §16) Not an applicant who holds a sent invite (the invite stands for the answer).
   const pendingApps = await (await import("./joining")).answerable(await db.application.findMany({ where: { status: "pending" }, select: { testId: true, testerId: true } }));
   const waiting = [...pendingApps.reduce((m, a) => m.set(a.testId, (m.get(a.testId) ?? 0) + 1), new Map<string, number>())].map(([testId, n]) => ({ testId, _count: { _all: n } }));
   const tests = await db.test.findMany({ where: { id: { in: waiting.map((w) => w.testId) }, status: "open", ...PAUSE_FREE }, select: { id: true, title: true, developerId: true } });
-  const told = new Set((await db.notification.findMany({ where: { userId: { in: tests.map((t) => t.developerId) }, testId: { in: tests.map((t) => t.id) }, text: { endsWith: "for your answer" }, createdAt: { gt: since } }, select: { testId: true }, distinct: ["testId"] })).map((n) => n.testId));
+  // (Owner, Nov 11, §383) A test's line again a calendar day after its last one, and at least 12 hours later (repeatDue; it was "none in the last 20 hours").
+  const lastLines = await db.notification.findMany({ where: { userId: { in: tests.map((t) => t.developerId) }, testId: { in: tests.map((t) => t.id) }, text: { endsWith: "for your answer" } }, orderBy: { createdAt: "desc" }, select: { testId: true, createdAt: true }, distinct: ["testId"] });
+  const told = new Set(lastLines.filter((n) => !repeatDue(n.createdAt, now, 1)).map((n) => n.testId));
   const count = new Map(waiting.map((w) => [w.testId, w._count._all]));
   // (Batch 15 section 35: "N applications wait"; no times in this line.)
   await db.notification.createMany({
