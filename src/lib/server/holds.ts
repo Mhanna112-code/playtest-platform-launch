@@ -24,7 +24,7 @@ import { callMinutesOf } from "@/lib/callMeasure";
 import { callReference, disputeDecisionName, disputedCentsOf, movedDue, nearestDayEnd, partOf, pausedUntil, pieceName, reversedOf, reversedPart, reversedWords, paymentWords, OWED_OVER_TICK, PAY_TICK_CENTS } from "@/lib/rules";
 import { callsLeftCents } from "./callMoney";
 import { closedOut, disputeClosedFor, pieceCloseOut } from "./closeOut";
-import { withTimersLock } from "./timers";
+import { DAILY_LOCK_WAIT_MS, withTimersLock } from "./timers";
 import { pieceWords } from "@/lib/bankTop";
 import { describedOnce, stripeDescription } from "./paymentRows";
 import { partOnTest } from "./partWords";
@@ -1352,9 +1352,14 @@ export async function runSweep(now = new Date(), co = closeOutMemo(now)) {
 }
 
 /** The daily job: auto-pay after the review window, closing tests paused for 7 days, Open until heads-ups and each tester's own deadline reminders. (No retries and no owed window any more: a declined payment is a hold at once.) */
-export async function runDaily(now = new Date()) {
-  // (Batch 19 section 4) Under the timers lock, so a 5-minute sweep never runs at the same moment (it waits for one that is running).
-  return (await withTimersLock(() => runDailyLocked(now), { waitMs: 60_000 })) ?? runDailyLocked(now);
+export async function runDaily(now = new Date(), opts: { /** tests: a shorter wait for the lock */ waitMs?: number } = {}) {
+  // (Batch 19 section 4) Under the timers lock, so a 5-minute sweep never runs at the same moment (it waits for one that is running). (Owner, Nov 11, §383) It
+  // waits until the lock is free or its holder is abandoned (taken over after TIMERS_LOCK_STALE_MS), and NEVER runs without it (it used to after 60 s): if it
+  // still can't get it, the error is logged and nothing runs (null); the next cron or a manual run does the job.
+  const waitMs = opts.waitMs ?? DAILY_LOCK_WAIT_MS;
+  const out = await withTimersLock(() => runDailyLocked(now), { waitMs });
+  if (out === null) console.error(`[daily] not run: the timers lock stayed busy for ${Math.round(waitMs / 1000)} s; the next cron or a manual run will do it.`);
+  return out;
 }
 
 async function runDailyLocked(now: Date) {

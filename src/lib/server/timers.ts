@@ -8,6 +8,11 @@ import { db } from "@/lib/db";
 export const TIMERS_LOCK_KEY = "timers-lock";
 /** A lock older than this was left by a run that died (a function timeout): the next run takes it over. */
 export const TIMERS_LOCK_STALE_MS = 4 * 60_000;
+/**
+ * (Owner, Nov 11, §383) How long the daily job waits for the lock: a running sweep finishes, or (a run that died) its lock is taken over once it is
+ * TIMERS_LOCK_STALE_MS old. It never runs without the lock: past this it logs an error and the next cron (or a manual run) does the job.
+ */
+export const DAILY_LOCK_WAIT_MS = TIMERS_LOCK_STALE_MS + 60_000;
 /** The health check answers at once; with no after-response hook (tests, a plain server) it waits at most this long for the sweep. */
 export const SWEEP_BUDGET_MS = 8_000;
 
