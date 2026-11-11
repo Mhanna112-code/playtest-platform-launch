@@ -231,3 +231,21 @@ describe("§377 a re-sent invite goes with the listing box (batch 34 §10); an i
     expect(r.lines).toEqual([]);
   });
 });
+
+describe("§379 item 2: Ask to rejoin meeting an invite the page hadn't shown", () => {
+  it("someone who had been in the test is back at once, and the developer's bell says they rejoined", async () => {
+    const s = await setup({ spots: 5 });
+    const ana = await joined(s.testId);
+    await db.contract.update({ where: { id: ana.sessionId }, data: { status: "ended", endKind: "early", endedAt: new Date() } });
+    const pageAt = seen();
+    await settle();
+    expect((await act(s.testId, "invite", s.dev.cookie, { seenAt: seen(), confirmed: true, testerIds: [ana.tester.user.id] })).status).toBe(200);
+    await settle();
+    const r = await press(s.testId, "rejoin-ask", ana.tester.cookie, { seenAt: pageAt });
+    expect(r.status, JSON.stringify(r)).toBe(200);
+    expect((await db.contract.findUniqueOrThrow({ where: { id: ana.sessionId } })).status).toBe("working");
+    const bell = await db.notification.findMany({ where: { userId: s.dev.user.id, createdAt: { gt: new Date(pageAt) } }, orderBy: { createdAt: "asc" } });
+    expect(bell.some((n) => n.text.startsWith("Ana Silva rejoined"))).toBe(true);
+    expect(bell.some((n) => n.text.startsWith("Ana Silva joined “"))).toBe(false);
+  });
+});

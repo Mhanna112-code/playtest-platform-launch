@@ -673,7 +673,8 @@ export async function askToRejoin(tester: U, testId: string, body: Record<string
     return { saved: { requested: { note } } };
   }).catch(noKeyLine(tester.id, testId, "Ask to rejoin"));
   if ("joined" in done) {
-    await afterJoin(done.joined, tester, testId, body);
+    // (Owner, Nov 11, §379 item 2) An Ask to rejoin that met an invite the page hadn't shown, from someone who had been in the test: "Ana Silva rejoined …".
+    await afterJoin(done.joined, tester, testId, body, { rejoined: done.joined.back });
     return { joined: true, sessionId: done.joined.contract.id };
   }
   const t = await db.test.findUniqueOrThrow({ where: { id: testId }, include: { developer: true } });

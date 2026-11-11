@@ -1165,15 +1165,17 @@ export async function saveJoin(tx: Tx, t: Prisma.TestGetPayload<object>, tester:
   const filled = (await tx.contract.count({ where: working(testId) })) >= t.spots
     ? await closeOnFull(tx, testId, tester.id)
     : null;
-  return { contract, dev, filled, title: t.title };
+  return { contract, dev, filled, title: t.title, /** (§379 item 2) they had been in the test before */ back: !!old };
 }
 
 /** (Owner, Nov 11, §377) After a join's commit: the developer's "full" line, and their "joined" bell (not for their own Accept). */
-export async function afterJoin(j: Joined, tester: U, testId: string, body: Record<string, unknown>) {
+export async function afterJoin(j: Joined, tester: U, testId: string, body: Record<string, unknown>, opts: { /** (§379 item 2) "rejoined" */ rejoined?: boolean } = {}) {
   const { contract, dev, filled, title } = j;
   if (filled) await tellFull(filled);
   // (Owner, Oct 27) The developer who accepted an application made it happen themselves: no second "joined" line for it (the "applied" line was the notice).
-  if (body.acceptedByDeveloper !== true) await notify(dev.email, `${displayName(tester)} joined “${title}”`, [`${displayName(tester)} joined your test “${title}”.`, `${pronouns(tester.pronoun).Poss} deal: ${termsLine(contract)}.`], `/app/tests/${testId}#tester-${contract.id}`, { about: tester.id, testId }); // (Owner, Nov 6, §308) a plain per-test line: the test's own "Harbor Run · N updates" stack
+  // (Owner, Nov 11, §379 item 2) An Ask to rejoin meeting an invite the page hadn't shown, from someone who had been in the test: "rejoined".
+  const verb = opts.rejoined ? "rejoined" : "joined";
+  if (body.acceptedByDeveloper !== true) await notify(dev.email, `${displayName(tester)} ${verb} “${title}”`, [`${displayName(tester)} ${verb} your test “${title}”.`, `${pronouns(tester.pronoun).Poss} deal: ${termsLine(contract)}.`], `/app/tests/${testId}#tester-${contract.id}`, { about: tester.id, testId }); // (Owner, Nov 6, §308) a plain per-test line: the test's own "Harbor Run · N updates" stack
 }
 
 // ---------- tester: session ----------
