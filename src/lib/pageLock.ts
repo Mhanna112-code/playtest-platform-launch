@@ -67,14 +67,14 @@ function apply(d: Document | undefined = engagedOn ?? doc()) {
     mark(() => ensureStyle(d));
     mark(() => d.body.setAttribute(ATTR, ""));
     mark(() => d.body.setAttribute("aria-busy", "true"));
-    for (const t of EVENTS) d.addEventListener(t, block, true);
+    for (const t of EVENTS) mark(() => d.addEventListener(t, block, true));
     engagedOn = d;
     safety = setTimeout(() => releaseAll(), MAX_MS);
   } else if (!on && engagedOn) {
     const e = engagedOn;
     mark(() => e.body.removeAttribute(ATTR));
     mark(() => e.body.removeAttribute("aria-busy"));
-    for (const t of EVENTS) engagedOn.removeEventListener(t, block, true);
+    for (const t of EVENTS) mark(() => e.removeEventListener(t, block, true));
     engagedOn = null;
     if (safety) clearTimeout(safety);
     safety = null;
