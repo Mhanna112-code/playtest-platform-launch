@@ -900,7 +900,6 @@ export async function endEarly(dev: U, testId: string, body: Record<string, unkn
   const ids = [...new Set((Array.isArray(body.contractIds) ? body.contractIds : [body.contractId]).map((x) => String(x ?? "")).filter(Boolean))];
   if (!ids.length) throw new HttpError(400, "none", "Tick at least one tester.");
   let cancelled: Awaited<ReturnType<typeof cancelCallsAhead>> = [];
-  let goneLines: EndEarlyGone[] = [];
   const ended = await db.$transaction(async (tx) => {
     const lockedTest = await lockTest(tx, testId);
     // (Owner) After a stop, a stale press fails and names the stop.
@@ -909,31 +908,27 @@ export async function endEarly(dev: U, testId: string, body: Record<string, unkn
     // (Owner, Oct 28, batch 16 section 21) Testers this developer already ended early in another tab: this press stops once ("You ended Ana Silva's work early
     // in another tab"); on the second press they're dropped and the rest go through.
     const endedElsewhere: { id: string; name: string }[] = [];
-    // (Owner, Nov 5, §278) Ticked testers whose part ended otherwise (left, rated, removed, ended…): a refusal line each.
-    const gone: { id: string; name: string; why: string }[] = [];
+    // (Owner, Nov 5, §278; Owner, Nov 11, §380 I) Ticked testers whose work already ended otherwise (left, rated, removed, ended, a block…): already what End early
+    // wanted, so nothing is said about them (no refusal line); the page drops them when it redraws.
+    const gone: { id: string; name: string }[] = [];
     for (const id of ids) {
       const c = await tx.contract.findUnique({ where: { id }, include: { tester: true, test: { select: { title: true } } } });
       if (!c || c.testId !== testId) throw new HttpError(404, "not_found", "Choose a tester.");
       const name = displayName(c.tester);
-      if (c.status === "left") { gone.push({ id, name, why: RF.pressRefused(RF.sessionEndedCause(name), "End early") }); continue; } // (§364 item 4)
       if (c.status === "ended" && c.endKind === "early" && seenOf(body.seenAt) && c.endedAt && c.endedAt > seenOf(body.seenAt)!) { endedElsewhere.push({ id, name }); continue; }
-      if (c.status !== "working") { gone.push({ id, name, why: RF.pressRefused(RF.sessionEndedCause(name), "End early") }); continue; } // (§364 item 4)
+      if (c.status !== "working") { gone.push({ id, name }); continue; }
       list.push(c);
     }
-    // (§278) Nobody ticked is still working: one refusal naming them, as before.
-    if (!list.length && gone.length) throw new HttpError(409, "gone", [...gone.map((g) => g.why), ...endedElsewhere.map((x) => RF.pressRefused(RF.sessionEndedCause(x.name), "End early"))].join(" "));
-    // (§278) Some still working: the others' refusal lines go with whatever this press shows (its stop box, or its done line).
-    if (list.length) {
-      goneLines = [...gone, ...endedElsewhere.map((x) => ({ ...x, why: RF.pressRefused(RF.sessionEndedCause(x.name), "End early") }))].sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id)).map((g) => ({ contractId: g.id, text: g.why })); // (§364 item 4) one line each
-    }
+    // (§380 I) Nobody ticked is still working (and none ended in another tab since the page loaded): silent.
+    if (!list.length && !endedElsewhere.length) return list;
     const goneIds = new Set(gone.map((g) => g.id));
     // (§278) A gone tester's own leaving line is what their refusal line says: it doesn't stop the press for the others.
     const notTheirLeaving = goneIds.size ? (e: TestEventLike & { contractId?: string | null }) => !(e.kind === "left" && !!e.contractId && goneIds.has(e.contractId)) : undefined;
     // (Batch 29 sections 11-12) Paused or not, it stops once for what changed since the page loaded, the developer's own changes in another tab included (batch 16
     // section 21: ended the ticked testers early, paid their work, or requested, booked or cancelled a call with them; batch 29: any of BIG_OWN_ACTS).
     // (§278) The press is about the ticked testers still in it (and those ended in another tab, as before).
-    await topPanelGate(tx, testId, body, goneLines.length ? { gone: goneLines } : {}, [], notTheirLeaving, { acts: ["end-early", ...PAY_ACTS, ...CALL_ACTS], keys: ids.filter((id) => !goneIds.has(id)).map((id) => `c:${id}`) });
-    if (!list.length && endedElsewhere.length) throw new HttpError(409, "gone", endedElsewhere.map((x) => RF.pressRefused(RF.sessionEndedCause(x.name), "End early")).join(" ")); // (§364 item 4)
+    await topPanelGate(tx, testId, body, {}, [], notTheirLeaving, { acts: ["end-early", ...PAY_ACTS, ...CALL_ACTS], keys: ids.filter((id) => !goneIds.has(id)).map((id) => `c:${id}`) });
+    if (!list.length) return list; // (§380 I) ended in another tab (that stopped once above): silent now
     for (const c of list) {
       await tx.contract.update({ where: { id: c.id }, data: { status: "ended", endKind: "early", endedAt: new Date(), endReason: reason } });
       await (await import("./accessKeys")).releaseTesterKeys(tx, c.id);
@@ -949,7 +944,8 @@ export async function endEarly(dev: U, testId: string, body: Record<string, unkn
     await notify(c.tester.email, `Your work on “${c.test.title}” was ended early`, [`${displayName(dev)} ended your work on “${c.test.title}”: “${reason}”`, "Work you already sent is still reviewed and paid. Calls ahead are cancelled."], `/app/sessions/${c.id}`, { about: dev.id, group: "tstopped" });
   await spotOpened(testId);
   // (§278) With refusal lines for ticked testers already out: the done line they show beside.
-  return { ended: true, count: ended.length, endedIds: ended.map((c) => c.id), ...(goneLines.length ? { gone: goneLines, done: `You ended ${andList(ended.map((c) => displayName(c.tester)))}'s work early.` } : {}) };
+  if (!ended.length) return { ended: true, count: 0, endedIds: [], already: true }; // (§380 I) already what the press wanted
+  return { ended: true, count: ended.length, endedIds: ended.map((c) => c.id) };
 }
 /** (Owner, Nov 5, §278) One ticked tester End early couldn't act on (already out): its own refusal line, and the tick the page removes. */
 export type EndEarlyGone = { contractId: string; text: string };

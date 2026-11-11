@@ -301,13 +301,14 @@ describe("§365 money refusals: Confirm with your bank", () => {
 });
 
 describe("§365 money refusals: Confirm all", () => {
-  it("nothing waiting; already confirmed (§380 B: the plain line, never \"in another tab\")", async () => {
+  it("nothing waiting; already confirmed: (§380 I, D14) silent", async () => {
     const w = await world();
-    await refused(w, () => confirmAll(w.dev.cookie, { seenIds: [], seenTotalCents: 0 }), NOTHING_TO_CONFIRM);
+    expect((await confirmAll(w.dev.cookie, { seenIds: [], seenTotalCents: 0 })).body).toMatchObject({ already: true, line: "" });
+    expect(NOTHING_TO_CONFIRM).toBe("There's nothing waiting for your bank to confirm.");
     const p = await waitingCharge(w);
     const r = await confirmAll(w.dev.cookie, { seenIds: [p.id], seenTotalCents: 1000, tab: "B", confirmed: true });
     expect(r.status, JSON.stringify(r.body)).toBe(200);
-    await refused(w, () => confirmAll(w.dev.cookie, { seenIds: [p.id], seenTotalCents: 1000, tab: "A" }), NOTHING_TO_CONFIRM);
+    expect((await confirmAll(w.dev.cookie, { seenIds: [p.id], seenTotalCents: 1000, tab: "A" })).body).toMatchObject({ already: true, line: "" });
   });
 
   it("one already waiting for the bank", async () => {
@@ -323,7 +324,7 @@ describe("§365 money refusals: Confirm all", () => {
     const p = await waitingCharge(w);
     await startHold(w.dev.user.id, "unpaid");
     await db.payment.update({ where: { id: p.id }, data: { status: "deferred", actionPi: null, actionBy: null } });
-    await refused(w, () => confirmAll(w.dev.cookie, { seenIds: [p.id], seenTotalCents: 1000 }), NOTHING_TO_CONFIRM);
+    expect((await confirmAll(w.dev.cookie, { seenIds: [p.id], seenTotalCents: 1000 })).body).toMatchObject({ already: true }); // (§380 I) silent
     const v = await world();
     await db.user.update({ where: { id: v.dev.user.id }, data: { deletedAt: new Date() } });
     await refused(v, () => confirmAll(v.dev.cookie, {}), ACCOUNT_NO_LONGER_EXISTS);

@@ -423,7 +423,7 @@ export async function withdrawApplication(tester: { id: string }, testId: string
   const n = await db.application.updateMany({ where: { testId, testerId: tester.id, status: "pending" }, data: { status: "withdrawn", decidedAt: new Date() } });
   if (!n.count) {
     // (Owner, Nov 11, §380) Already what the press wanted (declined, withdrawn, or closed: full, stopped, invite only, a block, the listing, joining closed): no
-    // refusal, the page just redraws. Accepted keeps its one line ("Nora Lane accepted your application at 3:20 AM, so you're in this test.").
+    // refusal, the page just redraws. Accepted keeps its one line ("Nora Lane accepted your application, so you're in this test.").
     if (await applicationAlreadyOver(tester.id, testId)) return { withdrawn: true, already: true };
     throw new HttpError(409, "gone", await withdrawGoneLine(tester.id, testId));
   }
@@ -459,15 +459,16 @@ export function appClosedForDev(name: string, reason: string | null, at: Date, o
 }
 
 /**
- * (Owner, Oct 31, batch 35 §48) Withdraw on an application that's no longer pending says why: "<Dev> accepted your application at 3:20 AM, so you're in this
- * test."; never one: the plain line. (Owner, Nov 11, §380) Declined, withdrawn and closed (for any reason) are silent now (applicationAlreadyOver): their lines
+ * (Owner, Oct 31, batch 35 §48) Withdraw on an application that's no longer pending says why: "<Dev> accepted your application, so you're in this test."
+ * (§380 I: no time); never one: the plain line. (Owner, Nov 11, §380) Declined, withdrawn and closed (for any reason) are silent now (applicationAlreadyOver): their lines
  * are gone.
  */
 export async function withdrawGoneLine(testerId: string, testId: string) {
   const a = await db.application.findUnique({ where: { testId_testerId: { testId, testerId } } });
   if (!a || (a.status !== "accepted" && a.status !== "joined")) return NO_PENDING_APPLICATION;
   const t = await db.test.findUnique({ where: { id: testId }, include: { developer: true } });
-  return `${t ? displayName(t.developer) : "The developer"} accepted your application at ${fmtTime(a.decidedAt ?? new Date())}, so you're in this test.`;
+  // (Owner, Nov 11, §380 I) Without the time: "Nora Lane accepted your application, so you're in this test."
+  return `${t ? displayName(t.developer) : "The developer"} accepted your application, so you're in this test.`;
 }
 
 /**

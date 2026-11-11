@@ -29,7 +29,8 @@ async function world() {
 }
 
 describe("§278 End early with a ticked tester gone meanwhile", () => {
-  it("gone plus a charge by the other: the refusal line for the gone one and a stop listing the charge; the second press ends the other; the tick goes", async () => {
+  // (Owner, Nov 11, §380 I) A ticked tester whose work already ended: silent now (no refusal line), the press goes on for the others.
+  it("gone plus a charge by the other: nothing said about the gone one, a stop listing the charge; the second press ends the other", async () => {
     const w = await world();
     // Ben charges on his part (a charge about a ticked tester always stops the press: §193).
     const sub = await db.submission.create({ data: { contractId: w.ben.sessionId, kind: "written", agreedCents: 1000, sentAt: new Date(), updatedAt: new Date() } });
@@ -38,17 +39,16 @@ describe("§278 End early with a ticked tester gone meanwhile", () => {
     const first = (await act(w.testId, "end-early", w.dev.cookie, { seenAt: w.pageLoaded, contractIds: [w.ana.sessionId, w.ben.sessionId], reason: REASON })) as Res;
     expect(first.status).toBe(409);
     expect(first.body.error?.code).toBe("stop_once");
-    expect(first.body.error?.gone).toEqual([{ contractId: w.ana.sessionId, text: "Ana Silva's session has ended, so your End early didn't go through." }]); // (§364 item 4)
+    expect(first.body.error?.gone).toBeUndefined(); // (§380 I)
     const texts = (first.body.error?.changes ?? []).map((c) => c.text);
     expect(texts).toContain("Ben Okafor charged $10.00 for his written answers");
-    // Ana's leaving is what her refusal line says: not a stop line too.
+    // Ana's leaving is already what End early wanted: not a stop line either.
     expect(texts.some((t) => t.startsWith("Ana Silva left"))).toBe(false);
     expect((first.body.error?.changes ?? []).find((c) => c.text.startsWith("Ben Okafor charged"))?.forced).toBe(true);
     expect(JSON.stringify(first.body)).not.toContain("Refresh");
     expect((await db.contract.findUniqueOrThrow({ where: { id: w.ben.sessionId } })).status).toBe("working");
-    // The page removes the gone tester's tick (the ids the stop names), then the second press ends Ben's work.
-    const ticks = [w.ana.sessionId, w.ben.sessionId].filter((id) => !first.body.error!.gone!.some((g) => g.contractId === id));
-    expect(ticks).toEqual([w.ben.sessionId]);
+    // The second press (both still ticked) ends Ben's work; Ana's is passed over silently.
+    const ticks = [w.ana.sessionId, w.ben.sessionId];
     const second = (await act(w.testId, "end-early", w.dev.cookie, { seenAt: w.pageLoaded, contractIds: ticks, reason: REASON, confirmed: true, boxAt: first.body.error?.now })) as Res;
     expect(second.status).toBe(200);
     expect(second.body.endedIds).toEqual([w.ben.sessionId]);
@@ -56,27 +56,32 @@ describe("§278 End early with a ticked tester gone meanwhile", () => {
     expect((await db.contract.findUniqueOrThrow({ where: { id: w.ana.sessionId } })).status).toBe("left");
   });
 
-  it("gone plus nothing new: the others' work ends at once, with the refusal line for the gone one beside the done line", async () => {
+  it("gone plus nothing new: the others' work ends at once, nothing said about the gone one", async () => {
     const w = await world();
     const r = (await act(w.testId, "end-early", w.dev.cookie, { seenAt: w.pageLoaded, contractIds: [w.ana.sessionId, w.ben.sessionId], reason: REASON })) as Res;
     expect(r.status).toBe(200);
     expect(r.body.endedIds).toEqual([w.ben.sessionId]);
-    expect(r.body.gone).toEqual([{ contractId: w.ana.sessionId, text: "Ana Silva's session has ended, so your End early didn't go through." }]); // (§364 item 4)
-    expect(r.body.done).toBe("You ended Ben Okafor's work early.");
+    expect(r.body.gone).toBeUndefined(); // (§380 I)
+    expect(r.body.done).toBeUndefined();
     expect((await db.contract.findUniqueOrThrow({ where: { id: w.ben.sessionId } })).status).toBe("ended");
   });
 
-  it("all ticked testers gone: a single refusal naming them, with no refresh text", async () => {
+  it("all ticked testers gone: silent (already what End early wanted), whatever ended their work (a block too)", async () => {
     const w = await world();
     expect((await sact(w.ben.sessionId, "leave", w.ben.tester.cookie, { seenAt: seen(), confirmed: true })).status).toBe(200);
     const r = (await act(w.testId, "end-early", w.dev.cookie, { seenAt: w.pageLoaded, contractIds: [w.ana.sessionId, w.ben.sessionId], reason: REASON })) as Res;
-    expect(r.status).toBe(409);
-    expect(r.body.error?.code).toBe("gone");
-    expect(r.body.error?.message).toBe("Ana Silva's session has ended, so your End early didn't go through. Ben Okafor's session has ended, so your End early didn't go through."); // (§364 item 4)
-    expect(r.body.error?.changes).toBeUndefined();
-    // One tester: as before.
+    expect(r.status).toBe(200);
+    expect(r.body).toMatchObject({ ended: true, count: 0, already: true });
     const one = (await act(w.testId, "end-early", w.dev.cookie, { seenAt: w.pageLoaded, contractIds: [w.ana.sessionId], reason: REASON })) as Res;
-    expect(one.body.error?.message).toBe("Ana Silva's session has ended, so your End early didn't go through."); // (§364 item 4)
+    expect(one.body.already).toBe(true);
+    // Ended by a block: silent too.
+    const b = await setup();
+    const cara = await joined(b.testId, "Cara Diaz");
+    await db.block.create({ data: { blockerId: cara.tester.user.id, blockedId: b.dev.user.id } });
+    await db.contract.update({ where: { id: cara.sessionId }, data: { status: "ended", endKind: "blocked", endedAt: new Date() } });
+    const blocked = (await act(b.testId, "end-early", b.dev.cookie, { seenAt: seen(), contractIds: [cara.sessionId], reason: REASON })) as Res;
+    expect(blocked.status).toBe(200);
+    expect(blocked.body.already).toBe(true);
   });
 });
 

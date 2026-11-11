@@ -66,3 +66,16 @@ describe("§380 H: your own block names itself", () => {
     expect((await act(other.testId, "apply", t.cookie, { listingVersion: 1, seenAt: seen(), confirmed: true })).body.error.message).toBe("You blocked Nora Lane, so your Apply didn't go through.");
   });
 });
+
+describe("§380 I: silent when a block already did it", () => {
+  it("Leave on a part a block ended (either way): silent", async () => {
+    for (const by of ["tester", "developer"] as const) {
+      const s = await setup();
+      const j = await joined(s.testId);
+      expect((await (by === "tester" ? block(j.tester.cookie, s.dev.user.id) : block(s.dev.cookie, j.tester.user.id))).status).toBe(200);
+      const r = await sact(j.sessionId, "leave", j.tester.cookie, { seenAt: seen(), confirmed: true });
+      expect(r.status, by).toBe(200);
+      expect(r.body.already, by).toBe(true);
+    }
+  });
+});

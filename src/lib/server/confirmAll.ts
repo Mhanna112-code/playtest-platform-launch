@@ -149,8 +149,9 @@ export async function confirmAllPress(dev: { id: string }, body: Seen & Record<s
   if (await openAll(dev.id)) throw new HttpError(409, "busy", T.ALL_BUSY);
   const now = new Date();
   const waiting = (await confirm.waitingConfirmation(dev.id, undefined, now)).filter(inAll); // (§172)
-  // (Owner, Nov 3, batch 35 §163) Nothing left to confirm is refused on the first press: a "what's waiting changed" stop could only be followed by this refusal.
-  if (!waiting.length) throw new HttpError(409, "nothing", await nothingLeftLine(dev.id, body));
+  // (Owner, Nov 3, batch 35 §163) Nothing left to confirm never stops (a "what's waiting changed" stop could only be followed by nothing). (Owner, Nov 11, §380 I,
+  // D14; replaces §163's refusal) Already what Confirm all wanted: silent, the page redraws.
+  if (!waiting.length) return NOTHING_LEFT;
   await stopIfChanged(waiting, body, now, dev.id);
   // (Owner, Nov 3) Over $200 in all: only with the tick "I confirm this payment is over $200." (as Pay's).
   if (sum(waiting) > PAY_TICK_CENTS && body.over200 !== true) throw new HttpError(400, "needs_tick", `Tick “${OVER_PAY_TICK_LINE}” to pay.`);
@@ -159,7 +160,7 @@ export async function confirmAllPress(dev: { id: string }, body: Seen & Record<s
     if (await openAll(dev.id)) throw new HttpError(409, "busy", T.ALL_BUSY);
     // Changed between the list and the claim (a single Confirm finished, a date passed): stops once on what's waiting now.
     const fresh = (await confirm.waitingConfirmation(dev.id, undefined, new Date())).filter(inAll);
-    if (!fresh.length) throw new HttpError(409, "nothing", await nothingLeftLine(dev.id, { ...body, seenIds: waiting.map((p) => p.id) })); // (§163) nothing left: refused, never a stop
+    if (!fresh.length) return NOTHING_LEFT; // (§380 I) nothing left: silent, never a stop
     await stopIfChanged(fresh, { seenTotalCents: sum(waiting), seenIds: waiting.map((p) => p.id), tab: body.tab }, new Date(), dev.id);
     throw new HttpError(409, "stop_once", "Press again to go ahead.", { changes: [{ text: "What's waiting for your bank changed meanwhile.", at: new Date() }], totalCents: sum(fresh), ids: fresh.map((p) => p.id) });
   }
@@ -190,7 +191,7 @@ export async function confirmAllPress(dev: { id: string }, body: Seen & Record<s
   const already = paid.length ? T.alreadyPaidLine(paid) : "";
   if (!kept.length) {
     await db.payment.updateMany({ where: { id: one.id, status: "paying" }, data: { status: "cancelled" } });
-    return { done: true, line: already || T.NOTHING_TO_CONFIRM, paidIds, oneId: null as string | null };
+    return { done: true, line: already, ...(already ? {} : { already: true }), paidIds, oneId: null as string | null }; // (§380 I) nothing else said when nothing was left
   }
   const cents = sum(kept);
   const row = cents === one.amountCents ? one : await db.payment.update({ where: { id: one.id }, data: { amountCents: cents, feeCents: cents } });
@@ -218,11 +219,8 @@ export async function confirmAllPress(dev: { id: string }, body: Seen & Record<s
  * (Owner, Nov 4, batch 35 §163) Nothing the page showed waits any more: ONE refusal, "There's nothing waiting for your bank to confirm." (Owner, Nov 11, §380 B)
  * Its "You already confirmed these payments in another tab at 3:20 PM." variant is gone: Confirm all exists only on the dashboard.
  */
-async function nothingLeftLine(devId: string, body: Seen & Record<string, unknown>) {
-  void devId;
-  void body;
-  return T.NOTHING_TO_CONFIRM;
-}
+/** (Owner, Nov 11, §380 I) Confirm all with nothing left to confirm: silent (the page redraws without the box). */
+const NOTHING_LEFT = { done: true, line: "", already: true, paidIds: [] as string[], oneId: null as string | null };
 
 async function stopIfChanged(now: Payment[], body: Seen & { tab?: unknown }, at: Date, devId = "") {
   const seen = typeof body.seenTotalCents === "number" ? body.seenTotalCents : null;

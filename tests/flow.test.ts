@@ -134,7 +134,7 @@ describe("top panel stops once", () => {
     const { tester, sessionId } = await joined(testId);
     await sact(sessionId, "leave", tester.cookie);
     const r = await act(testId, "end-early", dev.cookie, { seenAt: pageLoaded, contractId: sessionId, reason: "Enough feedback", confirmed: true });
-    expect(r.body.error.message).toBe("Ana Silva's session has ended, so your End early didn't go through."); // (§364 item 4)
+    expect(r.body.already).toBe(true); // (Owner, Nov 11, §380 I) their work already ended: silent
     await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true });
     await later();
     expect((await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: seen() })).body.already).toBe(true); // (Owner, Nov 11, §380) already stopped: silent

@@ -40,7 +40,7 @@ describe("§380 silent when already done", () => {
     expect((await act(testId, "application", dev.cookie, { applicationId: b.id, action: "accept", seenAt: seen(), confirmed: true })).status).toBe(200);
     const w2 = await act(testId, "withdraw-application", u.cookie, { seenAt: seen() });
     expect(w2.status).toBe(409);
-    expect(w2.body.error.message).toMatch(/^Nora Lane accepted your application at .*, so you're in this test\.$/);
+    expect(w2.body.error.message).toBe("Nora Lane accepted your application, so you're in this test."); // (§380 I) no time
   });
 
   it("Decline application: withdrawn or already declined → silent (J13, J14); Accept on a withdrawn one keeps its refusal", async () => {

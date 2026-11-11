@@ -251,11 +251,12 @@ describe("§163 4: Pay on an old page after the tester's Charge or Let it go is 
     expect([first.body.error.code, first.body.error.message]).toEqual(["reviewed", expect.stringMatching(/^You already paid \$10\.00 for Ana Silva's written answers in another tab at \d{1,2}:\d{2} [AP]M\.$/)]);
   });
 
-  it("Confirm all on a page whose payments are no longer waiting: refused at once, never a stop whose second press is refused", async () => {
+  it("Confirm all on a page whose payments are no longer waiting: (§380 I, D14) silent at once, never a stop", async () => {
     const s = await setup();
     const r = await allPOST(req("/api/payments/confirm-all", { cookie: s.dev.cookie, body: { seenTotalCents: 1000, seenIds: [randomUUID()] } })).then(json);
-    expect(r.status).toBe(409);
-    expect(r.body.error).toMatchObject({ code: "nothing", message: T.NOTHING_TO_CONFIRM });
+    expect(r.status).toBe(200);
+    expect(r.body).toMatchObject({ done: true, line: "", already: true });
+    expect(T.NOTHING_TO_CONFIRM).toBe("There's nothing waiting for your bank to confirm."); // still the stop box's line when the last one goes
   });
 });
 
@@ -459,9 +460,8 @@ describe("§163 6: own other-tab presses on the same thing are refused at once",
     await settle();
     for (const id of [v.anaWork.id, v.anaCall.id]) expect((await confirmIn(v.dev.cookie, "tab-B", { paymentId: id, simulate: "succeeded" })).status).toBe(200);
     const r = await all(v.dev.cookie, { seenTotalCents: 4000, seenIds: [v.anaWork.id, v.anaCall.id] });
-    expect([r.status, r.body.error?.code]).toEqual([409, "nothing"]);
-    // (Owner, Nov 11, §380 B) Confirm all lives only on the dashboard: its "in another tab" variant (B05) is gone, the one plain line stays (D14).
-    expect(r.body.error.message).toBe("There's nothing waiting for your bank to confirm.");
+    // (Owner, Nov 11, §380 I, D14) All of them confirmed: silent.
+    expect([r.status, r.body.already]).toEqual([200, true]);
   });
 
   it("the call room holds the page's ICE servers in a ref: a redraw of the page never hangs up the call", () => {
