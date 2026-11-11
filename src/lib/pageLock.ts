@@ -103,7 +103,7 @@ export function unlockPage(d: Document | undefined = engagedOn ?? doc()) {
   apply(d);
 }
 
-/** (E) A press from a one-at-a-time page went out. `d`: tests. */
+/** (E) A press went out (any page: the lock runs on every page, not only the one-at-a-time ones). `d`: tests. */
 export function pressStarted(d: Document | undefined = doc()) {
   presses++;
   if (grace) clearTimeout(grace);

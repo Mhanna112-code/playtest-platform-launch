@@ -124,7 +124,7 @@ export function bellKeyIn(n: { id: string; testId: string | null; own: boolean; 
 }
 
 /**
- * (Owner, Nov 6, §298) The bell's stacks: ONE grouping for the Notifications page and the summary / end-of-day emails, so they can't drift apart. Lines with the
+ * (Owner, Nov 6, §298) The bell's stacks: ONE grouping for the Notifications page and the summary / morning emails, so they can't drift apart. Lines with the
  * same bellKeyIn (in the reader's zone) form one stack, in the order their first line comes. Its title: the group's (groupTitle) for a `groupKey`, the test's
  * name for a per-test stack, none for a line on its own (`own`, or about no test). `counted`: the title already counts (no "· N updates"); `test`: the title is
  * a test's name. A stack of one line shows as that single line, in the bell and the email alike.

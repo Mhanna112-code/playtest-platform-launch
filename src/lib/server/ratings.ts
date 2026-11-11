@@ -95,7 +95,7 @@ export async function devRateStates(contractIds: string[], now = new Date()) {
   const spans = new Map<string, Span[]>();
   const closeOuts = new Map<string, Date | null>();
   for (const id of new Set(cs.map((c) => c.testId))) closeOuts.set(id, await closeOutOf(id, now));
-  // (Owner, Nov 12, §382 b and c) Outages move the developer's window whichever way it opens; the tester's disputes on the part (open: up to now) pause it; the test
+  // (Owner, Nov 11, §382 b and c) Outages move the developer's window whichever way it opens; the tester's disputes on the part (open: up to now) pause it; the test
   // close each test's close-out counts from, and that close-out's own pauses (team, the developer's holds and suspensions before the work ended, outages).
   const outages = (await db.outage.findMany({ where: { OR: [{ needsApproval: false }, { approvedAt: { not: null } }] }, select: { startAt: true, endAt: true } })).map((o): Span => ({ start: o.startAt.getTime(), end: o.endAt.getTime(), open: false }));
   const disputeRows = await db.dispute.findMany({ where: { contractId: { in: contractIds }, status: { not: "withdrawn" }, createdAt: { lte: now } }, select: { contractId: true, createdAt: true, decidedAt: true, status: true } });
@@ -109,7 +109,7 @@ export async function devRateStates(contractIds: string[], now = new Date()) {
     const dev = c.test.developer;
     const name = displayName(c.tester);
     // (Owner, Nov 4, §172) The window also pauses while the team paused this test (as under a developer suspension), for this test only.
-    // (Owner, Nov 12, §382 c; replaces §358 here, for the Rate window only) The developer's OWN hold or suspension pauses it whenever it began, after the work ended too.
+    // (Owner, Nov 11, §382 c; replaces §358 here, for the Rate window only) The developer's OWN hold or suspension pauses it whenever it began, after the work ended too.
     if (!spans.has(c.testId)) spans.set(c.testId, mergeSpans([...devPauseSpans(events.filter((e) => e.userId === dev.id), dev, now), ...(await teamPauseSpans(c.testId, c.test.adminPausedAt, now, c.test.status === "stopped" ? c.test.stoppedAt ?? now : null))]));
     const mine = ratings.find((r) => r.contractId === c.id && r.side === "developer");
     const theirs = ratings.find((r) => r.contractId === c.id && r.side === "tester");
@@ -121,7 +121,7 @@ export async function devRateStates(contractIds: string[], now = new Date()) {
     const closeOut = closeOuts.get(c.testId) ?? null;
     const lastSettled = Math.max(0, ...pieces.map((x) => x.review?.createdAt.getTime() ?? 0));
     const opensAt = !settled ? null : theirs ? new Date(Math.max(theirs.createdAt.getTime(), lastSettled)) : closedOut(closeOut, now) && pieces.length > 0 ? new Date(Math.max(closeOut!.getTime(), lastSettled)) : null; // (DEFAULT) only a tester who sent something or had a call
-    // (Owner, Nov 12, §382 c) The window closes at the LATER of the test's close-out and 14 days after it opened. Both move, exactly, by the developer's own holds
+    // (Owner, Nov 11, §382 c) The window closes at the LATER of the test's close-out and 14 days after it opened. Both move, exactly, by the developer's own holds
     // and suspensions, the tester's disputes on this part and (§382 b) outages; the close-out also by everything that moves it before the test closes.
     // (§382 b) No outage counted twice: one that already moved the tester's rating (applyOutage moves a rating while its first 14 days run) isn't added again
     // when the window opens at that rating.
@@ -414,7 +414,7 @@ export async function ratingReminders(now = new Date(), opts: { /** (§383) fals
     if (!c || (await db.user.findUnique({ where: { id: c.test.developerId }, select: { deletedAt: true } }))?.deletedAt) continue; // (batch 29 §21) on a running test too
     if (!repeatDue(await sinceLast(c.test.developerId, c.testId, s.opensAt!), now, EVERY_DAYS)) continue;
     // (Owner, Nov 7, §329) The LAST reminder before their 14 days end (the next 3-day slot would fall after the end) ignores email Off (`always`): it reaches the
-    // end-of-day email. The others follow the email setting. (The line already names the end date.)
+    // morning email. The others follow the email setting. (The line already names the end date.)
     const last = now.getTime() + EVERY_DAYS * DAY >= s.endsAt!.getTime();
     await bell(c.test.developerId, `Reminder: rate ${displayName(c.tester)} for “${c.test.title}” (until ${T(s.endsAt!, "date")})`, RATINGS_HREF, undefined, { side: "developer", ...RATINGS, testId: c.testId, reminder: `rate-dev:${c.id}`, ...(last ? { always: true } : {}) });
     n++;

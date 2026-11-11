@@ -816,7 +816,7 @@ export function workOverPress(action: string, body: Record<string, unknown> = {}
   return "";
 }
 /**
- * An old page's press after the work ended: "Nora Lane ended your session early on Nov 3, so your Send didn't go through. Work you sent is still reviewed."
+ * An old page's press after the work ended, "{cause}, so your {button} didn't go through.": "Your part in this test has ended, so your Send didn't go through."
  * (Owner, Nov 9, §363; replaces batch 16 §24's stopped line and §355's deleted-developer press line) A stopped test (the developer's Stop, the team's, or the
  * developer deleting their account) reads only "This test was stopped, so your Send didn't go through.": no date, no name, no tail (the banner has them).
  */

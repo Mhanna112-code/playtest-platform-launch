@@ -59,7 +59,7 @@ export async function awayAction(paymentId: string, r: NeedsAction & { feeCents?
 /**
  * (Owner, Oct 29, batch 29 §32; replaces the per-charge line) ONE bell line covering every charge waiting for the bank, across tests and renewals, opening the dashboard's
  * "Your bank wants you to confirm" box. A new waiting charge on a later day sends it again with the new totals; on the same day the day's line is updated in place (at most
- * one a day). Still in "Payments and holds", and emailed whatever the setting (the end-of-day email takes the line as it stands then).
+ * one a day). Still in "Payments and holds", and emailed whatever the setting (the morning email takes the line as it stands then).
  */
 export async function tellBankWaiting(devId: string, now = new Date()) {
   const dev = await db.user.findUniqueOrThrow({ where: { id: devId } });

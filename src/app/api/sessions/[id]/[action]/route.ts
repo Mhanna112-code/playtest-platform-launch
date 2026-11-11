@@ -36,8 +36,8 @@ type Ctx = { params: Promise<{ id: string; action: string }> };
  * (Owner, Oct 26) When the test was stopped or the tester's work was ended while the page is open, every later press is a FINAL
  * refusal (not a stop-once): Send, any call action, Switch / Keep, Request, uploads ((Owner, Nov 6, §304) "This key doesn't work" is gone). (Charge / Let it go, Dispute, Rate,
  * Report a problem, chat and excerpts keep their own rules.) (Owner, Oct 28, batch 16 section 24) After a stop, a closure or an early end the refusal
- * names the press ("Nora Lane stopped the test on Nov 3, so your Send didn't go through. Work you sent is still reviewed.") with the code
- * "work_over": the page moves to its top, where the stopped line says the same. A leave, a rating or a block keep their own (neutral) line.
+ * names the press, "{cause}, so your {button} didn't go through." (§363: "This test was stopped, so your Send didn't go through.") with the code
+ * "work_over": the page moves to its top, where the stopped line says the rest. A leave, a rating or a block keep their own (neutral) line.
  */
 const FINAL_AFTER_END = new Set<string>(WORK_OVER_ACTIONS);
 /** (§380 H) The call presses among them. */

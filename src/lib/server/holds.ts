@@ -159,7 +159,7 @@ export async function startHold(devId: string, reason: string, /** (§315) the d
   await (await import("./restrictions")).cancelCallsNearPause(devId, now);
   // (Owner, Nov 6, §295) Their testers read "“<test>” is paused": each test no other cause (a suspension, the team's pause) was pausing already.
   if (!dev.devSuspendedAt) await tellTestersPaused(tests.filter((t) => t.status !== "draft" && !t.adminPausedAt).map((t) => t.id));
-  // (Owner, Oct 27) "Your tests are paused" and the chargeback hold email ignore Off (they ride in the one end-of-day email); the lines stack with that day's other hold / payment lines.
+  // (Owner, Oct 27) "Your tests are paused" and the chargeback hold email ignore Off (they ride in the one morning email); the lines stack with that day's other hold / payment lines.
   // (Owner, Nov 6, §313a) ONE line names each paused test's closing date (it was this line plus one "<test> is paused and closes on …" line per test).
   const closing = await (await import("./pauseClosure")).pausedClosingWords(devId);
   if (reason === "chargeback") {
@@ -201,7 +201,7 @@ export const testerPausedLine = (title: string) => `“${title}” is paused`;
  * developer's suspension), at the moment the pause starts: every working tester of each test given. The callers pass only the tests no other cause was pausing
  * already, the mirror of "running again" (resumeTests / unpauseTest: only when no other cause still pauses it), so a second cause says nothing (one clock, batch 9).
  * It stacks with "running again" in the tester's "Pauses" entry (group `paused`). (Owner, Nov 6, §298) Both go out even with email Off (`always`: the
- * end-of-day email), like the developer's hold and pause lines, still stacked under "Pauses · N" and still never saying why.
+ * morning email), like the developer's hold and pause lines, still stacked under "Pauses · N" and still never saying why.
  */
 export async function tellTestersPaused(testIds: string[]) {
   if (!testIds.length) return;
@@ -989,7 +989,7 @@ export async function chargebackOpened(paymentIntentId: string, disputedCents: u
     // (Owner, Nov 6, §294) EVERY chargeback is emailed at once, whatever the email setting (`always`), as the admins' chargeback email is: the one that starts the
     // hold (its "Your tests are paused after a chargeback"), the one that turns a payment hold into a chargeback hold, and a further one during a chargeback hold
     // (before §294 a bell line only). In the bell they stay in the day's "payhold" entry. A hold already on needs the steps again (its card check and approval cleared).
-    // The email is sent immediately (`now`: sendEmail, the admins' path), never held for the end-of-day email.
+    // The email is sent immediately (`now`: sendEmail, the admins' path), never held for the morning email.
     await notify(before.email, line, [line + ".", "To resume: verify a card with 3D Secure, pay what you owe, and wait for the team's approval."], "/app/payments#chargeback-steps", { side: "developer", always: true, now: true, payment: true, group: "payhold" });
   }
   // (Owner, Nov 4, §178) The card check and approval are no longer cleared here, after the emails: they were cleared in the claim (a hold already on) or when
@@ -1222,7 +1222,7 @@ async function followAmount(reversalId: string, cents: number, status: string, e
     // (Owner, Nov 6, §294) Changed BEFORE the repayment: the developer is told too (before, nothing), in Pay what you owe's own words for it (its stop's
     // bankChangedLine): "Your bank changed the amount it took back from your $40.00 payment for …: $40.00 → $25.00 (now $25.00 + $15.00 fee = $40.00)". A bell line
     // in the day's "payhold" entry, linking to the chargeback steps (or Pay what you owe outside a chargeback hold).
-    // (Owner, Nov 6, §295) Its email goes in the end-of-day email (whatever the email setting: `always`), no longer immediately (`now`).
+    // (Owner, Nov 6, §295) Its email goes in the morning email (whatever the email setting: `always`), no longer immediately (`now`).
     const line = bankChangedLine(p.amountCents, piece, r.was, r.next, one);
     const link = dev.holdStartedAt && dev.holdReason === "chargeback" ? "/app/payments#chargeback-steps" : "/app/payments#owed";
     if (!dev.deletedAt) await notify(dev.email, line, [line + ".", "Open Payments to see what you owe."], link, { side: "developer", always: true, payment: true, group: "payhold", recipientId: dev.id });
@@ -1238,15 +1238,15 @@ async function followAmount(reversalId: string, cents: number, status: string, e
     if (ok > 0) {
       const line = bankLoweredLine(p.amountCents, piece, ok, one);
       const recorded = sent.every((x) => x.status !== "refunded");
-      // (Owner, Nov 6, §295; §294 had sent it immediately) A chargeback's amount changing goes in the end-of-day email, whatever the email setting (`always`); in the
+      // (Owner, Nov 6, §295; §294 had sent it immediately) A chargeback's amount changing goes in the morning email, whatever the email setting (`always`); in the
       // bell it's unchanged.
-      await notify(dev.email, line, [line, ...(recorded ? ["Payments aren't set up yet, so this was recorded and nothing was refunded."] : [])], "/app/payments", { side: "developer", always: true, payment: true, group: "payhold" }); // (Owner, Nov 6, §311c) in "Payments and holds", end of day
+      await notify(dev.email, line, [line, ...(recorded ? ["Payments aren't set up yet, so this was recorded and nothing was refunded."] : [])], "/app/payments", { side: "developer", always: true, payment: true, group: "payhold" }); // (Owner, Nov 6, §311c) in "Payments and holds", morning email
     }
     return "followed" as const;
   }
   await note(`${head}: followed after repayment: charged ${money(r.cents)} more.`);
   const line = bankRaisedLine(p.amountCents, piece, r.cents, one);
-  await notify(dev.email, line, [line], "/app/payments", { side: "developer", always: true, payment: true, group: "payhold" }); // (Owner, Nov 6, §295) the end-of-day email, as when lowered; (§311c) in "Payments and holds"
+  await notify(dev.email, line, [line], "/app/payments", { side: "developer", always: true, payment: true, group: "payhold" }); // (Owner, Nov 6, §295) the morning email, as when lowered; (§311c) in "Payments and holds"
   // Charged now like any charge made while away (during a hold, a suspension or the team's pause of its test it waits, as they do).
   await chargeDeferred(p.developerId);
   return "followed" as const;
@@ -1351,7 +1351,7 @@ export async function runSweep(now = new Date(), co = closeOutMemo(now)) {
   return { choices };
 }
 
-/** The daily job: auto-pay after the review window, closing tests paused for 7 days, Open until heads-ups and each tester's own deadline reminders. (No retries and no owed window any more: a declined payment is a hold at once.) */
+/** The daily job: Charge / Let it go opening after the review window (sent work is never paid automatically; only a listed call is charged, 7 days after it), closing tests paused for 7 days, Open until heads-ups and each tester's own deadline reminders. (No retries and no owed window any more: a declined payment is a hold at once.) */
 export async function runDaily(now = new Date(), opts: { /** tests: a shorter wait for the lock */ waitMs?: number } = {}) {
   // (Batch 19 section 4) Under the timers lock, so a 5-minute sweep never runs at the same moment (it waits for one that is running). (Owner, Nov 11, §383) It
   // waits until the lock is free or its holder is abandoned (taken over after TIMERS_LOCK_STALE_MS), and NEVER runs without it (it used to after 60 s): if it
@@ -1385,7 +1385,7 @@ async function runDailyLocked(now: Date) {
   await testerChargeLines(now, co, true);
   await payNowLines(now, co, true);
   await closeOutReminders(now, co);
-  // 3a. (Owner, Nov 6, §306) The team's admin email is no longer sent here: its lines are the "For the team" section of each admin's ONE end-of-day email
+  // 3a. (Owner, Nov 6, §306) The team's admin email is no longer sent here: its lines are the "For the team" section of each admin's ONE morning email
   // (sendSummaries, last in this job; see adminDaily.ts), following each admin's own email setting (Off: none).
   // 3c. (Owner, Oct 26) Paused tests close after 7 days, whatever the cause (the admin can extend a test's date or close it sooner).
   // (Owner, Nov 6, §311a) No daily "<test> is paused and closes on …" reminder any more. (§313a) The pause's own line names the closing dates.
@@ -1411,7 +1411,7 @@ async function runDailyLocked(now: Date) {
   }
   // 4b. (Owner, Oct 28, batch 16 section 1) Each working tester's own reminders, counted to THEIR deadline: 1 month, 1 week, 3 days and 1 day before (only the marks
   // still ahead when they joined). Sent marks are kept per tester and per deadline; they wait while the test is paused or the tester is suspended. (Owner, Oct 29,
-  // batch 29 §27, §34) They stack in one "Deadlines" entry a day across tests, and all of them go in the end-of-day email whatever the email setting.
+  // batch 29 §27, §34) They stack in one "Deadlines" entry a day across tests, and all of them go in the morning email whatever the email setting.
   const working = await db.contract.findMany({
     where: { status: "working", dueAt: { gt: now }, tester: { deletedAt: null, testerSuspendedAt: null }, test: { status: { in: ["open", "closed"] }, ...PAUSE_FREE } },
     select: { id: true, testerId: true, joinedAt: true, dueAt: true, test: { select: { id: true, title: true, notifiedMarks: true } } },
@@ -1461,7 +1461,7 @@ async function runDailyLocked(now: Date) {
   const subs = await import("./subscription");
   await subs.renewSubscriptions(now);
   await subs.freeLaunchNotices(now);
-  // 10. (Owner, Oct 26) The reminders that need their own rules, then the emails last (one email lists everything new; payment lines also go out end of day).
+  // 10. (Owner, Oct 26) The reminders that need their own rules, then the emails last (one email lists everything new; payment lines also go out in the morning email).
   await dailyReminders(now);
   await (await import("./ratings")).ratingReminders(now);
   // (Batch 15 section 9) Payments stuck "in progress" for over 15 minutes are finished or cleared.
@@ -1533,7 +1533,7 @@ async function openCharges(now: Date, co: CloseOuts, /** (§383) the daily job: 
     if (!payShut && (gone || chargeShut) && (!s.devRemindedAt || (repeats && repeatDue(s.devRemindedAt, now)))) {
       const line = unreviewedLine(c.test.title, displayName(c.tester), s.kind === "recording" ? "recording" : "written answers", chargeOpensAt(s, c.test, c, now)!, null, c.tester.pronoun);
       await db.$transaction(async (tx) => { // (§383) the line and its "reminded" time together
-        await bell(c.test.developerId, line, `/app/tests/${c.testId}#piece-${s.id}`, undefined, { group: "unreviewed", reminder: `unreviewed:${s.id}`, always: true }, tx); // (§311d) end-of-day email even with Off
+        await bell(c.test.developerId, line, `/app/tests/${c.testId}#piece-${s.id}`, undefined, { group: "unreviewed", reminder: `unreviewed:${s.id}`, always: true }, tx); // (§311d) morning email even with Off
         await tx.submission.update({ where: { id: s.id }, data: { devRemindedAt: now } });
       });
     }
@@ -1559,7 +1559,7 @@ async function openCharges(now: Date, co: CloseOuts, /** (§383) the daily job: 
  * 5. (Owner, Oct 30, batch 15 section 2) The developer's review reminders, the SAME for listed and unlisted parts, counting to the review date (the later of the
  * tester's deadline and sent + 7 days): 1 month (if it was more than a month away), 3, 2 and 1 weeks, 3 days, 1 day. After it, a listed part opens Charge (openCharges);
  * an unlisted part's reminders just stop (its Needs you row stays until it's paid, $0 included). 5b. Listed calls the same.
- * (Owner, Nov 6, §311d) Every one goes in the end-of-day email whatever the email setting (`always`; Off was the bell only), as the testers' deadline reminders do;
+ * (Owner, Nov 6, §311d) Every one goes in the morning email whatever the email setting (`always`; Off was the bell only), as the testers' deadline reminders do;
  * in a Weekly or Monthly summary only the newest copy of each (its `reminder`).
  */
 export async function reviewReminders(now: Date, co: CloseOuts = closeOutMemo(now), contractIds?: string[]) {
@@ -1671,7 +1671,7 @@ const firstName = (u: { name?: string | null; email: string; deletedAt?: Date | 
 /**
  * (Batch 17 §19; owner, Oct 29, batch 29 §22) The developer's closing-soon reminders, counted to each unpaid piece's own closing date (pieceCloseOut) on the countdown
  * schedule (closeSoonMarkDue): ONE line a day across all their tests covering every piece reaching a mark that day, opening Needs you on the dashboard. Money lines: in
- * the bell and the end-of-day email whatever the setting (`always`), stacked in "Closing soon". A piece reaching a mark later the same day joins that day's line (it is
+ * the bell and the morning email whatever the setting (`always`), stacked in "Closing soon". A piece reaching a mark later the same day joins that day's line (it is
  * updated in place). They wait while the test is paused (the closing dates move on meanwhile). The tester's side is their one daily "Charge or let go" line
  * (testerChargeLines). Kept alongside "Pay now" (payNowLines).
  */

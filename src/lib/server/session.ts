@@ -47,7 +47,7 @@ export async function getUserFromRequest(req: Request) {
   // (Owner, Oct 27) A press from a page of the PREVIOUS account (another account signed in in another tab since) is refused: the page then switches.
   const page = req.headers.get("x-uid");
   if (u && page && page !== u.id) throw new HttpError(409, "account_changed", "You're signed in as someone else in another tab. This page is switching to that account.");
-  // (Owner, Nov 11, §380) A press from a copy of a one-at-a-time page (test page with Edit, session page) that was opened somewhere else since is refused.
+  // (Owner, Nov 11, §380, §380 K) A press from a copy of a one-at-a-time page (any page claimed by OnePage: lib/pageClaim.ts) that was opened somewhere else since is refused.
   if (u) await (await import("./pageClaim")).checkPageClaim(req, u.id);
   if (u) {
     const browser = req.headers.get("x-timezone");

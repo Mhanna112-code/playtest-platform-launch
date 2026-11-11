@@ -733,7 +733,7 @@ export async function devRequestTime(dev: U, testId: string, body: Record<string
     await db.callRequest.update({ where: { id: m.match.id }, data: { status: "booked", callId: call.id, decidedAt: new Date(), closedReason: "matched" } });
     const line = `Booked: a call with ${displayName(c.test.developer)}: you both picked ${T(m.hit)}`; // (§290) names who
     const bellLine = `Booked: a call with ${displayName(c.test.developer)}${onTest(c.test.title)}: you both picked ${T(m.hit)}`; // (Owner, Nov 6, §312a) the bell names the test
-    await notify(c.tester.email, bellLine, [bellLine], `/app/sessions/${c.id}#call-${call.id}`, { about: c.test.developerId, group: BOOKED_GROUP, always: true /* (Owner, Nov 6, §323) in the end-of-day email even with email Off */ }); // (§286) "Booked calls · N today"
+    await notify(c.tester.email, bellLine, [bellLine], `/app/sessions/${c.id}#call-${call.id}`, { about: c.test.developerId, group: BOOKED_GROUP, always: true /* (Owner, Nov 6, §323) in the morning email even with email Off */ }); // (§286) "Booked calls · N today"
     callIds.push(call.id);
     bookedLine ||= line;
   }
@@ -827,7 +827,7 @@ export async function testerRequestTime(user: U, contractId: string, body: Recor
     await closeBatch(m.match.batchId, m.match.id);
     const line = `Booked: a call with ${displayName(c.tester)}: you both picked ${T(m.hit)}`; // (§290) names who
     const bellLine = `Booked: a call with ${displayName(c.tester)}${onTest(c.test.title)}: you both picked ${T(m.hit)}`; // (Owner, Nov 6, §312a) the bell names the test
-    await notify(c.test.developer.email, bellLine, [bellLine], `/app/tests/${c.testId}#call-${call.id}`, { about: c.testerId, group: BOOKED_GROUP, always: true /* (Owner, Nov 6, §323) in the end-of-day email even with email Off */ }); // (§286)
+    await notify(c.test.developer.email, bellLine, [bellLine], `/app/tests/${c.testId}#call-${call.id}`, { about: c.testerId, group: BOOKED_GROUP, always: true /* (Owner, Nov 6, §323) in the morning email even with email Off */ }); // (§286)
     callIds.push(call.id);
     bookedLine ||= line;
   }
@@ -991,7 +991,7 @@ export async function answerRequest(user: U, contractId: string, body: Record<st
     // (Owner, Nov 6, §290) A "Booked:" bell names who the call is with ("Booked: a call with Ana Silva, Wed, Nov 11, 4:00 PM").
     // (Owner, Nov 6, §312a) …and the test: "Booked: a call with Ana Silva on “Harbor Run”, Wed, Nov 11, 4:00 PM".
     const on = onTest(side === "tester" ? c.test.title : c.title);
-    await notify(other.email, `Booked: a call with ${displayName(user)}${on}, ${what}`, [`${displayName(user)} accepted the call request${on}: ${what} (${rateLabel(rate, c.liveRateCents)}).`], side === "tester" ? `/app/tests/${c.testId}#call-${first!.id}` : `/app/sessions/${c.id}#call-${first!.id}`, { about: user.id, group: BOOKED_GROUP, always: true /* (Owner, Nov 6, §323) in the end-of-day email even with email Off */ }); // (§286) "Booked calls · N today"
+    await notify(other.email, `Booked: a call with ${displayName(user)}${on}, ${what}`, [`${displayName(user)} accepted the call request${on}: ${what} (${rateLabel(rate, c.liveRateCents)}).`], side === "tester" ? `/app/tests/${c.testId}#call-${first!.id}` : `/app/sessions/${c.id}#call-${first!.id}`, { about: user.id, group: BOOKED_GROUP, always: true /* (Owner, Nov 6, §323) in the morning email even with email Off */ }); // (§286) "Booked calls · N today"
     return { booked: true, callId: first!.id, calls: times.length };
   }
   const status = action === "withdraw" ? "withdrawn" : "declined";

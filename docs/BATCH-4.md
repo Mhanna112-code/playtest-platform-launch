@@ -34,7 +34,7 @@ Items marked DEFAULT are my recommendation, which the owner hasn't confirmed yet
      - payment or chargeback hold: they can still send work, as settled earlier (DEFAULT: owner to confirm).
      - Testers never see "hold", "suspended", "failed" or "chargeback"; they see "paused" and "delayed".
 4. **Calls are cancelled automatically, with no fault**, when they start within 3 days of a suspension or hold starting. Later calls stay booked. Each is cancelled 3 days before it starts if the suspension or hold is still on. Both sides are told.
-5. **Emails that ignore Off:** "Your tests are paused" (hold start), the chargeback hold, and "running again". They go in the one end-of-day email for people with email Off.
+5. **Emails that ignore Off:** "Your tests are paused" (hold start), the chargeback hold, and "running again". They go in the one morning email for people with email Off.
 6. **Daily paused reminder for the developer while paused:** "<test> is paused and closes on <date> unless your account is cleared" (for a hold: "…unless you pay what you owe").
    - It stacks with the same line for their other tests, once a day.
    - It replaces the "paused" and "day before it closes" lines for the developer. Testers keep their lines.

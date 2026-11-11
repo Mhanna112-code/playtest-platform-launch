@@ -1233,8 +1233,8 @@ export async function leaveTest(tester: U, contractId: string, body: Record<stri
  *   3a. the part's final refusals (closed at $0, rejected, already sent …);
  *   3b. the soft refusals: paused → an NDA change → new terms → an upload still running;
  *   4. the questions changed since the page → the §269 stop-once box (always, whatever the Alerts);
- *   5. the form's mistakes (red 400s);
- *   6. the tester's stop-once gate → box;
+ *   5. the tester's stop-once gate → box (Owner, Nov 11, §380 D2: before the form's mistakes, so the box shows under a pressable button);
+ *   6. the form's mistakes (red 400s);
  *   7. the save (with its own-action line).
  * Steps 2 to 6 never throw inside the transaction (that would undo the drafts): the pass ends normally with what stopped it, thrown after the commit.
  */
@@ -1439,7 +1439,7 @@ async function writtenUploading(tx: Tx, contractId: string, text: unknown) {
 }
 
 /**
- * (§375) Step 5 for Send Answers: the form's own mistakes, red at the question. (Batch 26 §14) At least one question answered, plus every Required one (the
+ * (§375) Step 6 for Send Answers: the form's own mistakes, red at the question. (Batch 26 §14) At least one question answered, plus every Required one (the
  * notes box alone doesn't count); the refusal names which question (`missing`), so the page marks it red there. (Batch 30 §14) Each answer given is at least
  * 50 characters (answerMin). (§235) Only the form's own questions are checked (an answer sent before stays as it is), and `missing` is their place in the page's
  * form (§269); after a switch to changed questions the Send needs no new answer (it moves the part to the current questions). (Owner, Oct 29, batch 11) A
@@ -1584,7 +1584,7 @@ async function goneQuestionLines(c: { testId: string; questions: unknown; prevSe
 }
 
 /**
- * (§375) Step 5 for Add: the text's own mistakes (400s). (Batch 35 §136) Nothing to add. (Owner, Nov 4, §186; replaces batch 14's one limit over the answers,
+ * (§375) Step 6 for Add: the text's own mistakes (400s). (Batch 35 §136) Nothing to add. (Owner, Nov 4, §186; replaces batch 14's one limit over the answers,
  * the notes and everything added) An addition has the same limit as the answers sent first: at most 20,000 characters of its own, whatever the others hold;
  * (batch 30 §14) and at least 50 characters.
  */

@@ -122,7 +122,10 @@ export async function testSpans(t: { id: string; adminPausedAt: Date | null; wor
 
 export const CONTRACTS = { select: { status: true, dueAt: true, endedAt: true } } as const;
 
-/** The test's close-out date: Pay more and the testers' Rate close then (null while testers can still join or work: it isn't known yet). */
+/**
+ * The test's close-out date: 14 days after the test close, moved by pauses and outages (null while testers can still join or work: it isn't known yet). Pay, Pay
+ * more and Charge close on each piece's own date (pieceCloseOut, §378), and the Rate windows follow §382 (they count from this date).
+ */
 export async function closeOutOf(testId: string, now = new Date()) {
   const t = await db.test.findUnique({ where: { id: testId }, include: { developer: true, contracts: CONTRACTS } });
   if (!t) return null;

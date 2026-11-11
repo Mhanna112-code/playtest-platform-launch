@@ -184,7 +184,7 @@ export async function sendRecording(tester: U, contractId: string, body: Record<
     if (soft) return { stop: soft };
     // 3c. Nothing new to send ((Owner, Nov 3, batch 35 §136) sent recordings are locked, a later Send ADDS the ones not sent yet).
     if (!(await tx.recording.count({ where: { contractId, part: "recording", submissionId: null, uploadedAt: { not: null } } }))) return { stop: new HttpError(400, "none", sent ? NO_RECORDING_TO_ADD : "Upload a recording first.") };
-    // 6. The tester's one gate ((Owner, Nov 4, §183) adding to a sent recording stops once for a developer payment on it since the page loaded, whatever the
+    // 5. The tester's one gate ((Owner, Nov 4, §183) adding to a sent recording stops once for a developer payment on it since the page loaded, whatever the
     // tester's Alerts; another tab's Send).
     const box = await testerSendGate(tx, contractId, body, sent?.id);
     if (box) return { stop: box };

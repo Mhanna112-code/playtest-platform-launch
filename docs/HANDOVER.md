@@ -352,7 +352,7 @@ on the same day should not repeat notices, but test that before scheduling it mo
 | 13 | Manual subscription renewals; free-during-launch notices | `renewSubscriptions`, `freeLaunchNotices` (server/subscription) |
 | 14 | Application reminders, rating reminders | `dailyReminders` (internal to holds.ts), `ratingReminders` (server/ratings) |
 | 14b | Batch 15: payments stuck in progress (§9), unfinished uploads and orphan files (§41 M6), old sign-in attempts (§7), applications and invites after Open until (§18) | `checkStuck`, `purgeUploads`, `cleanLoginAttempts`, `closeJoiningAfterOpenUntil` |
-| 15 | Send every pending email (summaries, end-of-day payment and must-send emails) | `sendSummaries` (server/notify) |
+| 15 | Send every pending email (summaries, morning payment and must-send emails) | `sendSummaries` (server/notify) |
 | 0 | Batch 23: before the rest, emails that failed are tried again when due, and chargeback reservations past their 7 days are released (also every 5 minutes, in the sweep) | `retryEmails` (server/email), `expireReservations` (server/chargeback) |
 
 **Not in the cron:**
@@ -361,7 +361,7 @@ on the same day should not repeat notices, but test that before scheduling it mo
   nobody joined are cancelled, and (batch 15 §40) measured lengths become final, within a minute or so while anyone has such a page open.
 - `GET /api/health?key=HEALTH_KEY` runs the 5-minute sweep (above) and writes heartbeats for information; outages come from `POST /api/health/alert`; (batch 28 §1) a gap of 15 minutes or more with no server activity is only listed for an admin's Approve or Dismiss (only with `OUTAGE_CHECKS=1`).
 - Stripe webhooks drive chargebacks, Billing renewals and payout status.
-- Bell lines are written at the moment of the action. **Emails are only sent by step 15**, so "end-of-day email" in the
+- Bell lines are written at the moment of the action. **Emails are only sent by step 15**, so "morning email" in the
   guide means "when the daily job runs". The exceptions are sent at once: reset and confirmation links, Contact us
   messages to the team (`api/help`), and notices to an email that has no account.
 

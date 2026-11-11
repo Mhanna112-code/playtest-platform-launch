@@ -288,7 +288,7 @@ export async function deleteAccount(userId: string, by: "self" | "admin", reason
     return r.count === 1;
   });
   if (!claimed) throw new HttpError(409, "deleted", "That account was already deleted.");
-  // (Owner, Nov 9, §360) Nothing waiting is emailed any more (it was only the reminders): a deleted account gets no summary or end-of-day email.
+  // (Owner, Nov 9, §360) Nothing waiting is emailed any more (it was only the reminders): a deleted account gets no summary or morning email.
   await db.notification.updateMany({ where: { userId, summarizedAt: null }, data: { summarizedAt: new Date() } });
   // (Owner, Oct 29, batch 12 section 1) A developer can always delete their account (the warning lists what is left; nothing blocks it).
   // (Batch 8) The subscription ends at once, with no refund.
@@ -497,7 +497,7 @@ export async function unpauseTest(testId: string, adminId: string | null = null,
     for (const c of await db.contract.findMany({ where: { testId, status: "working" }, include: { tester: true, test: { select: { title: true } } } }))
       await notify(c.tester.email, `“${c.test.title}” is running again`, [`“${c.test.title}” is running again. Your deadline moved on by the pause.`], `/app/sessions/${c.id}`, { about: dev.id, group: "paused", always: true });
   }
-  // (Owner, Nov 6, §299) The lift reaches the developer like the pause: `always` (with email Off too, in the end-of-day email). (Owner, Nov 6, §311b) In the
+  // (Owner, Nov 6, §299) The lift reaches the developer like the pause: `always` (with email Off too, in the morning email). (Owner, Nov 6, §311b) In the
   // "The team decided" stack (admindecision; was "Payments and holds" with the pause). Running again only when nothing else pauses the test: while the developer's own hold or suspension still pauses it, the lift says what still does
   // (and the hold's or reinstatement's own line says running again when that lifts: never two for one moment).
   const still = devNow.holdStartedAt ? "you pay what you owe" : devNow.devSuspendedAt ? "your account is cleared" : "";

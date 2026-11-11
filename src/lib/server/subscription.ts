@@ -479,7 +479,7 @@ export async function subscriptionWebhook(type: string, payload: object, now = n
 // ---------- free during launch (section 6) ----------
 
 export const FREE_ENDED_LINE = "Free during launch ended: the extras need a subscription now.";
-/** One notice to every developer (bell + the end-of-day email, sent even with email Off), in one write. */
+/** One notice to every developer (bell + the morning email, sent even with email Off), in one write. */
 async function tellAllDevs(line: string) {
   const ids = (await db.user.findMany({ where: { isDeveloper: true, deletedAt: null }, select: { id: true } })).map((u) => u.id);
   const each = await linesFor(ids, line); // (batch 15 section 11) each developer's own time zone

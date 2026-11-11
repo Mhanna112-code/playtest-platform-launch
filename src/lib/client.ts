@@ -65,8 +65,9 @@ export const newPageLoad = () => {
 };
 
 /**
- * (Owner, Nov 11, §380) The one-at-a-time page this tab shows ("test:<id>" for a test page or its Edit, "session:<id>" for a session page; "" elsewhere): every
- * press names it (x-page), and the server refuses a press from a copy that was opened somewhere else since. Set by PagePresence while the page is shown.
+ * (Owner, Nov 11, §380, §380 K) The one-at-a-time page this tab shows (its scope, lib/pageClaim.ts: "test:<id>" for a test page or its Edit, "session:<id>",
+ * "join:<id>", "page:<name>" for Payments, Blocked people, Contact us and each settings page, "tester:<id>" / "developer:<id>" for profiles; "" elsewhere): every
+ * press names it (x-page), and the server refuses a press from a copy that was opened somewhere else since. Set by OnePage while the page is shown.
  */
 let PAGE_SCOPE = "";
 export const pageScope = () => PAGE_SCOPE;

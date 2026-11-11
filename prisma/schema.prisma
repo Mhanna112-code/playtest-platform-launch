@@ -102,7 +102,7 @@ model User {
   chargebackCardVerifiedAt DateTime?
   chargebackApprovedAt     DateTime?
   /// Email settings (Owner, Oct 26): "off", or on with "daily" (default) | "weekly" | "monthly". One email lists every notification since the last one;
-  /// payment lines also go out in an end-of-day email for weekly / monthly. The always-send emails (account paused ...) ignore it. The bell keeps everything.
+  /// payment lines also go out in a morning email for weekly / monthly. The always-send emails (account paused ...) ignore it. The bell keeps everything.
   emailPref     String    @default("daily")
   /// Last summary email (daily / weekly / monthly settings)
   lastSummaryAt DateTime?
@@ -387,13 +387,14 @@ model Submission {
   updatedAt  DateTime @default(now())
   /// Sent after the tester's own deadline
   late       Boolean  @default(false)
-  /// Not paid or rejected by then: the listing amount is paid automatically (moves on with payment holds)
+  /// The review date (moves on with payment holds): not paid by then (and the tester's deadline passed), a listed part opens the tester's Charge / Let it go.
+  /// Nothing sent is ever paid automatically.
   payBy      DateTime?
   /// Optional "Ask $___ for this" when sending
   askedCents Int?
   /// Last reminder (every 3 days): to the developer for parts outside the contract, to the tester for a waiting choice
   remindedAt DateTime?
-  /// Contract parts unreviewed 14 days: the tester chooses "Charge" or "Let it go" by choiceBy, else it's charged
+  /// Listed parts past their review date: the tester can "Charge" or "Let it go" (choiceBy); nothing is charged automatically (unpaid, it closes at its closing date)
   choiceOfferedAt DateTime?
   /// Countdown notices to the developer before day 14 ("1w" | "3d" | "1d"), then daily after it
   devMarks        String[]
@@ -451,7 +452,7 @@ model Review {
   reason       String      @default("")
   /// Reject: nothing charged (amountCents 0); a contract part can still be disputed once
   rejected     Boolean     @default(false)
-  /// Paid automatically after 14 days without a review
+  /// (Batch 28 §21) A listed call charged automatically 7 days after it (sent work never is: Charge / Let it go)
   auto         Boolean     @default(false)
   /// (Batch 30 §5) The team closed this piece for $0 (this admin); `reason` holds the team's reason. Final: no dispute, no Pay more
   teamClosedById String?
@@ -834,9 +835,9 @@ model Notification {
   own       Boolean   @default(false)
   /// (Owner, Oct 26) Lines with the same group stack together on one day even across tests ("invites", "charge", "unreviewed", "paused", "payout", "disputes")
   groupKey  String?
-  /// (Owner, Oct 26) Payment-related (failures, holds, retries, paid, rejected, delayed, payouts, chargebacks): also emailed in the end-of-day email
+  /// (Owner, Oct 26) Payment-related (failures, holds, retries, paid, rejected, delayed, payouts, chargebacks): also emailed in the morning email
   payment   Boolean   @default(false)
-  /// (Owner, Oct 27) One of the few emails that ignore Off (account paused / active again, the team paused / stopped / closed your test, the owed reminder): it goes in the end-of-day email, never right away
+  /// (Owner, Oct 27) One of the few emails that ignore Off (account paused / active again, the team paused / stopped / closed your test, the owed reminder): it goes in the morning email, never right away
   mustEmail Boolean   @default(false)
   /// (Owner, Oct 27) Reminders also go in the summary email, each line once; a Weekly / Monthly email keeps only the newest copy of each reminder (same reminderKey)
   reminderKey String?

@@ -152,7 +152,7 @@ async function capUntil(now: Date) {
  * the missing key as its error, so it goes out once the key is set. Never throws for a failed send: the email waits instead.
  */
 export async function sendEmail(e0: Email, now = new Date()) {
-  // (Owner, Nov 9, §360) Nothing is ever emailed to a deleted account's address: no summary, no end-of-day email, no immediate email (receipts included).
+  // (Owner, Nov 9, §360) Nothing is ever emailed to a deleted account's address: no summary, no morning email, no immediate email (receipts included).
   if (e0.recipientId && (await db.user.findUnique({ where: { id: e0.recipientId }, select: { deletedAt: true } }))?.deletedAt) return { via: "suppressed" as const };
   // (§114) A deleted account whose email was freed for a new sign-up keeps the original inside its tombstone: (§360) an email addressed to the tombstone is about the
   // deleted account, so it never goes (the address now belongs to someone else, or to nobody).

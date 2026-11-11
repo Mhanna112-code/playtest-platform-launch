@@ -628,7 +628,7 @@ async function decidedByLine(byId: string | null, at: Date | null, p: Presser | 
  * A payment receipt to the developer for every payment that goes through: bell + email, always sent. (Owner, Nov 5, §201) No "Receipt:" prefix: "You paid $10.00 for
  * Ana Silva's written answers on “Harbor Run”" (the same words whoever pressed: a decision charge, the tester's Charge and an automatic call charge keep their own
  * "(charged by her after 7 days)" / "(… charged automatically after 7 days)" / "the team's dispute decision on …" naming). Every one stacks under ONE "Paid ·
- * N payments" entry a day across tests (`PAID_GROUP`), in the bell and in the end-of-day email.
+ * N payments" entry a day across tests (`PAID_GROUP`), in the bell and in the morning email.
  */
 export async function receipt(devEmail: string, what: string, cents: number, status: string, path: string) {
   const line = paidLine(cents, what);

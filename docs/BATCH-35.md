@@ -3813,7 +3813,7 @@ New `tests/change-payout-200.test.ts`: the button only when connected (not with 
   everything else keep their lines and groups exactly as before (the "Payments and holds" stack, or their own line).
 - **Subscription receipts stack too** (no rule says otherwise: BATCH-8 §8.5 put the subscription's *notices* (renewal declined, ended, free launch ending) in
   "Payments and holds", and those stay there; the subscription's receipt was always a receipt line).
-- **The end-of-day email stacks them the same way** (`emailLines` in notify.ts now stacks `EMAIL_STACKED`: "deadlines" and "devpaid"): "• Paid · 4 payments" with
+- **The morning email stacks them the same way** (`emailLines` in notify.ts now stacks `EMAIL_STACKED`: "deadlines" and "devpaid"): "• Paid · 4 payments" with
   each "• You paid …" line under it; one line of a kind stays a plain line.
 - **Rules this supersedes** (doc agent, DESIGN-DOC.md "The bell"): "Receipts, a pause being lifted or extended, and outages are always their own line." now reads
   that receipts stack in "Paid" (pauses lifted and outages unchanged); the "Every bell line" row for receipts reads "You paid $X for <what>" and stacks in "Paid";
@@ -3842,7 +3842,7 @@ New `tests/change-payout-200.test.ts`: the button only when connected (not with 
 ### Tests
 New `tests/paid-stack-201.test.ts`: a Pay and a decision charge on “Harbor Run”, the tester's Charge and an automatic call charge on “Sky Lab”, one day: four
 "You paid …" lines, none with "Receipt", one group and one bell key across both tests; the Notifications page shows ONE "Paid · 4 payments" entry (counted) with
-the four lines; a declined Pay's lines stay outside it; the bell's number counts the stack once and reading it takes it off; the end-of-day email stacks them
+the four lines; a declined Pay's lines stay outside it; the bell's number counts the stack once and reading it takes it off; the morning email stacks them
 under "• Paid · 4 payments". Confirm all's line and a subscription charge stack too; `emailLines` (one line stays plain, two kinds stack side by side). The
 hold-lift Approve: one line with the note, one without, one before the money is paid. Updated for the words: `addition`, `batch8`, `batch11`, `batch18`,
 `batch24`, `batch25`, `batch28`, `batch35-one-card-checks`, `batch35-payment-proofs`, `chargeback-review-first`, `choice`, `codex8-separate-sides`,
@@ -5183,30 +5183,30 @@ the call is 24 hours or more away. Within 24 hours the field is required as befo
   - a further one during a chargeback hold ("Your bank reversed …: it was added to what you owe"): before, a bell line only. Its email adds "To resume: verify a
     card with 3D Secure, pay what you owe, and wait for the team's approval." (the new chargeback clears the card check and approval);
   - the bank changing its amount after the repayment (§192's "Your bank lowered what it took back …" / "Your bank raised what it took back …"): before, payment
-    lines in the end-of-day payment email only.
+    lines in the morning payment email only.
 - The bell is unchanged: the hold lines and the chargeback lines stay in the day's "Payments and holds" (`payhold`) entry; the lowered / raised lines stay their
   own entries. No new stacks (an earlier draft of §294 with "Chargebacks" and "Payments declined" stacks was dropped by the owner).
-- Unchanged: a won chargeback's line (payhold, the end-of-day payment email); a decline during a hold, "Another payment was declined: $X for … was added to what
-  you owe" (payhold, bell and the end-of-day payment email); the admins' chargeback emails.
+- Unchanged: a won chargeback's line (payhold, the morning payment email); a decline during a hold, "Another payment was declined: $X for … was added to what
+  you owe" (payhold, bell and the morning payment email); the admins' chargeback emails.
 - Tests: tests/chargeback-emails-294.test.ts. Updated: batch18 (the list of emails that ignore Off: two more in holds.ts).
 
 ### §294, second decision: sent immediately; the amount changing before the repayment is told too (owner, Nov 6)
-- **Immediately, not at the end of the day.** `always` alone only puts a line in the end-of-day email (whatever the setting). Every chargeback email to the
+- **Immediately, not at the end of the day.** `always` alone only puts a line in the morning email (whatever the setting). Every chargeback email to the
   developer above (the one that starts the hold, a payment hold turning into a chargeback hold, a further one during a chargeback hold, lowered, raised, and the
   new line below) is now sent at once through `sendEmail`, the path the admins' chargeback emails take. It's a new `now` option of `notify` (notify.ts): the bell
   line is written as usual and marked already emailed (`summarizedAt`), then the email (the line, its lines, the link, "Open Playtest") is sent to that one
-  person. The summary and the end-of-day email never repeat it. A failed send waits for the email sweep as every email does.
+  person. The summary and the morning email never repeat it. A failed send waits for the email sweep as every email does.
 - **The bank changing a chargeback's amount BEFORE the repayment** (§192's "followed": what is owed changes) now tells the developer, in the words Pay what
   you owe's stop already uses for it (`bankChangedLine`): "Your bank changed the amount it took back from your $40.00 payment for Ana Silva's written answers on
   “Harbor Run”: $40.00 → $25.00 (now $25.00 + $15.00 fee = $40.00)". A Pay what you owe payment is named with its items (§193b). A bell line in the day's
   `payhold` entry, linking to the chargeback steps (`/app/payments#chargeback-steps`; Pay what you owe's `#owed` outside a chargeback hold), and an immediate
   email ("Open Payments to see what you owe."). Each change is its own line from the last followed amount; the same amount again says nothing. A change that
   waited for a repayment in progress (§192) and is then followed in what is owed (the repayment didn't go through) is told the same way.
-- Unchanged: the bell entries; a won chargeback (end-of-day payment email); declined payments (wording and email rule); the admins' emails.
+- Unchanged: the bell entries; a won chargeback (morning payment email); declined payments (wording and email rule); the admins' emails.
 - Tests: tests/chargeback-emails-294.test.ts (each email is in the outbox right after the event and the summary doesn't repeat it; the before-repayment change
   rings in payhold and emails; a decline is still not sent immediately). Updated: batch18 (one more in holds.ts).
 
-## §295 Emails and bells: pauses for testers, additions, summary heading, deadline reminders, amount changes at end of day (owner, Nov 6)
+## §295 Emails and bells: pauses for testers, additions, summary heading, deadline reminders, amount changes in the morning email (owner, Nov 6)
 From the Nov 6 recording of every email and bell (playtest-lite-evidence/emails-nov6).
 - **Testers are told when a test pauses.** Every working tester of each test that pauses reads "“Harbor Run” is paused" (bell; email "“Harbor Run” is paused.
   Your deadline moves on by the pause once it runs again."), at the moment the pause starts, whatever the cause: the team's pause of the test, the developer's
@@ -5219,7 +5219,7 @@ From the Nov 6 recording of every email and bell (playtest-lite-evidence/emails-
   your notes on “Harbor Run”" (Anything else), "You added to your written answers on …" (no question), "You added a recording on …" (`youAddedLine`); it was
   "Work sent: your written answers for …" again. A first send keeps "Work sent: …". The developer's "Ana Silva added to her answer to …" was already right.
 - **Summary emails open with a heading** (the body's first line, larger and bold in the HTML), above the sections or the lines, in the account's time zone, from
-  the email's real window (the last summary, or its oldest line, to now): Daily and every end-of-day email (email Off; a Weekly / Monthly account's payment lines)
+  the email's real window (the last summary, or its oldest line, to now): Daily and every morning email (email Off; a Weekly / Monthly account's payment lines)
   "Your Playtest updates for Fri, Nov 6"; Weekly "Your Playtest updates for Nov 1 – Nov 7"; Monthly "Your Playtest updates for October" when it covers exactly
   one calendar month (the 1st to its last day, or to the next month's 1st), else its days as Weekly's (`summaryHeading`, notify.ts).
 - **Tester deadline reminders.** Cause: a tester's deadline marks (deadlineMarksFor) left out every mark within 24 hours of joining, the 1-day mark too, so a
@@ -5228,10 +5228,10 @@ From the Nov 6 recording of every email and bell (playtest-lite-evidence/emails-
   later day), the daily job's first look at the new deadline recorded every passed mark without sending, so a 1-day mark that came due between the move and that
   run was swallowed: now the latest passed mark is sent unless that mark was already sent for an earlier deadline of hers. Exactly one line (`deadlines`,
   `always`), in the bell and the summary.
-- **A chargeback's amount changing goes in the end-of-day email** (`always`, no longer `now`): before the repayment ("Your bank changed the amount it took back
+- **A chargeback's amount changing goes in the morning email** (`always`, no longer `now`): before the repayment ("Your bank changed the amount it took back
   …") and after it ("Your bank lowered / raised what it took back …"). Still immediate: the chargeback that starts the hold, and a further chargeback during a
   hold (including a payment hold turning into a chargeback hold).
-- Tests: tests/email-fixes-295.test.ts. Updated: chargeback-emails-294 (the amount changes are end-of-day).
+- Tests: tests/email-fixes-295.test.ts. Updated: chargeback-emails-294 (the amount changes are morning).
 
 ## §296 Ratings in the Invite testers panel show from 5; below that a tester is unrated and treated alike (owner, Nov 6)
 Narrowed by the owner the same day: only the developer's Invite testers panel.
@@ -5257,14 +5257,14 @@ Narrowed by the owner the same day: only the developer's Invite testers panel.
 
 ## §298 Emails stack exactly as the bell does; testers' pause lines reach them with email Off (owner, Nov 6)
 - **Every bell stack also stacks in the email**, the same way. One grouping function, `bellStacks` (lib/bell.ts), now drives both the Notifications page and
-  the summary / end-of-day emails (`emailLines`, notify.ts), so they can't drift apart: the same key (`own` lines alone; a `groupKey` across tests; else the
+  the summary / morning emails (`emailLines`, notify.ts), so they can't drift apart: the same key (`own` lines alone; a `groupKey` across tests; else the
   same test), one stack per day in the account's zone, the same titles. A stack of 2+ lines is one heading line, the bell's title without its day ("Disputes
   filed · 2 updates", "Disputes · 3 new", "Harbor Run · 4 updates"; `stackHeading`, which BellList uses too), with its lines under it; a line alone in the bell
   (own, or a single line) stays a single line. `EMAIL_STACKED` is gone. The "Your account" / "As a developer" / "As a tester" sections stay, each stacked.
   Per-test stack titles come from `testTitlesOf` (notify.ts), shared with the page.
-- **Testers' "“X” is paused" and "“X” is running again" go out even with email Off** (`always: true`, the end-of-day email), like the developer's hold and
+- **Testers' "“X” is paused" and "“X” is running again" go out even with email Off** (`always: true`, the morning email), like the developer's hold and
   pause lines; still in the "Pauses · N" stack, still never saying why (holds.ts, restrictions.ts).
-- Tests: tests/email-stacks-298.test.ts. Updated: email-fixes-295 (the pause lines are `mustEmail`; with Off they reach the end-of-day email), batch18 (the
+- Tests: tests/email-stacks-298.test.ts. Updated: email-fixes-295 (the pause lines are `mustEmail`; with Off they reach the morning email), batch18 (the
   always list: two more in holds.ts, two more in restrictions.ts), paid-stack-201 and nov5-batch2 (emailLines takes whole lines; EMAIL_STACKED removed),
   bell-parity-286.
 
@@ -5387,12 +5387,12 @@ summary, whose "Disputes · N new" and "Hold lifts waiting" bell lines repeated 
   emailed (no later email repeats it). A dispute bell line whose dispute is no longer in the section (decided since) stays among the own lines.
 - **The email setting, as the admin email did:** Daily / Weekly / Monthly carry the section when that summary is due, with everything since this admin's last
   section (the same `adminDaily:<id>` mark); a due admin with nothing anywhere gets no email (the mark still moves on, as before). **Off: no section**, as the
-  admin email sent nothing with Off; the Off end-of-day email (payment and must-send lines) is unchanged. A Weekly / Monthly admin's short end-of-day email
+  admin email sent nothing with Off; the Off morning email (payment and must-send lines) is unchanged. A Weekly / Monthly admin's short morning email
   (forced lines only) has no section, as the admin email went only when due. The team's items still always reach the team: every admin's bell and the console
   show them, and every admin on Daily / Weekly / Monthly gets them by email. The chargeback email to every admin at once is unchanged.
-- **Non-admins unchanged.** Checked in the code: sendSummaries is the only end-of-day email to an account, ONE per account per run, and every line it sends is
+- **Non-admins unchanged.** Checked in the code: sendSummaries is the only morning email to an account, ONE per account per run, and every line it sends is
   marked `summarizedAt` (only unmarked lines are read). Testers and developers on Daily get one email whose lines include the forced ones (`always` /
-  `payment`). Off: one end-of-day email with only the forced lines. Weekly / Monthly: on other days a short end-of-day email with only the forced lines,
+  `payment`). Off: one morning email with only the forced lines. Weekly / Monthly: on other days a short morning email with only the forced lines,
   which are marked and so not repeated in the weekly / monthly. `now` lines (§294, §299) are written already marked.
 - Tests: tests/admin-one-email-306.test.ts. Updated: batch3, batch29-bell, schedule and batch30-emails (they find the admin's items by the "For the team"
   section instead of the "Playtest admin:" subject; adminDaily.ts no longer calls sendEmail).
@@ -5400,7 +5400,7 @@ summary, whose "Disputes · N new" and "Hold lifts waiting" bell lines repeated 
 ## §307 "Your subscription ended", on the day it ends (owner, Nov 6)
 Nothing was sent when a subscription ended after the developer's own cancel, or when the free launch ended (only the 30-day and 7-day notices; email catalog,
 note 19). Now ONE bell line on the day it ends, in the subscription's "Payments and holds" stack (`payhold`), `always` (and `payment`), linking to
-/app/payments#subscription, so it is also in that day's end-of-day email whatever the setting:
+/app/payments#subscription, so it is also in that day's morning email whatever the setting:
 - **"Your subscription ended: you're on the free plan now, which runs one open test at a time."** (lib/subscription.ts `SUBSCRIPTION_ENDED_LINE`, in
   Payments' own words for the free plan), from endSubscription for every end with reason "cancelled": the developer's own cancel running out (the daily job),
   Stripe ending it (customer.subscription.deleted, not past due) and a Stripe subscription found gone (§130). During a free launch still running it reads

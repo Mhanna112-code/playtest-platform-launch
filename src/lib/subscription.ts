@@ -31,7 +31,7 @@ export const TOO_MANY_OPEN_LINE = "You have 10 open tests, the most you can have
 export const SECOND_TEST_LINE = `You already have an open test. Subscribe (${SUBSCRIPTION_PRICE}) to run several at once.`;
 export const SUBSCRIPTION_ENDED = "Your subscription ended.";
 /**
- * (Owner, Nov 6, §307) The bell line (and its end-of-day email line) on the day a subscription ends without a notice of its own (the developer's own cancel ran
+ * (Owner, Nov 6, §307) The bell line (and its morning email line) on the day a subscription ends without a notice of its own (the developer's own cancel ran
  * out, Stripe ended it, the free launch ended), in the free plan's own words ("The free plan runs one open test at a time", Payments). A lapse keeps LAPSED_LINE.
  */
 export const FREE_PLAN_NOW = "you're on the free plan now, which runs one open test at a time";

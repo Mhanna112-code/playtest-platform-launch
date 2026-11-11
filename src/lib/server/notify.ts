@@ -52,7 +52,7 @@ export type Opts = { recipientId?: string; side?: Side | null; always?: boolean;
 /**
  * `reminder`: (Owner, Oct 27) names a reminder ("invite:<id>"): reminders also go in the summary email, each line once; a Weekly or Monthly email shows only the newest copy of each.
  * `group`: lines with the same group stack together on one day even across tests (see lib/bell.ts). `payment`: payment-related (failures, holds, retries, paid,
- * rejected, delayed, payouts, chargebacks): it is its own line unless it has a group, and it also goes out in the end-of-day payment email.
+ * rejected, delayed, payouts, chargebacks): it is its own line unless it has a group, and it also goes out in the morning payment email.
  */
 const flags = (o: { own?: boolean; group?: string; payment?: boolean }) => ({ own: o.own ?? (!!o.payment && !o.group), groupKey: o.group ?? null, payment: !!o.payment });
 /** (Batch 34 §5) A line's side: the caller's, else its link's page (your own public profile is the side it shows), else the account's (null). */
@@ -68,7 +68,7 @@ export async function notify(to: string, subject0: string, lines0: string[], pat
   // (Batch 15 section 11) Times in the line are written in the recipient's own time zone (unknown: UTC).
   const subject = renderTimes(subject0, user?.timeZone), lines = lines0.map((l) => renderTimes(l, user?.timeZone));
   if (!user && opts.recipientId) return; // A known account never falls back to a non-account email.
-  // (Owner, Nov 9, §360) A deleted account is never emailed (no summary, end-of-day or immediate email): the line is kept in its bell as already emailed.
+  // (Owner, Nov 9, §360) A deleted account is never emailed (no summary, morning or immediate email): the line is kept in its bell as already emailed.
   if (user?.deletedAt) {
     await client.notification.create({ data: { side: lineSide(user.id, path, opts.side), userId: user.id, text: subject, link: path, testId: opts.testId ?? (await testIdOfLink(path)), mustEmail: false, summarizedAt: new Date(), reminderKey: opts.reminder ?? null, ...flags(opts) } });
     return;
@@ -84,8 +84,8 @@ export async function notify(to: string, subject0: string, lines0: string[], pat
     return;
   }
   // (Owner, Nov 6, §294) `now` (with `always`): the email is sent immediately through sendEmail, the path the admins' chargeback emails take, never queued for
-  // the summary or the end-of-day email; the bell line is written as already emailed (summarizedAt), so no later email repeats it. Used for the developer's
-  // chargeback emails. (Owner, Nov 6, §299) Also the 15-minute call reminder: it goes at once, before the call, never in a later summary; (§324) with `always`
+  // the summary or the morning email; the bell line is written as already emailed (summarizedAt), so no later email repeats it. Used for the developer's
+  // chargeback emails. (Owner, Nov 6, §299) Also the call reminder (24 hours before the call: calls.ts CALL_REMINDER_MIN): it goes at once, before the call, never in a later summary; (§324) with `always`
   // now, so an account with email Off gets it too.
   if (opts.now) {
     await client.notification.create({ data: { side: lineSide(user.id, path, opts.side), userId: user.id, text: subject, link: path, testId: opts.testId ?? (await testIdOfLink(path)), mustEmail: !!opts.always, summarizedAt: new Date(), reminderKey: opts.reminder ?? null, ...flags(opts) } });
@@ -97,14 +97,14 @@ export async function notify(to: string, subject0: string, lines0: string[], pat
     }
     return;
   }
-  // (Owner, Oct 27) Nothing is emailed right away: the notification waits for the person's email (the summary, or the end-of-day payment email). `always` marks the few
-  // that ignore Off (account paused / active again, the team pausing / stopping / closing a test, the owed reminder): they ride in ONE end-of-day email, once.
+  // (Owner, Oct 27) Nothing is emailed right away: the notification waits for the person's email (the summary, or the morning payment email). `always` marks the few
+  // that ignore Off (account paused / active again, the team pausing / stopping / closing a test, the owed reminder): they ride in ONE morning email, once.
   await client.notification.create({ data: { side: lineSide(user.id, path, opts.side), userId: user.id, text: subject, link: path, testId: opts.testId ?? (await testIdOfLink(path)), mustEmail: !!opts.always, reminderKey: opts.reminder ?? null, ...flags(opts) } });
 }
 
 /**
  * A notification written straight to the bell (no immediate email, and no email text of its own), e.g. the Open until heads-ups. Like every line it is in the
- * person's Daily / Weekly / Monthly summary; with `always` or `payment` it also reaches the end-of-day email with email Off.
+ * person's Daily / Weekly / Monthly summary; with `always` or `payment` it also reaches the morning email with email Off.
  */
 export async function bell(userId: string, text0: string, link: string, about?: string, opts: Pick<Opts, "own" | "testId" | "group" | "payment" | "reminder" | "always" | "side"> = {}, /** (Owner, Nov 11, §383) a transaction: a reminder's "sent" mark and its line are written together (the checks above still read as before) */ client: Prisma.TransactionClient | typeof db = db) {
   const deleted = !!(await db.user.findUnique({ where: { id: userId }, select: { deletedAt: true } }))?.deletedAt;
@@ -150,14 +150,14 @@ export async function teamEmails(what: string) {
 
 /**
  * (Owner, Oct 26-27) Email is Off, or On with Daily / Weekly / Monthly. EVERY email is ONE email listing all the notifications since the last one, and each
- * notification is emailed at most once (it is marked summarized when it goes). People on Weekly or Monthly also get an end-of-day email holding only their payment
+ * notification is emailed at most once (it is marked summarized when it goes). People on Weekly or Monthly also get a morning email holding only their payment
  * lines (and the must-send ones); the rest wait for their normal email. (Owner, Oct 29, batch 28 §18) On Off, the payment lines and the few must-send lines (mustEmail)
- * go in ONE end-of-day email ("Your Playtest payment updates", or "account updates" when it holds a must-send line that isn't about a payment); nothing else.
+ * go in ONE morning email ("Your Playtest payment updates", or "account updates" when it holds a must-send line that isn't about a payment); nothing else.
  * The daily job runs this once a day, after every notification of the day exists.
  */
 /**
  * (Owner, Oct 29, batch 29 §34) The email's lines; the testers' deadline reminders stack under one "Deadlines · 2 tests" heading, as in the bell (§27). (Owner, Nov 5,
- * §201) So do the developer's receipts: "Paid · 3 payments" with each "You paid …" line under it (in the end-of-day payment email and the summary alike). A kind
+ * §201) So do the developer's receipts: "Paid · 3 payments" with each "You paid …" line under it (in the morning payment email and the summary alike). A kind
  * with one line keeps its plain line, as in the bell.
  */
 // (Owner, Nov 6, §286) Call requests and booked calls stack in the email as in the bell. (§295) So do the tester's pauses ("Pauses · 2").
@@ -210,7 +210,7 @@ export async function notificationScopeFor(userId: string) {
 
 /**
  * (Owner, Nov 6, §295) The summary's heading, the first line of its body, in the account's time zone, following the email's period: a Daily summary and every
- * end-of-day email (email Off, or the payment lines of a Weekly / Monthly account) "Your Playtest updates for Fri, Nov 6" (the day it goes); a Weekly one the
+ * morning email (email Off, or the payment lines of a Weekly / Monthly account) "Your Playtest updates for Fri, Nov 6" (the day it goes); a Weekly one the
  * days it covers, from its real start (the last summary, or its oldest line) to now, "Your Playtest updates for Nov 1 – Nov 7"; a Monthly one the month,
  * "Your Playtest updates for October", when it covers exactly one calendar month (from the 1st to that month's last day, or to the next month's 1st when the
  * daily job sends it that morning), else its days as Weekly's. Days of different years carry the year ("Dec 28, 2026 – Jan 4, 2027").
@@ -247,10 +247,10 @@ export function summaryHeading(period: "daily" | "weekly" | "monthly", since: Da
 }
 
 /**
- * (Owner, Nov 6, §306) ONE end-of-day email per admin. The team's daily admin email ("Playtest admin: N items for the team") is gone: what it held is the "For the
+ * (Owner, Nov 6, §306) ONE morning email per admin. The team's daily admin email ("Playtest admin: N items for the team") is gone: what it held is the "For the
  * team" section (adminDaily.ts) at the bottom of the admin's own email, under their own updates (stacked as the bell, §298). It follows the admin's email setting
  * exactly as the admin email did: Daily / Weekly / Monthly, in the summary when it is due (everything since the admin's last section); none with Off, whose
- * end-of-day email (payment and must-send lines only) never carries it. The team's items still reach the team: every admin's bell and the console show them,
+ * morning email (payment and must-send lines only) never carries it. The team's items still reach the team: every admin's bell and the console show them,
  * and every admin on Daily / Weekly / Monthly gets them by email. A dispute or hold lift listed in "For the team" is not repeated among that email's own lines
  * (its "Disputes · N new" / "Hold lifts waiting" bell line stays in the bell, and is marked as emailed); one not listed there (e.g. a dispute decided since)
  * stays in the own lines. Non-admins are unchanged.
@@ -267,7 +267,7 @@ export async function sendSummaries(now = new Date(), only?: string[]) {
   const users = await db.user.findMany({
     where: {
       ...(only ? { id: { in: only } } : {}),
-      deletedAt: null, // (Owner, Nov 9, §360) a deleted account gets no summary or end-of-day email
+      deletedAt: null, // (Owner, Nov 9, §360) a deleted account gets no summary or morning email
 
       OR: [{ notifications: { some: { summarizedAt: null, ...({ OR: [{ mustEmail: true }, { payment: true }, { user: { emailPref: { in: ["daily", "weekly", "monthly"] } } }] } as object) } } }, ...(admins.size ? [{ id: { in: [...admins] } }] : [])],
     },
@@ -309,7 +309,7 @@ export async function sendSummaries(now = new Date(), only?: string[]) {
         ? `Your Playtest summary: ${[...(items.length ? [plural(items.length, "update")] : []), ...(teamN ? [`${plural(teamN, "item")} for the team`] : [])].join(", ")}`
         : items.some((n) => !n.payment) ? `Your Playtest account updates: ${items.length}` : `Your Playtest payment updates: ${items.length}`;
       // (Owner, Nov 6, §295) The body opens with its heading, above the sections or the lines: a due Weekly / Monthly summary names its period (from the last
-      // summary, or its oldest line, to now), a Daily one and every end-of-day email the day. (Owner, Nov 6, §297) From the day after the last summary.
+      // summary, or its oldest line, to now), a Daily one and every morning email the day. (Owner, Nov 6, §297) From the day after the last summary.
       const period = due && (u.emailPref === "weekly" || u.emailPref === "monthly") ? u.emailPref : "daily";
       const heading = summaryHeading(period, u.lastSummaryAt ?? all[0]?.createdAt ?? now, now, u.timeZone, !!u.lastSummaryAt);
       const own = sidedEmailLines(items, line, hasBoth(u), u.timeZone, await testTitlesOf(items));
@@ -327,7 +327,7 @@ export async function sendSummaries(now = new Date(), only?: string[]) {
   return users.length;
 }
 
-/** (Owner, Nov 7, §328) At most this many lines in one summary or end-of-day email (the newest). */
+/** (Owner, Nov 7, §328) At most this many lines in one summary or morning email (the newest). */
 export const SUMMARY_MAX = 200;
 /** (§328) The email's last line when older lines were left out: "And 37 older updates — see your bell". */
 export const olderLine = (n: number) => `And ${n} older update${n === 1 ? "" : "s"} — see your bell`;

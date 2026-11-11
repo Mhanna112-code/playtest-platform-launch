@@ -18,13 +18,13 @@ import { labelled, reportedOver3 } from "./reports";
 // action from the team: the admin page still shows them).
 // (Owner, Oct 29, batch 29 §34) It follows each admin's OWN email setting: Daily, Weekly or Monthly (listing everything new since that admin's last one), or none with Off.
 // The console and the bell show all of it anyway. "Playtest: new chargeback of $X" is unchanged: sent right away to every admin, whatever their setting.
-// (Owner, Nov 6, §306) It is no longer an email of its own: these lines are the "For the team" section of the admin's ONE end-of-day email (sendSummaries,
+// (Owner, Nov 6, §306) It is no longer an email of its own: these lines are the "For the team" section of the admin's ONE morning email (sendSummaries,
 // notify.ts), under the admin's own updates. This file builds the section (teamSections) and records it as sent (teamSent). The email follows the admin's own
 // setting exactly as the admin email did: Daily / Weekly / Monthly when that summary is due (everything since this admin's last section), none with Off.
 
 const DAY = 86_400_000;
 
-/** (Owner, Nov 6, §306) The admin's end-of-day email's section holding the team's items. */
+/** (Owner, Nov 6, §306) The admin's morning email's section holding the team's items. */
 export const TEAM_HEADING = "For the team";
 /**
  * (§306) One admin's "For the team" lines (a "   " line sits under the line above it), and which disputes and hold lifts they hold: those disputes' and lifts'

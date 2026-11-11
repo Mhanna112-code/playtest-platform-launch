@@ -32,7 +32,7 @@ The queued-email context has an additive migration (20261107220000_deleted_remin
 ## Manual checks performed
 
 - Fresh review work, moved review dates, correct reminder body and work destination; actual copies sent to the owner's requested address.
-- Off: real join, written submission, answer addition and chat notices remained in the bell and were excluded from the end-of-day email. Required review reminder included.
+- Off: real join, written submission, answer addition and chat notices remained in the bell and were excluded from the morning email. Required review reminder included.
 - Weekly between summaries: required review reminder included; ordinary notices retained for the later summary. This does not yet verify the eventual Weekly summary or Monthly/Daily matrix.
 - Payment hold repayment, two-tab Pay what you owe race reproduced; Second Admin approvals lifted the holds.
 - Dev Tester tester-side suspension removed the tester from the test, retained submitted work and refused tester actions (403), without suspending the developer side. Reinstatement restored the account, without auto-rejoining the test.
