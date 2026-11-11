@@ -157,7 +157,7 @@ describe("§365 refusal matrix: every cause × every button that reaches it", ()
     expect(await matrix(w.testId, () => "The team paused this test", [
       dev("invite", { testerIds: [] }, "Invite"),
       dev("next-round", {}, "Next round"),
-      dev("message", { contractId: w.ana.sessionId, body: "Hi" }, "Send"),
+      // (Owner, Nov 11, §379 item 1) Chat works during a team pause: tests/call-lines-379.test.ts and the chat tests.
       // (Owner, Nov 9, §368) Pay and Pay more go through during a team pause: tests/pay-during-pauses-368.test.ts.
     ])).toEqual([]);
   });

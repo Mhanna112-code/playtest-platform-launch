@@ -109,14 +109,18 @@ describe("paperclip uploads, drafts and sent answers", () => {
   it("shares five-file and five-recording limits across answers, with a 500 MB limit", async () => {
     const { testId } = await setup();
     const { sessionId, tester } = await joined(testId);
+    // (Owner, Nov 11, §380 D2b) Refusals come before the file's own mistakes: the 500 MB check is made while there is still room.
+    for (const contentType of ["image/png", "video/webm"]) {
+      const big = await sact(sessionId, "recording-start", tester.cookie, { part: "written", filename: "large", contentType, size: 500 * 1024 * 1024 + 1 });
+      expect(big.status).toBe(413);
+    }
     for (const contentType of ["image/png", "video/webm"]) {
       for (let i = 0; i < 5; i++) await upload(sessionId, tester.cookie, `file-${i}`, contentType);
       const full = await sact(sessionId, "recording-start", tester.cookie, { part: "written", filename: "extra", contentType, size: 100 });
       expect(full.status).toBe(409);
-    }
-    for (const contentType of ["image/png", "video/webm"]) {
-      const big = await sact(sessionId, "recording-start", tester.cookie, { part: "written", filename: "large", contentType, size: 500 * 1024 * 1024 + 1 });
-      expect(big.status).toBe(413);
+      // A file over 500 MB with no room left: the limit's refusal, not the size.
+      const bigFull = await sact(sessionId, "recording-start", tester.cookie, { part: "written", filename: "large", contentType, size: 500 * 1024 * 1024 + 1 });
+      expect(bigFull.status).toBe(409);
     }
   });
 

@@ -22,7 +22,9 @@ describe("(Owner, Nov 5) §252/§253 a dispute is one drop-down; the dashboard g
     expect(one).toBeGreaterThan(person);
     const inside = s.slice(one, s.indexOf("</Fold>", one));
     expect(inside).toContain('<ReasonQuote id={`dispute-reason-${d.id}`} label="Their reason"');
-    expect(inside).toContain("<DisputeSide seenAt={now.toISOString()} testId={d.testId} disputeId={d.id} />");
+    // (Owner, Nov 11, §380 L) The dashboard links to the dispute on the test page; Send your side is there only.
+    expect(inside).toContain("href={`/app/tests/${d.testId}#item-dispute-${d.id}`}");
+    expect(inside).not.toContain("<DisputeSide");
     expect(s).toContain('{ds.length === 1 ? "1 dispute" : `${ds.length} disputes`}');
   });
 });

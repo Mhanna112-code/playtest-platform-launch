@@ -175,7 +175,7 @@ describe("batch 27 section 1: an open new-terms offer blocks Send and calls unti
     expect(src("components/Err.tsx")).toContain("if (text && text !== ANSWER_TERMS_FIRST && text !== NDA_BLOCK_FIRST) bringInView(ref.current);");
     expect(src("components/ChangesBox.tsx")).toContain("if (changes || (error && error !== ANSWER_TERMS_FIRST && error !== NDA_BLOCK_FIRST)) bringInView(ref.current);");
     // The offer comes before the form's own checks.
-    expect(src("app/app/sessions/[id]/SessionActions.tsx")).toContain("const missing0 = terms ? null : answersMissing(questions, answers);");
+    expect(src("app/app/sessions/[id]/SessionActions.tsx")).toContain("const missing0 = terms || red ? null : answersMissing(questions, answers);");
     expect(src("components/CallRequests.tsx")).toContain("((p.side === \"tester\" && offerShown()) || checkFields(form.current))");
   });
 });
