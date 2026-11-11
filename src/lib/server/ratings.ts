@@ -95,6 +95,8 @@ export async function devRateStates(contractIds: string[], now = new Date()) {
   const spans = new Map<string, Span[]>();
   const closeOuts = new Map<string, Date | null>();
   for (const id of new Set(cs.map((c) => c.testId))) closeOuts.set(id, await closeOutOf(id, now));
+  // (Owner, Nov 12, §382 b) Outages move the developer's window whichever way it opens.
+  const outages = (await db.outage.findMany({ where: { OR: [{ needsApproval: false }, { approvedAt: { not: null } }] }, select: { startAt: true, endAt: true } })).map((o): Span => ({ start: o.startAt.getTime(), end: o.endAt.getTime(), open: false }));
   for (const c of cs) {
     const dev = c.test.developer;
     const name = displayName(c.tester);
@@ -111,7 +113,11 @@ export async function devRateStates(contractIds: string[], now = new Date()) {
     const closeOut = closeOuts.get(c.testId) ?? null;
     const lastSettled = Math.max(0, ...pieces.map((x) => x.review?.createdAt.getTime() ?? 0));
     const opensAt = !settled ? null : theirs ? new Date(Math.max(theirs.createdAt.getTime(), lastSettled)) : closedOut(closeOut, now) && pieces.length > 0 ? new Date(Math.max(closeOut!.getTime(), lastSettled)) : null; // (DEFAULT) only a tester who sent something or had a call
-    const w = opensAt ? windowEnd(opensAt, spans.get(c.testId)!, now, WINDOW_DAYS) : null;
+    // (Owner, Nov 12, §382 b) Outages move it however it opens. No outage counted twice: one that already moved the tester's rating (applyOutage moves a rating while its first 14 days run) isn't added again
+    // when the window opens at that rating.
+    const atRating = !!theirs && !!opensAt && opensAt.getTime() === theirs.createdAt.getTime();
+    const ownOutages = atRating ? outages.filter((o) => o.start >= theirs!.createdAt.getTime() + WINDOW_DAYS * DAY) : outages;
+    const w = opensAt ? windowEnd(opensAt, mergeSpans([...spans.get(c.testId)!, ...ownOutages]), now, WINDOW_DAYS) : null;
     // The tester's rating shows once the developer rates or their 14 days end. A window that hadn't opened 14 days after the tester rated (the developer left work
     // unsettled that long) doesn't hold it back past those 14 days.
     const revealAt = !theirs ? null : (theirs.revealedAt ?? (opensAt && w && opensAt.getTime() <= theirs.createdAt.getTime() + WINDOW_DAYS * DAY ? w.end : new Date(theirs.createdAt.getTime() + WINDOW_DAYS * DAY)));
