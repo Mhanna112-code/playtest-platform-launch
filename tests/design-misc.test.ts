@@ -136,7 +136,9 @@ describe("bell reach (owner, Oct 26)", () => {
     expect(await db.notification.count({ where: { userId: dev.user.id, text: { contains: "First message" } } })).toBe(0);
     await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true });
     await sact(sessionId, "message", tester.cookie, { body: "Second message" });
-    expect(await msgLines()).toBe(1);
+    // (Owner, Nov 11, §383 5) A test-chat message isn't filtered by reach: it rings whenever the chat can be used (a stopped test's chat stays open).
+    // Direct messages keep the reach rule (chat-reach.test.ts).
+    expect(await msgLines()).toBe(2);
   });
 
   it("each bell line remembers its test (same-day lines about one test stack)", async () => {

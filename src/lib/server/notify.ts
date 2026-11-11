@@ -20,6 +20,8 @@ import { REMINDER_ONLY_GROUPS } from "@/lib/reminderPolicy";
  * application, a stopped test, the site's own notices) don't pass `about`.
  * (Owner, Nov 6, §299) A PAYMENT line (`payment: true`) is never dropped by reach: money paid to a tester reaches her (bell and email) whatever the state of the
  * test it was paid on (open, closed, stopped). notify() and bell() skip this check for payment lines.
+ * (Owner, Nov 11, §383 5) Neither is a TEST-CHAT message's line: it rings whenever the message could be sent (the chat is open: not blocked, not restricted),
+ * on a closed or stopped test too (messages.ts passes no `about`). Direct messages keep this rule.
  */
 export async function inReach(recipientId: string, otherId: string) {
   const n = await db.contract.count({

@@ -133,7 +133,9 @@ export async function sendChat(user: { id: string; name: string; email: string }
   // (Owner, Oct 30, batch 15 section 20) The bell never carries the message itself: it says who wrote, and the email has the text.
   const line = a.active ? `${from} sent you a message on “${a.test.title}”` : `New message from ${from}`;
   const link = toDev ? `/app/tests/${testId}` : `/app/sessions/${a.contract.id}`;
-  await notify(recipient.email, line, [line, "", body], link, { about: user.id });
+  // (Owner, Nov 11, §383 5) Not filtered by reach (no `about`: reach needs an OPEN test): a test-chat message rings whenever it could be sent, i.e. while the chat
+  // is open (not blocked, not restricted: checked above), on a closed or stopped test too. Direct messages keep the reach rule (directMessages.ts).
+  await notify(recipient.email, line, [line, "", body], link, { recipientId: recipient.id });
   return m;
 }
 /** A chat message is at most this long. */
