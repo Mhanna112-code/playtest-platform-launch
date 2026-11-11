@@ -132,8 +132,8 @@ describe("batch 29 section 11: stopped, closed and paused tests keep the stop-on
     const rate = await act(w.testId, "rate", w.dev.cookie, { contractId: b.sessionId, stars: 4, ...B });
     expect(rate.status, JSON.stringify(rate.body)).toBe(200);
     expect((await ex(w.dev.cookie, { action: "decide", excerptId: x.id, decision: "allow", ...B })).status).toBe(200);
-    // The same decision made again (another tab): a plain refusal.
-    expect((await ex(w.dev.cookie, { action: "decide", excerptId: x.id, decision: "allow", ...B })).body.error.message).toBe("You already allowed this excerpt.");
+    // (Owner, Nov 11, §380) The same decision made again (another tab): silent.
+    expect((await ex(w.dev.cookie, { action: "decide", excerptId: x.id, decision: "allow", ...B })).body.already).toBe(true);
   });
 });
 

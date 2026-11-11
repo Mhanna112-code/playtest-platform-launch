@@ -70,10 +70,11 @@ describe("after a stop: what's gone is refused and names the press; what still w
     await refused("answer-request", { requestId: reqRow.id, action: "decline" }, "Decline");
     await refused("answer-request", { requestId: reqRow.id, action: "withdraw" }, "Withdraw");
     // (Batch 17 section 12; Owner, Nov 9, §363) Cancel call: the stop already cancelled the calls ahead; the one stopped line names the press.
-    for (const [action, body] of [["cancel-call", { callId: call.id }], ["cancel-set", { setId: "x" }]] as const) {
-      const r = await sact(sessionId, action, tester.cookie, { seenAt: opened, ...body });
-      expect(r.body.error, action).toMatchObject({ code: "work_over", message: `This test was stopped, so your ${action === "cancel-set" ? "Cancel the remaining calls" : "Cancel call"} didn't go through.` }); // (Nov 9 small fixes) each button's real label
-    }
+    // (Owner, Nov 11, §380) Cancel call on a call the stop already cancelled: silent (already what it wanted). A set that isn't hers keeps the stopped line.
+    const cc = await sact(sessionId, "cancel-call", tester.cookie, { seenAt: opened, callId: call.id });
+    expect([cc.status, cc.body.already]).toEqual([200, true]);
+    const cs = await sact(sessionId, "cancel-set", tester.cookie, { seenAt: opened, setId: "x" });
+    expect(cs.body.error).toMatchObject({ code: "work_over", message: "This test was stopped, so your Cancel the remaining calls didn't go through." });
     // Final: pressing again never goes ahead.
     await refused("written", { answers: ["a", "b"], confirmed: true }, "Send Answers");
   });

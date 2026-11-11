@@ -19,8 +19,10 @@ it("application withdrawal appears quietly in live updates, never stops another 
   expect((await devChanges(dev.user.id, testId, new Date(loaded), "")).some((e) => e.kind === "withdrew_app")).toBe(false);
   const response = await json(await live(req(`/api/live?scope=test:${testId}&since=${encodeURIComponent(loaded)}`, { cookie: dev.cookie, method: "GET" })));
   expect(response.body.changes).toContainEqual(expect.objectContaining({ text: "Applying Tester withdrew their application", quiet: true }));
-  for (const action of ["accept", "decline"]) expect((await act(testId, "application", dev.cookie, { applicationId: app.id, action, seenAt: loaded })).body.error).toMatchObject({ code: "gone", message: "Applying Tester withdrew their application." });
-  expect((await act(testId, "withdraw-application", tester.cookie, {})).status).toBe(409);
+  expect((await act(testId, "application", dev.cookie, { applicationId: app.id, action: "accept", seenAt: loaded })).body.error).toMatchObject({ code: "gone", message: "Applying Tester withdrew their application." });
+  // (Owner, Nov 11, §380) Decline on it, and Withdraw again: already what they wanted, silent (and no second line or bell).
+  expect((await act(testId, "application", dev.cookie, { applicationId: app.id, action: "decline", seenAt: loaded })).body.already).toBe(true);
+  expect((await act(testId, "withdraw-application", tester.cookie, {})).body.already).toBe(true);
   expect(await db.testEvent.count({ where: { testId, kind: "withdrew_app" } })).toBe(1);
   expect(await db.notification.count({ where: { userId: dev.user.id, groupKey: "appwithdrawn", testId } })).toBe(1);
 });

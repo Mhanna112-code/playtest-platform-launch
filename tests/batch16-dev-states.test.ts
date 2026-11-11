@@ -121,13 +121,13 @@ describe("developer, stopped / closed or paused / held: what still works follows
     expect(src("lib/server/excerpts.ts")).not.toContain("bigOwnGate");
   });
 
-  it("a state that began after the page loaded is news: Stop in another tab still stops this tab's Stop once (section 21)", async () => {
+  it("(Owner, Nov 11, §380) Stop in another tab: this tab's Stop is silent (already stopped), never a stop box", async () => {
     const { dev, testId } = await setup();
     await later();
     const loaded = seen();
     await later();
     expect((await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true, tab: "A" })).status).toBe(200);
-    expect((await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: loaded, tab: "B" })).body.error.code).toBe("stop_once");
+    expect((await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: loaded, tab: "B" })).body.already).toBe(true);
   });
 });
 

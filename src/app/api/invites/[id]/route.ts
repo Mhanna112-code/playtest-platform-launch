@@ -21,8 +21,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (!inv || inv.testerId !== u.id) throw new HttpError(404, "not_found", "That invite doesn't exist.");
     if (inv.status === "replaced") {
       const fresh = await db.invite.findFirst({ where: { testId: inv.testId, testerId: u.id, status: "sent" }, orderBy: { createdAt: "desc" } });
-      // Not sent again (the tester couldn't be invited any more): closed, with the reason.
-      if (!fresh) throw new HttpError(409, "invite_closed", await inviteClosedLine(inv.testId));
+      // Not sent again (the tester couldn't be invited any more): closed. (Owner, Nov 11, §380) Already what No thanks wanted: no refusal, the card goes.
+      if (!fresh) return ok({ ok: true, already: true });
       // Re-sent: the first press stops once with the new listing; the second (from that box) says no thanks to the new invite.
       const boxAt = seenOf(body.boxAt);
       if (body.confirmed !== true || (boxAt && boxAt < fresh.createdAt)) {
@@ -42,10 +42,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     // (Batch 16 section 32) Closed meanwhile: refused with the reason (never "hold" or "suspended"); the card goes.
     const closed = async (status: string, testId: string) =>
       status === "cancelled" ? new HttpError(409, "invite_closed", await inviteClosedLine(testId)) : status === "joined" ? new HttpError(409, "gone", "You already joined.") : new HttpError(409, "invite_closed", INVITE_NOT_OPEN);
+    // (Owner, Nov 11, §380) Already closed, cancelled or declined: what No thanks wanted, so no refusal (the card goes with the redraw). Joined keeps its line.
+    if (inv.status !== "sent" && inv.status !== "joined") return ok({ ok: true, already: true });
     if (inv.status !== "sent") throw await closed(inv.status, inv.testId);
     await listingGate(u.id, inv.testId, body, "decline");
     // (Nov 2, §119) Only a still-open invite is declined: a Cancel (or a join) a moment ago wins, and the refusal says what happened.
-    if ((await db.invite.updateMany({ where: { id: inv.id, status: "sent" }, data: { status: "declined" } })).count !== 1) throw await closed((await db.invite.findUniqueOrThrow({ where: { id: inv.id } })).status, inv.testId);
+    if ((await db.invite.updateMany({ where: { id: inv.id, status: "sent" }, data: { status: "declined" } })).count !== 1) {
+      const now = (await db.invite.findUniqueOrThrow({ where: { id: inv.id } })).status;
+      if (now !== "joined") return ok({ ok: true, already: true }); // (§380)
+      throw await closed(now, inv.testId);
+    }
     await logAction(u.id, inv.testId, body, "said no thanks to the invite");
     await logEvent(inv.testId, "invite", `${displayName(u)} said no thanks to your invite`);
     // (Owner, Nov 6, §286) The developer's top box line rings their bell too, in the same words, linking to their Invite testers panel.

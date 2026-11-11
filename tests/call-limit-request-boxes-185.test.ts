@@ -273,12 +273,11 @@ describe("§185 Join or Cancel on a call already cancelled: refused once; the ro
     expect((await sact(a.sessionId, "cancel-call", a.tester.cookie, { callId: call.id, seenAt: seen(), confirmed: true })).status).toBe(200);
     await settle();
     // The developer's old page (the tester's cancel would stop any other press there): his Cancel is refused at once.
+    // (Owner, Nov 11, §380) Cancel on a call already cancelled: silent on both sides (no refusal, no stop).
     const dev1 = await act(f.testId, "cancel-call", f.dev.cookie, { callId: call.id, seenAt: loaded });
-    expect(dev1.body.error.code).toBe("cancelled");
-    expect(dev1.body.error.message).toBe("This call was already cancelled."); // (§364 item 13)
+    expect([dev1.status, dev1.body.already]).toEqual([200, true]);
     const t1 = await sact(a.sessionId, "cancel-call", a.tester.cookie, { callId: call.id, seenAt: loaded, loadedAt: loaded });
-    expect(t1.body.error.code).toBe("cancelled");
-    expect(t1.body.error.message).toBe("This call was already cancelled."); // (§364 item 13)
+    expect([t1.status, t1.body.already]).toEqual([200, true]);
     // Join: one refusal, marked cancelled (the button goes).
     const devUser = await db.user.findUniqueOrThrow({ where: { id: f.dev.user.id } });
     const e = await joinCall(devUser, call.id).catch((x: unknown) => x);

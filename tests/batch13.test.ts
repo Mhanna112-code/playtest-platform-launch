@@ -89,7 +89,7 @@ describe("batch 13 sections 1-3: excerpt requests", () => {
     // (Batch 29 section 30) Only the tester removes it: the developer's Take down (from an older page) is refused; the tester's Remove sends no line.
     expect((await ex(s.dev.cookie, { action: "remove", excerptId: id })).body.error.message).toBe("Only the tester can remove an excerpt from their profile.");
     expect((await ex(s.tester.cookie, { action: "remove", excerptId: id })).status).toBe(200);
-    expect((await ex(s.tester.cookie, { action: "remove", excerptId: id })).body.error.message).toBe("This excerpt was already taken down.");
+    expect((await ex(s.tester.cookie, { action: "remove", excerptId: id })).body.already).toBe(true); // (Owner, Nov 11, §380) already removed: silent
     // Deny, then a new request allowed and taken down by the tester: the developer is told.
     const id2 = (await ask(s.tester.cookie, s.sub.id)).body.id;
     await ex(s.dev.cookie, { action: "decide", excerptId: id2, decision: "deny" });

@@ -49,27 +49,29 @@ describe("No thanks on an invite follows batch 16 section 32 (section 4)", () =>
     expect((await db.invite.findUniqueOrThrow({ where: { id: x.inv.id } })).status).toBe("declined");
   });
 
-  it("closed invites are refused with the section 32 reason (never hold), and the card goes", async () => {
+  // (Owner, Nov 11, §380) No thanks on a closed invite is already what it wanted: silent, whatever closed it (never "hold"), and the card goes.
+  it("closed invites: No thanks is silent (never hold), and the card goes", async () => {
     const held = await invited();
     await startHold(held.dev.user.id, "unpaid");
     const r1 = await noThanks(held.inv.id, held.ana.cookie, { seenAt: held.loaded });
-    expect(r1.body.error).toMatchObject({ code: "invite_closed", message: "“Harbor Run” isn't taking new testers right now, so this invite was closed." });
+    expect([r1.status, r1.body.already]).toEqual([200, true]);
     expect(await db.invite.count({ where: { testerId: held.ana.user.id, status: "sent" } })).toBe(0);
 
     const stopped = await invited();
     expect((await act(stopped.testId, "stop", stopped.dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true })).status).toBe(200);
-    expect((await noThanks(stopped.inv.id, stopped.ana.cookie)).body.error).toMatchObject({ code: "invite_closed", message: "This test was stopped." });
+    expect((await noThanks(stopped.inv.id, stopped.ana.cookie)).body.already).toBe(true);
 
     const ou = await invited();
     const until = new Date(Date.now() - 60_000);
     await db.test.update({ where: { id: ou.testId }, data: { openUntil: until } });
     await (await import("@/lib/server/tests")).closeJoiningAfterOpenUntil();
-    expect((await noThanks(ou.inv.id, ou.ana.cookie)).body.error).toMatchObject({ code: "invite_closed", message: `“Harbor Run” closed to new testers on ${fmtDate(until)}.` });
+    expect((await noThanks(ou.inv.id, ou.ana.cookie)).body.already).toBe(true);
+    void fmtDate;
 
     // Already answered in another tab: the plain section 32 line (no "This invite is closed.").
     const twice = await invited();
     expect((await noThanks(twice.inv.id, twice.ana.cookie)).status).toBe(200);
-    expect((await noThanks(twice.inv.id, twice.ana.cookie)).body.error).toMatchObject({ code: "invite_closed", message: "This invite is no longer open." });
+    expect((await noThanks(twice.inv.id, twice.ana.cookie)).body.already).toBe(true);
     const route = src("app/api/invites/[id]/route.ts");
     expect(route).not.toContain("This invite closed: the test filled up.");
     expect(route).not.toContain("This invite is closed.");
@@ -95,10 +97,10 @@ describe("No thanks on an invite follows batch 16 section 32 (section 4)", () =>
     expect(pressLabelOf(`/api/invites/${x.inv.id}`)).toBe("No thanks");
   });
 
-  it("a replaced invite that wasn't sent again (the tester can't be invited now) is refused, not stopped", async () => {
+  it("a replaced invite that wasn't sent again (the tester can't be invited now): (§380) No thanks is silent, never stopped", async () => {
     const x = await invited();
     await db.invite.update({ where: { id: x.inv.id }, data: { status: "replaced" } });
-    expect((await noThanks(x.inv.id, x.ana.cookie)).body.error).toMatchObject({ code: "invite_closed", message: "This invite is no longer open." });
+    expect((await noThanks(x.inv.id, x.ana.cookie)).body.already).toBe(true);
   });
 
   // (Owner, Nov 4, §185) The requests left the Live session for the page's own boxes: a tester's request is in "Requests to you", inside her drop-down.

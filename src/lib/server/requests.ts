@@ -823,14 +823,42 @@ export async function requestTime(user: U, contractId: string, body: Record<stri
  * taken out declines / withdraws the request. It stays one request for the limits (3 in total, 3 sends a day). A press on a time no longer in a waiting request:
  * Accept "Pick one of the times." (as before), Decline / Withdraw TIME_GONE; on another time of a request already booked: OTHER_TIME_BOOKED.
  */
+/** (Owner, Nov 11, §380) A request of yours in one of these states: Withdraw on it is silent. */
+export const WITHDRAWN_ALREADY = new Set(["declined", "closed", "withdrawn"]);
+
+/**
+ * (Owner, Nov 11, §380) Cancel call, Cancel calls (a set) and Withdraw on a request of yours when the result is already what the press wanted (the call or the
+ * set's calls ahead were cancelled by the other side, a pause, a stop or a block; the request was declined, closed or withdrawn): the press goes through silently
+ * (no refusal, no stop box, whatever else ended meanwhile), and the page redraws. Checked before every other refusal on the route. null: the press goes on.
+ */
+export async function alreadyDone(side: "tester" | "developer", where: { contractId?: string; testId?: string }, action: string, body: Record<string, unknown>) {
+  const inScope = async (contractId: string) => (where.contractId ? contractId === where.contractId : !!(await db.contract.count({ where: { id: contractId, testId: where.testId } })));
+  if (action === "cancel-call" && typeof body.callId === "string") {
+    const call = await db.call.findUnique({ where: { id: body.callId }, select: { status: true, contractId: true } });
+    if (call?.status === "cancelled" && (await inScope(call.contractId))) return { cancelled: true, already: true };
+  }
+  if (action === "cancel-set" && typeof body.setId === "string" && body.setId) {
+    const contractId = where.contractId ?? String(body.contractId ?? "");
+    if (contractId && (await inScope(contractId)) && (await db.call.count({ where: { contractId, setId: body.setId } })) && !(await db.call.count({ where: { contractId, setId: body.setId, status: "booked", startsAt: { gt: new Date() } } })))
+      return { cancelled: true, already: true };
+  }
+  if (action === "answer-request" && body.action === "withdraw" && typeof body.requestId === "string") {
+    const r = await db.callRequest.findUnique({ where: { id: body.requestId }, select: { status: true, fromSide: true, contractId: true, startsAt: true } });
+    if (r && r.fromSide === side && (await inScope(r.contractId)) && (WITHDRAWN_ALREADY.has(r.status) || (r.status === "pending" && r.startsAt < new Date()))) return { withdrawn: true, already: true };
+  }
+  return null;
+}
 export async function answerRequest(user: U, contractId: string, body: Record<string, unknown>) {
   const x = await ctx(user.id, contractId);
   const { c, side, other } = x;
   const r = await db.callRequest.findUnique({ where: { id: String(body.requestId ?? "") } });
   if (!r || r.contractId !== contractId) throw new HttpError(404, "not_found", "That request doesn't exist.");
-  if (side === "tester") await answerTermsFirst(contractId);
   const action = String(body.action ?? "");
   const mine = r.fromSide === side;
+  // (Owner, Nov 11, §380) Withdraw on your own request that was declined, closed (its time passed, the part ended, a pause, a block…) or already withdrawn:
+  // already what the press wanted, no refusal (the page redraws). Accepted / booked keeps its refusal.
+  if (action === "withdraw" && mine && (WITHDRAWN_ALREADY.has(r.status) || (r.status === "pending" && r.startsAt < new Date()))) return { withdrawn: true, already: true };
+  if (side === "tester") await answerTermsFirst(contractId);
   if (r.status === "pending" && r.startsAt < new Date()) await db.callRequest.update({ where: { id: r.id }, data: { status: "closed", closedReason: TIME_PASSED_REASON } });
   const fresh = await db.callRequest.findUniqueOrThrow({ where: { id: r.id } });
   // (Batch 16 section 21) Answered or withdrawn in another tab: the developer's press stops once naming it, then it's already done.
@@ -982,13 +1010,14 @@ export async function cancelCallSet(user: U, contractId: string, body: Record<st
   const now = new Date();
   const ahead = () => db.call.findMany({ where: { contractId, setId, status: "booked", startsAt: { gt: now } }, orderBy: { startsAt: "asc" } });
   const first = await ahead();
-  if (!first.length) throw new HttpError(409, "cancelled", RF.CALL_ALREADY_CANCELLED); // (§364 item 13)
+  // (Owner, Nov 11, §380; replaces §364 item 13) Nothing of the set left ahead (cancelled by the other side, a pause, a stop or a block): silent.
+  if (!first.length) return { cancelled: true, already: true };
   const ok = checkCancel(first[0].startsAt, now, reason);
   if (!ok.ok) throw new HttpError(400, "reason", ok.message);
   if (side === "developer") await db.$transaction((tx) => devGate(tx, c.testId, body, {}, [], undefined, { acts: CALL_ACTS, keys: [`set:${setId}`, `c:${contractId}`] }));
   else await testerGate(c.testerId, contractId, c.testId, body, undefined, CALL_PRESS);
   const calls = await ahead();
-  if (!calls.length) throw new HttpError(409, "cancelled", RF.CALL_ALREADY_CANCELLED); // (§364 item 13)
+  if (!calls.length) return { cancelled: true, already: true }; // (§380)
   const set = await db.callSet.findUnique({ where: { id: setId } });
   const unit = set ? unitOf(set.repeat) : calls.length > 1 && calls[1].startsAt.getTime() - calls[0].startsAt.getTime() < 2 * 86_400_000 ? "daily" : "weekly";
   await db.$transaction(async (tx) => {

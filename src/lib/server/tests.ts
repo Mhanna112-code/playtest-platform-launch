@@ -775,7 +775,7 @@ export async function devGate(tx: Tx, testId: string, body: Record<string, unkno
   const moments: TestEventLike[] = [];
   if (press.stopCheck !== undefined) {
     const loaded = loadedOf(body);
-    const stop = (await devStopSince(testId, press.stopCheck || null, loaded)) ?? (await devPauseSince(testId, loaded, undefined, press.skipTeamPause));
+    const stop = (await devStopSince(testId, press.stopCheck || null, loaded)) ?? (await devPauseSince(testId, loaded));
     if (stop) moments.push(stop);
     // (Owner, Nov 5, §207) The team lifting its pause is named like the pause: "The team lifted its pause on this test at 3:10 AM.".
     moments.push(...(await devLiftSince(testId, loaded)));
@@ -855,11 +855,8 @@ export async function stopTest(dev: U, testId: string, body: Record<string, unkn
   let invitesClosed: string[] = [];
   const contracts = await db.$transaction(async (tx) => {
     const t = await lockTest(tx, testId);
-    // (Batch 16 section 21) Stopped in another tab: this Stop stops once naming it ("You stopped the test in another tab"), then it's already done.
-    if (t.status === "stopped") {
-      await topPanelGate(tx, testId, body, {}, [], undefined, { acts: ["stop"], keys: ["test"], inState: true });
-      throw new HttpError(409, "stopped", stoppedPressLine("Stop the test")); // (§363)
-    }
+    // (Owner, Nov 11, §380; replaces batch 16 section 21's stop then refusal) Already stopped: what Stop wanted, so no stop box and no refusal (the page redraws).
+    if (t.status === "stopped") return null;
     // (Owner, Oct 29, batch 29 section 11; replaces batch 15 sections 23, 29 and 37) While the test is paused (any cause) Stop follows the same stop-once rules.
     await topPanelGate(tx, testId, body, {}, [], undefined, { acts: ["stop"], keys: ["test"] });
     const cs = await tx.contract.findMany({ where: working(testId), include: { tester: true, test: { select: { title: true } } } });
@@ -878,6 +875,7 @@ export async function stopTest(dev: U, testId: string, body: Record<string, unkn
     await recordEvent(tx, testId, "stopped", stopEventText(reason), true, { status: "stopped", stoppedAt: new Date() });
     return cs;
   });
+  if (!contracts) return { stopped: true, testers: 0, already: true };
   await tellCancelled(cancelled, "stopped");
   await (await import("./invites")).tellInvitesClosed(invitesClosed); // (batch 30 §6)
   // (Batch 17 §15) The reason in full in the email, never in the bell line.
@@ -1192,21 +1190,17 @@ export function sessionRefusal(c: { status: string; endKind: string; endedAt: Da
 
 export async function leaveTest(tester: U, contractId: string, body: Record<string, unknown> = {}) {
   const c0 = await ownContract(tester.id, contractId);
-  const refused = (c: Parameters<typeof sessionRefusal>[0]) => {
-    const refusal = sessionRefusal(c, { openUntil: null }, displayName(c0.test.developer));
-    // (Owner, Nov 9, §363 / §364) The one line by why, naming Leave (left already: "Your part in this test has ended, so your Leave didn't go through.").
-    if (refusal) throw new HttpError(409, "gone", overPressLine(c, "Leave"));
-  };
   // (Owner, Oct 31, batch 35 §59; replaces batch 15 §25 for Leave) Leave goes through the tester's one gate like their other presses: the first press stops once
-  // for changes the page hasn't shown (Alerts Off: only contract changes; new terms send the page up to the offer box), the confirmed press leaves. A refusal
-  // (leaving can't happen) comes first and is unchanged.
-  refused(c0);
+  // for changes the page hasn't shown (Alerts Off: only contract changes; new terms send the page up to the offer box), the confirmed press leaves.
+  // (Owner, Nov 11, §380; replaces §363 / §364's refusal here) Their part already ended (left, rated, ended early, stopped, blocked, the test closed): already
+  // what Leave wanted, so no refusal and no stop: the page just redraws.
+  if (sessionRefusal(c0, { openUntil: null }, displayName(c0.test.developer))) return { left: true, already: true };
   // (Owner, Nov 5, §268; replaces §232's open-terms stop) New terms follow the ordinary rule for Leave (Alerts on and not yet shown only); the NDA block never applies.
   await testerGate(tester.id, contractId, c0.testId, body, undefined, { ordinaryTerms: true });
   const c = await db.$transaction(async (tx) => {
     await lockTest(tx, c0.testId);
     const c = await tx.contract.findUniqueOrThrow({ where: { id: contractId }, include: { test: { select: { title: true } } } });
-    refused(c);
+    if (sessionRefusal(c, { openUntil: null }, displayName(c0.test.developer))) return null; // (§380) ended a moment ago: silent too
     await tx.contract.update({ where: { id: c.id }, data: { status: "left", endedAt: new Date() } });
     await (await import("./accessKeys")).releaseTesterKeys(tx, c.id);
     await cancelCallsAhead(tx, [c.id], `${displayName(tester)} left the test.`);
@@ -1215,6 +1209,7 @@ export async function leaveTest(tester: U, contractId: string, body: Record<stri
     await recordEvent(tx, c.testId, "left", `${displayName(tester)} left the test`, true, {}, c.id, "", testerRow(c.id)); // (Owner, Nov 6, §284) the place the line opens
     return c;
   });
+  if (!c) return { left: true, already: true };
   await notify(c0.test.developer.email, `${displayName(tester)} left “${c.test.title}”`, [`${displayName(tester)} left your test “${c.test.title}”. Work ${pronouns(tester.pronoun).subj} already sent still waits for your review.`], `/app/tests/${c.testId}#tester-${c.id}`, { about: tester.id, testId: c.testId }); // (Owner, Nov 6, §308) a plain per-test line: the test's own "Harbor Run · N updates" stack
   await spotOpened(c.testId);
   return { left: true };

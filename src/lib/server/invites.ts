@@ -464,6 +464,10 @@ export async function cancelInvite(dev: U, testId: string, body: Record<string, 
   await ownTest(dev.id, testId);
   const inv = await db.invite.findUnique({ where: { id: String(body.inviteId ?? "") }, include: { test: true } });
   if (!inv || inv.testId !== testId) throw new HttpError(404, "not_found", "That invite doesn't exist.");
+  // (Owner, Nov 11, §380) The tester said No thanks, or the invite closed (cancelled, the test stopped, joining closed): already what the press wanted, no
+  // refusal (the page redraws). Joined, or re-sent on the new listing (a new invite is open), keep their refusals.
+  const closedAlready = (status: string) => status === "declined" || status === "cancelled";
+  if (closedAlready(inv.status)) return { ok: true, already: true };
   const tester = await db.user.findUnique({ where: { id: inv.testerId }, include: { profile: true } });
   const shown = body.seenTesters && typeof body.seenTesters === "object" ? needsOf((body.seenTesters as Record<string, unknown>)[inv.testerId]) : null;
   const extra: TestEventLike[] = [];
@@ -479,7 +483,11 @@ export async function cancelInvite(dev: U, testId: string, body: Record<string, 
   const gone = (status: string) => new HttpError(409, "gone", status === "joined" ? `${pronouns(tester?.pronoun).Subj} already joined.` : status === "replaced" ? "This invite is no longer valid: it was re-sent on the new listing." : "This invite was already cancelled.");
   if (inv.status !== "sent") throw gone(inv.status);
   // (Nov 2, §119) Only a still-open invite is cancelled: a tester who joined (or a re-send) a moment ago wins, and the refusal says what happened.
-  if ((await db.invite.updateMany({ where: { id: inv.id, status: "sent" }, data: { status: "cancelled" } })).count !== 1) throw gone((await db.invite.findUniqueOrThrow({ where: { id: inv.id } })).status);
+  if ((await db.invite.updateMany({ where: { id: inv.id, status: "sent" }, data: { status: "cancelled" } })).count !== 1) {
+    const now = (await db.invite.findUniqueOrThrow({ where: { id: inv.id } })).status;
+    if (closedAlready(now)) return { ok: true, already: true }; // (§380)
+    throw gone(now);
+  }
   await tellInvitesClosed([inv.id]); // (batch 30 §6)
   return { ok: true };
 }

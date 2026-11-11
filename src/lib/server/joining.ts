@@ -420,7 +420,12 @@ export async function apply(tester: U, testId: string, body: Record<string, unkn
 export async function withdrawApplication(tester: { id: string }, testId: string, body: Record<string, unknown> = {}) {
   if (await db.application.count({ where: { testId, testerId: tester.id, status: "pending" } })) await listingGate(tester.id, testId, body, "withdraw");
   const n = await db.application.updateMany({ where: { testId, testerId: tester.id, status: "pending" }, data: { status: "withdrawn", decidedAt: new Date() } });
-  if (!n.count) throw new HttpError(409, "gone", await withdrawGoneLine(tester.id, testId));
+  if (!n.count) {
+    // (Owner, Nov 11, §380) Already what the press wanted (declined, withdrawn, or closed: full, stopped, invite only, a block, the listing, joining closed): no
+    // refusal, the page just redraws. Accepted keeps its one line ("Nora Lane accepted your application at 3:20 AM, so you're in this test.").
+    if (await applicationAlreadyOver(tester.id, testId)) return { withdrawn: true, already: true };
+    throw new HttpError(409, "gone", await withdrawGoneLine(tester.id, testId));
+  }
   const me = await db.user.findUniqueOrThrow({ where: { id: tester.id } });
   // (Owner, Nov 7) A quiet live line, never a stop. Accept / Decline on it stays one refusal. The bell's email follows their
   // settings. (Owner, Nov 6, §308) It stacks one entry a day ACROSS tests,
@@ -429,6 +434,12 @@ export async function withdrawApplication(tester: { id: string }, testId: string
   await logEvent(testId, "withdrew_app", `${displayName(me)} withdrew ${pronouns(me.pronoun).poss} application`);
   await bell(t.developerId, `${displayName(me)} withdrew ${pronouns(me.pronoun).poss} application to “${t.title}”`, `/app/tests/${testId}`, undefined, { side: "developer", testId, group: APP_WITHDRAWN_GROUP });
   return { withdrawn: true };
+}
+
+/** (Owner, Nov 11, §380) Withdraw on an application that's already over without them in the test (declined, withdrawn, closed for any reason): silent. */
+async function applicationAlreadyOver(testerId: string, testId: string) {
+  const a = await db.application.findUnique({ where: { testId_testerId: { testId, testerId } }, select: { status: true } });
+  return !!a && ["declined", "withdrawn", "closed"].includes(a.status);
 }
 
 /** "There's no pending application to withdraw." (never one, or one that ended some other way). */
@@ -447,26 +458,15 @@ export function appClosedForDev(name: string, reason: string | null, at: Date, o
 }
 
 /**
- * (Owner, Oct 31, batch 35 §48) Withdraw on an application that's no longer pending says why, with the time: "<Dev> accepted your application at 3:20 AM, so
- * you're in this test." / "<Dev> declined your application at 3:20 AM." / "You withdrew it in another tab at 3:20 AM." / "It closed when <Dev> changed the
- * listing at 3:20 AM. You can apply again."; never one (or closed another way): the plain line.
+ * (Owner, Oct 31, batch 35 §48) Withdraw on an application that's no longer pending says why: "<Dev> accepted your application at 3:20 AM, so you're in this
+ * test."; never one: the plain line. (Owner, Nov 11, §380) Declined, withdrawn and closed (for any reason) are silent now (applicationAlreadyOver): their lines
+ * are gone.
  */
 export async function withdrawGoneLine(testerId: string, testId: string) {
   const a = await db.application.findUnique({ where: { testId_testerId: { testId, testerId } } });
-  if (!a) return NO_PENDING_APPLICATION;
+  if (!a || (a.status !== "accepted" && a.status !== "joined")) return NO_PENDING_APPLICATION;
   const t = await db.test.findUnique({ where: { id: testId }, include: { developer: true } });
-  const dev = t ? displayName(t.developer) : "The developer";
-  const at = fmtTime(a.decidedAt ?? new Date());
-  if (a.status === "accepted") return `${dev} accepted your application at ${at}, so you're in this test.`;
-  if (a.status === "declined") return `${dev} declined your application at ${at}.`;
-  if (a.status === "withdrawn") return `You withdrew it in another tab at ${at}.`;
-  if (a.status === "closed" && a.closedReason === "listing") return `It closed when ${dev} changed the listing at ${at}. You can apply again.`;
-  // (Owner, Nov 9, §354) The same reasons as the developer's line. A block's closing stays neutral (the plain line).
-  if (a.status === "closed" && a.closedReason === "full") return `It closed when the test filled up at ${at}.`;
-  if (a.status === "closed" && a.closedReason === "invite_only") return `It closed when ${dev} made the test invite only at ${at}.`;
-  if (a.status === "closed" && a.closedReason === "joining_closed") return `It closed when joining closed (Open until passed) on ${fmtDate(t?.openUntil ?? a.decidedAt ?? new Date())}.`;
-  if (a.status === "closed" && a.closedReason === "stopped") return `It closed when the test was stopped at ${at}.`;
-  return NO_PENDING_APPLICATION;
+  return `${t ? displayName(t.developer) : "The developer"} accepted your application at ${fmtTime(a.decidedAt ?? new Date())}, so you're in this test.`;
 }
 
 /**
@@ -491,6 +491,10 @@ export async function decideApplication(dev: U, testId: string, body: Record<str
     return new HttpError(409, "gone", a.status === "withdrawn" ? `${name} withdrew ${pronouns(tester.pronoun).poss} application.` : a.status === "declined" ? "You already declined this application." : a.status === "accepted" || a.status === "joined" ? "You already accepted this application." : "This application was already answered.");
   };
   const goneNow = async () => gone(await db.application.findUniqueOrThrow({ where: { id: a.id } }));
+  // (Owner, Nov 11, §380) Decline on an application the tester withdrew, that closed, or that was already declined: already what the press wanted, no refusal
+  // (the page redraws). Joined another way (accepted) keeps its refusal.
+  const declinedAlready = (s: string) => body.action === "decline" && ["withdrawn", "closed", "declined"].includes(s);
+  if (declinedAlready(a.status)) return { declined: true, already: true };
   if (a.status !== "pending") throw gone(a);
   const extra: TestEventLike[] = [];
   const shownTesters = body.seenTesters && typeof body.seenTesters === "object" ? body.seenTesters as Record<string, unknown> : {};
@@ -509,7 +513,10 @@ export async function decideApplication(dev: U, testId: string, body: Record<str
   await db.$transaction((tx) => devGate(tx, testId, body, {}, extra, undefined, { acts: ["application"], keys: [`app:${a.id}`], answers: { item: a.id, kinds: ["applied"], texts: [`${name} applied to join`, `${name} asks to rejoin`] } })); // (batch 35 §79)
   if (body.action === "decline") {
     // (Nov 2, §119) Only a still-pending application is declined: a Withdraw (or an answer in another tab) a moment ago wins, and the refusal says which.
-    if ((await db.application.updateMany({ where: { id: a.id, status: "pending" }, data: { status: "declined", decidedAt: new Date() } })).count !== 1) throw await goneNow();
+    if ((await db.application.updateMany({ where: { id: a.id, status: "pending" }, data: { status: "declined", decidedAt: new Date() } })).count !== 1) {
+      if (declinedAlready((await db.application.findUniqueOrThrow({ where: { id: a.id } })).status)) return { declined: true, already: true }; // (§380)
+      throw await goneNow();
+    }
     const title = (await db.test.findUniqueOrThrow({ where: { id: testId } })).title;
     // (Batch 29 §24) In the day's "Joined" entry, across tests.
     if (a.kind === "rejoin") await notify(tester.email, `Your ask to rejoin “${title}” wasn't accepted`, ["The developer didn't accept your ask to rejoin."], `/app/find/${testId}`, { group: "joined", testId });

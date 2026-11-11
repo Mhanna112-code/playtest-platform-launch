@@ -76,8 +76,8 @@ describe("batch 24 section 1: Your bank wants you to confirm, at the top of the 
     // (Owner, Nov 5, §270) The tester's name and the test (cut by the 50 cut: its visible start) are green links.
     expect(html).toMatch(/data-bank-top-amount="">\$12\.50<\/span> · <span title="Anabela Silva Okafor&#x27;s written answers on “Harbor Run”" data-what-cut=""><span data-what-text=""><a href="\/app\/testers\/[^"]+" class="text-volt-300 hover:underline" data-line-link="person">Anabela Silva Okafor<\/a>&#x27;s written answers on “<a href="\/app\/tests\/[^"]+" class="text-volt-300 hover:underline" data-line-link="test" target="_blank" rel="noreferrer">Harbor<\/a>…<\/span><\/span><button/);
     expect(html).toMatch(/data-whole-toggle=""[^>]*>[\s\S]*?<\/button> · <span class="text-slate-300" data-confirm-by="">confirm by /);
-    expect(html).toContain(`data-bank-waiting="${p.id}"`);
-    expect(html).toContain("Confirm with your bank</button>");
+    expect(html).toContain(`data-bank-top-link="${p.id}"`);
+    expect(html).toContain("Confirm with your bank →</a>"); // (Owner, Nov 11, §380 B) a link to the test page, no button here
     // The same plain scroll box as Needs you, everything in it (no "Show N more").
     expect(html).toContain('data-scroll-list="rows"');
     expect(html).not.toMatch(/Show \d+ more/);
@@ -194,10 +194,10 @@ describe("batch 24 section 1: Your bank wants you to confirm, at the top of the 
     expect(await bankToConfirm(dev.user.id)).toEqual([]);
   });
 
-  it("phones: the same plain rows and an inline button that fills the row", () => {
+  it("phones: the same plain rows and (§380 B) a link button that fills the row", () => {
     const html = markup([{ id: "p1", lead: "$1.00 for your plan", full: "$1.00 for your plan", by: "confirm by Nov 2, 3:10 PM", soon: false, href: "/app/payments#bank-p1", at: 0 }]);
     expect(html).toContain("rounded-lg border border-white/10 p-3 text-sm");
-    expect(html).toContain('data-bank-waiting="p1"');
+    expect(html).toContain('data-bank-top-link="p1"');
     expect(html).toContain("w-full");
     expect(html).toContain("sm:w-auto");
   });
@@ -229,9 +229,9 @@ describe("batch 24 section 2: a request closed by the tester's rating says they 
     expect(changes.map((c) => c.text).some((t) => /no longer available/.test(t))).toBe(false);
     // The developer's request reads it.
     await settle();
+    // (Owner, Nov 11, §380) Withdraw on the closed request: already what it wanted, silent. (Accept / Decline on it from the other side keep the line.)
     const withdraw = await act(testId, "answer-request", dev.cookie, { contractId: w.sessionId, requestId: r.id, action: "withdraw", seenAt: seen(), confirmed: true });
-    expect(withdraw.status).toBe(409);
-    expect(withdraw.body.error.message).toBe("This request closed: the tester finished their part.");
+    expect([withdraw.status, withdraw.body.already]).toEqual([200, true]);
     // Leave and the suspension's removal keep "the tester left".
     expect(src("lib/server/tests.ts")).toContain('closedReason: "the tester left"');
     expect(src("lib/server/restrictions.ts")).toContain('closedReason: "the tester left"');

@@ -28,7 +28,9 @@ describe("§354 a closed application's Accept / Decline names why it closed", ()
     const r = await accept(x);
     expect(r.status).toBe(409);
     expect(r.body.error.message).toMatch(/^Ben Carter's application closed when the test was stopped at \d{1,2}:\d{2}\W(AM|PM)\.$/);
-    expect(await withdrawGoneLine(x.ben.user.id, x.testId)).toMatch(/^It closed when the test was stopped at /);
+    // (Owner, Nov 11, §380) The tester's Withdraw on it is silent now (already what it wanted).
+    expect((await act(x.testId, "withdraw-application", x.ben.cookie, {})).body.already).toBe(true);
+    void withdrawGoneLine;
     const top = (await joinPageChanges(x.ben.user.id, x.testId, loaded, "")).map((l) => l.text);
     expect(top).toContain("Harbor Run was stopped: your application was closed");
     expect(top.join("\n")).not.toContain("changed the listing");
@@ -45,7 +47,7 @@ describe("§354 a closed application's Accept / Decline names why it closed", ()
     const r = await accept(x);
     expect(r.status).toBe(409);
     expect(r.body.error.message).toBe(`Ben Carter's application closed when joining closed (Open until passed) on ${fmtDate(until)}.`);
-    expect(await withdrawGoneLine(x.ben.user.id, x.testId)).toBe(`It closed when joining closed (Open until passed) on ${fmtDate(until)}.`);
+    expect((await act(x.testId, "withdraw-application", x.ben.cookie, {})).body.already).toBe(true); // (§380) silent
     const top = (await joinPageChanges(x.ben.user.id, x.testId, loaded, "")).map((l) => l.text);
     expect(top).toContain(`Joining Harbor Run closed (Open until passed) on ${fmtDate(until)}: your application was closed`);
   });

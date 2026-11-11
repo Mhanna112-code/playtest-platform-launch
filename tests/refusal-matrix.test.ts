@@ -85,8 +85,7 @@ describe("§365 refusal matrix: every cause × every button that reaches it", ()
     const dev = (action: string, body: Record<string, unknown>, button: string): Press => ({ side: "developer", button, go: () => act(w.testId, action, w.dev.cookie, { seenAt: seen(), confirmed: true, ...body }) });
     const wrong = await matrix(w.testId, () => "This test was stopped", [
       ...testerPresses(w),
-      { side: "tester", button: "Leave", go: () => sact(w.ana.sessionId, "leave", w.ana.tester.cookie, { seenAt: seen(), confirmed: true }) },
-      dev("stop", { reason: "We have what we need." }, "Stop the test"),
+      // (Owner, Nov 11, §380) Leave and Stop the test on a stopped test are already what they wanted: silent (silent-380.test.ts), never refused.
       dev("end-early", { contractIds: [w.ana.sessionId], reason: "We have enough feedback." }, "End early"),
       dev("request-time", { minutes: "30", contractIds: [w.ana.sessionId], rows: [{ startsAt: atHours(80), repeat: "once", count: 1 }] }, "Request a time"),
       dev("invite", { testerIds: [(await makeUser({ tester: true })).user.id] }, "Invite"),
@@ -130,7 +129,7 @@ describe("§365 refusal matrix: every cause × every button that reaches it", ()
     const dev = (action: string, body: Record<string, unknown>, button: string): Press => ({ side: "developer", button, go: () => act(w.testId, action, w.dev.cookie, { seenAt: seen(), confirmed: true, ...body }) });
     expect(await matrix(w.testId, (p) => (p.side === "tester" ? "Your part in this test has ended" : "Ana Silva's session has ended"), [
       ...testerPresses(w).filter((p) => !["Accept", "Decline"].includes(p.button)),
-      { side: "tester", button: "Leave", go: () => sact(w.ana.sessionId, "leave", w.ana.tester.cookie, { seenAt: seen(), confirmed: true }) },
+      // (Owner, Nov 11, §380) Leave when her part already ended: silent, never refused.
       dev("end-early", { contractIds: [w.ana.sessionId], reason: "We have enough feedback." }, "End early"),
       dev("request-time", { minutes: "30", contractIds: [w.ana.sessionId], rows: [{ startsAt: atHours(80), repeat: "once", count: 1 }] }, "Request a time"),
     ])).toEqual([]);
@@ -190,7 +189,7 @@ describe("§365 refusal matrix: every cause × every button that reaches it", ()
     expect(await matrix(w.testId, () => "This test isn't taking new testers right now", [joinBen("Join", "join")])).toEqual([]);
   });
 
-  it("call already cancelled: both sides' Cancel call", async () => {
+  it("call already cancelled: both sides' Cancel call go through silently (§380)", async () => {
     const w = await world();
     expect((await sact(w.ana.sessionId, "answer-request", w.ana.tester.cookie, { requestId: w.reqRow.id, action: "accept", seenAt: seen(), confirmed: true })).status).toBe(200);
     const call = await db.call.findFirstOrThrow({ where: { contractId: w.ana.sessionId, status: "booked" } });
@@ -198,7 +197,7 @@ describe("§365 refusal matrix: every cause × every button that reaches it", ()
     for (const r of [
       await sact(w.ana.sessionId, "cancel-call", w.ana.tester.cookie, { callId: call.id, reason: "Something came up at work today.", seenAt: seen(), confirmed: true }),
       await act(w.testId, "cancel-call", w.dev.cookie, { callId: call.id, reason: "Something came up at work today.", seenAt: seen(), confirmed: true }),
-    ]) expect(r.body.error?.message).toBe("This call was already cancelled.");
+    ]) expect([r.status, r.body.already]).toEqual([200, true]); // (Owner, Nov 11, §380) already what Cancel call wanted
   });
 
   it("own deleted account: Confirm with your bank from an old tab", async () => {

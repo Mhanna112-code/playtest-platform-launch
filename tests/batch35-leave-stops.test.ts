@@ -63,7 +63,7 @@ describe("batch 35 §59: Leave stops once for contract changes, like the other t
     expect(await status(b.sessionId)).toBe("left");
   });
 
-  it("a refusal stays unchanged and comes before any stop", async () => {
+  it("(§380) already left: silent, never a stop", async () => {
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
     await settle();
@@ -72,8 +72,7 @@ describe("batch 35 §59: Leave stops once for contract changes, like the other t
     await settle();
     expect((await edit(testId, dev.cookie, { writtenCents: "12.00" })).status).toBe(200);
     const r = await sact(sessionId, "leave", tester.cookie, { seenAt: loaded });
-    expect(r.body.error?.code).toBe("gone");
-    expect(r.body.error.message).toBe("Your part in this test has ended, so your Leave didn't go through."); // (§364 item 3)
+    expect([r.status, r.body.already]).toEqual([200, true]); // (Owner, Nov 11, §380)
   });
 });
 

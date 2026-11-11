@@ -104,7 +104,7 @@ describe("tester invitations follow every close (section 32)", () => {
     expect(await live(x.ana.cookie, "invites:me", x.loaded)).toEqual(["Your invite to “Harbor Run” was closed."]);
     expect(await live(x.ana.cookie, `listing:${x.testId}`, x.loaded)).toContain("Your invite to “Harbor Run” was closed.");
     const nt = await json(await invitePOST(req(`/api/invites/${x.inv.id}`, { cookie: x.ana.cookie, body: {} }), { params: Promise.resolve({ id: x.inv.id }) }));
-    expect(nt.body.error).toMatchObject({ code: "invite_closed", message: "This invite is no longer open." });
+    expect([nt.status, nt.body.already]).toEqual([200, true]); // (Owner, Nov 11, §380) No thanks on a cancelled invite: silent
     expect((await join(x.testId, x.ana.cookie, x.inv.id)).body.error).toMatchObject({ code: "invite_closed", message: "This invite is no longer open." });
     expect(await db.invite.count({ where: { testerId: x.ana.user.id, status: "sent" } })).toBe(0);
   });

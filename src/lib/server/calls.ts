@@ -1,6 +1,5 @@
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
-import * as RF from "@/lib/refusal";
 import { T, fmtFor } from "@/lib/tz";
 import { displayName, fmtDateTime, pronouns } from "@/lib/server/dateFormat";
 import { COULD_NOT_CONNECT, callClosedKind, callClosedLineOf, callEndedLine, cancelLine, checkCancel, type TestEventLike, NOBODY_JOINED, JOIN_OPENS_MIN, payByFrom, testPaused } from "@/lib/rules";
@@ -34,7 +33,8 @@ export async function devCancelCall(dev: U, testId: string, body: Record<string,
     const name = displayName(c.contract.tester);
     // (Owner, Nov 4, §185; replaces batch 16 section 21's stop first) A Cancel on a call already cancelled (by the tester, in another tab, by a stop) from an old
     // page is refused once, never a stop first; the row then leaves the booked list with the page's redraw (the call is in the Live session's Cancelled, §209).
-    if (c.status === "cancelled") throw new HttpError(409, "cancelled", RF.CALL_ALREADY_CANCELLED); // (§364 item 13)
+    // (Owner, Nov 11, §380; replaces §364 item 13) Already cancelled (by the other side, a pause, a stop or a block): already what the press wanted, no refusal.
+    if (c.status === "cancelled") return null;
     const ok = checkCancel(c.startsAt, new Date(), reason);
     if (!ok.ok) throw new HttpError(400, "reason", ok.message);
     // (Batch 16 section 21) Another tab's call action with this tester stops it once.
@@ -44,6 +44,7 @@ export async function devCancelCall(dev: U, testId: string, body: Record<string,
     await recordEvent(tx, testId, "cancelled", `You cancelled the call with ${name} on ${fmtDateTime(c.startsAt)}`, false, {}, c.contractId);
     return c;
   });
+  if (!call) return { cancelled: true, already: true };
   // (Batch 15 section 20) The reason is on the page, never in the bell line. (Owner, Nov 6, §299) The longer text below is emailed only to an address with no
   // account: an account's email (its summary) lists the bell line.
   const line = cancelLine(displayName(dev), call.startsAt, "", call.contract.test.title); // (Owner, Nov 6, §312a) names the test
@@ -83,7 +84,7 @@ export async function testerCancelCall(tester: U, contractId: string, body: Reco
     await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${c0.testId} FOR UPDATE`;
     const call = await tx.call.findUnique({ where: { id: callId } });
     if (!call || call.contractId !== contractId) throw new HttpError(404, "not_found", "That call doesn't exist.");
-    if (call.status === "cancelled") throw new HttpError(409, "cancelled", RF.CALL_ALREADY_CANCELLED); // (§364 item 13)
+    if (call.status === "cancelled") return null; // (Owner, Nov 11, §380) already cancelled: silent
     const ok = checkCancel(call.startsAt, new Date(), reason);
     if (!ok.ok) throw new HttpError(400, "reason", ok.message);
     await testerGate(tester, c0, body);
@@ -92,6 +93,7 @@ export async function testerCancelCall(tester: U, contractId: string, body: Reco
     await recordEvent(tx, c0.testId, "cancelled", `${displayName(tester)} cancelled ${pronouns(tester.pronoun).poss} call on ${fmtDateTime(call.startsAt)}`, false, {}, contractId, "", callRow(call.id)); // (Owner, Nov 6, §284) the place the line opens
     return call;
   });
+  if (!call) return { cancelled: true, already: true };
   const line = cancelLine(displayName(tester), call.startsAt, "", c0.test.title); // (Owner, Nov 6, §312a) names the test
   await notify(c0.test.developer.email, line, [cancelLine(displayName(tester), call.startsAt, reason, c0.test.title), "The time is open again for other testers."], `/app/tests/${c0.testId}#call-${call.id}`, { about: tester.id });
   return { cancelled: true };

@@ -201,17 +201,18 @@ describe("batch 35 §48: Withdraw names why there's nothing to withdraw", () => 
   }
   const at = (m: string) => new RegExp(m.replace("<T>", T));
 
-  it("accepted, declined, withdrawn in another tab, closed by a listing change; never applied keeps the plain line", async () => {
+  // (Owner, Nov 11, §380) Declined, withdrawn and closed are already what Withdraw wanted: silent. Accepted and never applied keep their lines.
+  it("accepted keeps its line; declined, withdrawn in another tab, closed by a listing change are silent; never applied keeps the plain line", async () => {
     const a = await applied();
     await db.application.updateMany({ where: { testId: a.testId }, data: { status: "accepted", decidedAt: new Date() } });
     expect((await act(a.testId, "withdraw-application", a.ben.cookie, {})).body.error.message).toMatch(at("^Nora Lane accepted your application at <T>, so you're in this test\\.$"));
     await db.application.updateMany({ where: { testId: a.testId }, data: { status: "declined" } });
-    expect((await act(a.testId, "withdraw-application", a.ben.cookie, {})).body.error.message).toMatch(at("^Nora Lane declined your application at <T>\\.$"));
+    expect((await act(a.testId, "withdraw-application", a.ben.cookie, {})).body.already).toBe(true);
     await db.application.updateMany({ where: { testId: a.testId }, data: { status: "closed", closedReason: "listing" } });
-    expect((await act(a.testId, "withdraw-application", a.ben.cookie, {})).body.error.message).toMatch(at("^It closed when Nora Lane changed the listing at <T>\\. You can apply again\\.$"));
+    expect((await act(a.testId, "withdraw-application", a.ben.cookie, {})).body.already).toBe(true);
     const b = await applied();
     expect((await act(b.testId, "withdraw-application", b.ben.cookie, {})).status).toBe(200);
-    expect((await act(b.testId, "withdraw-application", b.ben.cookie, {})).body.error.message).toMatch(at("^You withdrew it in another tab at <T>\\.$"));
+    expect((await act(b.testId, "withdraw-application", b.ben.cookie, {})).body.already).toBe(true);
     const c = await setup({ joinMode: "apply" });
     const never = await makeUser({ tester: true });
     expect((await act(c.testId, "withdraw-application", never.cookie, {})).body.error.message).toBe(NO_PENDING_APPLICATION);

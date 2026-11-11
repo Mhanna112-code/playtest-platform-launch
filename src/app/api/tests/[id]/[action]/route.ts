@@ -3,7 +3,7 @@ import { gapsOf } from "@/lib/gaps";
 import { HttpError, handle, ok, readJson } from "@/lib/server/http";
 import { devCancelCall, reportNoShow } from "@/lib/server/calls";
 import { cancelInvite, inviteGaps, invitePanel, inviteRestore, inviteTesters } from "@/lib/server/invites";
-import { answerRequest, cancelCallSet, devRequestTime } from "@/lib/server/requests";
+import { alreadyDone, answerRequest, cancelCallSet, devRequestTime } from "@/lib/server/requests";
 import { apply, askToRejoin, clientJoinBody, decideApplication, join, joinStopList, withdrawApplication } from "@/lib/server/joining";
 import { addDevSide, payExtra } from "@/lib/server/payments";
 import { sendChat, sendMessage } from "@/lib/server/messages";
@@ -52,13 +52,18 @@ export async function POST(req: Request, { params }: Ctx) {
     const u = await requireActive(req, { devOk: SUSPENDED_OK.has(action) || action === "rate" || action === "edit", devSide: !TESTER_SIDE.has(action), what, payOk: PAY_OK_ACTIONS.has(action) /* (§368) Pay more during a suspension */ });
     const body = await readJson(req, 900_000); // (batch 15 sections 3 and 17) an Edit with 20 questions and the steps at 20,000 characters each
     if (NEEDS_CONFIRMED.has(action)) requireConfirmed(u);
+    // (Owner, Nov 11, §380) Already what the press wanted (a cancelled call, a set with nothing left, a closed request of theirs): silent, before any refusal.
+    if (!TESTER_SIDE.has(action) && (await db.test.count({ where: { id, developerId: u.id } }))) {
+      const done = await alreadyDone("developer", { testId: id }, action, body);
+      if (done) return ok(done);
+    }
     await adminRefusal(req, u.id, id, action, what, verb);
     if (NEEDS_CURRENT_TERMS.has(action)) await requireCurrentTerms(u, body);
     const res0 = await run(u, id, action, body);
     const data = await res0.clone().json().catch(() => null);
     // A rename the page hadn't shown: the press went ahead; the note goes under the button.
     const res = res0.ok && typeof body.__note === "string" && data && typeof data === "object" ? ok({ ...data, note: body.__note }) : res0;
-    if (res.ok) await logTestAction(u.id, id, action, body, data);
+    if (res.ok && !data?.already) await logTestAction(u.id, id, action, body, data); // (§380) a silent no-op did nothing
     return res;
   });
 }

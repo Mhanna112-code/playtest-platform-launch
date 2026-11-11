@@ -108,7 +108,7 @@ describe("big changes from another tab stop every press once (section 21)", () =
   });
 
   // (Batch 29 section 12) Stop and End early from another tab are live lines now too.
-  it("Stop in tab A: a live line in B; Stop in B stops once, then 'This test was stopped.'", async () => {
+  it("Stop in tab A: a live line in B; (§380) Stop in B is silent (already stopped)", async () => {
     const { dev, testId } = await setup();
     await joined(testId);
     await later();
@@ -117,9 +117,7 @@ describe("big changes from another tab stop every press once (section 21)", () =
     expect((await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true, tab: "A" })).status).toBe(200);
     expect((await devLive(dev.cookie, testId, loaded, "B")).filter((t) => /another tab/.test(t))).toEqual(["You stopped the test in another tab"]);
     const b = await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: loaded, tab: "B" });
-    expect(texts(b)).toEqual(["You stopped the test in another tab"]);
-    const b2 = await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: loaded, tab: "B", ...again() });
-    expect(b2.body.error.message).toBe("This test was stopped, so your Stop the test didn't go through."); // (§363)
+    expect([b.status, b.body.already]).toEqual([200, true]); // (Owner, Nov 11, §380)
   });
 
   it("End early: an End early elsewhere stops it once; testers already ended there are dropped on the second press", async () => {
@@ -171,9 +169,9 @@ describe("big changes from another tab stop every press once (section 21)", () =
     expect((await act(testId, "application", dev.cookie, { applicationId: app.id, action: "decline", seenAt: seen(), confirmed: true, tab: "A" })).status).toBe(200);
     const lines = ["You saved the listing in another tab", /* (batch 35 §34) no field list */ "You declined Ana Silva's application in another tab"];
     expect((await devLive(dev.cookie, testId, loaded, "B")).filter((t) => /another tab/.test(t))).toEqual(lines);
+    // (Owner, Nov 11, §380) The same Decline already made: silent (no stop box, no refusal).
     const d = await act(testId, "application", dev.cookie, { applicationId: app.id, action: "decline", seenAt: loaded, tab: "B" });
-    expect(d.body.error).toMatchObject({ message: "You already declined this application." });
-    expect(d.body.error.changes).toBeUndefined();
+    expect([d.status, d.body.already]).toEqual([200, true]);
     const st = await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: loaded, tab: "B" });
     expect(texts(st)).toEqual(lines);
     expect((await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: loaded, tab: "B", ...again() })).status).toBe(200);

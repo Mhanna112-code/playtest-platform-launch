@@ -5,7 +5,7 @@ import { reportNoShow, testerCancelCall } from "@/lib/server/calls";
 import { sendMessage } from "@/lib/server/messages";
 import { abandonUpload, finishRecording, sendRecording, removeRecording, startRecording, uploadAlive } from "@/lib/server/recordings";
 import { chooseOutcome } from "@/lib/server/holds";
-import { answerRequest, cancelCallSet, requestTime } from "@/lib/server/requests";
+import { alreadyDone, answerRequest, cancelCallSet, requestTime } from "@/lib/server/requests";
 import { closeOffersOfEnded, decideTerms, ndaBlockFirst } from "@/lib/server/terms";
 import { openDispute } from "@/lib/server/payments";
 import { db } from "@/lib/db";
@@ -140,6 +140,9 @@ export async function POST(req: Request, { params }: Ctx) {
     const u = (await limitedUser(req, id, action)) ?? (await requireActive(req));
     const body = await readJson(req, 900_000); // (batch 14; batch 15) a written part of up to 20,000 characters (§186; was 50,000), with the question set it answers (20 × 20,000)
     if (NEEDS_CONFIRMED.has(action)) requireConfirmed(u);
+    // (Owner, Nov 11, §380) Already what the press wanted (a cancelled call, a set with nothing left, a closed request of hers): silent, before any refusal.
+    const done = await alreadyDone("tester", { contractId: id }, action, body);
+    if (done) return ok(done);
     // (Owner, Nov 11, §375) Send Answers, Add to this answer and a recording's Send / Add make ONE pass under the test's lock (lib/server/tests.ts onePass): part
     // over, paused and the NDA are checked there, in the owner's order, with the same lines and codes as here (after the drafts are saved), never before it.
     const onePass = ONE_PASS.has(action);
@@ -154,7 +157,7 @@ export async function POST(req: Request, { params }: Ctx) {
     const data = await res0.clone().json().catch(() => null);
     // A rename the page hadn't shown: the press went ahead; the note goes under the button.
     const res = res0.ok && typeof body.__note === "string" && data && typeof data === "object" ? ok({ ...data, note: body.__note }) : res0;
-    if (res.ok) await logTesterAction(u.id, id, action, body, data);
+    if (res.ok && !data?.already) await logTesterAction(u.id, id, action, body, data); // (§380) a silent no-op did nothing
     if (res.ok && action === "choose") await maybePromptRating(id);
     return res;
   });

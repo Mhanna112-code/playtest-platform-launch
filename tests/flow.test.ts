@@ -137,7 +137,7 @@ describe("top panel stops once", () => {
     expect(r.body.error.message).toBe("Ana Silva's session has ended, so your End early didn't go through."); // (§364 item 4)
     await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true });
     await later();
-    expect((await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: seen() })).body.error.message).toBe("This test was stopped, so your Stop the test didn't go through."); // (§363)
+    expect((await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: seen() })).body.already).toBe(true); // (Owner, Nov 11, §380) already stopped: silent
   });
 });
 

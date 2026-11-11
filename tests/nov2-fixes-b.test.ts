@@ -117,7 +117,8 @@ describe("§119 A: a race's refusal names the admin who actually did it, with th
     expect(src("app/api/admin/[action]/route.ts")).toContain("!RECORDED_INSIDE.has(action)");
   });
 
-  it("a Decline and the tester's Withdraw at once: exactly one happens, and the other is told which", async () => {
+  // (Owner, Nov 11, §380) Both are already what the other wanted: exactly one happens, and the other goes through silently (no refusal).
+  it("a Decline and the tester's Withdraw at once: exactly one happens, the other is silent", async () => {
     for (let i = 0; i < 4; i++) {
       const { dev, testId } = await setup({ joinMode: "apply" });
       const ana = await makeUser({ tester: true, name: "Ana Silva" });
@@ -125,15 +126,10 @@ describe("§119 A: a race's refusal names the admin who actually did it, with th
       const app = await db.application.findFirstOrThrow({ where: { testId, testerId: ana.user.id } });
       await settle();
       const rs = (await Promise.all([act(testId, "application", dev.cookie, { applicationId: app.id, action: "decline", seenAt: seen(), confirmed: true }), act(testId, "withdraw-application", ana.cookie, {})])) as Res[];
-      const [w, lost] = oneWins(rs);
+      expect(rs.map((r) => r.status)).toEqual([200, 200]);
+      expect(rs.filter((r) => r.body.already === true)).toHaveLength(1);
       const now = await db.application.findUniqueOrThrow({ where: { id: app.id } });
-      if (w === 0) {
-        expect(now.status).toBe("declined");
-        expect(lost.body.error!.message).toMatch(/^Nora Lane declined your application at \d{1,2}:\d{2}\s[AP]M\.$/);
-      } else {
-        expect(now.status).toBe("withdrawn"); // never overwritten by the Decline that lost
-        expect(lost.body.error!.message).toBe("Ana Silva withdrew their application.");
-      }
+      expect(now.status).toBe(rs[0].body.already ? "withdrawn" : "declined"); // never overwritten by the silent one
     }
   });
 
@@ -149,7 +145,8 @@ describe("§119 A: a race's refusal names the admin who actually did it, with th
     expect(await db.contract.count({ where: { testId, testerId: ana.user.id } })).toBe(0);
   });
 
-  it("Cancel invite and the tester's No thanks at once: one wins, the invite keeps its status, the other is refused", async () => {
+  // (Owner, Nov 11, §380) Both are already what the other wanted: one wins, the invite keeps its status, the other goes through silently.
+  it("Cancel invite and the tester's No thanks at once: one wins, the invite keeps its status, the other is silent", async () => {
     for (let i = 0; i < 4; i++) {
       const { dev, testId } = await setup({ joinMode: "invite" });
       const ana = await makeUser({ tester: true, name: "Ana Silva" });
@@ -160,11 +157,11 @@ describe("§119 A: a race's refusal names the admin who actually did it, with th
         act(testId, "cancel-invite", dev.cookie, { inviteId: inv.id, seenAt: seen(), confirmed: true }),
         json(await invitePOST(req(`/api/invites/${inv.id}`, { cookie: ana.cookie, body: {} }), { params: Promise.resolve({ id: inv.id }) })),
       ])) as Res[];
-      const [w, lost] = oneWins(rs);
+      expect(rs.map((r) => r.status)).toEqual([200, 200]);
+      expect(rs.filter((r) => r.body.already === true)).toHaveLength(1);
+      const w = rs[0].body.already ? 1 : 0;
       const now = await db.invite.findUniqueOrThrow({ where: { id: inv.id } });
       expect(now.status).toBe(w === 0 ? "cancelled" : "declined");
-      expect(lost.status).toBe(409);
-      if (w === 1) expect(lost.body.error!.message).toBe("This invite was already cancelled.");
     }
   });
 });
