@@ -39,7 +39,7 @@ export function ReportButton({ userId, name, reportedOn, seenAt }: { userId: str
               className="btn-secondary px-3 py-1.5 text-xs"
               disabled={busy}
               onClick={async (e) => {
-                if (!checkFields(e.currentTarget.closest("[data-report-box]"))) return;
+                checkFields(e.currentTarget.closest("[data-report-box]")); // (Owner, Nov 11, §386 C) Pressable with fields still red: the press marks them and still goes (refusals → box → field mistakes; nothing saved while red).
                 setBusy(true);
                 setErr("");
                 try {

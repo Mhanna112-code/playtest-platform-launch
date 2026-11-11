@@ -89,9 +89,10 @@ export function CallRequests(p: {
   // (Batch 35 §132) Less than the lead left before testers' work ends: no time fits, so the form goes and a line says why.
   const shut = useWindowShutLine(p.end, p.leadMinutes);
   // (Batch 27 section 1) The tester's open new-terms offer comes first: the press goes straight to its refusal (the page goes up to Switch / Keep).
-  const send = () =>
-    ((p.side === "tester" && offerShown()) || checkFields(form.current)) &&
-    go(
+  // (Owner, Nov 11, §386 C) Pressable with the form incomplete: the red notes and the server's refusal, box or mistakes together.
+  const send = () => {
+    if (!(p.side === "tester" && offerShown())) checkFields(form.current);
+    return go(
       "request-time",
       {
         rows: filled,
@@ -100,6 +101,7 @@ export function CallRequests(p: {
       },
       "request",
     );
+  };
   return (
     <div className="space-y-2 text-sm">
       {/* (Batch 16 sections 33 and 35) The waiting requests with them, soonest first. (Owner, Nov 4, §185) Split as on the developer's page: "Requests to you (N)"
@@ -143,7 +145,7 @@ export function CallRequests(p: {
             <label className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap">Length <input className="input w-20" inputMode="numeric" placeholder="60" aria-label="Length in minutes" data-min="10" data-max="180" data-whole="" data-msg="A live call lasts from 10 to 180 minutes." data-required="" data-required-msg="Enter the call's length in minutes."
               data-match="length in minutes|live call lasts" value={minutes} onChange={(e) => setMinutes(e.target.value)} {...lockText(sendLocked)} /> min</label>
             <span className="pb-2 text-xs text-slate-500" data-length-hint="">10–180</span>
-            <button className="btn-ghost" disabled={busy || !filled.length || (p.side === "developer" && ticked.length === 0)} onClick={send}>Request a time</button>
+            <button className="btn-ghost" disabled={busy} onClick={send}>Request a time</button>
             {keep.restored && <DraftTag disabled={busy} kind="discard" onUseSaved={() => { setRows([newRow()]); setMinutes(""); }} />}
           </div>
           {box("request")}

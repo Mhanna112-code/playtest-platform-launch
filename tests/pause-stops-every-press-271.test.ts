@@ -53,7 +53,8 @@ async function chargeOpen() {
 }
 
 describe("tester session actions after a pause or lift", () => {
-  it("Let it go goes through on the first press during a team pause", async () => {
+  // (Owner, Nov 11, §386 A) No money moves while the test is paused: Let it go is refused (never a stop box first), then goes through after the lift.
+  it("Let it go is refused during a team pause (§386 A), never stopped once", async () => {
     const w = await chargeOpen();
     await alertsOff(w.tester.user.id);
     const loaded = await loadedNow();
@@ -61,7 +62,7 @@ describe("tester session actions after a pause or lift", () => {
     await later();
     const body = { submissionId: w.sub.id, choice: "letgo", seenAt: loaded };
     const first = (await sact(w.sessionId, "choose", w.tester.cookie, body)) as Res;
-    expect(first.status, JSON.stringify(first.body)).toBe(200);
+    expect(first.body.error?.message, JSON.stringify(first.body)).toBe("This test is paused, so your Let it go didn't go through.");
   });
 
   it("Send is refused while paused and goes through on the first press after the lift", async () => {

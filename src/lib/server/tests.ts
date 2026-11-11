@@ -262,12 +262,22 @@ async function checkPost(dev: U, body: Record<string, unknown>) {
   const now = new Date();
   // (Batch 15 section 32) The press sends the developer's time zone (the account's stored one otherwise): "today" is their date.
   const errs = checkListing(l, 0, now, { openedAt: now, confirmedHigh: confirmedHighOf(body), tz: tzOf(body, dev) });
-  const keys = checkTypedKeys(body.accessKeys);
+  // (Owner, Nov 11, §386 C; refusals → field mistakes) A key typed twice or too long is one of the red mistakes too, said with the others after the refusals.
+  let keys: string[] = [];
+  try {
+    keys = checkTypedKeys(body.accessKeys);
+  } catch (e) {
+    if (!(e instanceof HttpError && e.status === 400)) throw e;
+    errs.push(e.message);
+  }
   if (keys.length && Number.isInteger(l.spots) && keys.length < l.spots) errs.push(keyNeedLine(l.spots, keys.length));
   // (Batch 19 section 7) The required tick about Charge, red at the tick (listed last, with every other mistake).
   if (!payRulesTicked(body)) errs.push(PAY_RULES_TICK_MISSING);
-  if (errs.length) throw new HttpError(400, "bad_listing", errs[0], { errors: errs });
-  return { l, keys };
+  // (§386 C) Thrown by the caller after the refusals (a card, the plan's limits, the name in use): nothing is posted while one remains.
+  const mistakes = () => {
+    if (errs.length) throw new HttpError(400, "bad_listing", errs[0], { errors: errs });
+  };
+  return { l, keys, mistakes };
 }
 
 /** (Batch 8) Posting (or opening a draft): the free plan runs one open test at a time, and Approved-only testers are a subscriber perk. */
@@ -303,7 +313,7 @@ async function requireCardToPost(devId: string) {
 export async function postDraft(dev: U, testId: string, body: Record<string, unknown>) {
   const t0 = await ownTest(dev.id, testId);
   if (t0.status !== "draft") throw new HttpError(409, "not_draft", t0.status === "stopped" ? stoppedPressLine("Post the test") : "This test is already open."); // (§363)
-  const { l, keys } = await checkPost(dev, body);
+  const { l, keys, mistakes } = await checkPost(dev, body);
   await requireCardToPost(dev.id);
   await postPerks(dev.id, l.joinMode, testId);
   return db.$transaction(async (tx) => {
@@ -311,6 +321,7 @@ export async function postDraft(dev: U, testId: string, body: Record<string, unk
     if (t.status !== "draft") throw new HttpError(409, "not_draft", "This test is already open.");
     await (await import("./subscription")).canOpenAnotherLocked(tx, dev.id, testId); // (Owner, Nov 11, §380 N) counted under the account's lock
     await requireUniqueTitle(tx, dev.id, l.title, testId);
+    mistakes(); // (§386 C) the form's own mistakes last
     if (keys.length) await tx.accessKey.createMany({ data: keys.map((value) => ({ testId, value })) });
     // It opens now: the deadline buffer and the dashboard order count from here; (batch 15 section 18) so do the tester days.
     await recordEvent(tx, testId, "opened", "The test opened for testers", true, { ...listingData(l), status: "open", createdAt: new Date(), testerDays: testerDaysFor(l.openUntil, dev) });
@@ -345,12 +356,13 @@ const draftDeletedBy = async (devId: string, testId: string) => !!(await db.acti
 
 export async function createTest(dev: U, body: Record<string, unknown>) {
   // (Batch 31) At most 10 spots; (design doc 4) with access keys, at least as many keys as open spots.
-  const { l, keys } = await checkPost(dev, body);
+  const { l, keys, mistakes } = await checkPost(dev, body);
   await requireCardToPost(dev.id);
   await postPerks(dev.id, l.joinMode);
   return db.$transaction(async (tx) => {
     await (await import("./subscription")).canOpenAnotherLocked(tx, dev.id); // (Owner, Nov 11, §380 N) counted under the account's lock
     await requireUniqueTitle(tx, dev.id, l.title);
+    mistakes(); // (§386 C) the form's own mistakes last
     const t = await tx.test.create({ data: { ...listingData(l), developerId: dev.id, status: "open", testerDays: testerDaysFor(l.openUntil, dev) } });
     if (keys.length) await tx.accessKey.createMany({ data: keys.map((value) => ({ testId: t.id, value })) });
     return t;
@@ -377,7 +389,15 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     if (cur.joinMode !== "apply") await (await import("./subscription")).requirePerk(dev.id, "approved");
   }
   // (Design doc 5) Access keys: the keys added and the free keys removed in this tab (applied on top of the newest keys).
-  const keysAdd = checkTypedKeys(body.keysAdd);
+  // (Owner, Nov 11, §386 C) A key typed twice or too long is a red mistake with the others (errs, below), after the refusals and the box.
+  let keysAdd: string[] = [];
+  let keysAddMistake = "";
+  try {
+    keysAdd = checkTypedKeys(body.keysAdd);
+  } catch (e) {
+    if (!(e instanceof HttpError && e.status === 400)) throw e;
+    keysAddMistake = e.message;
+  }
   const keysRemove = parseKeys(body.keysRemove);
   let termsChanged = false;
   let switchedToAnyone = false;
@@ -448,6 +468,7 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     const plan = await planKeyChange(tx, testId, keysAdd, keysRemove, next.spots);
     const keyErrs = [...plan.errors, ...(plan.need ? [plan.need] : [])];
     if (!ndaOnly) errs.push(...keyErrs);
+    if (!ndaOnly && keysAddMistake) errs.push(keysAddMistake); // (§386 C)
     // (Batch 19 section 7) Every Save needs the tick about Charge (the page shows it while Save is enabled), red at the tick.
     if (!ndaOnly && !payRulesTicked(body)) errs.push(PAY_RULES_TICK_MISSING);
     const keysChanged = plan.toAdd.length > 0 || plan.removable.length > 0 || plan.toReuse.length > 0;
@@ -851,9 +872,13 @@ export async function tellCancelled(list: { email: string; startsAt: Date; contr
 export async function stopTest(dev: U, testId: string, body: Record<string, unknown>) {
   await ownTest(dev.id, testId);
   // (Batch 17 §15) A required "Why?" like End early's: at least one character, at most 10,000, refused beyond (never cut). Testers read it (also when paused or restricted).
-  const reason = readText(body.reason, LIMITS.stopReason, "bad_reason");
-  if (!reason) throw new HttpError(400, "bad_reason", "Say why you're stopping the test (testers read it).");
-  if (reason.length < WHY_MIN_CHARS) throw new HttpError(400, "bad_reason", WHY_TOO_SHORT); // (batch 20 section 27)
+  // (Owner, Nov 11, §386 C; refusals → box → field mistakes) Checked after "already stopped" and the stop-once box (below); nothing is stopped while it's red.
+  const reason = typeof body.reason === "string" ? body.reason.trim() : "";
+  const reasonMistake = () => {
+    readText(reason, LIMITS.stopReason, "bad_reason");
+    if (!reason) throw new HttpError(400, "bad_reason", "Say why you're stopping the test (testers read it).");
+    if (reason.length < WHY_MIN_CHARS) throw new HttpError(400, "bad_reason", WHY_TOO_SHORT); // (batch 20 section 27)
+  };
   let cancelled: Awaited<ReturnType<typeof cancelCallsAhead>> = [];
   let invitesClosed: string[] = [];
   const contracts = await db.$transaction(async (tx) => {
@@ -862,6 +887,7 @@ export async function stopTest(dev: U, testId: string, body: Record<string, unkn
     if (t.status === "stopped") return null;
     // (Owner, Oct 29, batch 29 section 11; replaces batch 15 sections 23, 29 and 37) While the test is paused (any cause) Stop follows the same stop-once rules.
     await topPanelGate(tx, testId, body, {}, [], undefined, { acts: ["stop"], keys: ["test"] });
+    reasonMistake(); // (§386 C) after the box
     const cs = await tx.contract.findMany({ where: working(testId), include: { tester: true, test: { select: { title: true } } } });
     // (Batch 17 §15) The reason is each ended contract's endReason, and an entry in each tester's contract changes (the marker that it's the developer's own reason).
     await tx.contract.updateMany({ where: working(testId), data: { status: "ended", endKind: "stopped", endedAt: new Date(), endReason: reason } });
@@ -897,11 +923,16 @@ export async function stopTest(dev: U, testId: string, body: Record<string, unkn
 export async function endEarly(dev: U, testId: string, body: Record<string, unknown>) {
   await ownTest(dev.id, testId);
   // (Owner, Oct 30, batch 15 section 22) Required (at least one character), at most 10,000, refused beyond (never cut).
-  const reason = readText(body.reason, LIMITS.endEarlyReason, "bad_reason");
-  if (!reason) throw new HttpError(400, "bad_reason", "Say why you're ending their work (they read it).");
-  if (reason.length < WHY_MIN_CHARS) throw new HttpError(400, "bad_reason", WHY_TOO_SHORT); // (batch 20 section 27)
+  // (Owner, Nov 11, §386 C; refusals → box → field mistakes) The reason and the ticks are checked after "stopped" and the stop-once box (below); nothing ends
+  // while one is red.
+  const reason = typeof body.reason === "string" ? body.reason.trim() : "";
   const ids = [...new Set((Array.isArray(body.contractIds) ? body.contractIds : [body.contractId]).map((x) => String(x ?? "")).filter(Boolean))];
-  if (!ids.length) throw new HttpError(400, "none", "Tick at least one tester.");
+  const fieldMistakes = () => {
+    if (!ids.length) throw new HttpError(400, "none", "Tick at least one tester.");
+    readText(reason, LIMITS.endEarlyReason, "bad_reason");
+    if (!reason) throw new HttpError(400, "bad_reason", "Say why you're ending their work (they read it).");
+    if (reason.length < WHY_MIN_CHARS) throw new HttpError(400, "bad_reason", WHY_TOO_SHORT); // (batch 20 section 27)
+  };
   let cancelled: Awaited<ReturnType<typeof cancelCallsAhead>> = [];
   const ended = await db.$transaction(async (tx) => {
     const lockedTest = await lockTest(tx, testId);
@@ -922,8 +953,8 @@ export async function endEarly(dev: U, testId: string, body: Record<string, unkn
       if (c.status !== "working") { gone.push({ id, name }); continue; }
       list.push(c);
     }
-    // (§380 I) Nobody ticked is still working (and none ended in another tab since the page loaded): silent.
-    if (!list.length && !endedElsewhere.length) return list;
+    // (§380 I) Nobody ticked is still working (and none ended in another tab since the page loaded): silent. (§386 C) Nobody ticked at all is the ticks' mistake.
+    if (!list.length && !endedElsewhere.length && ids.length) return list;
     const goneIds = new Set(gone.map((g) => g.id));
     // (§278) A gone tester's own leaving line is what their refusal line says: it doesn't stop the press for the others.
     const notTheirLeaving = goneIds.size ? (e: TestEventLike & { contractId?: string | null }) => !(e.kind === "left" && !!e.contractId && goneIds.has(e.contractId)) : undefined;
@@ -931,6 +962,7 @@ export async function endEarly(dev: U, testId: string, body: Record<string, unkn
     // section 21: ended the ticked testers early, paid their work, or requested, booked or cancelled a call with them; batch 29: any of BIG_OWN_ACTS).
     // (§278) The press is about the ticked testers still in it (and those ended in another tab, as before).
     await topPanelGate(tx, testId, body, {}, [], notTheirLeaving, { acts: ["end-early", ...PAY_ACTS, ...CALL_ACTS], keys: ids.filter((id) => !goneIds.has(id)).map((id) => `c:${id}`) });
+    fieldMistakes(); // (§386 C) after the box
     if (!list.length) return list; // (§380 I) ended in another tab (that stopped once above): silent now
     for (const c of list) {
       await tx.contract.update({ where: { id: c.id }, data: { status: "ended", endKind: "early", endedAt: new Date(), endReason: reason } });

@@ -316,8 +316,8 @@ export async function testerRate(tester: { id: string; name: string; email: stri
   const c0 = await ownContract(tester.id, contractId);
   const state = await testerRateState(contractId);
   if (state.kind !== "open") refuse(state, `You already rated ${displayName(c0.test.developer)}.`, { gone: RF.STOPPED_CAUSE, own: RF.ACCOUNT_PAUSED_CAUSE }); // (batch 29 section 13) a Rate made in another tab: a plain refusal
-  const r = readRating(body);
   await testerRateGate(tester.id, contractId, c0.testId, body);
+  const r = readRating(body); // (Owner, Nov 11, §386 C) the stars and the comment after the refusals and the box
   await db.$transaction(async (tx) => {
     await lockTest(tx, c0.testId);
     await assertRatingAccounts(tx, tester.id, c0.test.developerId, RF.stoppedPressLine("Rate"));
@@ -351,8 +351,8 @@ export async function devRate(dev: { id: string; name: string; email: string }, 
   if (!c0 || c0.testId !== testId) throw new HttpError(404, "not_found", "Choose a tester.");
   const state = (await devRateStates([contractId])).get(contractId)!;
   if (state.kind !== "open") refuse(state, `You already rated ${displayName(c0.tester)}.`, { gone: RF.sessionEndedCause(displayName(c0.tester)), own: dev0Cause(await db.user.findUniqueOrThrow({ where: { id: dev.id }, select: { devSuspendedAt: true } })) });
-  const r = readRating(body);
   await devRateGate(testId, contractId, body, dev.id);
+  const r = readRating(body); // (Owner, Nov 11, §386 C) the stars and the comment after the refusals and the box
   const now = new Date();
   await db.$transaction(async (tx) => {
     await lockTest(tx, testId);

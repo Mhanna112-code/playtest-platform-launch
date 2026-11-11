@@ -24,10 +24,11 @@ export async function reportPerson(me: { id: string }, body: Record<string, unkn
   // stays (a pair is reported once, ever).
   if (had && Date.now() - had.createdAt.getTime() < REPORT_AGAIN_SILENT_MS) return { reported: true, already: true, at: had.createdAt.toISOString() };
   if (had) throw new HttpError(409, "already", `You already reported ${displayName(other)} on ${fmtDate(had.createdAt)}.`);
-  if (note.length < REPORT_NOTE_MIN) throw new HttpError(400, "bad_note", "Say what happened (the team reads it).");
   // (Owner, Nov 5, §271) A tester reporting a developer whose test she works on: a pause of that test since the profile loaded (or the team's lift) stops it once.
   const m = await import("./stopMoment");
   m.pauseStopOnce(await m.testerPauseMomentsWith(me.id, otherId, body), body);
+  // (Owner, Nov 11, §386 C; refusals → box → field mistakes) The note after the box; nothing is reported while it's red.
+  if (note.length < REPORT_NOTE_MIN) throw new HttpError(400, "bad_note", "Say what happened (the team reads it).");
   const r = await db.report.create({ data: { reporterId: me.id, reportedId: otherId, note } }).catch(() => null);
   if (!r) {
     // (§380 M) The other Report of the same moment made it: silent.

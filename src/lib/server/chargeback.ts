@@ -559,7 +559,7 @@ export const approvedNewHoldLine = (cents: number) => `${APPROVED_LINE}${cents ?
 export const approvedStillSuspendedLine = (cents: number) => `${APPROVED_LINE}${cents ? `: the ${money(cents)} reserved on your card was taken` : ""}. Your tests stay paused while your account is suspended.`;
 
 /** (Batch 23 section 6) The team doesn't approve (yet): every reservation is cancelled (nothing taken) and the hold stays. */
-export async function declineChargebackReserve(devId: string, note = "", adminId: string | null = null, seen: import("./adminRace").AdminSeen | null = null) {
+export async function declineChargebackReserve(devId: string, note = "", adminId: string | null = null, seen: import("./adminRace").AdminSeen | null = null, /** (Owner, Nov 11, §386 C) The admin note's own mistakes, checked after the refusals and the box (refusals → box → field mistakes). */ check?: () => void) {
   const u = await db.user.findUnique({ where: { id: devId } });
   const race = await import("./adminRace");
   const p = race.presserOf(adminId, seen);
@@ -567,12 +567,16 @@ export async function declineChargebackReserve(devId: string, note = "", adminId
   if (!u?.holdStartedAt || u.holdReason !== "chargeback") throw await approvedRefusal(devId, new HttpError(409, "no_chargeback_hold", "That account isn't on a chargeback hold."), p);
   if (u.chargebackApprovedAt) throw await approvedRefusal(devId, new HttpError(409, "already", "That hold was already approved."), p);
   const from = race.checkFrom(seen);
-  if (from && adminId && (await reserveState(devId)).active.length) race.stopIfChanged("Don't approve: release the reservation", await race.holdChangesSince(devId, adminId, from, seen?.tab));
-  const cents = await releaseReservations(devId);
-  if (!cents) {
+  const active = (await reserveState(devId)).active.length;
+  if (from && adminId && active) race.stopIfChanged("Don't approve: release the reservation", await race.holdChangesSince(devId, adminId, from, seen?.tab));
+  const nothing = async () => {
     const released = await releasedBy(devId, adminId, seen?.since ?? null, seen?.tab);
-    throw new HttpError(409, "nothing_reserved", released ? `Nothing is reserved on that account (${released}).` : "Nothing is reserved on that account.");
-  }
+    return new HttpError(409, "nothing_reserved", released ? `Nothing is reserved on that account (${released}).` : "Nothing is reserved on that account.");
+  };
+  if (!active) throw await nothing(); // (§386 C) before the note's own mistakes
+  check?.();
+  const cents = await releaseReservations(devId);
+  if (!cents) throw await nothing();
   // (Owner, Nov 5, §201) The team's note is in the bell line too (it was only in the email).
   const line = notApprovedLine(cents) + (await import("./holds")).theirNote(note);
   await notify(u.email, line, [line], "/app/payments#chargeback-steps", { side: "developer", payment: true, group: "admindecision" });

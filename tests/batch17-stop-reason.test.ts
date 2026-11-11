@@ -118,14 +118,14 @@ describe("what testers read (section 15)", () => {
 });
 
 describe("the developer's Stop pop-up (section 15)", () => {
-  it("a required Why? like End early's (the same box): N / 10,000, and Stop disabled with “Say why first” until it has text", () => {
+  it("a required Why? like End early's (the same box): N / 10,000; (§386 C) Stop stays pressable with “Say why first” (red and still goes)", () => {
     const top = src("app/app/tests/[id]/TopPanel.tsx");
     expect(top).toContain('<WhyBox id="stop-reason" label="Why? (testers read it)"');
     expect(top).toContain('requiredMsg="Say why you\'re stopping the test (testers read it)."'); // the server's own line
     expect(src("lib/server/tests.ts")).toContain("\"Say why you're stopping the test (testers read it).\"");
     expect(top).toContain("max={LIMITS.stopReason}");
-    expect(top).toContain('confirmDisabled={busy || !stopReady} confirmHint={!stopReason.trim() ? "Say why first" : undefined}');
-    expect(top).toContain('go("stop", { reason: stopReason })');
+    expect(top).toContain('confirmDisabled={busy} confirmHint={!stopReady && !stopReason.trim() ? "Say why first" : undefined}');
+    expect(top).toContain('void go("stop", { reason: stopReason })');
     expect(top).toContain('<WhyBox id="reason" label="Why? (each tester you tick reads it)"'); // End early uses the same box
     const why = src("components/WhyBox.tsx");
     expect(why).toContain('<CharacterCount value={value} min={WHY_MIN_CHARS} max={max} required');

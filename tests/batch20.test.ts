@@ -1014,8 +1014,10 @@ describe("batch 20 section 27: End early's and Stop's reason need at least 10 ch
     expect((await st("Over")).body.error.message).toBe("Say a little more: at least 10 characters.");
     expect((await st("Over now..")).status).toBe(200);
     expect(src("components/WhyBox.tsx")).toContain("data-min-chars={String(WHY_MIN_CHARS)} data-msg={WHY_TOO_SHORT}");
-    // (§278) The button counts only ticks still in the list (`chosenIds`), not hidden stale ones.
-    expect(src("app/app/tests/[id]/TopPanel.tsx")).toContain("disabled={busy || reason.trim().length < WHY_MIN_CHARS || !chosenIds.length");
+    // (§278) The button counts only ticks still in the list (`chosenIds`), not hidden stale ones. (Owner, Nov 11, §386 C) Pressable with the reason or the ticks
+    // missing: the red notes and the server's answer together.
+    expect(src("app/app/tests/[id]/TopPanel.tsx")).toContain('disabled={busy} confirmLabel="End their work now"');
+    expect(src("app/app/tests/[id]/TopPanel.tsx")).toContain("&& chosenIds.length > 0;");
   });
 });
 

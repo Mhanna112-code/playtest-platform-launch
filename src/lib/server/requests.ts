@@ -107,6 +107,15 @@ const onceTimes = (r: { rows?: unknown; times: Date[]; startsAt: Date; weeks: nu
 const overlaps = (a: Date, am: number, b: Date, bm: number) => a.getTime() < b.getTime() + bm * 60_000 && b.getTime() < a.getTime() + am * 60_000;
 
 /** Read the request's kind and times from the form: times[] (1–3, choose one) or startsAt + weeks (2–8, weekly). */
+/** (Owner, Nov 11, §386 C) A form read now whose own mistake (a 400) is said later, after the refusals and the box. */
+function readForm<T>(read: () => T): { value: T | null; mistake: HttpError | null } {
+  try {
+    return { value: read(), mistake: null };
+  } catch (e) {
+    if (e instanceof HttpError && e.status === 400) return { value: null, mistake: e };
+    throw e;
+  }
+}
 /** (NEWEST+8) The length the requester typed (minutes); API callers without one get 30. */
 function readMinutes(body: Record<string, unknown>) {
   if (body.minutes === undefined || body.minutes === null) return 30;
@@ -592,11 +601,14 @@ function limitText(list: Limited[], order: Room["kind"][], short = false) {
  */
 export async function devRequestTime(dev: U, testId: string, body: Record<string, unknown>) {
   const ids = Array.isArray(body.contractIds) ? body.contractIds.map(String) : body.contractId ? [String(body.contractId)] : [];
-  if (!ids.length) throw new HttpError(400, "none", "Tick at least one tester.");
   // (Batch 35 §132) Every time inside the call window: at least the lead ahead, and no later than when testers' work on this test ends.
   const end = await workEndOf(db, testId, dev.id);
-  const kind = readKind(body, end);
-  const reqMinutes = readMinutes(body);
+  // (Owner, Nov 11, §386 C; refusals → box → field mistakes) The form's own mistakes (no tester ticked, a time, a length) are read here but said after the ticked
+  // testers' refusals and the stop-once box; the refusals that need the times (limits, clashes) wait until the form is right.
+  const form = readForm(() => {
+    if (!ids.length) throw new HttpError(400, "none", "Tick at least one tester.");
+    return { kind: readKind(body, end), reqMinutes: readMinutes(body) };
+  });
   const all: Ctx[] = [];
   // (Owner, Nov 5, §278) Ticked testers whose session already ended (left, ended, rated…), when others are still in: a refusal line each, and the press goes on
   // for the others by the ordinary rules. Every ticked one out: the refusal as before.
@@ -608,10 +620,22 @@ export async function devRequestTime(dev: U, testId: string, body: Record<string
     await refusals(x.c, "developer", "Request a time");
     all.push(x);
   }
-  if (!all.length) await refusals(out[0].c, "developer", "Request a time");
+  if (!all.length && out.length) await refusals(out[0].c, "developer", "Request a time");
   // (Owner, Nov 11, §380 H) A tester whose session ended by the developer's own block: "You blocked Ana Silva, so your Request a time didn't go through."
   const own = new Set((await db.block.findMany({ where: { blockerId: dev.id, blockedId: { in: out.map((x) => x.c.testerId) } }, select: { blockedId: true } })).map((b) => b.blockedId));
   const gone = out.map((x) => ({ contractId: x.c.id, text: own.has(x.c.testerId) ? RF.pressRefused(RF.ownBlockCause(displayName(x.c.tester)), "Request a time") : requestTesterGoneLine(displayName(x.c.tester)) }));
+  // (Batch 16 section 21) Another tab's call action with any of these testers stops it once.
+  // (§278) The press is about the ticked testers still in; a gone one's own leaving line is what their refusal line says (it doesn't stop the others' press).
+  const outIds = new Set(out.map((x) => x.c.id));
+  const gate = async () => {
+    await db.$transaction((tx) => devGate(tx, testId, body, gone.length ? { gone } : {}, [], outIds.size ? (e: TestEventLike & { contractId?: string | null }) => !(e.kind === "left" && !!e.contractId && outIds.has(e.contractId)) : undefined, { acts: CALL_ACTS, keys: all.map((x) => `c:${x.c.id}`) }));
+  };
+  // (§386 C) The form's own mistakes: after the refusals above and the box.
+  if (form.mistake) {
+    await gate();
+    throw form.mistake;
+  }
+  const { kind, reqMinutes } = form.value!;
   // (Batch 16 section 21) A time of this press already requested with them (e.g. in another tab meanwhile): already done, said plainly after the gate.
   const starts = kind.rows.map((r) => r.startsAt);
   const sameAgain = async (contractId: string) => !!(await db.callRequest.findFirst({ where: { contractId, fromSide: "developer", status: "pending", startsAt: { in: starts } } }));
@@ -666,10 +690,7 @@ export async function devRequestTime(dev: U, testId: string, body: Record<string
     const own = await ownCallClash("developer", dev, all.map((x) => x.c.id), kind.rows, reqMinutes, end);
     if (own) throw new HttpError(409, "clash", own);
   }
-  // (Batch 16 section 21) Another tab's call action with any of these testers stops it once.
-  // (§278) The press is about the ticked testers still in; a gone one's own leaving line is what their refusal line says (it doesn't stop the others' press).
-  const outIds = new Set(out.map((x) => x.c.id));
-  await db.$transaction((tx) => devGate(tx, testId, body, gone.length ? { gone } : {}, [], outIds.size ? (e: TestEventLike & { contractId?: string | null }) => !(e.kind === "left" && !!e.contractId && outIds.has(e.contractId)) : undefined, { acts: CALL_ACTS, keys: all.map((x) => `c:${x.c.id}`) }));
+  await gate();
   // (Batch 16 section 21) The same time again (e.g. requested in another tab meanwhile): already done, said plainly; the request shows in the panel.
   const again: string[] = [];
   for (const { c } of all) if (await sameAgain(c.id)) again.push(displayName(c.tester));
@@ -779,13 +800,20 @@ export async function testerRequestTime(user: U, contractId: string, body: Recor
   await answerTermsFirst(contractId);
   // (Batch 35 §132) Every time inside the call window: at least the lead ahead, and no later than when testers' work on this test ends.
   const end = await workEndOf(db, c.testId);
-  const kind = readKind(body, end);
+  // (Owner, Nov 11, §386 C; refusals → box → field mistakes) The form's own mistakes (a time, a length) are said after the refusals and the stop-once box; the
+  // refusals that need the times (the limits, clashes) wait until the form is right.
+  const form = readForm(() => ({ kind: readKind(body, end), minutes: readMinutes(body) }));
+  if (form.mistake) {
+    await testerGate(c.testerId, contractId, c.testId, body, undefined, CALL_PRESS);
+    throw form.mistake;
+  }
+  const kind = form.value!.kind;
   const devName = displayName(c.test.developer);
   const n = kind.rows.length;
   // (Owner, Nov 4, §185) Over the limits with the developer (3 in total, both sides; 3 sent today): refused on the first press, never a stop first (a row that only
   // auto-matches the developer's own request at that time books it, which adds nothing to the total). The form's own mistakes (the length, red at its box) come
   // first, now before the gate as on the developer's side. (§208) Each row is a request: the press is refused as a whole, saying how many more can go.
-  const minutes = readMinutes(body);
+  const minutes = form.value!.minutes;
   const limitNow = async (matches: number) => roomLine(devName, { sent: await sentToday(contractId, "tester", x.me.timeZone), taken: await callsTaken(contractId) }, n, n - matches);
   {
     const line = await limitNow((await autoMatches(contractId, "developer", kind.rows, minutes)).size);

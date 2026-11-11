@@ -21,9 +21,10 @@ export function ContactForm({ topics }: { topics: readonly string[] }) {
     <form
       className="card space-y-4"
       noValidate
+      data-red-and-blue=""
       onSubmit={async (e) => {
         e.preventDefault();
-        if (!checkFields(e.currentTarget)) return;
+        checkFields(e.currentTarget); // (Owner, Nov 11, §386 C) Pressable with fields still red: the press marks them and still goes (refusals → box → field mistakes; nothing saved while red).
         setBusy(true);
         setErr("");
         try {

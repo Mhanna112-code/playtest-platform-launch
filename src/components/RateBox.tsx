@@ -32,7 +32,7 @@ export function RateBox(p: { path: string; seenAt: string; name: string; body?: 
   // (Owner, Nov 5, §261) While Rate is going through (and its draft is cleared), the note is read-only.
   const going = useSending();
   const send = async () => {
-    if (!checkFields(box.current)) return;
+    checkFields(box.current); // (Owner, Nov 11, §386 C) Pressable with fields still red: the press marks them and still goes (refusals → box → field mistakes; nothing saved while red).
     await going.run(async () => {
       const r = await press(p.path, { ...(p.body ?? {}), stars: stars ? Number(stars) : null, comment });
       if (r) {

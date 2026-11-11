@@ -166,9 +166,9 @@ export function TopPanel(p: { timeZone?: string | null; joinClosedLine?: string;
               {/* Stop the test: the full app's "Are you sure?" pop-up first; the stop-once box shows right under it. */}
               {/* (Batch 17 §15) The pop-up's "Why?" is required (also paused or restricted): its Stop stays disabled with "Say why first" until it has text. */}
               {!stopped && !p.workEnded && <ConfirmButton live className="btn-secondary px-3 py-1.5 text-sm text-rose-200" disabled={busy} before={() => { if (at !== "stop") clear(); return true; }} title={`Are you sure you want to stop “${p.title}”?`} confirmLabel="Stop the test"
-                confirmDisabled={busy || !stopReady} confirmHint={!stopReason.trim() ? "Say why first" : undefined}
+                confirmDisabled={busy} confirmHint={!stopReady && !stopReason.trim() ? "Say why first" : undefined}
                 body={(
-                  <div className="space-y-2">
+                  <div className="space-y-2" data-stop-why="">
                     <p>{p.working.length ? <>The work of <strong className="text-white">{p.working.length === 1 ? "1 tester" : `${p.working.length} testers`}</strong> ends now.</> : "Nobody is working on it right now."}</p>
                     {p.working.length > 0 && (
                       <ul className="list-disc space-y-1 pl-5">
@@ -186,7 +186,7 @@ export function TopPanel(p: { timeZone?: string | null; joinClosedLine?: string;
                     <p className="font-medium text-white">This can&apos;t be undone.</p>
                   </div>
                 )}
-                onConfirm={() => go("stop", { reason: stopReason })}>
+                onConfirm={() => { checkFields(document.querySelector("[data-stop-why]") as HTMLElement | null); /* (§386 C) red and still goes */ void go("stop", { reason: stopReason }); }}>
                 <OctagonX className="h-4 w-4" /> Stop the test
               </ConfirmButton>}
               {box("next-round")}
@@ -234,11 +234,15 @@ export function TopPanel(p: { timeZone?: string | null; joinClosedLine?: string;
             <p className="note">Their work ends now. What they already sent still waits for you to pay; calls ahead are cancelled.</p>
             <div>
               {(!reason.trim() || !chosenIds.length) && <p className="text-xs text-slate-400" data-say-why="">{!chosenIds.length ? "Tick at least one tester first" : "Say why first"}</p>}
-              <ConfirmButton live className="btn-secondary px-3 py-1.5 text-sm text-rose-200" disabled={busy || reason.trim().length < WHY_MIN_CHARS || !chosenIds.length || reason.length > LIMITS.endEarlyReason} confirmLabel="End their work now"
+              <ConfirmButton live className="btn-secondary px-3 py-1.5 text-sm text-rose-200" disabled={busy} confirmLabel="End their work now"
                 title={`End the work of ${chosen.length === 1 ? chosen[0].name : `${chosen.length} testers`} now?`}
                 before={() => {
-                  if (!chosenIds.length) { setNoTick(true); return false; }
-                  return checkFields(document.querySelector("[data-end-early]") as HTMLElement | null);
+                  // (Owner, Nov 11, §386 C) Pressable with the ticks or the reason missing: the red notes AND the server's answer (a refusal, the box, or the
+                  // mistakes), with no pop-up; nothing ends while one is red.
+                  if (!chosenIds.length) setNoTick(true);
+                  const fine = checkFields(document.querySelector("[data-end-early]") as HTMLElement | null) && chosenIds.length > 0;
+                  if (!fine) void go("end-early", { contractIds: chosenIds, reason });
+                  return fine;
                 }}
                 body={(
                   <div className="space-y-2">

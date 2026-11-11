@@ -700,7 +700,7 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
   const redLine = (t: string) => (t ? <p className="err-field mt-1" role="alert">{t}</p> : null);
 
   return (
-    <form ref={formRef} className="space-y-4" onSubmit={submit} {...(edit ? { "data-red-and-blue": "" } : {})} noValidate>
+    <form ref={formRef} className="space-y-4" onSubmit={submit} data-red-and-blue="" /* (§386 C) Post too: the refusals, then the red mistakes */ noValidate>
       {fromDraft && (
         <p className="info text-sm" data-from-draft="">
           {DRAFT_START_LINE(keep.restoredAt ? fmtDateTime(keep.restoredAt) : "")}

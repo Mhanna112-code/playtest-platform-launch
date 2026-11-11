@@ -83,7 +83,9 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0] & { hold
   const tickedCents = typeof body.tickedCents === "number" ? body.tickedCents : null;
   // (Batch 9) The optional note on every Pay (required below the listing): the same field as the reason.
   // (Batch 15 section 20) The note (required below the listing and at $0): at most 1,000 characters, refused at the box, never cut.
-  const reason = readText(typeof body.reason === "string" ? body.reason : body.note, LIMITS.reason, "bad_reason");
+  // (Owner, Nov 11, §386 C) Its length is checked with the amount, after the refusals and the box (was before even the hold).
+  const reasonRaw = typeof body.reason === "string" ? body.reason : body.note;
+  const reason = typeof reasonRaw === "string" ? reasonRaw.trim() : "";
   const over200 = body.over200 === true || body.understood === true;
   // (Batch 9) A call's Pay: the rate typed ($/h), when one was. (Batch 15 section 40) Rate and Amount fill each other; the one typed last wins and the other is recomputed here.
   let rateCents = body.rate === undefined || body.rate === null || body.rate === "" ? null : toCents(body.rate);
@@ -150,6 +152,7 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0] & { hold
     // (§380 D2) The safety net: the form's own mistakes (red at the field); nothing is reserved or charged.
     // (Owner, Nov 11: refusals → box → form mistakes) The amount checks all come after the box: the unlisted call's $200 an hour and over what's left (§163) too.
     {
+      readText(reason, LIMITS.reason, "bad_reason"); // (§386 C) the note's length: "Keep it to 1,000 characters."
       const check = checkPay(amountCents, piece.listing, reason, tickedCents, over200);
       if (!check.ok) throw new HttpError(400, "bad_amount", check.message);
       if (piece.kind === "call" && rateCents != null && rateCents < 0) throw new HttpError(400, "bad_rate", "Enter a rate like 30.00.");
@@ -779,7 +782,8 @@ export async function payExtra(dev: U & Parameters<typeof cardRefusal>[0], testI
   }
   if (!testerPayable(c.tester)) throw new HttpError(409, "unavailable", "This payment isn't available.");
   const amount = toCents(body.amount);
-  const note = readText(body.note, LIMITS.reason, "bad_note");
+  // (Owner, Nov 11, §386 C) The note's length is checked after the box (below; the $0 close checks it after its own box).
+  const note = typeof body.note === "string" ? body.note.trim() : "";
   // (Batch 30 §2) $0 answers an updated version the tester sent after it was paid: it closes that Needs you row (an optional note), charging nothing.
   if (amount === 0 && piece.kind === "submission") return closeUpdateAtZero(dev, c, piece.where.submissionId!, note, body);
   // (Owner, Nov 11, §380 D2) The amount's own mistakes are the safety net after the stop-once box (below, under the lock): Pay more is pressable with them.
@@ -813,6 +817,7 @@ export async function payExtra(dev: U & Parameters<typeof cardRefusal>[0], testI
     await devGate(tx, testId, body, {}, [], undefined, morePress);
     // (§380 D2) The safety net: the amount's own mistakes, red at the field; nothing is reserved or charged.
     if (!check.ok) throw new HttpError(400, "bad_amount", check.message);
+    readText(note, LIMITS.reason, "bad_note"); // (§386 C) the note's length, after the box
     // (Owner, Nov 11: refusals → box → form mistakes; replaces §163's "refused on the first press, never after a stop") More than what's left is an amount
     // mistake too: after the box.
     if (amount != null && amount > room.roomCents) throw new HttpError(400, "over_cap", overRoomLine(piece, room));
@@ -874,6 +879,7 @@ async function closeUpdateAtZero(dev: U, c: { id: string; testId: string; tester
       throw new HttpError(400, "bad_amount", "Enter an amount like 7.50.");
     }
     await devGate(tx, c.testId, body, {}, [], undefined, payPressOf(c.id, { submissionId }));
+    readText(note, LIMITS.reason, "bad_note"); // (§386 C) the note's length, after the box
     const now = new Date();
     await tx.submission.update({ where: { id: s.id }, data: { paidUpdateDoneAt: now, paidUpdateZeroAt: now, paidUpdateNote: note } });
     await recordEvent(tx, c.testId, "paid", `You paid ${name} $0 more for the updated ${label}`, false, {}, c.id);

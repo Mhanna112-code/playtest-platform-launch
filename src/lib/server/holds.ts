@@ -529,7 +529,7 @@ export const approvedWaitingLine = () => "The team approved lifting your hold: i
 /** (Owner, Nov 5, §201) The team's note on its own decision, IN the bell line: " Their note: “Thanks for paying quickly.”" (nothing without a note). */
 export const theirNote = (note: string) => (note ? ` Their note: “${note}”` : "");
 /** Admin: approve lifting a payment hold (the 4th hold onward). First press wins. The hold lifts once everything owed is paid. */
-export async function approveHoldLift(adminId: string, devId: string, note: string, seen: import("./adminRace").AdminSeen | null = null) {
+export async function approveHoldLift(adminId: string, devId: string, note: string, seen: import("./adminRace").AdminSeen | null = null, /** (Owner, Nov 11, §386 C) The admin note's own mistakes, checked after the refusals and the box (refusals → box → field mistakes). */ check?: () => void) {
   const dev = await db.user.findUnique({ where: { id: devId } });
   if (!dev?.holdStartedAt || dev.holdReason === "chargeback" || dev.holdCount <= HOLD_APPROVAL_AFTER) {
     // (Batch 34 §1) Approved by another admin and lifted since (the hold no longer says so): the approval on record names them.
@@ -560,6 +560,7 @@ export async function approveHoldLift(adminId: string, devId: string, note: stri
   // (Owner, Oct 30, batch 34 §1) Another admin suspended (or reinstated) this developer since the page loaded: the Approve stops once; the second press goes ahead.
   const from = race.checkFrom(seen);
   if (from) race.stopIfChanged("Approve", await race.accountChangesSince(devId, adminId, from, ["suspended", "reinstated"], seen?.tab));
+  check?.();
   // (Nov 2, §119) The claim and its account-history record (who, when) commit together.
   const claimed = await db.$transaction(async (tx) => {
     const at = new Date();

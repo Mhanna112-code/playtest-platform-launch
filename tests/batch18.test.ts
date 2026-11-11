@@ -333,8 +333,9 @@ describe("S) price caps and the $200 ticks", () => {
     const refused = await json(await testsPOST(req("/api/tests", { cookie: dev.cookie, body: listingBody({ writtenCents: "500.00" }) })));
     expect(refused.status).toBe(400);
     expect(refused.body.error.message).toMatch(/^Tick “I confirm this part pays more than \$200\.”/);
-    expect((await json(await testsPOST(req("/api/tests", { cookie: dev.cookie, body: { ...listingBody({ writtenCents: "500.00" }), confirmHigh: ["written"] } })))).status).toBe(200);
+    // (Owner, Nov 11, §386 C) The form's own mistakes come after the refusals (the free plan's one open test): $500.01 is checked before the first test is open.
     expect((await json(await testsPOST(req("/api/tests", { cookie: dev.cookie, body: { ...listingBody({ writtenCents: "500.01" }), confirmHigh: ["written"] } })))).status).toBe(400);
+    expect((await json(await testsPOST(req("/api/tests", { cookie: dev.cookie, body: { ...listingBody({ writtenCents: "500.00" }), confirmHigh: ["written"] } })))).status).toBe(200);
     const form = src("app/app/tests/TestForm.tsx");
     expect(form).toContain('max: "500"');
     expect(form).toContain('max: "200"');

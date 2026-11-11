@@ -235,8 +235,8 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
             <span className="pb-2 text-xs text-slate-500" data-length-hint="">10–180</span>
             <button
               className="btn"
-              disabled={busy || !filled.length || tickedIds.length === 0}
-              onClick={() => checkFields(form.current) && request({ contractIds: tickedIds, minutes: minutes.trim() ? minutes.trim() : "", rows: filled, ...(limitSeen ? { limitSeen } : {}) /* (§350) */ })}
+              disabled={busy} /* (§386 C) pressable with the form incomplete: the red notes and the server's answer together */
+              onClick={() => { checkFields(form.current); void request({ contractIds: tickedIds, minutes: minutes.trim() ? minutes.trim() : "", rows: filled, ...(limitSeen ? { limitSeen } : {}) /* (§350) */ }); }}
             >
               Request a time
             </button>

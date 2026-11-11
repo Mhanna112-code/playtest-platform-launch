@@ -21,17 +21,19 @@ export async function POST(req: Request) {
     const u = await requireUser(req);
     const body = await readJson(req, 250_000);
     const topic = typeof body.topic === "string" && TOPICS.includes(body.topic) ? body.topic : "";
-    // (Owner, Oct 30, batch 15 section 21) Up to 20,000 characters ((Owner, Nov 4, §186) was 50,000), refused (never cut) beyond.
-    const message = readText(body.message, LIMITS.contact.max, "bad_message");
-    if (!topic) throw new HttpError(400, "bad_topic", "Choose what it's about.");
-    if (message.length < 10) throw new HttpError(400, "bad_message", "Write a few words about what happened (at least 10 characters).");
+    const message = typeof body.message === "string" ? body.message.trim() : "";
     // (Owner, Nov 3, §157) Under the account's row lock: the same message sent from two tabs (or twice) within 10 minutes goes to the team once; the other press
     // reads "You already sent this message." (The day's limit is counted under the same lock.)
     await db.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${u.id} FOR UPDATE`;
-      if (await tx.contactMessage.count({ where: { userId: u.id, topic, message, createdAt: { gt: new Date(Date.now() - SAME_MESSAGE_MS) } } })) throw new HttpError(409, "already", CONTACT_ALREADY_SENT);
+      if (topic && message && (await tx.contactMessage.count({ where: { userId: u.id, topic, message, createdAt: { gt: new Date(Date.now() - SAME_MESSAGE_MS) } } }))) throw new HttpError(409, "already", CONTACT_ALREADY_SENT);
       const today = await tx.contactMessage.count({ where: { userId: u.id, createdAt: { gt: new Date(Date.now() - 86_400_000) } } });
       if (today >= CONTACT_LIMIT_PER_DAY) throw new HttpError(409, "limit", contactLimitLine());
+      // (Owner, Nov 11, §386 C; refusals → field mistakes) The form's own mistakes after "already sent" and the day's limit; nothing is sent while one remains.
+      if (!topic) throw new HttpError(400, "bad_topic", "Choose what it's about.");
+      // (Owner, Oct 30, batch 15 section 21) Up to 20,000 characters ((Owner, Nov 4, §186) was 50,000), refused (never cut) beyond.
+      readText(message, LIMITS.contact.max, "bad_message");
+      if (message.length < 10) throw new HttpError(400, "bad_message", "Write a few words about what happened (at least 10 characters).");
       await tx.contactMessage.create({ data: { userId: u.id, topic, message } });
     });
     const team = await teamEmails(`Contact us (${topic})`);

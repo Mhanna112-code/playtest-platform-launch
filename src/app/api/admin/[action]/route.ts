@@ -64,10 +64,10 @@ async function run(u: Awaited<ReturnType<typeof requireUser>>, action: string, i
         return ok(await decideDispute(u, id, body));
       case "suspend": {
         if (id === u.id) throw new HttpError(409, "self", "You can't pause your own account.");
-        const note = readText(body.note, LIMITS.reason, "bad_note");
-        if (note.length < 3) throw new HttpError(400, "bad_note", "Record why (it is kept with the suspension).");
+        // (Owner, Nov 11, §386 C) The note's own mistakes after the admin's refusals and box (noteCheck).
+        const note = trimmed(body.note);
         // (Batch 17 §6) `since`: when the admin's Preview (or the page) was loaded; a refusal carries the account's state now (the row or profile updates).
-        return ok(await withAccountState(id, () => suspendAccount(u.id, id, note, body.side, seenFromBody(body))));
+        return ok(await withAccountState(id, () => suspendAccount(u.id, id, note, body.side, seenFromBody(body), noteCheck(note, "Record why (it is kept with the suspension)."))));
       }
       case "unsuspend":
         return ok(await withAccountState(id, () => reinstateAccount(id, body.side, u.id, seenFromBody(body))));
@@ -76,29 +76,28 @@ async function run(u: Awaited<ReturnType<typeof requireUser>>, action: string, i
         return ok({ ...(await previewSuspension(id)), at: new Date().toISOString() });
       case "delete-account": {
         if (id === u.id) throw new HttpError(409, "self", "Use Settings to delete your own account.");
-        const reason = readText(body.note, LIMITS.reason, "bad_note");
-        if (reason.length < 3) throw new HttpError(400, "bad_note", "Record why (it is kept with the deletion).");
+        const reason = trimmed(body.note);
         // (Batch 34 §1) With the page's time: already deleted is named; another admin's change to the account since then stops once.
-        return ok(await withAccountState(id, () => adminDeleteAccount(u.id, id, reason, adminSeen(body))));
+        return ok(await withAccountState(id, () => adminDeleteAccount(u.id, id, reason, adminSeen(body), noteCheck(reason, "Record why (it is kept with the deletion)."))));
       }
       case "pause-test":
-        return ok(await pauseTest(u.id, id, readText(body.note, LIMITS.reason, "bad_note"), adminSeen(body)));
+        return ok(await pauseTest(u.id, id, trimmed(body.note), adminSeen(body), noteCheck(trimmed(body.note))));
       case "unpause-test":
         return ok(await unpauseTest(id, u.id, adminSeen(body)));
       case "stop-test":
-        return ok(await adminStopTest(id, readText(body.note, LIMITS.reason, "bad_note"), u.id, adminSeen(body)));
+        return ok(await adminStopTest(id, trimmed(body.note), u.id, adminSeen(body), noteCheck(trimmed(body.note))));
       // (Owner, Oct 28, batch 8) "Free for everyone until <date>" (blank clears it).
       case "allow-critical-changes":
         // (Owner, Oct 28 afternoon) Per field: each locked field gets its 3 changes back; the other fields keep their counts. (Batch 34 §1) Already allowed: named.
         return ok(await allowLockedChanges(u.id, id, adminSeen(body)));
       // (Owner, Oct 26) A chargeback hold needs the admin's approval (id = the developer) once the card is verified and what is owed is paid.
       case "approve-hold":
-        return ok(await approveHoldLift(u.id, id, readText(body.note, LIMITS.reason, "bad_note"), adminSeen(body)));
+        return ok(await approveHoldLift(u.id, id, trimmed(body.note), adminSeen(body), noteCheck(trimmed(body.note))));
       case "approve-chargeback":
         return ok(await approveChargebackHold(id, u.id, adminSeen(body)));
       // (Batch 23 section 6) Not approved: the reservation is cancelled (nothing taken) and the hold stays (id = the developer).
       case "decline-chargeback":
-        return ok(await declineChargebackReserve(id, readText(body.note, LIMITS.reason, "bad_note"), u.id, adminSeen(body)));
+        return ok(await declineChargebackReserve(id, trimmed(body.note), u.id, adminSeen(body), noteCheck(trimmed(body.note))));
       // (Batch 23 section 2) The red box's failed-for-good list is cleared (the emails are kept).
       case "emails-clear":
         return ok(await clearFailedEmails());
@@ -123,3 +122,11 @@ async function run(u: Awaited<ReturnType<typeof requireUser>>, action: string, i
     throw new HttpError(404, "not_found", "That action doesn't exist.");
   }
 }
+
+/** (Owner, Nov 11, §386 C) An admin note as typed (trimmed, never cut). */
+const trimmed = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+/** (§386 C) The note's own mistakes, run by the action after its refusals and its box: at most 1,000 characters; `required` (at least 3) when it must say why. */
+const noteCheck = (note: string, required?: string) => () => {
+  readText(note, LIMITS.reason, "bad_note");
+  if (required && note.length < 3) throw new HttpError(400, "bad_note", required);
+};

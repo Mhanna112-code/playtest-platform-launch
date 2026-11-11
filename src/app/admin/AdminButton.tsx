@@ -96,7 +96,7 @@ export function AdminButton({ action, id, label, fields = [], danger, disabled, 
         className={danger ? "btn-danger" : "btn-ghost"}
         disabled={busy || disabled || fin.done}
         onClick={async (e) => {
-          if (!checkFields(e.currentTarget.parentElement)) return;
+          checkFields(e.currentTarget.parentElement); // (Owner, Nov 11, §386 C) Pressable with fields still red: the press marks them and still goes (refusals → box → field mistakes; nothing saved while red).
           setBusy(true);
           setMsg(null);
           try {
