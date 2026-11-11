@@ -103,13 +103,13 @@ export async function notify(to: string, subject0: string, lines0: string[], pat
  * A notification written straight to the bell (no immediate email, and no email text of its own), e.g. the Open until heads-ups. Like every line it is in the
  * person's Daily / Weekly / Monthly summary; with `always` or `payment` it also reaches the end-of-day email with email Off.
  */
-export async function bell(userId: string, text0: string, link: string, about?: string, opts: Pick<Opts, "own" | "testId" | "group" | "payment" | "reminder" | "always" | "side"> = {}) {
+export async function bell(userId: string, text0: string, link: string, about?: string, opts: Pick<Opts, "own" | "testId" | "group" | "payment" | "reminder" | "always" | "side"> = {}, /** (Owner, Nov 11, §383) a transaction: a reminder's "sent" mark and its line are written together (the checks above still read as before) */ client: Prisma.TransactionClient | typeof db = db) {
   const deleted = !!(await db.user.findUnique({ where: { id: userId }, select: { deletedAt: true } }))?.deletedAt;
   if ((opts.reminder || REMINDER_ONLY_GROUPS.includes(opts.group ?? "")) && deleted) return;
   if (about && !opts.payment && !(await inReach(userId, about))) return; // (Owner, Nov 6, §299) payment lines always reach
   const text = await renderFor(userId, text0);
   // (Owner, Nov 9, §360) A deleted account's line is never emailed: written as already emailed.
-  await db.notification.create({ data: { side: lineSide(userId, link, opts.side), userId, text, link, testId: opts.testId ?? (await testIdOfLink(link)), mustEmail: !deleted && !!opts.always, reminderKey: opts.reminder ?? null, ...(deleted ? { summarizedAt: new Date() } : {}), ...flags(opts) } });
+  await client.notification.create({ data: { side: lineSide(userId, link, opts.side), userId, text, link, testId: opts.testId ?? (await testIdOfLink(link)), mustEmail: !deleted && !!opts.always, reminderKey: opts.reminder ?? null, ...(deleted ? { summarizedAt: new Date() } : {}), ...flags(opts) } });
 }
 
 /** (Batch 15 section 11) A line's time tokens, in this person's time zone. */

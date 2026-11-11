@@ -1399,12 +1399,15 @@ async function runDailyLocked(now: Date) {
     // (Owner, Nov 6, §311g) Keyed by the Open until they count to: moving it (Edit, a pause, an outage) re-arms the heads-ups still ahead (they were bare marks
     // that never cleared, so an extended Open until got none).
     const due = openUntilMarkDue(t, t.notifiedMarks, now);
-    if (due.record.length) await db.test.update({ where: { id: t.id }, data: { notifiedMarks: { push: due.record } } });
-    if (!due.send) continue;
+    if (!due.record.length && !due.send) continue;
+    // (Owner, Nov 11, §383) The marks and the line in ONE transaction: a failure writing either leaves neither, so the next run sends it (never lost, never twice).
     // Bell lines, also in the developer's Daily / Weekly / Monthly summary like every bell line (Off: the bell only). (Batch 15 sections 11 and 18) The reader's
     // own zone; Open until is the last day to join.
-    await bell(t.developerId, joinClosingLine(t.title, t.openUntil!, (d) => T(d, "date")), `/app/tests/${t.id}`, undefined, { reminder: `headsup:${t.id}` });
-    out.headsUps++;
+    await db.$transaction(async (tx) => {
+      if (due.record.length) await tx.test.update({ where: { id: t.id }, data: { notifiedMarks: { push: due.record } } });
+      if (due.send) await bell(t.developerId, joinClosingLine(t.title, t.openUntil!, (d) => T(d, "date")), `/app/tests/${t.id}`, undefined, { reminder: `headsup:${t.id}` }, tx);
+    });
+    if (due.send) out.headsUps++;
   }
   // 4b. (Owner, Oct 28, batch 16 section 1) Each working tester's own reminders, counted to THEIR deadline: 1 month, 1 week, 3 days and 1 day before (only the marks
   // still ahead when they joined). Sent marks are kept per tester and per deadline; they wait while the test is paused or the tester is suspended. (Owner, Oct 29,
@@ -1416,11 +1419,13 @@ async function runDailyLocked(now: Date) {
   });
   for (const c of working) {
     const due = ownDeadlineMarkDue(c, c.test.notifiedMarks, now);
-    if (due.send) {
-      await bell(c.testerId, ownDeadlineLine(c.test.title, c.dueAt, (d) => T(d, "date")), `/app/sessions/${c.id}`, undefined, { reminder: `headsup:${c.test.id}`, group: "deadlines", always: true, testId: c.test.id });
-      out.headsUps++;
-    }
-    if (due.record.length) await db.test.update({ where: { id: c.test.id }, data: { notifiedMarks: { push: due.record } } });
+    if (!due.send && !due.record.length) continue;
+    // (§383) The line and its marks in one transaction (they were written one after the other: a failure between them sent the line again next time).
+    await db.$transaction(async (tx) => {
+      if (due.send) await bell(c.testerId, ownDeadlineLine(c.test.title, c.dueAt, (d) => T(d, "date")), `/app/sessions/${c.id}`, undefined, { reminder: `headsup:${c.test.id}`, group: "deadlines", always: true, testId: c.test.id }, tx);
+      if (due.record.length) await tx.test.update({ where: { id: c.test.id }, data: { notifiedMarks: { push: due.record } } });
+    });
+    if (due.send) out.headsUps++;
   }
   // 5, 5b. The developer's review reminders (batch 19 section 4: also every 5 minutes, runSweep).
   await reviewReminders(now, co);
@@ -1438,8 +1443,10 @@ async function runDailyLocked(now: Date) {
     if (i.test.status !== "open" || testersIn >= i.test.spots || (i.test.openUntil && i.test.openUntil < now)) continue; // expired
     if (i.test.adminPausedAt || i.test.developer.holdStartedAt || i.test.developer.devSuspendedAt) continue; // paused: the reminders wait
     const deadline = i.test.openUntil ? ` Join by ${T(i.test.openUntil, "date")}.` : "";
-    await bell(i.testerId, `Reminder: ${displayName(i.test.developer)} invited you to “${i.test.title}”.${deadline}`, `/app/find/${i.testId}`, undefined, { group: "invites", reminder: `invite:${i.id}` });
-    await db.invite.update({ where: { id: i.id }, data: { remindedAt: now } });
+    await db.$transaction(async (tx) => { // (§383) the line and its "reminded" time together
+      await bell(i.testerId, `Reminder: ${displayName(i.test.developer)} invited you to “${i.test.title}”.${deadline}`, `/app/find/${i.testId}`, undefined, { group: "invites", reminder: `invite:${i.id}` }, tx);
+      await tx.invite.update({ where: { id: i.id }, data: { remindedAt: now } });
+    });
   }
   // 8. (NEXT-UI 7) Forever sets of calls: the next ones are booked as each passes (4 ahead); ended sets are marked.
   await (await import("./requests")).topUpForeverSets(now);
@@ -1525,8 +1532,10 @@ async function openCharges(now: Date, co: CloseOuts, /** (§383) the daily job: 
     const gone = !!c.tester.deletedAt;
     if (!payShut && (gone || chargeShut) && (!s.devRemindedAt || (repeats && repeatDue(s.devRemindedAt, now)))) {
       const line = unreviewedLine(c.test.title, displayName(c.tester), s.kind === "recording" ? "recording" : "written answers", chargeOpensAt(s, c.test, c, now)!, null, c.tester.pronoun);
-      await bell(c.test.developerId, line, `/app/tests/${c.testId}#piece-${s.id}`, undefined, { group: "unreviewed", reminder: `unreviewed:${s.id}`, always: true }); // (§311d) end-of-day email even with Off
-      await db.submission.update({ where: { id: s.id }, data: { devRemindedAt: now } });
+      await db.$transaction(async (tx) => { // (§383) the line and its "reminded" time together
+        await bell(c.test.developerId, line, `/app/tests/${c.testId}#piece-${s.id}`, undefined, { group: "unreviewed", reminder: `unreviewed:${s.id}`, always: true }, tx); // (§311d) end-of-day email even with Off
+        await tx.submission.update({ where: { id: s.id }, data: { devRemindedAt: now } });
+      });
     }
     if (gone || chargeShut) continue; // the tester can't sign in: Charge and Let it go never open (or, batch 17 §19, they closed)
     // Contract price already paid in full for this part: no Charge / Let it go, no day-14 notice, no reminders. (Owner, Nov 3, batch 35 §163) Likewise once the
@@ -1564,15 +1573,21 @@ export async function reviewReminders(now: Date, co: CloseOuts = closeOutMemo(no
     const due = reviewMarkDue(s.updatedAt, reviewDate, now, s.devMarks);
     if ((!due.send && !due.record.length) || (await co.payClosed({ submissionId: s.id }))) continue; // (batch 17 §19) Pay closed: no reminders
     const m = due.send;
-    // The mark is recorded with every earlier one, so a missed mark is never sent late.
-    if (due.record.length) await db.submission.update({ where: { id: s.id }, data: { devMarks: { push: due.record } } });
-    if (!m) continue;
+    // The mark is recorded with every earlier one, so a missed mark is never sent late. (Owner, Nov 11, §383) In ONE transaction with its line: a failure
+    // writing either leaves neither, so the next run sends it (it was "mark, then line": the reminder was lost when the line failed).
+    if (!m) {
+      await db.submission.update({ where: { id: s.id }, data: { devMarks: { push: due.record } } });
+      continue;
+    }
     const name = displayName(s.contract.tester);
     const part = s.kind === "recording" ? "recording" : "written answers";
     const when = m.label === "tomorrow" ? "by tomorrow" : m.label.replace("in ", "within ");
     // (Batch 30 §3) Late listed work counts down the same way, but the tester can't charge for it.
     const after = s.agreedCents == null ? " (it isn't listed: any amount, $0 included)" : s.late ? LATE_REMINDER_TAIL : s.contract.tester.deletedAt ? "" : ` (after that ${name} can charge or let it go)`;
-    await bell(s.contract.test.developerId, `“${s.contract.test.title}”: review ${name}'s ${part} ${when} (${T(reviewDate, "date")})${after}.`, `/app/tests/${s.contract.testId}#piece-${s.id}`, undefined, { group: "unreviewed", reminder: `unreviewed:${s.id}`, always: true });
+    await db.$transaction(async (tx) => {
+      if (due.record.length) await tx.submission.update({ where: { id: s.id }, data: { devMarks: { push: due.record } } });
+      await bell(s.contract.test.developerId, `“${s.contract.test.title}”: review ${name}'s ${part} ${when} (${T(reviewDate, "date")})${after}.`, `/app/tests/${s.contract.testId}#piece-${s.id}`, undefined, { group: "unreviewed", reminder: `unreviewed:${s.id}`, always: true }, tx);
+    });
   }
   // 5b. (Owner, Oct 29, batch 28 §21) Listed calls: "pay it within 3 days / by tomorrow" before the automatic charge (7 days after the call, moved by pauses and outages).
   // (Owner, Nov 6, §311e) Unlisted calls the same, counted to their pay date (7 days after the call), ending "(it isn't listed: pay any amount, or it closes with
@@ -1584,13 +1599,18 @@ export async function reviewReminders(now: Date, co: CloseOuts = closeOutMemo(no
     const sent = x.measuredAt ?? x.startsAt;
     const due = callMinutesOf(x) ? reviewMarkDue(sent, chargeAt, now, x.devMarks) : null; // (§311g) keyed by the pay date
     if (!due) continue;
-    if (due.record.length) await db.call.update({ where: { id: x.id }, data: { devMarks: { push: due.record } } });
     const m = due.send;
-    if (!m) continue;
-    if (m.label !== "tomorrow" && m.label !== "in 3 days") continue; // only the 3-day and 1-day marks
+    if (!m || (m.label !== "tomorrow" && m.label !== "in 3 days")) { // only the 3-day and 1-day marks are sent
+      if (due.record.length) await db.call.update({ where: { id: x.id }, data: { devMarks: { push: due.record } } });
+      continue;
+    }
     const when = m.label === "tomorrow" ? "by tomorrow" : "within 3 days";
     const tail = x.rateCents == null ? UNLISTED_CALL_TAIL : "";
-    await bell(x.contract.test.developerId, `“${x.contract.test.title}”: pay ${displayName(x.contract.tester)}'s call on ${T(x.startsAt)} ${when} (${T(chargeAt, "date")})${tail}.`, `/app/tests/${x.contract.testId}#call-${x.id}`, undefined, { group: "unreviewed", reminder: `unreviewed:${x.id}`, always: true });
+    // (§383) The marks and the line in ONE transaction (as the review reminders above).
+    await db.$transaction(async (tx) => {
+      if (due.record.length) await tx.call.update({ where: { id: x.id }, data: { devMarks: { push: due.record } } });
+      await bell(x.contract.test.developerId, `“${x.contract.test.title}”: pay ${displayName(x.contract.tester)}'s call on ${T(x.startsAt)} ${when} (${T(chargeAt, "date")})${tail}.`, `/app/tests/${x.contract.testId}#call-${x.id}`, undefined, { group: "unreviewed", reminder: `unreviewed:${x.id}`, always: true }, tx);
+    });
   }
 }
 
@@ -1663,7 +1683,10 @@ async function closeOutReminders(now: Date, co: CloseOuts) {
     take: 5000,
   });
   type Piece = { who: string; part: string; title: string; at: Date; when?: string | null };
-  const byDev = new Map<string, { email: string; today: Piece[]; fresh: boolean }>();
+  // (Owner, Nov 11, §383) Each developer's marks to record are written with their line, in one transaction (they were written first: a failure writing the
+  // line lost that day's reminder).
+  type MarkRow = { sub: boolean; id: string; record: string[] };
+  const byDev = new Map<string, { email: string; today: Piece[]; fresh: boolean; records: MarkRow[] }>();
   for (const c of contracts) {
     // Anything of this tester's still unpaid (a deleted tester's only when their payout account was connected).
     if (!testerPayable(c.tester)) continue;
@@ -1677,26 +1700,31 @@ async function closeOutReminders(now: Date, co: CloseOuts) {
       const due = closeSoonMarkDue(at, p.from, now, p.sent);
       const mark = due.send;
       // (§313b) What to record (the mark sent, every one behind it, the first look at this closing date).
-      if (due.record.length) {
-        if (p.sub) await db.submission.update({ where: { id: p.id }, data: { devMarks: { push: due.record } } });
-        else await db.call.update({ where: { id: p.id }, data: { devMarks: { push: due.record } } });
-      }
+      const entry = byDev.get(c.test.developerId) ?? { email: c.test.developer.email, today: [], fresh: false, records: [] };
+      if (due.record.length) entry.records.push({ sub: p.sub, id: p.id, record: due.record });
+      byDev.set(c.test.developerId, entry);
       // Already sent today (its mark is today's): it stays in today's line when that line is drawn again.
       const today = !mark && CLOSE_SOON_MARKS.some((d) => d === dayNo(at) - dayNo(now) && p.sent.includes(`${closeSoonKey(at)}${d}`));
       if (!mark && !today) continue;
-      const entry = byDev.get(c.test.developerId) ?? { email: c.test.developer.email, today: [], fresh: false };
       entry.today.push({ who: firstName(c.tester), part: p.part, title: c.test.title, at, when: "when" in p ? p.when : null }); // (§327) a call's date and time
       if (mark) entry.fresh = true;
-      byDev.set(c.test.developerId, entry);
     }
   }
   for (const [devId, e] of byDev) {
-    if (!e.fresh) continue;
-    const line = closingSoonLine(e.today.sort((a, b) => a.at.getTime() - b.at.getTime()));
+    if (!e.fresh && !e.records.length) continue;
+    const line = e.fresh ? closingSoonLine(e.today.sort((a, b) => a.at.getTime() - b.at.getTime())) : "";
     const key = `closesoon:${now.toISOString().slice(0, 10)}`;
-    const had = await db.notification.findFirst({ where: { userId: devId, reminderKey: key }, select: { id: true, summarizedAt: true } });
-    if (had && !had.summarizedAt) await db.notification.update({ where: { id: had.id }, data: { text: await renderFor(devId, line), readAt: null } });
-    else await notify(e.email, line, [line + "."], "/app#needs-you", { side: "developer", always: true, payment: true, group: "closeout", reminder: key }); // (batch 30 §6) where the pieces are: Needs review, marked
+    const had = e.fresh ? await db.notification.findFirst({ where: { userId: devId, reminderKey: key }, select: { id: true, summarizedAt: true } }) : null;
+    const text = had && !had.summarizedAt ? await renderFor(devId, line) : "";
+    await db.$transaction(async (tx) => {
+      for (const r of e.records) {
+        if (r.sub) await tx.submission.update({ where: { id: r.id }, data: { devMarks: { push: r.record } } });
+        else await tx.call.update({ where: { id: r.id }, data: { devMarks: { push: r.record } } });
+      }
+      if (!e.fresh) return;
+      if (had && !had.summarizedAt) await tx.notification.update({ where: { id: had.id }, data: { text, readAt: null } });
+      else await notify(e.email, line, [line + "."], "/app#needs-you", { side: "developer", always: true, payment: true, group: "closeout", reminder: key }, tx); // (batch 30 §6) where the pieces are: Needs review, marked
+    });
   }
 }
 
@@ -1782,8 +1810,10 @@ async function payNowLines(now: Date, co: CloseOuts, /** (§383) the daily job: 
       continue;
     }
     const line = payNowLine(list);
-    await notify(emails.get(devId)!, line, [line + "."], "/app#needs-you", { side: "developer", always: true, payment: true, group: "unreviewed", reminder: "paynow" }); // (batch 30 §6) Needs review, marked
-    for (const p of unnamed) await db.submission.update({ where: { id: p.id }, data: { devMarks: { push: PAY_NOW_MARK } } });
+    await db.$transaction(async (tx) => { // (§383) the line and its marks together
+      await notify(emails.get(devId)!, line, [line + "."], "/app#needs-you", { side: "developer", always: true, payment: true, group: "unreviewed", reminder: "paynow" }, tx); // (batch 30 §6) Needs review, marked
+      for (const p of unnamed) await tx.submission.update({ where: { id: p.id }, data: { devMarks: { push: PAY_NOW_MARK } } });
+    });
   }
 }
 
@@ -1814,8 +1844,10 @@ async function testerChargeLines(now: Date, co: CloseOuts, /** (§383) the daily
       continue;
     }
     const line = chargeDayLine(list);
-    await notify(emails.get(testerId)!, line, [line + "."], "/app#charge-or-cancel", { side: "tester", always: true, payment: true, group: "charge", reminder: "chargeday" });
-    for (const p of list) if (chargeNamed(p.marks) !== (p.closes?.getTime() ?? 0)) await db.submission.update({ where: { id: p.id }, data: { devMarks: { push: `tc:${p.closes?.getTime() ?? 0}` } } });
+    await db.$transaction(async (tx) => { // (§383) the line and the dates it named together
+      await notify(emails.get(testerId)!, line, [line + "."], "/app#charge-or-cancel", { side: "tester", always: true, payment: true, group: "charge", reminder: "chargeday" }, tx);
+      for (const p of list) if (chargeNamed(p.marks) !== (p.closes?.getTime() ?? 0)) await tx.submission.update({ where: { id: p.id }, data: { devMarks: { push: `tc:${p.closes?.getTime() ?? 0}` } } });
+    });
   }
 }
 
