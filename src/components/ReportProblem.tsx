@@ -24,7 +24,7 @@ export function ReportProblem({ path, callId, otherName, seenAt, reported }: { p
     );
   }
   return (
-    <details className="w-full text-sm">
+    <details className="w-full text-sm" data-press-free="" /* (§380 E) never locked by another press */>
       <summary className="cursor-pointer text-rose-200"><AlertTriangle className="mr-1 inline h-4 w-4" />Report a problem with this call</summary>
       <div className="mt-2 space-y-2">
         <div className="flex flex-wrap gap-4 text-slate-200">

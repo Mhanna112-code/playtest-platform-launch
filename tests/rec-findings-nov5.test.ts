@@ -220,7 +220,7 @@ describe("§207 4: Verify a card's own Cancel reads as a cancel", () => {
     const box = src("components/BankCheck.tsx");
     expect(box).toContain('onClick={() => end(undefined, true)} data-bank-close=""');
     expect(box).toContain('onClick={() => end("failed", true)} data-bank-cancel=""');
-    expect(box).toContain("onEnd({ ok: true, value: await finish(simulate, cancel) });");
+    expect(box).toContain("onEnd({ ok: true, value: await freePress(() => finish(simulate, cancel)) });"); // (§380 E) the check's own finish never locks the page
     const steps = src("components/ChargebackSteps.tsx");
     expect(steps).toContain("...(cancel ? { pressedCancel: true } : {})");
     expect(steps).toContain("if (r?.cancelled) throw new CardCheckCancelled();");

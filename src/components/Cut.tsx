@@ -145,7 +145,7 @@ function CutPopup({ full, kind, at, onClose }: { full: string; kind: CutKind; at
       </ResizeBox></OwnPanel>
       <div className="flex flex-wrap items-center gap-2">
         {at.href && <a href={at.href} className="btn-secondary px-3 py-1 text-xs no-underline hover:no-underline" data-cut-open="">{openLabel(kind)}</a>}
-        <button type="button" className="btn-secondary px-3 py-1 text-xs" data-cut-copy="" onClick={async () => setCopied((await copyText(full)) ? "yes" : "no")}>Copy</button>
+        <button type="button" className="btn-secondary px-3 py-1 text-xs" data-cut-copy="" data-press-free="" onClick={async () => setCopied((await copyText(full)) ? "yes" : "no")}>Copy</button>
         {copied === "yes" && <span className="ok text-xs" role="status" data-cut-copied="">Copied</span>}
         {copied === "no" && <span className="text-xs text-slate-400" role="status">Couldn&apos;t copy: select the text above.</span>}
       </div>

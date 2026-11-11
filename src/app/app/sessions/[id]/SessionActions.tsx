@@ -339,7 +339,7 @@ export function WrittenForm({ sessionId, questions, newQs = [], initial, initial
           <p className="text-slate-400">Files not in an answer (they go with your answers when you send them):</p>
           <ul className="flex flex-wrap gap-2">
             {loose.map((a) => (
-              <li key={a.id} className="inline-flex items-center gap-1"><a className="rounded border border-white/15 px-2 py-1 text-xs" href={`/api/recordings/${a.id}/file`} target="_blank" rel="noreferrer">{a.filename} · {fileSize(a.size)}</a><button type="button" aria-label={`Remove ${a.filename}`} className="btn-ghost px-1" {...lockPick(busy)} onClick={() => removeAttachment(a.id)}>×</button></li>
+              <li key={a.id} className="inline-flex items-center gap-1"><a className="rounded border border-white/15 px-2 py-1 text-xs" href={`/api/recordings/${a.id}/file`} target="_blank" rel="noreferrer">{a.filename} · {fileSize(a.size)}</a><button type="button" aria-label={`Remove ${a.filename}`} className="btn-ghost px-1" data-press-free="" {...lockPick(busy)} onClick={() => removeAttachment(a.id)}>×</button></li>
             ))}
           </ul>
         </div>

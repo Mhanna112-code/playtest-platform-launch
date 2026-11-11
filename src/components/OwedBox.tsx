@@ -150,7 +150,7 @@ export function OwedBox({ onHold, owed: drawn, chargeback = false, review = fals
       )}
       {/* (Owner, Nov 3) A long list folds to its first lines; Show all opens every line with the names uncut, scrolling inside the box. */}
       {owed.length > OWED_FOLD && (
-        <button type="button" className="text-xs underline" data-owed-toggle="" onClick={() => setAllLines(!allLines)}>
+        <button type="button" className="text-xs underline" data-owed-toggle="" data-press-free="" onClick={() => setAllLines(!allLines)}>
           {allLines ? "Show fewer" : `Show all ${owed.length} lines`}
         </button>
       )}

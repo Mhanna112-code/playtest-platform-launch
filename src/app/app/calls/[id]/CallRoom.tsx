@@ -311,7 +311,7 @@ function Room({ callId, role, myName, otherName, otherPoss = "their", iceServers
   };
 
   return (
-    <div className="space-y-3" data-call-room="">
+    <div className="space-y-3" data-call-room="" data-press-free="" /* (Owner, Nov 11, §380 E) a live call's controls are never locked */>
       {warn && <p className="info" role="status" data-call-warn="">{warn}</p>}
       <div className="grid items-start gap-3 md:grid-cols-[2fr_1fr]">
         <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-black">

@@ -6,6 +6,7 @@ import { ANSWER_TERMS_CODE, ANSWER_TERMS_EVENT, ANSWER_TERMS_FIRST, termsBlocked
 import { NDA_BLOCK_CODE, NDA_BLOCK_EVENT, NDA_BLOCK_FIRST, NDA_NOTICE, ndaBlockedPath } from "./ndaNotice";
 import { rememberReply } from "./lineLinkRegistry";
 import { PAGE_MOVED_CODE, PAGE_MOVED_PATH } from "./pageClaim";
+import { pressAnswered, pressStarted } from "./pageLock";
 
 /** (Batch 15 section 36) The label of the last press that was stopped or refused: the box under it names it ("Your Pay didn't go through."). */
 let LAST_PRESS = "";
@@ -136,11 +137,39 @@ export const PRESS_REFUSED_EVENT = "press-refused";
 export const PRESS_ERROR_EVENT = "press-error";
 /** (Batch 35 §60) Every press refused or stopped says so (lib/pageVersion.ts): a line hidden by a newer page shows again when the same press is refused again. */
 export async function api<T = unknown>(path: string, body?: unknown, method?: string): Promise<T> {
+  // (Owner, Nov 11, §380 E) On EVERY page, ANY press disables every button on that page until the server answers; one that went through keeps them disabled
+  // until its redraw lands (useFinished), and a payment now waiting on the bank's inline check releases the page at once (its own Confirm / Cancel stay usable).
+  // Never for what a page sends on its own (NOT_A_PRESS), an upload in progress, or a press made through freePress (the bank check's own finish).
+  const locks = body !== undefined && typeof window !== "undefined" && !FREE && !notAPress(path, body);
+  if (locks) pressStarted();
   try {
-    return await callApi<T>(path, body, method);
+    const r = await callApi<T>(path, body, method);
+    if (locks) pressAnswered(true, bankWaits(r));
+    return r;
   } catch (e) {
+    if (locks) pressAnswered(false);
     if (e instanceof ApiError && typeof window !== "undefined") window.dispatchEvent(new CustomEvent(PRESS_ERROR_EVENT, { detail: e.message }));
     throw e;
+  }
+}
+/**
+ * (§380 E) What a page sends on its own (reads, heartbeats, a pill, an acknowledgement, the time zone, the bell's lines read, drafts kept, the page claim), an
+ * upload in progress (its start, its end, its heartbeat, its abandon; and the × that takes a just-uploaded file out of an answer being typed), and a live call's
+ * "Report a problem with this call": never a press that locks the page.
+ */
+const NOT_A_PRESS = /\/(my-gaps|invite-check|invite-search|invite-restore|recording-start|recording-done|recording-abandon|recording-alive|terms-pill|nda-seen|listing|no-show)$|^\/api\/(account\/timezone|notifications\/read|kept|page-claim|page-handover)/;
+export const notAPress = (path: string, body?: unknown) =>
+  NOT_A_PRESS.test(path.split("?")[0]) || (/\/recording-remove$/.test(path.split("?")[0]) && (body as { written?: unknown } | null)?.written === true);
+/** (§380 E) The answer opens the bank's inline check (3D Secure): a Pay / Pay more / Confirm with your bank waiting on it. */
+const bankWaits = (r: unknown) => !!r && typeof r === "object" && ((r as { requiresAction?: unknown }).requiresAction === true || typeof (r as { clientSecret?: unknown }).clientSecret === "string");
+let FREE = 0;
+/** (§380 E) Requests started (synchronously) inside `f` never lock the page: the open bank check's own Confirm / Cancel / Close. */
+export function freePress<T>(f: () => T): T {
+  FREE++;
+  try {
+    return f();
+  } finally {
+    FREE--;
   }
 }
 async function callApi<T = unknown>(path: string, body?: unknown, method?: string): Promise<T> {

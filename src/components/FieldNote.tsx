@@ -38,7 +38,7 @@ function ShortList({ label, items }: { label: string; items: string[] }) {
 function CopyButton({ text }: { text: string }) {
   const [done, setDone] = useState(false);
   return (
-    <button type="button" className="btn-ghost !px-2 !py-0.5 text-xs" data-copy-typed="" onClick={() => void navigator.clipboard?.writeText(text).then(() => { setDone(true); setTimeout(() => setDone(false), 2000); }).catch(() => {})}>
+    <button type="button" className="btn-ghost !px-2 !py-0.5 text-xs" data-copy-typed="" data-press-free="" onClick={() => void navigator.clipboard?.writeText(text).then(() => { setDone(true); setTimeout(() => setDone(false), 2000); }).catch(() => {})}>
       {done ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />} {done ? "Copied" : "Copy"}
     </button>
   );

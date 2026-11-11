@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { api, ApiError, errOf } from "./client";
+import { holdForRedraw, redrawLanded } from "./pageLock";
 import type { Change } from "@/components/ChangesBox";
 import { liveRuleOf, mergeChanges, useLiveAppend, type LiveRule } from "./live";
 import { reloadKeepingPlace } from "./keepPlace";
@@ -52,6 +53,7 @@ export function useFinished(onFresh?: () => void) {
     const release = () => {
       waiting.current = null;
       setLine(null);
+      redrawLanded(); // (§380 E) the page's buttons come back once the redraw landed
       fresh.current?.();
     };
     const left = releaseIn(w.until);
@@ -61,6 +63,8 @@ export function useFinished(onFresh?: () => void) {
   }, [refreshing, line]);
   function finish(result = "", how: { reload?: boolean } = {}) {
     setLine(result);
+    // (Owner, Nov 11, §380 E) Every button on the page waits for this redraw (or reload) too, after a press that locked the page.
+    holdForRedraw();
     if (how.reload) {
       waiting.current = null; // the page loads again: the box stays finished until then
       setTimeout(() => reloadKeepingPlace(), result ? DONE_RELOAD_MS : 0);

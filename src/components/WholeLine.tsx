@@ -39,7 +39,7 @@ export function WholeLine({ shown, full, href, after, className = "", render, ch
   const pieces = cutPieces(shown, full!);
   const closed = pieces
     ? pieces.map((p, i) => p.hidden == null ? <span key={i}>{draw(p.text)}</span> : names.includes(i) ? <span key={i} data-name-open="">{p.hidden}</span>
-      : <button key={i} type="button" className="rounded px-0.5 text-sky-300 hover:bg-white/10" aria-label="Show the whole name" data-name-toggle="" onClick={() => setNames([...names, i])}>…</button>)
+      : <button key={i} type="button" className="rounded px-0.5 text-sky-300 hover:bg-white/10" aria-label="Show the whole name" data-name-toggle="" data-press-free="" onClick={() => setNames([...names, i])}>…</button>)
     : draw(shown);
   const arrow = (
     <button type="button" className="ml-1 inline-flex rounded p-0.5 align-middle text-slate-400 hover:bg-white/10 hover:text-slate-100" aria-expanded={open}

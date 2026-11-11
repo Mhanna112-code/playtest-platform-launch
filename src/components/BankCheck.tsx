@@ -5,6 +5,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { OwnPanel, ResizeBox } from "@/components/Panel";
 import { bringInView } from "@/lib/markJump";
 import { liveBeat } from "@/lib/liveSync";
+import { freePress } from "@/lib/client";
 import { checkPiOf, countBankCheck, finishPayment, leaveBeacon, peekBank, stripePopup, watchBank, type BankAction, type PeekAnswer, type PeekResult, type Simulate } from "@/lib/bankConfirm";
 import { BANK_CANCEL, CANCEL_HINTS, NOTICE_HEAD, noticeLine } from "@/lib/bankNotice";
 import { BANK_CHECK_TITLE, BANK_STAND_IN, BANK_STAND_IN_NOTE } from "@/lib/rules";
@@ -105,7 +106,8 @@ export function BankCheckView({ action, finish, onEnd, peek, leave, since = "", 
     ended.current = true;
     setBusy(true);
     try {
-      onEnd({ ok: true, value: await finish(simulate, cancel) });
+      // (Owner, Nov 11, §380 E) The open check's own Confirm / Cancel / Close never lock the page (the page was freed when the check showed).
+      onEnd({ ok: true, value: await freePress(() => finish(simulate, cancel)) });
     } catch (e) {
       onEnd({ ok: false, error: e instanceof Error ? e : new Error(String(e)) });
     }
