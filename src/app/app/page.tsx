@@ -58,6 +58,7 @@ import { YourTestsSearch } from "./YourTestsSearch";
 import { TestsVisited } from "./TestsVisited";
 
 import { answerable, rejoinAskLine } from "@/lib/server/joining";
+import { PAGE_MOVED_LINE } from "@/lib/pageClaim";
 import { pronouns } from "@/lib/format";
 import { chargebackSteps } from "@/lib/server/chargeback";
 import { PAUSE_CLOSE_DAYS, pauseReasons } from "@/lib/pause";
@@ -82,12 +83,12 @@ const plural = (n: number, w: string) => `${num(n)} ${w}${n === 1 ? "" : "s"}`;
 const pays = (t: Parameters<typeof termsLine>[0]) => termsLine({ ...t, testerDays: null }, true); // (batch 15: termsLine adds days only when given)
 const DAY = 86_400_000;
 
-export default async function AppHome({ searchParams }: { searchParams: Promise<{ category?: string; failed?: string; done?: string }> }) {
+export default async function AppHome({ searchParams }: { searchParams: Promise<{ category?: string; failed?: string; done?: string; moved?: string }> }) {
   const u = await requirePageUser();
   return withDateZone(u.timeZone, async () => {
 
   const fmtDateTime = (d: Date | string) => fmtDateTimeIn(d, u.timeZone);
-  const { category, failed, done } = await searchParams;
+  const { category, failed, done, moved } = await searchParams;
   // (Owner, Oct 28, batch 20 section 16) An admin account is only an admin: the setup asks only Name and Pronoun (until the name is set), then /admin is home.
   adminAway(u, "/app");
   // (Owner, Nov 3, batch 35 §134) Every other account gets its sides when it's made (email or Google sign-up), so this setup is the admin's only. An account that
@@ -123,6 +124,8 @@ export default async function AppHome({ searchParams }: { searchParams: Promise<
       {(devOff || testerOff) && (
         <RestrictedBox failed={failed} developer={devOff} tester={testerOff} kinds={restrictionsOf(u)} steps={cbSteps?.remaining} review={holdReview} paid={holdPaid} />
       )}
+      {/* (Owner, Nov 11, §380) A test page, Edit or session page opened somewhere else (another tab, browser or device) sent this copy here. */}
+      {moved === "1" && <p className="info" role="status" data-page-moved="">{PAGE_MOVED_LINE}</p>}
       {/* (Batch 15 section 29) After Stop or End early from a restricted test page. */}
       {done && /^Done: /.test(done) && <p className="ok rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-3 py-2" role="status" data-done-line="">{done.slice(0, 300)}</p>}
       {/* (Batch 15 section 16) The side in use: its own reinstatement. */}

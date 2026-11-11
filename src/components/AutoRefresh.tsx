@@ -3,7 +3,7 @@ import { useEffect, useRef } from "react";
 import { pageBusy, watchTyping } from "@/lib/pageBusy";
 import { useRouter } from "next/navigation";
 import { bankCheckOpen } from "@/lib/bankConfirm";
-import { PRESS_REFUSED_EVENT } from "@/lib/client";
+import { PRESS_REFUSED_EVENT, leaveMovedPage, pageHeaders } from "@/lib/client";
 import { publishIgnoredAlerts, publishTesterAlertsOff } from "@/lib/testerAlerts";
 import { LIVE_TICK, liveBeat, noteRedrawAsked, onBoxLines, rideLiveClock } from "@/lib/liveSync";
 import { reloadKeepingPlace } from "@/lib/keepPlace";
@@ -70,9 +70,15 @@ export function AutoRefresh({ query, refresh = true, v, sessionActive }: { query
     // (Batch 35 §37) Runs on the page's beat ("live-tick"), the same tick as the live top box's check: no timer of its own.
     const tick = async () => {
       try {
-        const r = await fetch(`/api/pulse?${query}`, { cache: "no-store" });
+        // (Owner, Nov 11, §380) A one-at-a-time page names itself: the answer says whether this copy was opened somewhere else since.
+        const r = await fetch(`/api/pulse?${query}`, { cache: "no-store", headers: pageHeaders() });
         if (!r.ok) return;
-        const { v, adminStopped, restricted, alerts, sessionActive: activeNow } = (await r.json()) as { v: string; sessionActive?: boolean; adminStopped?: boolean; restricted?: boolean; alerts?: { ignored?: string[]; v?: number; testerOff?: boolean } };
+        const { v, adminStopped, restricted, alerts, sessionActive: activeNow, moved } = (await r.json()) as { v: string; sessionActive?: boolean; adminStopped?: boolean; restricted?: boolean; alerts?: { ignored?: string[]; v?: number; testerOff?: boolean }; moved?: boolean };
+        // (§380) Opened somewhere else: every button here is disabled and the tab goes to the dashboard (nothing else on this poll matters).
+        if (alive && moved) {
+          leaveMovedPage();
+          return;
+        }
         // (Batch 20 section 8) The Alerts setting as saved now (changed in another browser or device): the menu, toggle and chips follow.
         if (alive && testId && Array.isArray(alerts?.ignored)) publishIgnoredAlerts(testId, alerts.ignored, false, alerts.v); // (batch 35 §73) this test's; (§169) never over a newer save
         if (alive && typeof alerts?.testerOff === "boolean") publishTesterAlertsOff(alerts.testerOff, false);

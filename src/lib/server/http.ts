@@ -31,6 +31,9 @@ export async function readJson(req: Request, limit = 100_000): Promise<Record<st
     // (Batch 35 §51) The page load that sent it (the tab's id plus this page's part): admins' "this page's own" changes.
     const load = req.headers.get("x-load");
     if (load && typeof v.load !== "string") v.load = load.slice(0, 64);
+    // (Owner, Nov 11, §380) The one-at-a-time page that sent it ("test:<id>", "session:<id>"), if any: own actions from that page never stop that page.
+    const page = req.headers.get("x-page");
+    if (page && typeof v.pageScope !== "string") v.pageScope = page.slice(0, 100);
     return v as Record<string, unknown>;
   } catch {
     throw new HttpError(400, "bad_request", "Something went wrong sending that. Reload the page and try again.");

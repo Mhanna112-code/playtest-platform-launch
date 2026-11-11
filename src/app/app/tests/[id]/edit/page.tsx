@@ -10,6 +10,8 @@ import { asListing, countingState } from "@/lib/server/tests";
 import { TestForm } from "../../TestForm";
 import { LiveTop } from "@/components/LiveTop";
 import { PageLoaded } from "@/components/PageLoaded";
+import { OnePage } from "@/components/OnePage";
+import { testScope } from "@/lib/pageClaim";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { AlertsMenu } from "@/components/AlertsMenu";
 import { keyBoxes } from "@/lib/server/accessKeys";
@@ -39,6 +41,8 @@ export default async function EditTest({ params, searchParams }: { params: Promi
   return (
     <>
       <AutoRefresh query={`test=${id}`} refresh={false} />
+      {/* (Owner, Nov 11, §380) Edit and the test page are ONE page: opening either claims it. */}
+      <OnePage scope={testScope(id)} />
       <p><a href={`/app/tests/${id}`}>← Back to the test</a></p>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-3xl font-bold tracking-tight text-white">Edit “{t.title}”</h1>

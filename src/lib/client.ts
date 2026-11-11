@@ -5,6 +5,7 @@ import { publishTesterAlertsOff, setTesterAlertsOff } from "./testerAlerts";
 import { ANSWER_TERMS_CODE, ANSWER_TERMS_EVENT, ANSWER_TERMS_FIRST, termsBlockedPath } from "./answerTerms";
 import { NDA_BLOCK_CODE, NDA_BLOCK_EVENT, NDA_BLOCK_FIRST, NDA_NOTICE, ndaBlockedPath } from "./ndaNotice";
 import { rememberReply } from "./lineLinkRegistry";
+import { PAGE_MOVED_CODE, PAGE_MOVED_PATH } from "./pageClaim";
 
 /** (Batch 15 section 36) The label of the last press that was stopped or refused: the box under it names it ("Your Pay didn't go through."). */
 let LAST_PRESS = "";
@@ -60,6 +61,42 @@ let PAGE_LOAD = TAB;
 export const pageLoad = () => PAGE_LOAD;
 export const newPageLoad = () => {
   if (typeof window !== "undefined") PAGE_LOAD = `${TAB}.${Math.random().toString(36).slice(2, 8)}${Date.now().toString(36)}`;
+};
+
+/**
+ * (Owner, Nov 11, §380) The one-at-a-time page this tab shows ("test:<id>" for a test page or its Edit, "session:<id>" for a session page; "" elsewhere): every
+ * press names it (x-page), and the server refuses a press from a copy that was opened somewhere else since. Set by PagePresence while the page is shown.
+ */
+let PAGE_SCOPE = "";
+export const pageScope = () => PAGE_SCOPE;
+export const setPageScope = (scope: string) => {
+  PAGE_SCOPE = scope;
+};
+/** The headers that name this page to the server (a poll asking whether this copy still holds the page sends them too). */
+export const pageHeaders = (): Record<string, string> => (PAGE_SCOPE && TAB ? { "x-tab": TAB, "x-page": PAGE_SCOPE } : {});
+let LEFT_MOVED = false;
+/**
+ * (Owner, Nov 11, §380) This copy was opened somewhere else (another tab, browser or device): every button here is disabled at once and the tab goes to the
+ * dashboard, which says "This page was opened somewhere else." Once per page.
+ */
+export function leaveMovedPage(w: (Window & typeof globalThis) | undefined = typeof window === "undefined" ? undefined : window) {
+  if (!w || LEFT_MOVED) return false;
+  LEFT_MOVED = true;
+  PAGE_SCOPE = "";
+  try {
+    w.document.querySelectorAll<HTMLButtonElement | HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("button, input, select, textarea").forEach((el) => {
+      el.disabled = true;
+    });
+    w.document.querySelector("main")?.setAttribute("inert", "");
+  } catch {
+    // nothing to disable: the tab still moves
+  }
+  w.location.replace(PAGE_MOVED_PATH);
+  return true;
+}
+/** Tests: a fresh page. */
+export const resetMovedPage = () => {
+  LEFT_MOVED = false;
 };
 
 /**
@@ -122,7 +159,7 @@ async function callApi<T = unknown>(path: string, body?: unknown, method?: strin
   try {
     res = await fetch(path, {
       method: method ?? (body === undefined ? "GET" : "POST"),
-      headers: { "x-timezone": Intl.DateTimeFormat().resolvedOptions().timeZone, ...(body === undefined ? {} : { "content-type": "application/json" }), "x-tab": TAB, ...(PAGE_LOAD ? { "x-load": PAGE_LOAD } : {}), ...(PAGE_USER ? { "x-uid": PAGE_USER } : {}) },
+      headers: { "x-timezone": Intl.DateTimeFormat().resolvedOptions().timeZone, ...(body === undefined ? {} : { "content-type": "application/json" }), "x-tab": TAB, ...(PAGE_LOAD ? { "x-load": PAGE_LOAD } : {}), ...(PAGE_USER ? { "x-uid": PAGE_USER } : {}), ...(PAGE_SCOPE ? { "x-page": PAGE_SCOPE } : {}) },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch {
@@ -131,6 +168,11 @@ async function callApi<T = unknown>(path: string, body?: unknown, method?: strin
   }
   const data = await res.json().catch(() => null);
   if (!res.ok) {
+    // (Owner, Nov 11, §380) This copy of the page was opened somewhere else: the press is refused with the one line and the tab goes to the dashboard.
+    if (data?.error?.code === PAGE_MOVED_CODE) {
+      leaveMovedPage();
+      throw new ApiError(res.status, PAGE_MOVED_CODE, String(data.error.message ?? ""), data.error);
+    }
     // A press from a page that belongs to the previous account was refused: the tab switches to the new account (on the page the new sign-in landed on).
     if (data?.error?.code === "account_changed" && typeof window !== "undefined") {
       try {

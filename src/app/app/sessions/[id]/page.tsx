@@ -57,6 +57,8 @@ import { TEAM_CLOSED_NO_DISPUTE, pieceDay, canSendAgain, lateBeforeSendLine, lat
 import { keyOf } from "@/lib/server/accessKeys";
 import { KeyBox } from "./KeyBox";
 import { PageLoaded } from "@/components/PageLoaded";
+import { OnePage } from "@/components/OnePage";
+import { sessionScope } from "@/lib/pageClaim";
 import { NdaBox } from "@/components/NdaBox";
 import { TESTER_REQUESTS_BOX } from "@/lib/lineAnchors";
 import { QuestionTexts, ValueText } from "@/components/QA";
@@ -388,6 +390,8 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
   return (
     <div key={`${c.id}:${c.status}:${c.endedAt?.getTime() ?? 0}`} className="mx-auto max-w-3xl space-y-6">
       <AutoRefresh query={`session=${c.id}`} v={pageV} sessionActive={c.status === "working"} />
+      {/* (Owner, Nov 11, §380) One session page at a time, across devices: opening it claims it. */}
+      <OnePage scope={sessionScope(c.id)} />
       {/* (Batch 16 section 38B) Call changes stop a press once even after a refresh showed them: counted from when the page first loaded here. */}
       <PageLoaded at={seenAt} />
       {/* (Design doc 8, owner Oct 26) The top, in this order: the test name, the access-key box, the live updates box (every change except the

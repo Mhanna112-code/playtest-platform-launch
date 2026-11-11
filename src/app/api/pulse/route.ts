@@ -145,6 +145,8 @@ export async function GET(req: Request) {
     // tab or browser follows a change made elsewhere on this poll (no refresh needed).
     // (Owner, Nov 4, §169) With the list's version (`v`): an answer read before a save that lands after it is older than that save, and the tab ignores it.
     const alerts = sessionId ? { testerOff: u.testerAlertsOff } : { ignored: t.ignoredAlerts, v: t.alertsV } /* batch 35 §73: this test's */;
-    return ok({ v, sessionActive, adminStopped: !!t.adminStoppedAt, restricted: !sessionId && !!(u.devSuspendedAt || t.developer.holdStartedAt), alerts });
+    // (Owner, Nov 11, §380) This copy of the page was opened somewhere else since (another tab, browser or device claimed it): it goes to the dashboard.
+    const moved = await (await import("@/lib/server/pageClaim")).pageMoved(req, u.id);
+    return ok({ v, sessionActive, adminStopped: !!t.adminStoppedAt, restricted: !sessionId && !!(u.devSuspendedAt || t.developer.holdStartedAt), alerts, ...(moved ? { moved: true } : {}) });
   });
 }

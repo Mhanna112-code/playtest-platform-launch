@@ -18,6 +18,8 @@ import { callsLeftWarning } from "@/lib/callMeasure";
 import { LabeledReason, ReasonQuote } from "@/components/ScrollText";
 import { requireOpenPage } from "@/lib/server/page-auth";
 import { PageLoaded } from "@/components/PageLoaded";
+import { OnePage } from "@/components/OnePage";
+import { testScope } from "@/lib/pageClaim";
 import { devRestricted, payGoesOn } from "@/lib/restricted";
 import { PAUSED_ALERTS, STOPPED_ALERTS } from "@/lib/alerts";
 import { TestBanner, allowedLine, type BannerCause } from "./TestBanner";
@@ -575,6 +577,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
     return (
       <>
         <AutoRefresh query={`test=${t.id}`} v={pageV} />
+        <OnePage scope={testScope(t.id)} />
         {banner}
         <TopPanel timeZone={u.timeZone}
           id={t.id} title={t.title} productName={t.productName} ignoredAlerts={t.ignoredAlerts} alertsV={t.alertsV} restricted mature={t.mature} nda={!!t.ndaText} keysLeft={keysLeft}
@@ -663,6 +666,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
     // (Batch 34 §14) Every stop box under any button on this page: a listing line's See it goes to the Listing panel.
     <SeeItTarget target="#listing">
       <AutoRefresh query={`test=${t.id}`} v={pageV} />
+        <OnePage scope={testScope(t.id)} />
       {t.workEndedAt && <p className="info" data-work-ended="">This test ended on {fmtDate(t.workEndedAt)}. You can still pay for work already sent and use the remaining rating and dispute windows.</p>}
       <TopPanel timeZone={u.timeZone}
         id={t.id}

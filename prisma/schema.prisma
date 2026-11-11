@@ -1018,9 +1018,22 @@ model ActionLog {
   text      String
   /// The browser tab (page load) that did it; that tab's own presses never stop for it.
   tab       String   @default("")
+  /// (Owner, Nov 11, §380) The one-at-a-time page it came from ("test:<id>", "session:<id>"), "" for any other page: that page never stops for it.
+  page      String   @default("")
   createdAt DateTime @default(now())
 
   @@index([userId, testId, createdAt])
+}
+
+/// (Owner, Nov 11, §380) One page at a time, across devices: the tab that holds a person's test page (with its Edit: "test:<id>") or session page
+/// ("session:<id>"). Opening the page claims it (newest wins); a press from any other copy is refused and that copy goes to the dashboard.
+model PageClaim {
+  userId    String
+  scope     String
+  tabId     String
+  claimedAt DateTime @default(now())
+
+  @@id([userId, scope])
 }
 
 /// (NEWEST+5) One rating per side per test (contract), final. side = who rated: "tester" (rates the developer) | "developer" (rates the tester).
