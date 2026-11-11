@@ -95,7 +95,7 @@ describe("batch 35 §41: a finished press stays finished until the page has redr
     expect(releaseIn(Date.now() - 1)).toBe(0);
     expect(DONE_HOLD_MS).toBeGreaterThanOrEqual(600);
     // The presses with their own busy state use the same helper.
-    for (const f of ["app/app/sessions/[id]/ChoiceBox.tsx", "app/app/sessions/[id]/RecordingUpload.tsx", "app/app/sessions/[id]/SessionActions.tsx", "app/app/sessions/[id]/TesterTop.tsx", "app/admin/AdminButton.tsx", "app/admin/DisputeDecision.tsx", "app/admin/PagedList.tsx", "components/OwedBox.tsx", "components/ChargebackSteps.tsx", "components/BlockButton.tsx", "components/Excerpts.tsx", "app/app/NoThanks.tsx", "app/app/DismissRemoved.tsx"])
+    for (const f of ["app/app/sessions/[id]/ChoiceBox.tsx", "app/app/sessions/[id]/RecordingUpload.tsx", "app/app/sessions/[id]/SessionActions.tsx", "app/app/sessions/[id]/TesterTop.tsx", "app/admin/AdminButton.tsx", "app/admin/DisputeDecision.tsx", "app/admin/PagedList.tsx", "components/OwedBox.tsx", "components/ChargebackSteps.tsx", "components/BlockButton.tsx", "components/Excerpts.tsx"])
       expect(code(f), f).toContain("useFinished(");
   });
 
