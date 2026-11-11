@@ -72,14 +72,16 @@ describe("Pay and Reject stay available until the tester chooses", () => {
     expect((await pay(dev.cookie, payBody(open.id))).status).toBe(200);
   });
 
-  // (Owner, Nov 9, §368; was "both are refused") Pay goes through while the developer is suspended, as the tester's Charge does; a hold still refuses it.
-  it("while the developer is suspended: Pay goes through; on a stopped test after the lift too", async () => {
+  // (Owner, Nov 11, §386 A; replaces §368, back to "refused") No money moves while the developer is suspended: Pay is refused; after the lift it goes through,
+  // on a stopped test too.
+  it("while the developer is suspended: Pay is refused; after the lift it goes through, on a stopped test too", async () => {
     const { dev, testId } = await setup();
     const [a, b] = [(await piece(testId, "Ana Silva")).sub, (await piece(testId)).sub];
     await db.user.update({ where: { id: dev.user.id }, data: { devSuspendedAt: new Date(), testerSuspendedAt: new Date() } });
-    expect((await pay(dev.cookie, payBody(a.id))).status).toBe(200);
-    expect(await db.review.count({ where: { submissionId: a.id } })).toBe(1);
+    expect((await pay(dev.cookie, payBody(a.id))).body.error.message).toBe("Your account is suspended, so your Pay didn't go through.");
+    expect(await db.review.count({ where: { submissionId: a.id } })).toBe(0);
     await db.user.update({ where: { id: dev.user.id }, data: { devSuspendedAt: null, testerSuspendedAt: null } });
+    expect((await pay(dev.cookie, payBody(a.id))).status).toBe(200);
     await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true });
     expect((await pay(dev.cookie, payBody(b.id))).status).toBe(200);
   });

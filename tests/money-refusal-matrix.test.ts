@@ -21,7 +21,7 @@ import { act, bookCall, joined, sact, seen, settle, setup } from "./fixtures";
 // Dispute), each STATE refusal its route can throw, reached and asserted with its exact text, and nothing in the database changed by the refused press: already
 // paid / charged / settled (a part settled by Pay, Charge or Let it go included), the windows closed, the caps ($500 a part with Pay more; the $500 for a
 // tester's calls), a duplicate waiting for the bank, already done in another tab, the block's hidden "This payment isn't available.", deleted accounts, and
-// pauses and holds as §368 has them (a team pause or a suspension lets them through; a hold refuses them). Field validation and technical errors are out of scope.
+// pauses and holds as §386 A has them (a team pause, a suspension and a hold all refuse them). Field validation and technical errors are out of scope.
 
 type Res = { status: number; body: { error?: { code?: string; message?: string } } & Record<string, unknown> };
 const DAY = 86_400_000;
@@ -180,14 +180,14 @@ describe("§365 money refusals: Pay", () => {
     await refused(w, () => pay(w, {}), "Deleted account's session has ended, so your Pay didn't go through.");
   });
 
-  it("§368: a hold refuses it; a team pause doesn't", async () => {
+  it("§386 A: a hold and a team pause both refuse it", async () => {
     const w = await world();
     await startHold(w.dev.user.id, "unpaid");
     await refused(w, () => pay(w, {}), "Your tests are paused, so your Pay didn't go through.");
     const v = await world();
     await pauseTest((await admin()).id, v.testId, "Checking");
     await settle();
-    expect((await pay(v, {})).status).toBe(200);
+    await refused(v, () => pay(v, {}), "The team paused this test, so your Pay didn't go through.");
   });
 });
 
@@ -319,12 +319,12 @@ describe("§365 money refusals: Confirm all", () => {
     await refused(w, () => confirmAll(w.dev.cookie, { seenIds: [p.id], seenTotalCents: 1000 }), ALL_BUSY);
   });
 
-  it("§368: during a hold nothing waits for the bank (it waits for the lift); own deleted account", async () => {
+  it("§386 A: during a hold Confirm all is refused (what waited for the bank waits for the lift); own deleted account", async () => {
     const w = await world();
     const p = await waitingCharge(w);
     await startHold(w.dev.user.id, "unpaid");
     await db.payment.update({ where: { id: p.id }, data: { status: "deferred", actionPi: null, actionBy: null } });
-    expect((await confirmAll(w.dev.cookie, { seenIds: [p.id], seenTotalCents: 1000 })).body).toMatchObject({ already: true }); // (§380 I) silent
+    await refused(w, () => confirmAll(w.dev.cookie, { seenIds: [p.id], seenTotalCents: 1000 }), "Your tests are paused, so your Confirm all didn't go through.");
     const v = await world();
     await db.user.update({ where: { id: v.dev.user.id }, data: { deletedAt: new Date() } });
     await refused(v, () => confirmAll(v.dev.cookie, {}), ACCOUNT_NO_LONGER_EXISTS);

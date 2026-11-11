@@ -50,26 +50,22 @@ const delayedLines = (userId: string) => db.notification.count({ where: { userId
 const callOf = async (x: { call: { id: string } }) => `Ana Silva's call on ${fmtDateTimeIn((await db.call.findUniqueOrThrow({ where: { id: x.call.id } })).startsAt, "UTC")}`;
 
 describe("batch 29 §37: an automatic call charge the tester can't be paid for yet reads 'may be delayed'", () => {
-  it("during a hold: deferred, the tester's call reads delayed and the event says it is waiting", async () => {
-    const x = await heldCall();
-    await db.user.update({ where: { id: x.dev.user.id }, data: { holdStartedAt: new Date(), holdReason: "unpaid" } });
-    expect(await autoCharge()).toBe(1);
-    expect(await db.payment.findFirstOrThrow({ where: { callId: x.call.id } })).toMatchObject({ status: "deferred", amountCents: 1500 });
-    expect(await delayedLines(x.tester.user.id)).toBe(1);
-    const mine = await db.notification.findMany({ where: { userId: x.tester.user.id } });
-    for (const n of mine) expect(n.text).not.toMatch(/failed|hold|chargeback|suspended/i);
-    expect(await eventsOf(x.testId)).toContain(`${await callOf(x)} is waiting to be charged once your tests resume: $15.00`);
-    // The session page treats owed and waiting (deferred) call payments like a declined one: the delayed line instead of "paid".
+  // (Owner, Nov 11, §386 A; replaces §113 / §368 here) No money moves while the developer is on a hold or suspended: the charge waits (nothing made, no line); the
+  // session page still treats a waiting (deferred) call payment recorded before like a declined one.
+  it("during a hold or a suspension: nothing is made and nothing is said; made after the lift", async () => {
+    for (const data of [{ holdStartedAt: new Date(), holdReason: "unpaid" }, { devSuspendedAt: new Date() }]) {
+      const x = await heldCall();
+      await db.user.update({ where: { id: x.dev.user.id }, data });
+      await autoCharge();
+      expect(await db.payment.count({ where: { callId: x.call.id } })).toBe(0);
+      expect(await delayedLines(x.tester.user.id)).toBe(0);
+      expect(await eventsOf(x.testId)).toEqual([]);
+      await db.user.update({ where: { id: x.dev.user.id }, data: { holdStartedAt: null, devSuspendedAt: null } });
+      await autoCharge();
+      expect(["charged", "not_set_up"]).toContain((await db.payment.findFirstOrThrow({ where: { callId: x.call.id } })).status);
+      expect(await eventsOf(x.testId)).toContain(`${await callOf(x)} was charged automatically: $15.00`);
+    }
     expect(src("app/app/sessions/[id]/page.tsx")).toContain('{ status: { in: ["needs_confirmation", "owed", "deferred"] } }');
-  });
-
-  // (Owner, Nov 9, §368; was "waiting (deferred)") A suspension no longer holds it back: it is charged at once, as without one.
-  it("during a suspension: charged at once (§368)", async () => {
-    const x = await heldCall();
-    await db.user.update({ where: { id: x.dev.user.id }, data: { devSuspendedAt: new Date() } });
-    expect(await autoCharge()).toBe(1);
-    expect(["charged", "not_set_up"]).toContain((await db.payment.findFirstOrThrow({ where: { callId: x.call.id } })).status);
-    expect(await eventsOf(x.testId)).toContain(`${await callOf(x)} was charged automatically: $15.00`);
   });
 
   it("the developer's event says the true outcome: declined, or waiting for the bank", async () => {

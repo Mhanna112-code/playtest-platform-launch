@@ -113,9 +113,9 @@ export function OwedBox({ onHold, owed: drawn, chargeback = false, review = fals
   return (
     <div id="owed" className="space-y-2 rounded-lg border border-amber-400/40 bg-amber-500/10 p-3 text-sm text-amber-100">
       {onHold && chargeback ? (
-        <p><b>Your tests are paused.</b> No new testers, invites or calls, and Pay waits. Testers can&apos;t send work until then (they can still charge for work you haven&apos;t reviewed: it&apos;s added here and paid with what you owe, as one payment); their deadlines move on by the pause.</p>
+        <p><b>Your tests are paused.</b> No new testers, invites or calls, and Pay waits. Testers can&apos;t send work or charge for work you haven&apos;t reviewed until then; their deadlines and payment dates move on by the pause.</p>
       ) : onHold ? (
-        <p><b>Your tests are paused.</b> No new testers, invites or calls, and Pay waits, until you pay what you owe. Testers can&apos;t send work until then (they can still charge for work you haven&apos;t reviewed: it&apos;s added here and paid with what you owe, as one payment); their deadlines move on by the pause.</p>
+        <p><b>Your tests are paused.</b> No new testers, invites or calls, and Pay waits, until you pay what you owe. Testers can&apos;t send work or charge for work you haven&apos;t reviewed until then; their deadlines and payment dates move on by the pause.</p>
       ) : (
         <p><b>A payment failed.</b> Pay {money(seenTotal)} to keep your tests running.</p>
       )}

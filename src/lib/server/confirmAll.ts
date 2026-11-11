@@ -147,11 +147,16 @@ export async function confirmAllPress(dev: { id: string }, body: Seen & Record<s
   await confirm.expireActions(new Date(), { developerId: dev.id });
   await once.resumeStaleOwed(dev.id);
   if (await openAll(dev.id)) throw new HttpError(409, "busy", T.ALL_BUSY);
+  // (Owner, Nov 11, §386 A; replaces §368) No money moves while paused: the developer's hold or suspension refuses Confirm all ("Your account is suspended, so
+  // your Confirm all didn't go through."), and so does the team's pause of any test whose charge it covers (below), before the stop box.
+  const pay = await import("./payments");
+  await pay.moneyFrozenRefusal(dev.id, null, "Confirm all");
   const now = new Date();
   const waiting = (await confirm.waitingConfirmation(dev.id, undefined, now)).filter(inAll); // (§172)
   // (Owner, Nov 3, batch 35 §163) Nothing left to confirm never stops (a "what's waiting changed" stop could only be followed by nothing). (Owner, Nov 11, §380 I,
   // D14; replaces §163's refusal) Already what Confirm all wanted: silent, the page redraws.
   if (!waiting.length) return NOTHING_LEFT;
+  for (const t of await db.test.findMany({ where: { contracts: { some: { id: { in: waiting.map((p) => p.contractId!) } } } }, select: { adminPausedAt: true, status: true } })) await pay.moneyFrozenRefusal(dev.id, t, "Confirm all");
   await stopIfChanged(waiting, body, now, dev.id);
   // (Owner, Nov 3) Over $200 in all: only with the tick "I confirm this payment is over $200." (as Pay's).
   if (sum(waiting) > PAY_TICK_CENTS && body.over200 !== true) throw new HttpError(400, "needs_tick", `Tick “${OVER_PAY_TICK_LINE}” to pay.`);

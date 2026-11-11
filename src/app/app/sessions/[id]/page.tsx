@@ -40,6 +40,7 @@ import { RecordingUpload } from "./RecordingUpload";
 import { TesterCallPanel } from "./TesterCallPanel";
 import { LivePanel } from "@/components/LivePanel";
 import { ChoiceBox } from "./ChoiceBox";
+import { moneyFrozen } from "@/lib/restricted";
 import { TesterTop } from "./TesterTop";
 import { CallRequests } from "@/components/CallRequests";
 import { busyTimes, callEndProps, pageRows, rateLabel } from "@/lib/server/requests";
@@ -224,6 +225,9 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
   // saved); Charge / Let it go, disputes, rating, leaving and cancelling calls carry on. Testers read only "paused". (Batch 15 section 1) Chat stays open: it pauses
   // only while a person is restricted, and the chat page itself says so.
   const rulesPaused = testerPaused(c.test.developer, c.test);
+  // (Owner, Nov 11, §386 A) No money moves while the test or its developer is paused, after the test closed too: Charge and Let it go stay on the page, a press is
+  // refused, and no banner offers them.
+  const moneyPaused = !!moneyFrozen(c.test.developer, c.test);
   const draftsShown = !rulesPaused || PAUSE_DEFAULTS.draftsEditable;
   const meOff = !!u.testerSuspendedAt;
   // (§167) The tester can add under a question: sent, still open, the questions unchanged since.
@@ -379,7 +383,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
   // (Owner, Nov 11, §376) ONLY what truly works right now: Charge / Let it go only while its box is open (choiceOpen, not a Charge that opens later); chat and
   // excerpts during a pause too (§376 item 2), never with a deleted developer's read-only chat.
   const stillWorks = {
-    charge: !devGone && (choiceOpen(written) || choiceOpen(recording)),
+    charge: !devGone && !moneyPaused && (choiceOpen(written) || choiceOpen(recording)),
     dispute: [written, recording].some((x) => x && !chargedOwed.has(x.id) && !delayedSubs.has(x.id) && disputable(x.review, x.dispute, x.id)) || c.calls.some((x) => !owedCalls.has(x.id) && disputable(x.review, x.dispute, x.id)),
     rate: rateBlock === "" && !meOff,
     excerpt: excerptPicks.length > 0,
@@ -630,7 +634,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
               })()}
               {sub && <p className="text-xs text-slate-500">{partLine(sub.agreedCents, partPaid.get(sub.id) ?? 0)}</p>}
               {sub && !sub.review && !sub.late && sub.choiceOfferedAt && sub.choiceBy && canChoose && !chargeShut(sub.id) && chargeAmount(sub.agreedCents, partPaid.get(sub.id) ?? 0) > 0 && (
-                <ChoiceBox paused={rulesPaused} seenAt={seenAt} sessionId={c.id} submissionId={sub.id} devName={dev} cents={chargeAmount(sub.agreedCents, partPaid.get(sub.id) ?? 0)} line={choiceLine(dev, key, chargeAmount(sub.agreedCents, partPaid.get(sub.id) ?? 0), (() => { const o = chargeOpensAt(sub, c.test, c, now); return o ? fmtDate(o) : undefined; })())} />
+                <ChoiceBox paused={moneyPaused} seenAt={seenAt} sessionId={c.id} submissionId={sub.id} devName={dev} cents={chargeAmount(sub.agreedCents, partPaid.get(sub.id) ?? 0)} line={choiceLine(dev, key, chargeAmount(sub.agreedCents, partPaid.get(sub.id) ?? 0), (() => { const o = chargeOpensAt(sub, c.test, c, now); return o ? fmtDate(o) : undefined; })())} />
               )}
               {/* (Batch 17 §19) Its last 7 days before close-out. */}
               {chargeSoon(sub?.id) && choiceOpen(sub) && <p className="note" data-charge-closes="">{chargeSoon(sub?.id)}</p>}

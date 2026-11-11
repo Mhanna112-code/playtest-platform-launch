@@ -127,16 +127,17 @@ describe("batch 10 item 2: a paused test hides what doesn't work, with a banner 
   const all = { drafts: true, charge: true, dispute: true, rate: true, leave: true, cancelCalls: true, send: true, requestCalls: true };
   it("the banner text, built from what is available (never hold, suspended, failed or chargeback); (Owner, Nov 11, §376) chat and excerpts when available", () => {
     expect(R.pausedForTesters(all)).toBe(
-      "This test is paused right now. For now you can save drafts of your parts, charge or let go of work left unreviewed, dispute, rate, leave the test, and cancel booked calls. Sending work and requesting calls come back when it resumes.",
+      // (Owner, Nov 11, §386 A) No money moves while paused: Charge and Let it go come back with sending, never offered now.
+      "This test is paused right now. For now you can save drafts of your parts, dispute, rate, leave the test, and cancel booked calls. Sending work, charging or letting go and requesting calls come back when it resumes.",
     );
     // (§376; reverses §172) Chat and "Ask to show an excerpt" go on during every pause: listed when they are on the page.
     expect(R.pausedForTesters({ ...all, excerpt: true, chat: true })).toBe(
-      "This test is paused right now. For now you can save drafts of your parts, charge or let go of work left unreviewed, dispute, rate, leave the test, cancel booked calls, ask to show an excerpt, and chat. Sending work and requesting calls come back when it resumes.",
+      "This test is paused right now. For now you can save drafts of your parts, dispute, rate, leave the test, cancel booked calls, ask to show an excerpt, and chat. Sending work, charging or letting go and requesting calls come back when it resumes.",
     );
     expect(R.PAUSED_FOR_TESTERS).toBe(R.pausedForTesters({ ...all, excerpt: true, chat: true }));
     const noCharge = R.pausedForTesters({ ...all, charge: false });
-    expect(noCharge).not.toContain("charge or let go");
-    expect(noCharge).toContain("For now you can save drafts of your parts, dispute, rate, leave the test, and cancel booked calls.");
+    expect(noCharge).not.toContain("charg");
+    expect(noCharge).toContain("For now you can save drafts of your parts, dispute, rate, leave the test, and cancel booked calls. Sending work and requesting calls come back when it resumes.");
     expect(R.pausedForTesters({ ...all, drafts: false, charge: false, dispute: false, rate: false, cancelCalls: false })).toBe(
       "This test is paused right now. For now you can leave the test. Sending work and requesting calls come back when it resumes.",
     );

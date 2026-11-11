@@ -29,7 +29,7 @@ async function withWork() {
 }
 
 describe("a suspended developer (design doc 2 and 11.4)", () => {
-  it("names the press that failed; (§368) Pay goes through; (batch 15 section 29) Cancel call, Stop and End early go through", async () => {
+  it("names the press that failed; (§386 A) Pay is refused; (batch 15 section 29) Cancel call, Stop and End early go through", async () => {
     const { dev, testId, sub, sessionId, tester } = await withWork();
     const a = await admin();
     const call = await bookCall(testId, dev.cookie, sessionId, tester.cookie, 24 * 6);
@@ -38,7 +38,7 @@ describe("a suspended developer (design doc 2 and 11.4)", () => {
     expect(r.status).toBe(409);
     expect(r.body.error).toMatchObject({ code: "nda_only" }); // (Codex 2033b106: Edit opens its NDA-only view while paused, held, suspended or stopped; other fields are refused as nda_only)
     expect((await act(testId, "invite", dev.cookie, { seenAt: seen(), testerIds: [] })).body.error.failed).toBe("Your Invite on Harbor Run didn't go through");
-    expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000, confirmed: true })).status).toBe(200); // (Owner, Nov 9, §368)
+    expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000, confirmed: true })).body.error.message).toBe("Your account is suspended, so your Pay didn't go through."); // (Owner, Nov 11, §386 A)
     // Cancel call is allowed (the call is 6 days away, so the suspension had not cancelled it yet).
     expect((await act(testId, "cancel-call", dev.cookie, { callId: call.id, seenAt: seen(), confirmed: true })).status).toBe(200);
   });
@@ -59,7 +59,7 @@ describe("a suspended developer (design doc 2 and 11.4)", () => {
     expect((await db.call.findUniqueOrThrow({ where: { id: far.id } })).status).toBe("cancelled");
   });
 
-  it("testers in the test see it paused (never why): joining, calls and sending wait; (batch 6) Charge goes through at once, Let it go works; lifting resumes it", async () => {
+  it("testers in the test see it paused (never why): joining, calls, sending and (§386 A) Charge wait; lifting resumes it", async () => {
     const { dev, testId, sessionId, tester, sub } = await withWork();
     const a = await admin();
     await adm("suspend", a.cookie, { id: dev.user.id, note: "Spam" });
@@ -68,10 +68,9 @@ describe("a suspended developer (design doc 2 and 11.4)", () => {
     const r = await sact(sessionId, "request-time", tester.cookie, { seenAt: seen(), startsAt: atHours(80) });
     expect(r.body.error.message).not.toMatch(/suspend|hold|fail/i);
     await db.submission.update({ where: { id: sub.id }, data: { choiceOfferedAt: new Date(), choiceBy: new Date(Date.now() + 86_400_000) } });
-    // (Owner, Oct 28 afternoon) Under the team's suspension with no hold a Charge is charged at once; sending waits. They read only "paused".
+    // (Owner, Nov 11, §386 A; replaces Oct 28) No money moves while the developer is suspended: Charge is refused. They read only "paused".
     const ch = await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge", amount: "10.00", tickedCents: 1000, seenAt: seen(), confirmed: true });
-    expect(ch.status).toBe(200);
-    expect(ch.body.status).not.toBe("owed");
+    expect(ch.body.error.message).toBe("This test is paused, so your Charge didn't go through.");
     // (Owner, Nov 11, §375) A re-send of what was sent is "already sent" first (a refusal for good, before the soft ones); an addition is the paused one.
     expect((await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] })).body.error.code).toBe("locked");
     expect((await addTo(sessionId, tester.cookie, { text: "one more thing" })).body.error.message).toBe("This test is paused right now, so your Add didn't go through."); // (§364 item 5)

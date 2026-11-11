@@ -199,8 +199,9 @@ export async function suspendAccount(adminId: string, userId: string, note: stri
     await pauseDeveloper(u);
     // (Owner, Nov 6, §295) Their testers read "“<test>” is paused": each test no other cause (a hold, the team's pause) was pausing already.
     if (!u.holdStartedAt) await tellTestersPaused((await db.test.findMany({ where: { developerId: userId, status: "open", workEndedAt: null, adminPausedAt: null }, select: { id: true } })).map((t) => t.id));
-    // (Owner, Nov 9, §368; replaces §159 rule 4a) Paying goes on during a suspension: the developer's own Pay / Pay more whose bank page is still open is no longer
-    // cancelled (its Complete goes through and is recorded, as a tester's charge being confirmed always did, rule 4b). A hold still cancels it (holds.ts).
+    // (Owner, Nov 11, §386 A; replaces §368, back to §159 rule 4a) No money moves while suspended: the developer's own Pay / Pay more whose bank page is still open
+    // is cancelled, as a hold's start cancels it (holds.ts); nothing was charged, and Pay works again after the reinstatement.
+    await releaseOpenPays({ developerId: userId });
     await (await import("./subscription")).pauseBilling(userId);
   }
   if (side === "tester" && u.isTester) await removeTester(u, "suspended");
@@ -441,8 +442,9 @@ export async function pauseTest(adminId: string, testId: string, note: string, s
   const contractIds = (await db.contract.findMany({ where: { testId }, select: { id: true } })).map((c) => c.id);
   await closeRequests({ contractIds }, "the test is paused");
   // (Owner, Nov 4, §172) What a developer suspension does to each of the developer's tests, done to this one: calls starting within 3 days are cancelled with no
-  // fault (later ones 3 days before they start if the pause still lasts: the daily job). (Owner, Nov 9, §368; replaces §159 rule 9 / §171 B5) Paying goes on: the
-  // developer's own Pay / Pay more whose bank page is open on this test is no longer cancelled.
+  // fault (later ones 3 days before they start if the pause still lasts: the daily job). (Owner, Nov 11, §386 A; replaces §368, back to §159 rule 9) No money
+  // moves while paused: the developer's own Pay / Pay more whose bank page is open on this test is cancelled (nothing was charged).
+  await releaseOpenPays({ contractId: { in: contractIds } });
   const callsCancelled = await cancelCallsNearPause(t.developerId, new Date(), testId);
   const dev = await db.user.findUniqueOrThrow({ where: { id: t.developerId } });
   // (Owner, Nov 6, §310b) The developer's line names the closing date in the paused line's words ("The team paused “…”: it closes on <date> unless the team lifts
@@ -460,7 +462,7 @@ export async function pauseTest(adminId: string, testId: string, note: string, s
 
 /** (Owner, Nov 4, §172) The pause email's line: what still works on the test, and what waits for the lift. */
 export const TEAM_PAUSED_EMAIL_LINE =
-  "For now you can pay for work (Pay, Pay more, Confirm with your bank), stop it, end testers' work early, cancel calls, or add your side of a dispute. Chat and Rate on this test wait until the team lifts the pause."; // (§368)
+  "For now you can stop it, end testers' work early, cancel calls, or add your side of a dispute. Paying for work, Rate and chat on this test wait until the team lifts the pause, and payment dates move on by it."; // (§386 A)
 /** "2 calls in the next 3 days were cancelled. Later calls are cancelled 3 days before they start if the pause still lasts." */
 export const teamPauseCallsLine = (n: number) =>
   `${n === 1 ? "1 call" : `${n} calls`} in the next ${CALL_SUSPENSION_DAYS} days ${n === 1 ? "was" : "were"} cancelled. Later calls are cancelled ${CALL_SUSPENSION_DAYS} days before they start if the pause still lasts.`;
@@ -633,4 +635,11 @@ export async function payoutWaitReminders(now = new Date(), opts: { /** (§383) 
     n++;
   }
   return n;
+}
+
+/** (Owner, Nov 11, §386 A) The developer's own Pay / Pay more checks still open at the bank (needs_action) are cancelled when the money freezes (as a hold's start does). */
+async function releaseOpenPays(where: { developerId?: string; contractId?: { in: string[] } }) {
+  const { release } = await import("./confirm");
+  for (const p of await db.payment.findMany({ where: { ...where, status: "needs_action", kind: { in: ["review", "call", "extra"] } }, select: { id: true } }))
+    await release(p.id).catch((e) => console.error("[pause] cancel open Pay check:", (e as Error).message));
 }

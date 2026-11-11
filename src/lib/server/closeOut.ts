@@ -120,6 +120,22 @@ export async function testSpans(t: { id: string; adminPausedAt: Date | null; wor
   return mergeSpans([...[...devPauseSpans(devEvents, t.developer, now), ...team].filter((s) => s.start < end).map(clip), ...outages.map((o) => ({ start: o.startAt.getTime(), end: o.endAt.getTime(), open: false }))]);
 }
 
+/**
+ * (Owner, Nov 11, §386 A; replaces §358 and §366 A for the money windows only) What moves each piece's money window (Pay, Pay more, Charge / Let it go): every span
+ * the money was frozen (moneyFrozen), after the test closed or stopped too: the developer's holds and suspensions whenever they ran (not a deleted developer's
+ * one still on: it never lifts and freezes nothing), the team's pauses while in force (a stopped test's ends at its stop), and outages. Overlaps count once.
+ * The test's close-out, Rate and Dispute windows keep testSpans.
+ */
+export async function moneySpans(t: { id: string; adminPausedAt: Date | null; workEndedAt?: Date | null; pauseClosedAt?: Date | null; status?: string; stoppedAt?: Date | null; developer: { id: string; holdStartedAt: Date | null; devSuspendedAt: Date | null; deletedAt?: Date | null } }, from: Date, now: Date) {
+  const [devEvents, outages, team] = await Promise.all([
+    db.accountEvent.findMany({ where: { userId: t.developer.id, kind: { in: ["hold", "hold-lifted", "suspended", "reinstated"] } }, select: { kind: true, side: true, createdAt: true } }),
+    db.outage.findMany({ where: { endAt: { gt: from }, OR: [{ needsApproval: false }, { approvedAt: { not: null } }] }, select: { startAt: true, endAt: true } }),
+    teamPauseSpans(t.id, t.adminPausedAt, now, t.status === "stopped" ? workEndOf(t) ?? now : null),
+  ]);
+  const dev = t.developer.deletedAt ? { holdStartedAt: null, devSuspendedAt: null } : t.developer;
+  return mergeSpans([...devPauseSpans(devEvents, dev, now), ...team, ...outages.map((o) => ({ start: o.startAt.getTime(), end: o.endAt.getTime(), open: false }))]);
+}
+
 export const CONTRACTS = { select: { status: true, dueAt: true, endedAt: true } } as const;
 
 /**
@@ -156,9 +172,10 @@ export async function testerRatingClosesAt(contractId: string, now = new Date())
  * opened (the later of its tester's deadline and 7 days after sending), moved by the same pauses and outages. A tester whose tester side was suspended gets that time
  * added (their Charge is hidden while suspended). null while the test's close-out isn't known.
  * (Owner, Nov 11, §378; replaces batch 17 §19's one Pay more date per test and the developer side's own date) ONE date per piece for all of them: the tester's
- * Charge / Let it go, the developer's Pay AND Pay more on that piece close together, on this date (the tester's suspension time included).
+ * Charge / Let it go, the developer's Pay AND Pay more on that piece close together, on this date (the tester's suspension time included). (Owner, Nov 11, §386 A)
+ * Moved by every span the money was frozen, after the test closed too (moneySpans). `dispute`: the dispute window, which keeps the test's spans (testSpans).
  */
-export async function pieceCloseOut(where: { submissionId?: string | null; callId?: string | null }, now = new Date()) {
+export async function pieceCloseOut(where: { submissionId?: string | null; callId?: string | null }, now = new Date(), /** (§386 A) the dispute window: testSpans, as before */ opts: { dispute?: boolean } = {}) {
   const piece = where.submissionId
     ? await db.submission.findUnique({ where: { id: where.submissionId }, select: { payBy: true, contractId: true, stintDueAt: true } })
     : where.callId
@@ -173,7 +190,9 @@ export async function pieceCloseOut(where: { submissionId?: string | null; callI
   if (!base) return null;
   const opens = piece.payBy ? reviewDateOf(piece.payBy, pieceDueAt(piece, c)) : null; // (§313c) an earlier stint's work keeps its deadline
   const tEvents = await db.accountEvent.findMany({ where: { userId: c.tester.id, kind: { in: ["suspended", "reinstated"] } }, select: { kind: true, side: true, createdAt: true } });
-  const spans = mergeSpans([...(await testSpans(t, new Date(Math.min(base.getTime(), opens?.getTime() ?? Infinity)), now)), ...testerPauseSpans(tEvents, c.tester.testerSuspendedAt, now)]);
+  const from = new Date(Math.min(base.getTime(), opens?.getTime() ?? Infinity));
+  // (Owner, Nov 11, §386 A) The money window moves by every frozen span, after the test closed too (moneySpans); a dispute keeps the test's spans (§358).
+  const spans = mergeSpans([...(await (opts.dispute ? testSpans(t, from, now) : moneySpans(t, from, now))), ...testerPauseSpans(tEvents, c.tester.testerSuspendedAt, now)]);
   const testEnd = windowEnd(base, spans, now, CLOSE_OUT_DAYS).end;
   const own = opens ? windowEnd(opens, spans, now, CLOSE_OUT_DAYS).end : null;
   return own && own > testEnd ? own : testEnd;
@@ -195,7 +214,7 @@ export async function disputesClosed(contractId: string, pieces: { submissionId?
   for (const k of keys) {
     const id = (k.submissionId ?? k.callId)!;
     if (rated) { out.set(id, RATED_NO_DISPUTE); continue; }
-    const at = await pieceCloseOut(k, now);
+    const at = await pieceCloseOut(k, now, { dispute: true }); // (§386 A) unchanged by the money freeze
     if (closedOut(at, now)) out.set(id, disputeClosedLine(fmtDate(at!)));
   }
   return out;

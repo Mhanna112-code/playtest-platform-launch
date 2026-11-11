@@ -6,8 +6,8 @@ import { db } from "@/lib/db";
 import { joined, sact, seen, settle, setup } from "./fixtures";
 import { allowedLine } from "@/app/app/tests/[id]/TestBanner";
 
-// (Owner, Nov 9, §368) The restricted view of a test page shows the parts to pay (Pay) during a team pause or a developer suspension (paying goes on), never during a
-// hold.
+// (Owner, Nov 9, §368) The restricted view of a test page shows the parts to pay (Pay) during a team pause or a developer suspension, never during a hold.
+// (Owner, Nov 11, §386 A) The buttons stay (a press is refused: no money moves while paused), and the banner never offers paying.
 
 const auth = vi.hoisted(() => ({ user: null as User | null }));
 vi.mock("@/lib/server/page-auth", () => ({ requireOpenPage: async () => auth.user, requirePageUser: async () => auth.user, getPageUser: async () => auth.user, adminAway() {}, leaveIfClosed() {} }));
@@ -30,7 +30,7 @@ async function sent() {
   return { ...s, ...j, sub };
 }
 
-describe("§368 the restricted view keeps Pay during a team pause or a suspension, not a hold", () => {
+describe("§368 / §386 A the restricted view keeps the Pay buttons during a team pause or a suspension, not a hold; the banner never offers paying", () => {
   it.each(["team", "suspended", "held"] as const)("%s", async (cause) => {
     const w = await sent();
     if (cause === "team") await db.test.update({ where: { id: w.testId }, data: { adminPausedAt: new Date() } });
@@ -45,12 +45,13 @@ describe("§368 the restricted view keeps Pay during a team pause or a suspensio
     } else {
       expect(html).toContain("data-restricted-pay");
       expect(html).toContain(`data-fold="needs-pay-${w.sub.id}"`);
-      expect(html).toContain("For now you can pay for work, stop this test");
+      expect(html).toContain("For now you can stop this test");
+      expect(html).not.toContain("pay for work");
     }
   });
 
-  it("the banner's what-still-works line names paying first", () => {
-    expect(allowedLine(true, { pay: true, stop: true, endEarly: true })).toBe("For now you can pay for work, stop this test, or end testers' work early.");
+  it("the banner's what-still-works line never names paying (§386 A)", () => {
+    expect(allowedLine(true, { stop: true, endEarly: true })).toBe("For now you can stop this test, or end testers' work early.");
     expect(allowedLine(true, { stop: true })).toBe("For now you can stop this test.");
   });
 });

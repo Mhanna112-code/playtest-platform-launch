@@ -2,13 +2,14 @@ import { beforeLock } from "./pressRace";
 import { chooseOwnText } from "./actionText";
 import { randomUUID } from "node:crypto";
 import { startedBeforeWorkEnd } from "@/lib/pause";
+import { TESTER_FROZEN_CAUSE, moneyFrozen } from "@/lib/restricted";
 import * as RF from "@/lib/refusal";
 import { Prisma, type Payment } from "@prisma/client";
 import { T } from "@/lib/tz";
 import { APPS_WAITING_GROUP } from "@/lib/bell";
 import { db } from "@/lib/db";
 import { callAtFor, displayName, fmtDate, fmtDateTime, money, pronouns, toCents } from "@/lib/server/dateFormat";
-import { owedReceiptWhat, pressAgainLine, bankChangedLine, reviewFirstLine, CHARGEBACKS_REVIEW_FROM, OWED_ALL_WAITING, OWED_BANK_WAITING, reservedAddedLine, AUTO_CHARGED_CALL, AUTO_NOTHING_CALL, UNLISTED_CALL_CLOSED, UNLISTED_CALL_TAIL, AUTO_CHARGE_NO_CHOICE, MIN_CHARGE_CENTS, CHARGE_TICK_CENTS, chargeTickLine, chargeClosedLine, CLOSE_OUT_REMINDER_DAYS, testerPayable, HOLD_APPROVAL_AFTER, MANY_HOLDS_LABEL, autoPayFor, chargeAmount, paidMeanwhileLine, CHARGED_BY_TESTER, byTesterChoice, chargedDelayedLine, openUntilMarkDue, datedMarkDue, ownDeadlineMarkDue, reviewMarkDue, INVITE_REMIND_DAYS, repeatDue, utcDayNo, REPEAT_MIN_GAP_MS, failedLine, joinClosingLine, ownDeadlineLine, LET_GO_BY_TESTER, REVIEW_DAYS, chargeIsOpen, chargeOpensAt, pauseShiftMs, PAYABLE_TESTER, PIECE_LOCKED, ownChargeWaitingLine, chargedByTester, chargebackWonRefundLine, chargebackWonLine, CHARGEBACK_FEE_CENTS, chargebackOwedLine, chargebackReversedLine, bankLoweredLine, bankRaisedLine, raiseNote, raiseOf, raiseName, RAISE_NOTE } from "@/lib/rules";
+import { owedReceiptWhat, pressAgainLine, bankChangedLine, reviewFirstLine, CHARGEBACKS_REVIEW_FROM, OWED_ALL_WAITING, OWED_BANK_WAITING, reservedAddedLine, AUTO_CHARGED_CALL, AUTO_NOTHING_CALL, UNLISTED_CALL_CLOSED, UNLISTED_CALL_TAIL, AUTO_CHARGE_NO_CHOICE, MIN_CHARGE_CENTS, CHARGE_TICK_CENTS, chargeTickLine, chargeClosedLine, CLOSE_OUT_REMINDER_DAYS, testerPayable, HOLD_APPROVAL_AFTER, MANY_HOLDS_LABEL, autoPayFor, chargeAmount, paidMeanwhileLine, CHARGED_BY_TESTER, byTesterChoice, openUntilMarkDue, datedMarkDue, ownDeadlineMarkDue, reviewMarkDue, INVITE_REMIND_DAYS, repeatDue, utcDayNo, REPEAT_MIN_GAP_MS, failedLine, joinClosingLine, ownDeadlineLine, LET_GO_BY_TESTER, REVIEW_DAYS, chargeIsOpen, chargeOpensAt, pauseShiftMs, PAYABLE_TESTER, PIECE_LOCKED, ownChargeWaitingLine, chargedByTester, chargebackWonRefundLine, chargebackWonLine, CHARGEBACK_FEE_CENTS, chargebackOwedLine, chargebackReversedLine, bankLoweredLine, bankRaisedLine, raiseNote, raiseOf, raiseName, RAISE_NOTE } from "@/lib/rules";
 import { HttpError } from "./http";
 import { adminUsers, bell, notify, renderFor, sendSummaries, teamEmails } from "./notify";
 import { appUrl } from "./auth";
@@ -40,6 +41,15 @@ import { LATE_REMINDER_TAIL, NO_CHARGE_LATE, TEAM_CLOSED_NO_PAY } from "@/lib/mo
 // (Owner, Nov 9, §366 A) A stopped test isn't paused any more (its kept adminPausedAt, or a hold or suspension of its developer, no longer holds Charge opening or
 // the reminders back); a deleted developer's test still is (§363: their unreviewed work never gets Charge).
 const PAUSE_FREE = { developer: { deletedAt: null }, OR: [{ status: "stopped" }, { adminPausedAt: null, developer: { holdStartedAt: null, devSuspendedAt: null } }] } satisfies Prisma.TestWhereInput;
+/**
+ * (Owner, Nov 11, §386 A; replaces §368 and §358 for the money windows) Tests whose money isn't frozen (moneyFrozen): no hold or suspension of the developer,
+ * whatever the test's state (closed and stopped tests too), and no team pause still in force (a stopped test's kept adminPausedAt doesn't count). A deleted
+ * developer's hold or suspension freezes nothing. The automatic call charge, Charge opening and the money reminders (Pay now, Charge or let go, closing soon,
+ * the review and call pay reminders) wait while frozen; afterwards they name the moved dates.
+ */
+const MONEY_LIVE = { OR: [{ developer: { deletedAt: { not: null } } }, { developer: { holdStartedAt: null, devSuspendedAt: null } }], AND: [{ OR: [{ status: "stopped" }, { adminPausedAt: null }] }] } satisfies Prisma.TestWhereInput;
+/** (§386 A) MONEY_LIVE for the reminders and Charge opening: never a deleted developer's test (as PAUSE_FREE). */
+const MONEY_FREE = { ...MONEY_LIVE, developer: { deletedAt: null } } satisfies Prisma.TestWhereInput;
 
 export async function onHold(devId: string) {
   const u = await db.user.findUnique({ where: { id: devId }, select: { holdStartedAt: true } });
@@ -250,7 +260,8 @@ export async function shiftPieceDeadlines(tx: Prisma.TransactionClient, where: P
  * the pause's length (pauseShiftMs: only the part not covered by another pause still on). The same for a hold lift, a reinstatement and the team's unpause.
  */
 export async function shiftAfterPause(tx: Prisma.TransactionClient, t: { id: string; status: string; openUntil: Date | null; workEndedAt?: Date | null; pauseClosedAt?: Date | null }, start: Date, now: Date, others: (Date | null | undefined)[] = []) {
-  // (Owner, Nov 9, §358) A pause that began after the test's work ended (closed, or the 7-day pause closure) moves none of its dates.
+  // (Owner, Nov 9, §358) A pause that began after the test's work ended (closed, or the 7-day pause closure) moves none of its dates. (Owner, Nov 11, §386 A) Its
+  // frozen time still moves each piece's money window (pieceCloseOut counts it from the piece's own dates, which stay: never counted twice).
   if (!startedBeforeWorkEnd(start, t)) return 0;
   const ms = pauseShiftMs(start, now, others);
   if (ms <= 0) return 0;
@@ -322,12 +333,14 @@ async function chargeDeferredLocked(devId: string) {
   // each becomes a debt (a new hold); any other problem -> they all keep waiting. A hold or a suspension starting first keeps them all waiting (the claim re-checks it).
   const dev = await db.user.findUniqueOrThrow({ where: { id: devId } });
   // (Owner, Nov 3) A deleted developer's waiting charges go to their saved card even on a hold (it can never clear).
-  // (Owner, Nov 9, §368; replaces §172's wait for the team's lift and the reinstatement) A suspension or the team's pause of a test no longer holds payments back,
-  // the developer's side the same as the tester's Charge: what waits is made now. Only a payment or chargeback hold keeps them waiting (for Pay what you owe).
-  if (!dev.deletedAt && dev.holdStartedAt) return;
+  // (Owner, Nov 11, §386 A; replaces §368) No money moves while paused: a hold or a suspension keeps them all waiting (the reinstatement or the lift makes them),
+  // and the team's pause of a test keeps that test's waiting (its lift makes them). Charges recorded under §113 (a Charge during a hold) are made here too.
+  if (!dev.deletedAt && (dev.holdStartedAt || dev.devSuspendedAt)) return;
   // (§151) A deleted developer's repayments of reversed payments still wait (only an account with no hold or suspension pays them).
   const repays = !dev.holdStartedAt && !dev.devSuspendedAt;
-  const rows = await db.payment.findMany({ where: { developerId: devId, status: "deferred", coveredById: null, OR: [{ kind: { notIn: ["chargeback", "owed"] } }, ...(repays ? [{ kind: "chargeback", repaysId: { not: null } }] : [])] }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] });
+  const paused = (await db.contract.findMany({ where: { test: { developerId: devId, adminPausedAt: { not: null }, status: { not: "stopped" } } }, select: { id: true } })).map((c) => c.id);
+  const notTeamPaused = { OR: [{ contractId: null }, { contractId: { notIn: paused } }] } satisfies Prisma.PaymentWhereInput;
+  const rows = await db.payment.findMany({ where: { developerId: devId, status: "deferred", coveredById: null, AND: [notTeamPaused], OR: [{ kind: { notIn: ["chargeback", "owed"] } }, ...(repays ? [{ kind: "chargeback", repaysId: { not: null } }] : [])] }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] });
   const r = await once.chargeWaitingTotal(devId, rows);
   if (r?.result === "paid" && r.cents > 0) await receipt(dev.email, once.receiptWhat(r.names, true), r.cents, r.status !== "not_set_up" ? "charged" : "not_set_up", "/app/payments");
 }
@@ -335,8 +348,8 @@ async function chargeDeferredLocked(devId: string) {
 async function chargeReadyDeferred() {
   const waiting = await db.payment.findMany({ where: { status: "deferred" }, select: { developerId: true }, distinct: ["developerId"] });
   // (Owner, Nov 3) A deleted developer's waiting charges are made too, hold or not.
-  // (§368) A suspended developer's too: only a hold keeps them waiting.
-  const devs = await db.user.findMany({ where: { id: { in: waiting.map((p) => p.developerId) }, OR: [{ holdStartedAt: null }, { deletedAt: { not: null } }] }, select: { id: true }, take: 100 });
+  // (§386 A) A hold or a suspension keeps them waiting (not a deleted developer's).
+  const devs = await db.user.findMany({ where: { id: { in: waiting.map((p) => p.developerId) }, OR: [{ holdStartedAt: null, devSuspendedAt: null }, { deletedAt: { not: null } }] }, select: { id: true }, take: 100 });
   for (const dev of devs) await chargeDeferred(dev.id);
 }
 
@@ -1509,7 +1522,7 @@ async function openCharges(now: Date, co: CloseOuts, /** (§383) the daily job: 
   let n = 0;
   const due = await db.submission.findMany({
     // (Owner, Oct 29, batch 11) A deleted tester's sent work is still reviewed (and reminded) when their payout account was connected; Charge never opens for it.
-    where: { review: null, payBy: { lt: now }, contract: { test: PAUSE_FREE, tester: PAYABLE_TESTER } },
+    where: { review: null, payBy: { lt: now }, contract: { test: MONEY_FREE /* (§386 A) */, tester: PAYABLE_TESTER } },
     include: { contract: { include: { tester: true, test: { include: { developer: true } } } } },
     orderBy: { payBy: "asc" },
     take: 1000,
@@ -1565,7 +1578,7 @@ async function openCharges(now: Date, co: CloseOuts, /** (§383) the daily job: 
 export async function reviewReminders(now: Date, co: CloseOuts = closeOutMemo(now), contractIds?: string[]) {
   // A local rehearsal can generate reminders for selected sessions without running payment timers.
   const scope = contractIds ? { contractId: { in: contractIds } } : {};
-  const upcoming = await db.submission.findMany({ where: { ...scope, review: null, choiceOfferedAt: null, payBy: { not: null }, contract: { test: PAUSE_FREE, tester: PAYABLE_TESTER } }, include: { contract: { include: { tester: true, test: true } } }, orderBy: { payBy: "asc" }, take: 2000 });
+  const upcoming = await db.submission.findMany({ where: { ...scope, review: null, choiceOfferedAt: null, payBy: { not: null }, contract: { test: MONEY_FREE, tester: PAYABLE_TESTER } }, include: { contract: { include: { tester: true, test: true } } }, orderBy: { payBy: "asc" }, take: 2000 });
   for (const s of upcoming) {
     const reviewDate = chargeOpensAt(s, s.contract.test, s.contract, now);
     // (Owner, Nov 6, §311g) The marks are keyed by the review date: an extended deadline, a pause or an outage re-arms the ones still ahead (never a repeat).
@@ -1592,7 +1605,7 @@ export async function reviewReminders(now: Date, co: CloseOuts = closeOutMemo(no
   // 5b. (Owner, Oct 29, batch 28 §21) Listed calls: "pay it within 3 days / by tomorrow" before the automatic charge (7 days after the call, moved by pauses and outages).
   // (Owner, Nov 6, §311e) Unlisted calls the same, counted to their pay date (7 days after the call), ending "(it isn't listed: pay any amount, or it closes with
   // nothing paid)" (was a weekly "Pay your calls" line after the date): at that date an unpaid one closes with $0 (autoChargeCalls).
-  const upcomingCalls = await db.call.findMany({ where: { ...scope, review: null, status: "booked", payBy: { not: null }, contract: { test: PAUSE_FREE, tester: PAYABLE_TESTER } }, include: { contract: { include: { tester: true, test: true } } }, take: 2000 });
+  const upcomingCalls = await db.call.findMany({ where: { ...scope, review: null, status: "booked", payBy: { not: null }, contract: { test: MONEY_FREE, tester: PAYABLE_TESTER } }, include: { contract: { include: { tester: true, test: true } } }, take: 2000 });
   for (const x of upcomingCalls) {
     if (x.rateCents == null && (await co.payClosed({ callId: x.id }))) continue; // an unlisted call whose Pay closed: no reminders
     const chargeAt = x.payBy!;
@@ -1678,7 +1691,7 @@ const firstName = (u: { name?: string | null; email: string; deletedAt?: Date | 
 async function closeOutReminders(now: Date, co: CloseOuts) {
   const held = { review: null, status: "booked", startsAt: { lte: now } };
   const contracts = await db.contract.findMany({
-    where: { test: { status: { not: "draft" }, ...PAUSE_FREE }, OR: [{ submissions: { some: { review: null } } }, { calls: { some: held } }] },
+    where: { test: { status: { not: "draft" }, ...MONEY_FREE }, OR: [{ submissions: { some: { review: null } } }, { calls: { some: held } }] },
     include: { tester: true, test: { include: { developer: true } }, submissions: { where: { review: null } }, calls: { where: held } },
     take: 5000,
   });
@@ -1794,7 +1807,7 @@ const dailyLineDue = (last: Date | null, fresh: boolean, repeats: boolean, now: 
 async function payNowLines(now: Date, co: CloseOuts, /** (§383) the daily job: the repeats too */ repeats: boolean) {
   const byDev = new Map<string, (OpenPiece & { marks: string[]; offered: Date | null })[]>();
   const emails = new Map<string, string>();
-  for (const p of await chargeablePieces(co, { contract: { test: PAUSE_FREE } })) {
+  for (const p of await chargeablePieces(co, { contract: { test: MONEY_FREE } })) {
     if (await co.payClosed({ submissionId: p.id })) continue;
     byDev.set(p.devId, [...(byDev.get(p.devId) ?? []), p]);
     emails.set(p.devId, p.devEmail);
@@ -1826,7 +1839,8 @@ async function payNowLines(now: Date, co: CloseOuts, /** (§383) the daily job: 
 async function testerChargeLines(now: Date, co: CloseOuts, /** (§383) the daily job: the repeats too */ repeats: boolean) {
   const byTester = new Map<string, (OpenPiece & { marks: string[]; offered: Date | null })[]>();
   const emails = new Map<string, string>();
-  for (const p of await chargeablePieces(co, {})) {
+  // (Owner, Nov 11, §386 A) They wait while the money is frozen (any pause of the test or of its developer; after close too), then name the moved dates (§367).
+  for (const p of await chargeablePieces(co, { contract: { test: MONEY_LIVE } })) {
     if (p.testerSuspended) continue;
     byTester.set(p.testerId, [...(byTester.get(p.testerId) ?? []), p]);
     emails.set(p.testerId, p.testerEmail);
@@ -1874,7 +1888,7 @@ export const autoPaidTesterLine = (dev: string, cents: number, at: Date) => `${d
  * (Owner, Oct 29, batch 28 §21; replaces Charge / Let it go for listed calls) A LISTED call not paid 7 days after it (its payBy, moved by pauses and outages) is charged
  * automatically: rate × measured minutes, less what's paid, within the $500 for that tester's calls; off-session, as a payment made while the developer is away. Each
  * call once: its review row is claimed first (unique per call), and the charge's key is the call's. Bank asks: "Your bank wants you to confirm" (3 days, then declined).
- * Declined: a payment hold. During a hold: added to what's owed. (Owner, Nov 9, §368) During a suspension or the team's pause of its test: charged at once.
+ * Declined: a payment hold. (Owner, Nov 11, §386 A) While the money is frozen (a hold, a suspension, the team's pause) it waits, and its date moves on.
  * Nothing to charge (no measured time, or the $500 used): closed with $0.
  * Listed calls whose Charge had already opened switch to this. Returns how many were charged.
  * (Owner, Nov 6, §311e) An UNLISTED call not paid by the same date closes with $0 the same way ("<name>'s call on <date> closed with nothing paid (it wasn't
@@ -1884,12 +1898,16 @@ export async function autoChargeCalls(now: Date) {
   let n = 0;
   // (Batch 29 §37) A developer who deleted their account is charged too, on the card they saved (as a tester's Charge was before batch 28 §21); with no saved card
   // the call stays unpaid ("<dev> deleted their account, so this can't be paid.").
-  // (Owner, Nov 4, §172) A test the team paused no longer skips this. (Owner, Nov 9, §368) Neither it nor a suspension holds the charge back any more.
-  const due = await db.call.findMany({ where: { review: null, status: "booked", payBy: { lt: now }, contract: { tester: PAYABLE_TESTER } }, include: { contract: { include: { tester: true, test: { include: { developer: true } } } } }, take: 1000 });
+  // (Owner, Nov 11, §386 A; replaces §368 and §172) It waits while the money is frozen (the team's pause of its test, the developer's hold or suspension; after the
+  // test closed too). A pause during the test moves its date (payBy) when it lifts, as before (shiftAfterPause).
+  const due = await db.call.findMany({ where: { review: null, status: "booked", payBy: { lt: now }, contract: { tester: PAYABLE_TESTER, test: MONEY_LIVE } }, include: { contract: { include: { tester: true, test: { include: { developer: true } } } } }, take: 1000 });
   for (const x of due) {
     const minutes = callMinutesOf(x);
     if (minutes == null) continue;
     const c = x.contract, dev = c.test.developer, name = displayName(c.tester);
+    // (§386 A) A pause that began since the list was read: it waits.
+    const fresh = await db.test.findUnique({ where: { id: c.testId }, select: { adminPausedAt: true, status: true, developer: { select: { holdStartedAt: true, devSuspendedAt: true, deletedAt: true } } } });
+    if (!fresh || moneyFrozen(fresh.developer, fresh)) continue;
     // (Owner, Nov 4, §177) Each line names the call it charged, with its date and time in the developer's zone: "Ana Silva's call on Tue, Oct 27, 8:00 AM was
     // charged automatically: $15.00" (a tester can have many calls on a test).
     const call = `${name}'s call on ${callAtFor(x.startsAt, dev)}`;
@@ -1923,16 +1941,6 @@ export async function autoChargeCalls(now: Date) {
     const tellDelayed = () => notify(c.tester.email, `Payment for your call on “${c.test.title}” (${T(x.startsAt)}) may be delayed`, ["Payment for your call may be delayed."], `/app/sessions/${c.id}#call-${x.id}`, { side: "tester", payment: true, group: "tdelayed" });
     // (Batch 29 §37) The developer's event says what really happened (charged, waiting for the bank, declined, owed, waiting for the account).
     const logged = (text: string) => db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${text}`, false, {}, c.id, "", `call-${x.id}`));
-    // (Owner, Nov 9, §368; replaces §172 and batch 28 §21's wait) During a developer suspension or the team's pause of its test it is charged now, as the tester's
-    // Charge is; only a payment or chargeback hold makes it wait (added to what's owed, below).
-    if (!gone && await deferIfHeld({ kind: "call", callId: x.id, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amount, feeCents: 0, testerCents: 0 })) {
-      // (Owner, Nov 4, §177) Which call: its date, as every other payment line names a call ("Ana Silva's live call on “Harbor Run” (Oct 27)").
-      await bell(dev.id, `${pieceName({ tester: name, part: "live call", test: c.test.title, when: T(x.startsAt), full: true })} (${money(amount)}) is added to what you owe: it's paid with it, as one payment`, "/app/payments#owed", undefined, { side: "developer", payment: true, group: "payhold" });
-      await tellDelayed();
-      await logged(`${call} is waiting to be charged once your tests resume: ${money(amount)}`);
-      n++;
-      continue;
-    }
     const row = await db.payment.create({ data: { kind: "call", callId: x.id, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amount, feeCents: 0, testerCents: 0, status: "pending", payKey } });
     let outcome = `${call} was charged automatically: ${money(amount)}`;
     try {
@@ -1977,6 +1985,8 @@ export async function autoChargeCalls(now: Date) {
  * tab") is written with the claim.
  */
 type ChoiceRace = { userId: string; body: Record<string, unknown> } | null;
+/** (§386 A) The press a choice names: "Let it go" or "Charge". */
+const choicePress = (body: Record<string, unknown>) => (body.choice === "letgo" ? "Let it go" : "Charge");
 export async function chooseOutcome(tester: { id: string; email: string; name: string; pronoun?: string }, contractId: string, body: Record<string, unknown>) {
   const race: ChoiceRace = { userId: tester.id, body };
   // (Owner, Oct 29, batch 32 §7) An open new-terms offer blocks Charge and Let it go until the tester answers it (Switch or Keep).
@@ -1985,6 +1995,9 @@ export async function chooseOutcome(tester: { id: string; email: string; name: s
   const s = await db.submission.findUnique({ where: { id: String(body.submissionId ?? "") }, include: { review: true, contract: { include: { tester: true, test: { include: { developer: true } } } } } });
   if (!s || s.contractId !== contractId || s.contract.testerId !== tester.id) throw new HttpError(404, "not_found", "That work doesn't exist.");
   const c = s.contract, dev = c.test.developer, label = s.kind === "recording" ? "recording" : "written answers";
+  // (Owner, Nov 11, §386 A; replaces §113 and §368) No money moves while the test or the developer is paused (after the test closed too): Charge and Let it go are
+  // refused first, in neutral words ("This test is paused, so your Charge didn't go through."). Its dates move on by the pause.
+  await (await import("./payments")).testerFrozenRefusal(dev.id, c.test, choicePress(body));
   // (Owner, Nov 4, §187) In this order: the tester's own Charge waiting for the developer's bank ("You already charged $10.00 for your written answers. It's waiting
   // for Nora Lane's bank."); then (batch 35 §163) the developer paid anything on this part: ONE final refusal, before any stop-once ("Nora Lane paid $6.00 for this
   // meanwhile: you can dispute it if you think it should be more."), even while another payment of theirs on it is at the bank (paid-anything wins); only then
@@ -2005,7 +2018,6 @@ export async function chooseOutcome(tester: { id: string; email: string; name: s
   }
   const choice = body.choice === "letgo" ? "letgo" : body.choice === "charge" ? "charge" : null;
   if (!choice) throw new HttpError(400, "bad_choice", "Choose Charge or Let it go.");
-  // (Owner, Oct 28 afternoon) Charge and Let it go both work while the test is paused: during a payment or chargeback hold a Charge is added to what the developer owes (below).
   const paidForPart = (await db.payment.aggregate({ where: { submissionId: s.id, status: { in: ["charged", "not_set_up"] } }, _sum: { amountCents: true } }))._sum.amountCents ?? 0;
   const cap = chargeAmount(s.agreedCents, paidForPart);
   if (cap === 0) throw new HttpError(409, "paid_in_full", "This part is already paid in full.");
@@ -2029,13 +2041,7 @@ export async function chooseOutcome(tester: { id: string; email: string; name: s
     await bell(dev.id, line, `/app/tests/${c.testId}#piece-${s.id}`, undefined, { side: "developer", testId: c.testId });
     return { choice, amountCents: 0 };
   }
-  // (Batch 35 §113) During a hold the tester's choice waits separately until the hold lifts; it never grows Pay what you owe.
-  // During an admin suspension with no hold, or the team's pause, it is charged at once below.
-  if (await deferIfHeld({ kind: "review", submissionId: s.id, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amount, feeCents: 0, testerCents: 0 })) {
-    await bell(dev.id, `Charged by the tester: ${money(amount)} for ${pieceName({ tester: displayName(tester), part: label, test: c.test.title, full: true })}, added to what you owe and paid with it, as one payment`, "/app/payments#owed", undefined, { side: "developer", payment: true, group: "payhold" });
-    await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${displayName(tester)} charged ${money(amount)} for ${pronouns(tester.pronoun).poss} ${label}`, false, {}, c.id, "", `part-${s.id}`));
-    return { choice, amountCents: amount, status: "deferred", message: chargedDelayedLine(amount) };
-  }
+  // (Owner, Nov 11, §386 A; replaces batch 35 §113) A Charge never waits for a hold's lift any more: it is refused while frozen (above, and again with the claim).
   // (Batch 15 section 9) The payment row is reserved (pending) before the charge, so a lost answer from Stripe can be found and finished or cleared later.
   const row = await db.payment.create({ data: { kind: "review", submissionId: s.id, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amount, feeCents: 0, testerCents: 0, status: "pending", payKey } });
   let status = "charged";
@@ -2080,6 +2086,9 @@ async function claimChoice(testId: string, where: { submissionId: string } | { c
   try {
     return await db.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${testId} FOR UPDATE`;
+      // (Owner, Nov 11, §386 A) A pause that began after the first check: the same neutral refusal, read again with the claim (the team's pause writes the test row).
+      const t = await tx.test.findUniqueOrThrow({ where: { id: testId }, select: { adminPausedAt: true, status: true, developer: { select: { holdStartedAt: true, devSuspendedAt: true, deletedAt: true } } } });
+      if (moneyFrozen(t.developer, t)) throw new HttpError(409, "paused", RF.pressRefused(TESTER_FROZEN_CAUSE, data.reason === LET_GO_BY_TESTER ? "Let it go" : "Charge"));
       // (Owner, Nov 3, batch 35 §163) The developer's Pay landed first (the same moment): the same one final refusal, decided here under the lock. (Owner, Nov 4,
       // §187) Paid anything wins over a payment of theirs still at the bank.
       const paid = await devPaidRefusal(tx, where, devName, await tx.review.findFirst({ where }));
@@ -2151,6 +2160,7 @@ async function chooseCallOutcome(tester: { id: string; email: string; name: stri
   const x = await db.call.findUnique({ where: { id: String(body.callId ?? "") }, include: { review: true, contract: { include: { tester: true, test: { include: { developer: true } } } } } });
   if (!x || x.contractId !== contractId || x.contract.testerId !== tester.id) throw new HttpError(404, "not_found", "That call doesn't exist.");
   const c = x.contract, dev = c.test.developer, label = "live call";
+  await (await import("./payments")).testerFrozenRefusal(dev.id, c.test, choicePress(body)); // (§386 A)
   // (Owner, Nov 4, §187) As for written work: the tester's own Charge at the bank, then the developer paid anything (one final refusal), then "being confirmed".
   await chargeRefusals({ callId: x.id }, displayName(dev), x.review, `your call on ${callAtFor(x.startsAt, c.tester)}`);
   // (Owner, Oct 29, batch 28 §21) A listed call is charged automatically: no Charge or Let it go (an older page's press).
@@ -2187,12 +2197,6 @@ async function chooseCallOutcome(tester: { id: string; email: string; name: stri
     // (Owner, Nov 6, §286) The same line in the developer's bell, linking to the call.
     await bell(dev.id, line, `/app/tests/${c.testId}#call-${x.id}`, undefined, { side: "developer", testId: c.testId });
     return { choice, amountCents: 0 };
-  }
-  if (await deferIfHeld({ kind: "call", callId: x.id, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amount, feeCents: 0, testerCents: 0 })) {
-    await bell(dev.id, `Charged by the tester: ${money(amount)} for ${pieceName({ tester: displayName(tester), part: label, test: c.test.title, when: T(x.startsAt), full: true })}, added to what you owe and paid with it, as one payment`, "/app/payments#owed", undefined, { side: "developer", payment: true, group: "payhold" });
-    // (Owner, Nov 4, §177) Which call: "Ana Silva charged $15.00 for her call on Tue, Oct 27, 8:00 AM" (the developer's zone).
-    await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${displayName(tester)} charged ${money(amount)} for ${pronouns(tester.pronoun).poss} call on ${callAtFor(x.startsAt, dev)}`, false, {}, c.id, "", `call-${x.id}`));
-    return { choice, amountCents: amount, status: "deferred", message: chargedDelayedLine(amount) };
   }
   const row = await db.payment.create({ data: { kind: "call", callId: x.id, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amount, feeCents: 0, testerCents: 0, status: "pending", payKey } });
   let status = "charged";

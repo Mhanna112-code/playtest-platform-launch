@@ -54,14 +54,23 @@ async function fixture(hold: "payment" | "chargeback" | "none" = "payment") {
   if (hold !== "none") await startHold(f.dev.user.id, hold === "chargeback" ? "chargeback" : "unpaid");
   return { ...f, ...j, sub, base };
 }
-const choose = (f: Awaited<ReturnType<typeof fixture>>, submissionId = f.sub.id) => sact(f.sessionId, "choose", f.tester.cookie, { submissionId, choice: "charge", seenAt: seen(), confirmed: true });
+const press = (f: Awaited<ReturnType<typeof fixture>>, submissionId = f.sub.id) => sact(f.sessionId, "choose", f.tester.cookie, { submissionId, choice: "charge", seenAt: seen(), confirmed: true });
+/**
+ * (Owner, Nov 11, §386 A) A Charge pressed during a hold is refused now; one recorded under §113 before (its review and its waiting "deferred" payment) must still be
+ * processed when the hold lifts. `choose` makes that legacy record, as §113's Charge did.
+ */
+async function choose(f: Awaited<ReturnType<typeof fixture>>, submissionId = f.sub.id) {
+  const s = await db.submission.findUniqueOrThrow({ where: { id: submissionId } });
+  await db.review.create({ data: { contractId: f.sessionId, submissionId, amountCents: s.agreedCents!, agreedCents: s.agreedCents, reason: "Charged by the tester after 7 days without a review.", payKey: `choice:${submissionId}` } });
+  await db.payment.create({ data: { kind: "review", submissionId, contractId: f.sessionId, developerId: f.dev.user.id, testerId: f.tester.user.id, amountCents: s.agreedCents!, feeCents: 0, testerCents: 0, status: "deferred" } });
+  return { status: 200 };
+}
 
-describe("§113: new charges wait separately until a hold lifts", () => {
-  it("a tester Charge waits (never a debt) as Payment delayed; (§125) during a hold it is listed IN Pay what you owe, paid with it", async () => {
+describe("§113 (legacy) / §386 A: charges recorded as waiting during a hold are still made when it lifts", () => {
+  it("a tester Charge during a hold is refused now (§386 A); one recorded before waits (never a debt) as Payment delayed; (§125) listed IN Pay what you owe, paid with it", async () => {
     const st = bank(), f = await fixture();
-    const result = await choose(f);
-    expect(result.status, JSON.stringify(result.body)).toBe(200);
-    expect(result.body.status).toBe("deferred");
+    expect((await press(f)).body.error.message).toBe("This test is paused, so your Charge didn't go through.");
+    await choose(f);
     expect((await owed(f.dev.user.id)).map((p) => p.id)).toEqual([f.base!.id]);
     expect(st.made).toHaveLength(0);
     const waiting = await deferredForBox(f.dev.user.id);
@@ -111,7 +120,7 @@ describe("§113: new charges wait separately until a hold lifts", () => {
   it("(batch 35 §122) the waiting charges are made together as one payment: declined, each becomes a debt and a NEW hold starts", async () => {
     const st = bank(), f = await fixture(); await choose(f);
     const rec = await db.submission.create({ data: { contractId: f.sessionId, kind: "recording", agreedCents: 600, payBy: ago(1), choiceOfferedAt: new Date(), choiceBy: new Date(Date.now() + 7 * DAY) } });
-    expect((await choose(f, rec.id)).status).toBe(200);
+    await choose(f, rec.id);
     const old = await db.user.findUniqueOrThrow({ where: { id: f.dev.user.id } });
     st.state.mode = "decline";
     // (§125) Pay what you owe would pay them with the debt; this is the after-lift path: the hold lifted another way (the debt settled elsewhere).
@@ -140,13 +149,13 @@ describe("§113: new charges wait separately until a hold lifts", () => {
     expect((await db.user.findUniqueOrThrow({ where: { id: f.dev.user.id } })).holdStartedAt).toBeNull();
   });
 
-  it("automatic listed-call charges also wait outside the owed balance", async () => {
+  it("(§386 A) an automatic listed-call charge isn't made during the hold (it waits unpaid, outside the owed balance)", async () => {
     const st = bank(), f = await fixture();
     const start = ago(8), end = new Date(start.getTime() + 10 * 60000);
     const slot = await db.callSlot.create({ data: { testId: f.testId, startsAt: start, minutes: 10, allowedTesterIds: [], status: "booked" } });
     const call = await db.call.create({ data: { slotId: slot.id, contractId: f.sessionId, startsAt: start, minutes: 10, rateCents: 3000, measuredMinutes: 10, measuredAt: end, measuredFrom: start, measuredTo: end, payBy: ago(1) } });
     await autoChargeCalls(new Date());
-    expect((await db.payment.findFirstOrThrow({ where: { callId: call.id } })).status).toBe("deferred");
+    expect(await db.payment.count({ where: { callId: call.id } })).toBe(0);
     expect((await owed(f.dev.user.id)).map((p) => p.id)).toEqual([f.base!.id]);
     expect(st.made).toHaveLength(0);
   });
@@ -165,7 +174,7 @@ describe("§113: new charges wait separately until a hold lifts", () => {
 
   it("no hold keeps the existing immediate Charge behavior", async () => {
     const st = bank(), f = await fixture("none");
-    expect((await choose(f)).status).toBe(200);
+    expect((await press(f)).status).toBe(200);
     expect(st.made.map((p) => p.amount)).toEqual([1000]);
     expect((await db.payment.findFirstOrThrow({ where: { submissionId: f.sub.id } })).status).toBe("charged");
     expect(await deferredForBox(f.dev.user.id)).toEqual([]);

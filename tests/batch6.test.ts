@@ -193,8 +193,9 @@ describe("batch 6 item 4: a paused test, what testers can do", () => {
   it("the paused notice says what still works (never why); the DEFAULTs live in one place", () => {
     // (Batch 10) The banner's wording: what works now, and what comes back when it resumes.
     // (Owner, Nov 11, §376) Chat and "Ask to show an excerpt" go on during every pause: the full banner offers them.
-    expect(R.PAUSED_FOR_TESTERS).toContain("For now you can save drafts of your parts, charge or let go of work left unreviewed, dispute, rate, leave the test, cancel booked calls, ask to show an excerpt, and chat.");
-    expect(R.PAUSED_FOR_TESTERS).toContain("Sending work and requesting calls come back when it resumes.");
+    // (Owner, Nov 11, §386 A) No money moves while paused: Charge and Let it go come back when it resumes.
+    expect(R.PAUSED_FOR_TESTERS).toContain("For now you can save drafts of your parts, dispute, rate, leave the test, cancel booked calls, ask to show an excerpt, and chat.");
+    expect(R.PAUSED_FOR_TESTERS).toContain("Sending work, charging or letting go and requesting calls come back when it resumes.");
     expect(R.PAUSED_FOR_TESTERS).not.toMatch(/hold|suspend|fail|chargeback/i);
     expect(R.PAUSE_DEFAULTS).toEqual({ draftsEditable: true, teamPauseSameRules: true, shiftDeadlines: true });
     expect(R.testerPaused({}, { adminPausedAt: new Date() })).toBe(true);
@@ -240,38 +241,36 @@ describe("batch 6 item 4: a paused test, what testers can do", () => {
     expect((await sact(sessionId, "dispute", tester.cookie, { kind: "submission", id: sub.id, reason: "I answered every question fully" })).status).toBe(200);
   });
 
-  it("Charge during a payment hold waits outside what is owed and is charged when the hold lifts", async () => {
-    const { dev, sub, tester, sessionId } = await chargeOpen();
-    await startHold(dev.user.id, "unpaid");
-    const c = await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge", tickedCents: 1000, seenAt: seen(), confirmed: true });
-    expect(c.status).toBe(200);
-    expect(c.body).toMatchObject({ status: "deferred", message: "Charged $10.00. Payment may be delayed until the test resumes." });
-    expect(c.body.message).not.toMatch(/hold/i);
-    const p = await db.payment.findFirstOrThrow({ where: { submissionId: sub.id } });
-    expect(p).toMatchObject({ status: "deferred", amountCents: 1000 });
-    expect(await owedLines(dev.user.id)).toEqual([]);
-    expect(await liftHoldIfClear(dev.user.id)).toBe(true); // no original balance in this fixture; now the waiting Charge runs
-    expect(src("app/app/sessions/[id]/page.tsx")).toContain("delayed={paymentDelayed(sub.id)}");
-
-    expect((await db.payment.findUniqueOrThrow({ where: { id: p.id } })).status).not.toBe("owed");
-    // (Owner, Nov 4, §177) The delayed payment's bell names WHICH test too.
-    expect(await db.notification.count({ where: { userId: tester.user.id, text: "Nora Lane paid $10.00 for your written answers on “Harbor Run”" } })).toBe(1);
+  // (Owner, Nov 11, §386 A; replaces Oct 28, §113 and §368) No money moves while the test or the developer is paused: Charge and Let it go are refused (neutral
+  // words, never why), during the test and after it closed; they work again after the lift. tests/money-frozen-386.test.ts covers every cause and press.
+  it("Charge during a payment or chargeback hold is refused (never why); after the lift it is charged at once", async () => {
+    for (const reason of ["unpaid", "chargeback"]) {
+      const { dev, sub, tester, sessionId } = await chargeOpen();
+      await startHold(dev.user.id, reason);
+      const c = await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge", tickedCents: 1000, seenAt: seen(), confirmed: true });
+      expect(c.body.error.message).toBe("This test is paused, so your Charge didn't go through.");
+      expect(await db.payment.count({ where: { submissionId: sub.id } })).toBe(0);
+      expect(await owedLines(dev.user.id)).toEqual([]);
+      if (reason !== "unpaid") continue;
+      expect(await liftHoldIfClear(dev.user.id)).toBe(true);
+      await settle();
+      const d = await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge", tickedCents: 1000, seenAt: seen(), confirmed: true });
+      expect(["charged", "not_set_up"]).toContain(d.body.status);
+    }
   });
 
-  it("Charge during a chargeback hold waits outside what is owed too", async () => {
-    const { dev, sub, tester, sessionId } = await chargeOpen();
-    await startHold(dev.user.id, "chargeback");
-    expect((await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge", tickedCents: 1000, seenAt: seen(), confirmed: true })).body.status).toBe("deferred");
-  });
-
-  it("Charge during an admin suspension with no hold is charged at once; a declined card starts a payment hold and the amount is owed", async () => {
+  it("Charge during an admin suspension, or the team's pause of the test, is refused too", async () => {
     const one = await chargeOpen();
-    await db.user.update({ where: { id: one.dev.user.id }, data: { devSuspendedAt: new Date(), testerSuspendedAt: new Date() } });
-    const c = await sact(one.sessionId, "choose", one.tester.cookie, { submissionId: one.sub.id, choice: "charge", tickedCents: 1000, seenAt: seen(), confirmed: true });
-    expect(c.status).toBe(200);
-    expect(["charged", "not_set_up"]).toContain(c.body.status);
+    await db.user.update({ where: { id: one.dev.user.id }, data: { devSuspendedAt: new Date() } });
+    expect((await sact(one.sessionId, "choose", one.tester.cookie, { submissionId: one.sub.id, choice: "charge", tickedCents: 1000, seenAt: seen(), confirmed: true })).body.error.message).toBe("This test is paused, so your Charge didn't go through.");
     const two = await chargeOpen();
-    await db.user.update({ where: { id: two.dev.user.id }, data: { devSuspendedAt: new Date(), testerSuspendedAt: new Date() } });
+    await db.test.update({ where: { id: two.testId }, data: { adminPausedAt: new Date() } });
+    expect((await sact(two.sessionId, "choose", two.tester.cookie, { submissionId: two.sub.id, choice: "letgo", seenAt: seen(), confirmed: true })).body.error.message).toBe("This test is paused, so your Let it go didn't go through.");
+    expect(await db.review.count({ where: { submissionId: { in: [one.sub.id, two.sub.id] } } })).toBe(0);
+  });
+
+  it("with no pause, a declined Charge starts a payment hold and the amount is owed", async () => {
+    const two = await chargeOpen();
     await withCard(two.dev.user.id);
     decline();
     const d = await sact(two.sessionId, "choose", two.tester.cookie, { submissionId: two.sub.id, choice: "charge", tickedCents: 1000, seenAt: seen(), confirmed: true });
@@ -280,20 +279,12 @@ describe("batch 6 item 4: a paused test, what testers can do", () => {
     expect((await owedLines(two.dev.user.id)).length).toBe(1);
   });
 
-  it("the team's pause of one test with no hold: a Charge is charged at once", async () => {
-    const { dev, testId, sub, tester, sessionId } = await chargeOpen();
-    void dev;
-    await db.test.update({ where: { id: testId }, data: { adminPausedAt: new Date() } });
-    const c = await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge", tickedCents: 1000, seenAt: seen(), confirmed: true });
-    expect(["charged", "not_set_up"]).toContain(c.body.status);
-  });
-
-  it("after the 7-day close, Charge carries on and waits during the hold", async () => {
+  it("after the 7-day close, a hold still refuses Charge", async () => {
     const { dev, testId, sub, tester, sessionId } = await chargeOpen();
     await startHold(dev.user.id, "unpaid");
     await db.test.update({ where: { id: testId }, data: { status: "closed", pauseClosedAt: new Date() } });
     await db.contract.update({ where: { id: sessionId }, data: { status: "ended", endKind: "closed", endedAt: new Date() } });
-    expect((await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge", tickedCents: 1000, seenAt: seen(), confirmed: true })).body.status).toBe("deferred");
+    expect((await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge", tickedCents: 1000, seenAt: seen(), confirmed: true })).body.error.message).toBe("This test is paused, so your Charge didn't go through.");
   });
 
   it("a dispute decided for the tester during a hold waits until it lifts; during a suspension with no hold it charges at once, and a decline starts a hold", async () => {

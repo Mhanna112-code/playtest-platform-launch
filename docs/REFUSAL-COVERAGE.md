@@ -44,7 +44,7 @@ Pay, Pay more, Confirm with your bank, Confirm all, Charge, Let it go and Disput
 | Charge, Let it go | not open yet; late work; the window closed; the developer paid meanwhile; her own choice already made; her Charge waiting for the developer's bank; the developer's first Pay at the bank; the team's $0 closure (fixed with §365: it read as the developer paying $0, "you can dispute it") |
 | Dispute | nothing paid yet; already disputed; the team's $0 closure; a part she settled herself; nothing left to dispute (paid the most; paid to the most since her page loaded); closed (she rated; the part's closing date passed) |
 
-Pauses and holds as §368 has them are also in `tests/pay-during-pauses-368.test.ts` (each payment press charges once during a team pause and a suspension).
+Pauses and holds as §386 A has them (no money moves while paused) are in `tests/money-frozen-386.test.ts` (each payment press refused per cause, during the test and after close).
 
 Not in this matrix, **covered by recordings**: every other button's own refusals (already done here or in another tab, windows, limits, keys, full,
 NDA / terms changes, deleted accounts on the non-money buttons); Pay more "already done in another tab" (the same press key returns the earlier result,

@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { awayAction, confirmFinish, confirmStart, expireActions } from "@/lib/server/confirm";
 import { confirmAllPress, confirmAllState } from "@/lib/server/confirmAll";
-import { pauseTest, unpauseTest } from "@/lib/server/restrictions";
+import { pauseTest, reinstateAccount, unpauseTest } from "@/lib/server/restrictions";
 import { makeUser } from "./helpers";
 import { joined, seen, settle, setup } from "./fixtures";
 import { pay } from "./b15";
@@ -29,47 +29,50 @@ async function world(kind: string) {
   return { ...s, ...j, items, loaded };
 }
 
-describe("existing bank confirmations during pauses and suspensions", () => {
-  it.each(["pause", "suspension"])("%s: single Confirm finishes without reopening the test", async (kind) => {
+// (Owner, Nov 11, §386 A; replaces "existing bank confirmations remain available" and §368) No money moves while the test or the developer is paused: Confirm with
+// your bank and Confirm all are refused; a check that runs out meanwhile waits for the lift (never a decline); after the lift they go through once.
+const lift = async (kind: string, w: Awaited<ReturnType<typeof world>>) => {
+  if (kind === "pause") await unpauseTest(w.testId);
+  else await reinstateAccount(w.dev.user.id, "developer");
+};
+const CAUSE: Record<string, string> = { pause: "The team paused this test", suspension: "Your account is suspended" };
+
+describe("bank confirmations during pauses and suspensions (§386 A)", () => {
+  it.each(["pause", "suspension"])("%s: Confirm with your bank is refused, then finishes once after the lift", async (kind) => {
     const w = await world(kind), p = w.items[0];
-    const body = { seenAt: w.loaded };
-    if (kind === "pause") {
-      await expect(confirmStart(w.dev.user, p.id, body)).resolves.toMatchObject({ paymentId: p.id });
-    } else {
-      await expect(confirmStart(w.dev.user, p.id, body)).rejects.toMatchObject({ code: "stop_once" });
-      await expect(confirmStart(w.dev.user, p.id, { ...body, confirmed: true, boxAt: seen() })).resolves.toMatchObject({ paymentId: p.id });
-    }
-    expect((await db.payment.findUniqueOrThrow({ where: { id: p.id } })).actionBy).toEqual(p.actionBy);
+    await expect(confirmStart(w.dev.user, p.id, { seenAt: w.loaded })).rejects.toMatchObject({ message: `${CAUSE[kind]}, so your Confirm with your bank didn't go through.` });
+    expect((await db.payment.findUniqueOrThrow({ where: { id: p.id } })).status).toBe("needs_confirmation");
+    // (§386 A) A new Pay is refused too (tests/money-frozen-386.test.ts covers every press).
+    const fresh = await db.submission.create({ data: { contractId: w.sessionId, kind: "extra-sample", agreedCents: 1000 } });
+    expect((await pay(w.dev.cookie, { kind: "submission", id: fresh.id, amount: "10.00", tickedCents: 1000, confirmed: true })).body.error.message).toBe(`${CAUSE[kind]}, so your Pay didn't go through.`);
+    await lift(kind, w);
+    await settle();
+    await expect(confirmStart(w.dev.user, p.id, { seenAt: seen() })).resolves.toMatchObject({ paymentId: p.id });
     await confirmFinish(w.dev.user, p.id, { simulate: "succeeded" });
     expect((await db.payment.findUniqueOrThrow({ where: { id: p.id } })).status).toBe("charged");
     expect((await db.payment.findUniqueOrThrow({ where: { id: w.items[1].id } })).status).toBe("needs_confirmation");
-    const t = await db.test.findUniqueOrThrow({ where: { id: w.testId } });
-    const dev = await db.user.findUniqueOrThrow({ where: { id: w.dev.user.id } });
-    expect(kind === "pause" ? !!t.adminPausedAt : !!dev.devSuspendedAt).toBe(true);
-    // (Owner, Nov 9, §368) A new Pay goes through during the pause or suspension too (tests/pay-during-pauses-368.test.ts covers Pay more and a call's Pay).
-    const fresh = await db.submission.create({ data: { contractId: w.sessionId, kind: "extra-sample", agreedCents: 1000 } });
-    expect((await pay(w.dev.cookie, { kind: "submission", id: fresh.id, amount: "10.00", tickedCents: 1000, confirmed: true })).status).toBe(200);
   });
 
-  it.each(["pause", "suspension"])("%s: Confirm all includes the waiting items and completes once", async (kind) => {
+  it.each(["pause", "suspension"])("%s: Confirm all is refused, then completes once after the lift", async (kind) => {
     const w = await world(kind);
     const state = await confirmAllState(w.dev.user.id);
     expect(state.ids.sort()).toEqual(w.items.map((p) => p.id).sort());
     const body = { seenAt: w.loaded, seenIds: state.ids, seenTotalCents: state.totalCents };
-    await expect(confirmAllPress(w.dev.user, body)).rejects.toMatchObject({ code: "stop_once" });
-    await confirmAllPress(w.dev.user, { ...body, confirmed: true, boxAt: seen() });
+    await expect(confirmAllPress(w.dev.user, body)).rejects.toMatchObject({ message: `${CAUSE[kind]}, so your Confirm all didn't go through.` });
+    await lift(kind, w);
+    await settle();
+    await confirmAllPress(w.dev.user, { ...body, seenAt: seen() });
     for (const p of w.items) expect((await db.payment.findUniqueOrThrow({ where: { id: p.id } })).status).toBe("not_set_up");
     expect((await confirmAllState(w.dev.user.id)).ids).toEqual([]);
   });
 
-  it("the three-day deadline is not extended by an admin pause", async () => {
+  it("a check that runs out during the team's pause waits for the lift (never a decline, no hold), then is made", async () => {
     const w = await world("pause"), p = w.items[0];
     expect(+p.actionBy! - +p.createdAt).toBeLessThanOrEqual(3 * DAY + 1000);
-    await unpauseTest(w.testId);
-    expect((await db.payment.findUniqueOrThrow({ where: { id: p.id } })).actionBy).toEqual(p.actionBy);
-    await db.test.update({ where: { id: w.testId }, data: { adminPausedAt: new Date() } });
     await expireActions(new Date(+p.actionBy! + 1000), { submissionId: p.submissionId! });
-    expect((await db.payment.findUniqueOrThrow({ where: { id: p.id } })).status).toBe("failed");
-    await expect(confirmStart(w.dev.user, p.id)).rejects.toBeDefined();
+    expect((await db.payment.findUniqueOrThrow({ where: { id: p.id } })).status).toBe("deferred");
+    expect((await db.user.findUniqueOrThrow({ where: { id: w.dev.user.id } })).holdStartedAt).toBeNull();
+    await unpauseTest(w.testId);
+    expect(["charged", "not_set_up"]).toContain((await db.payment.findUniqueOrThrow({ where: { id: p.id } })).status);
   });
 });

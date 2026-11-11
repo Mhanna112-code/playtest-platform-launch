@@ -966,13 +966,15 @@ const listAnd = (xs: string[], oxford: boolean) => (xs.length <= 1 ? xs.join("")
 /**
  * (Owner, Oct 29, batch 10) The blue banner at the top of a paused test's session page (never "hold", "suspended", "failed" or "chargeback"), built from what is actually
  * available, so it never offers a button that isn't there. With everything available:
- * "This test is paused right now. For now you can save drafts of your parts, charge or let go of work left unreviewed, dispute, rate, leave the test, cancel booked calls,
- * ask to show an excerpt, and chat. Sending work and requesting calls come back when it resumes." (Owner, Nov 11, §376; reverses §172) Chat and "Ask to show an
+ * "This test is paused right now. For now you can save drafts of your parts, dispute, rate, leave the test, cancel booked calls, ask to show an excerpt, and chat.
+ * Sending work, charging or letting go and requesting calls come back when it resumes." (§386 A: Charge and Let it go wait) (Owner, Nov 11, §376; reverses §172) Chat and "Ask to show an
  * excerpt" go on during every pause (the team's, a payment or chargeback hold, the developer's suspension): the banner offers them when they are on the page.
  */
 export function pausedForTesters(can: PausedCan) {
-  const now = [can.drafts && "save drafts of your parts", can.charge && "charge or let go of work left unreviewed", can.dispute && "dispute", can.rate && "rate", can.leave && "leave the test", can.cancelCalls && "cancel booked calls", can.excerpt && "ask to show an excerpt", can.chat && "chat"].filter((x): x is string => !!x);
-  const back = [can.send && "sending work", can.requestCalls && "requesting calls"].filter((x): x is string => !!x);
+  // (Owner, Nov 11, §386 A) No money moves while the test is paused: Charge and Let it go are never offered here; when their box is on the page they come back with
+  // sending ("Sending work, charging or letting go and requesting calls come back when it resumes.").
+  const now = [can.drafts && "save drafts of your parts", can.dispute && "dispute", can.rate && "rate", can.leave && "leave the test", can.cancelCalls && "cancel booked calls", can.excerpt && "ask to show an excerpt", can.chat && "chat"].filter((x): x is string => !!x);
+  const back = [can.send && "sending work", can.charge && "charging or letting go", can.requestCalls && "requesting calls"].filter((x): x is string => !!x);
   const backLine = back.length ? ` ${listAnd(back, false).replace(/^./, (c) => c.toUpperCase())} ${back.length === 1 ? "comes" : "come"} back when it resumes.` : "";
   return `${PAUSED_RIGHT_NOW}${now.length ? ` For now you can ${listAnd(now, true)}.` : ""}${backLine}${can.deadline && PAUSE_DEFAULTS.shiftDeadlines ? ` ${PAUSED_DEADLINE_LINE}` : ""}`;
 }
@@ -988,8 +990,8 @@ export const PAUSED_SEND = `${PAUSED_RIGHT_NOW} You can send this once it resume
 export const CHAT_PAUSED_NOTE = "Messages are paused for now. You can still read this chat.";
 /** The blue notice under Send when the other person became restricted after the page loaded (the typed text is kept). */
 export const CHAT_NOT_SENT = "Messages are paused for now, so this wasn't sent.";
-/** (Owner, Oct 28 afternoon) A Charge pressed while the developer is on a payment or chargeback hold: added to what they owe, paid when they pay it. */
-export const chargedDelayedLine = (cents: number) => `Charged ${money(cents)}. Payment may be delayed until the test resumes.`;
+/** (Owner, Nov 11, §386 A) The note in the Charge / Let it go box while the money is frozen (never why). */
+export const CHOICE_PAUSED_NOTE = "This test is paused right now: Charge and Let it go wait until it resumes, and their dates move on by the pause.";
 /** Is a developer's test paused for its testers (a payment hold, the developer's suspension, or an admin pause)? */
 export const testPaused = (dev: { holdStartedAt?: Date | null; devSuspendedAt?: Date | null }, test?: { adminPausedAt?: Date | null; /** (§358) */ workEndedAt?: Date | null; pauseClosedAt?: Date | null } | null) => (test?.workEndedAt || test?.pauseClosedAt ? [dev.holdStartedAt, dev.devSuspendedAt, test.adminPausedAt].some((d) => startedBeforeWorkEnd(d, test)) : !!(dev.holdStartedAt || dev.devSuspendedAt || test?.adminPausedAt));
 /** (Owner, Oct 28 afternoon) Do the paused-test tester rules apply (no sending, chat closed)? A team pause of one test counts only with PAUSE_DEFAULTS.teamPauseSameRules. */

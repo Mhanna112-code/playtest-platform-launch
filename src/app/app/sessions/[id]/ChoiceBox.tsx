@@ -6,7 +6,7 @@ import { FormMistakes } from "@/components/FormMistakes";
 import { useState } from "react";
 import { api, errOf, FIELD } from "@/lib/client";
 import { money, toCents } from "@/lib/format";
-import { CHARGE_TICK_CENTS, chargeTickLabel, chargeTickLine, letGoTickLabel } from "@/lib/rules";
+import { CHARGE_TICK_CENTS, CHOICE_PAUSED_NOTE, chargeTickLabel, chargeTickLine, letGoTickLabel } from "@/lib/rules";
 import { stopBox, useStopBox } from "@/lib/topStop";
 import { useCarried, useCarriedLive } from "@/lib/pressCarry";
 import { ChangesBox } from "@/components/ChangesBox";
@@ -82,8 +82,8 @@ export function ChoiceBox({ paused = false, sessionId, submissionId, callId, lin
   return (
     <div className="space-y-2 rounded-lg border border-amber-400/40 bg-amber-500/10 p-3 text-sm text-amber-100" data-mistakes-root="">
       <p>{line}.</p>
-      {/* (Owner, Oct 28 afternoon) Charge and Let it go both work while the test is paused; a Charge then may be paid later (never says why). */}
-      {paused && <p className="note" data-paused-charge="">This test is paused right now. You can still charge or let it go; payment may be delayed until the test resumes.</p>}
+      {/* (Owner, Nov 11, §386 A; replaces Oct 28) No money moves while the test is paused: the buttons stay and a press is refused (never says why). */}
+      {paused && <p className="note" data-paused-charge="">{CHOICE_PAUSED_NOTE}</p>}
       {fin.done ? (
         <div className="flex flex-wrap items-center gap-2" data-choice-done="">
           <button className={pressed === "Charge" ? "btn" : "btn-secondary"} disabled>{pressed === "Charge" ? <ChargeLabel devName={devName} cents={typed} /> : "Let it go"}</button>

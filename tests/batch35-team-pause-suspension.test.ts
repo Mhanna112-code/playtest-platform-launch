@@ -37,8 +37,8 @@ async function rateOpen() {
 }
 
 describe("§172: the developer's presses on a test the team paused are a suspended developer's", () => {
-  it("the same presses still work (Stop, End early, Cancel call, the side of a dispute; §368: Pay more); every other one, chat included, goes to the banner", async () => {
-    expect([...TEAM_PAUSED_OK_ACTIONS].sort()).toEqual([...RESTRICTED_OK_ACTIONS, "pay-extra", "message"].sort()); // (Owner, Nov 9, §368) paying goes on; (Nov 11, §379 item 1) chat too
+  it("the same presses still work (Stop, End early, Cancel call, the side of a dispute); every other one goes to the banner (§386 A: Pay more too)", async () => {
+    expect([...TEAM_PAUSED_OK_ACTIONS].sort()).toEqual([...RESTRICTED_OK_ACTIONS, "message"].sort()); // (Owner, Nov 11, §386 A) paying waits; (Nov 11, §379 item 1) chat goes on
     const s = await setup();
     const a = await joined(s.testId);
     await pauseTest(await admin(), s.testId, "Checking");
@@ -55,12 +55,12 @@ describe("§172: the developer's presses on a test the team paused are a suspend
     expect((await act(s.testId, "stop", s.dev.cookie, { reason: "This trial is finished.", seenAt: seen() })).status).toBe(200);
   });
 
-  // (Owner, Nov 9, §368; replaces §172's wait for the lift) Pay and Pay more go through on a test the team paused, as the tester's Charge does.
-  it("Pay goes through on that test during the pause (§368), as on the developer's other test", async () => {
+  // (Owner, Nov 11, §386 A; replaces §368) No money moves while the test is paused: Pay and Pay more are refused on that test; the developer's other test pays.
+  it("Pay is refused on that test during the pause (§386 A); the developer's other test pays", async () => {
     const x = await sentWork();
     await pauseTest(await admin(), x.testId, "Checking");
-    expect((await pay(x.dev.cookie, { kind: "submission", id: x.sub.id, amount: "10.00", tickedCents: 1000 })).status).toBe(200);
-    expect(await db.review.count({ where: { submissionId: x.sub.id } })).toBe(1);
+    expect((await pay(x.dev.cookie, { kind: "submission", id: x.sub.id, amount: "10.00", tickedCents: 1000 })).body.error).toMatchObject({ code: "admin_paused", message: "The team paused this test, so your Pay didn't go through." });
+    expect(await db.review.count({ where: { submissionId: x.sub.id } })).toBe(0);
     const other = await secondTest(x.dev.cookie);
     const b = await joined(other, "Ben Okafor");
     await sact(b.sessionId, "written", b.tester.cookie, { answers: ["a", "b"] });
@@ -69,13 +69,13 @@ describe("§172: the developer's presses on a test the team paused are a suspend
     expect((await pay(x.dev.cookie, { kind: "submission", id: sub2.id, amount: "10.00", tickedCents: 1000 })).status).toBe(200);
   });
 
-  it("Pay more goes through too (§368)", async () => {
+  it("Pay more is refused too (§386 A)", async () => {
     const x = await sentWork();
     expect((await pay(x.dev.cookie, { kind: "submission", id: x.sub.id, amount: "5.00", tickedCents: 500, reason: "Half of it" })).status).toBe(200);
     await pauseTest(await admin(), x.testId, "Checking");
     const r = await payMore(x.testId, x.dev.cookie, { contractId: x.sessionId, submissionId: x.sub.id, amount: "2.00", tickedCents: 200 });
-    expect(r.status, JSON.stringify(r.body)).toBe(200);
-    expect(await db.payment.count({ where: { submissionId: x.sub.id, kind: "extra" } })).toBe(1);
+    expect(r.body.error).toMatchObject({ code: "admin_paused", message: "The team paused this test, so your Pay more didn't go through." });
+    expect(await db.payment.count({ where: { submissionId: x.sub.id, kind: "extra" } })).toBe(0);
   });
 
   it("Rate: hidden and refused with the team's wording (never 'suspended'); the tester's Rate is unaffected", async () => {
@@ -90,29 +90,30 @@ describe("§172: the developer's presses on a test the team paused are a suspend
     expect((await act(x.testId, "rate", x.dev.cookie, { contractId: x.sessionId, stars: 5, seenAt: seen() })).status).toBe(200);
   });
 
-  it("Confirm with your bank and Confirm all remain available during the pause", async () => {
+  it("Confirm with your bank and Confirm all are refused during the pause (§386 A); the waiting charge stays and works after the lift", async () => {
     const x = await sentWork();
     const row = await db.payment.create({ data: { kind: "review", submissionId: x.sub.id, contractId: x.sessionId, developerId: x.dev.user.id, testerId: x.tester.user.id, amountCents: 1000, feeCents: 0, testerCents: 0, status: "needs_confirmation", actionPi: "pi_" + randomUUID(), actionBy: new Date(Date.now() + 2 * DAY) } });
     expect((await confirmAllState(x.dev.user.id)).ids).toEqual([row.id]);
     await pauseTest(await admin(), x.testId, "Checking");
-    await expect(confirmStart({ id: x.dev.user.id }, row.id, {})).resolves.toMatchObject({ paymentId: row.id });
+    await expect(confirmStart({ id: x.dev.user.id }, row.id, {})).rejects.toMatchObject({ message: "The team paused this test, so your Confirm with your bank didn't go through." });
     expect((await confirmAllState(x.dev.user.id)).ids).toEqual([row.id]);
     // §159 rule 4b: the tester's waiting charge itself is not cancelled by the pause.
     expect((await db.payment.findUniqueOrThrow({ where: { id: row.id } })).status).toBe("needs_confirmation");
     await unpauseTest(x.testId);
     expect((await confirmAllState(x.dev.user.id)).ids).toEqual([row.id]);
+    await expect(confirmStart({ id: x.dev.user.id }, row.id, {})).resolves.toMatchObject({ paymentId: row.id });
   });
 
-  it("the pause no longer cancels the developer's own Pay whose bank page is open on that test (§368; was §159 rule 9), and says what still works", async () => {
+  it("the pause cancels the developer's own Pay whose bank page is open on that test (§386 A; back to §159 rule 9), and says what still works", async () => {
     const x = await sentWork();
     const open = await db.payment.create({ data: { kind: "review", submissionId: x.sub.id, contractId: x.sessionId, developerId: x.dev.user.id, testerId: x.tester.user.id, amountCents: 1000, feeCents: 0, testerCents: 0, status: "needs_action", actionPi: "pi_" + randomUUID(), actionBy: new Date(Date.now() + 15 * 60_000) } });
     await pauseTest(await admin(), x.testId, "Checking");
-    expect((await db.payment.findUniqueOrThrow({ where: { id: open.id } })).status).toBe("needs_action");
+    expect((await db.payment.findUniqueOrThrow({ where: { id: open.id } })).status).not.toBe("needs_action");
     const mail = await db.notification.findFirstOrThrow({ where: { userId: x.dev.user.id, text: { startsWith: "The team paused “Harbor Run”: it closes on " } } }); // (§310b)
     void mail;
     expect(TEAM_PAUSED_EMAIL_LINE).toContain("add your side of a dispute");
-    expect(TEAM_PAUSED_EMAIL_LINE).toContain("pay for work (Pay, Pay more, Confirm with your bank)");
-    expect(TEAM_PAUSED_EMAIL_LINE).not.toMatch(/Pay[^.]*wait until/);
+    expect(TEAM_PAUSED_EMAIL_LINE).not.toContain("pay for work (");
+    expect(TEAM_PAUSED_EMAIL_LINE).toContain("Paying for work, Rate and chat on this test wait until the team lifts the pause");
   });
 });
 
@@ -150,9 +151,13 @@ describe("§172: what a suspension runs or cancels, done for the one test", () =
     return { ...s, ...j, call };
   }
 
-  it("a listed call's automatic charge is made at once during the team's pause (§368; was: waited for the lift)", async () => {
+  it("a listed call's automatic charge waits for the team's lift (§386 A; was §368's at once)", async () => {
     const x = await heldCall();
     await pauseTest(await admin(), x.testId, "Checking");
+    await autoChargeCalls(new Date());
+    expect(await db.payment.count({ where: { callId: x.call.id } })).toBe(0);
+    await unpauseTest(x.testId);
+    await db.call.update({ where: { id: x.call.id }, data: { payBy: new Date(Date.now() - 60_000) } });
     expect(await autoChargeCalls(new Date())).toBeGreaterThanOrEqual(1);
     const p = await db.payment.findFirstOrThrow({ where: { callId: x.call.id } });
     expect(p.amountCents).toBe(1500);

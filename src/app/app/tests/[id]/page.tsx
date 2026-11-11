@@ -20,7 +20,7 @@ import { requireOpenPage } from "@/lib/server/page-auth";
 import { PageLoaded } from "@/components/PageLoaded";
 import { OnePage } from "@/components/OnePage";
 import { testScope } from "@/lib/pageClaim";
-import { devRestricted, payGoesOn } from "@/lib/restricted";
+import { devRestricted } from "@/lib/restricted";
 import { PAUSED_ALERTS, STOPPED_ALERTS } from "@/lib/alerts";
 import { TestBanner, allowedLine, type BannerCause } from "./TestBanner";
 import { RestrictedCalls } from "./RestrictedCalls";
@@ -154,8 +154,9 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const accountPaused = devRestricted(u, "developer");
   const teamPaused = !!t.adminPausedAt && t.status !== "stopped";
   const restricted = accountPaused || teamPaused;
-  // (Owner, Nov 9, §368) Paying goes on in the restricted view during a team pause or a developer suspension (as the tester's Charge does); a hold still stops it.
-  const restrictedPays = restricted && payGoesOn(u);
+  // (Owner, Nov 9, §368) The restricted view shows Pay during a team pause or a developer suspension (not a hold). (Owner, Nov 11, §386 A) The buttons stay, and a
+  // press is refused while the money is frozen ("The team paused this test, so your Pay didn't go through."): the owner prefers refusals to hidden buttons.
+  const restrictedPays = restricted && !u.holdStartedAt;
   const bannerCause: BannerCause | null = t.adminStoppedAt ? "team-stopped" : teamPaused ? "team-paused" : u.devSuspendedAt ? "suspended" : u.holdStartedAt ? (u.holdReason === "chargeback" ? "chargeback" : "hold") : t.status === "stopped" ? "stopped" : null;
   const bannerCauseReason = bannerCause === "team-paused" || bannerCause === "team-stopped" ? t.adminNote : bannerCause === "suspended" ? u.devSuspendNote : "";
   const keysEver = await db.accessKey.count({ where: { testId: id } });
@@ -557,7 +558,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   );
   const banner = bannerCause ? (
     <TestBanner cause={bannerCause} reason={bannerReason} failed={failed}
-      allowed={restricted ? allowedLine(true, { pay: restrictedPays && (pieces.length > 0 || updates.length > 0), stop: t.status !== "stopped", endEarly: t.status !== "stopped" && working.length > 0, cancelCalls: bookedAhead.length > 0, disputes: disputesWaiting.length > 0 }) : allowedLine(false, { nextRound: !t.adminStoppedAt })} />
+      allowed={restricted ? allowedLine(true, { stop: t.status !== "stopped", endEarly: t.status !== "stopped" && working.length > 0, cancelCalls: bookedAhead.length > 0, disputes: disputesWaiting.length > 0 }) : allowedLine(false, { nextRound: !t.adminStoppedAt })} />
   ) : null;
   if (restricted) {
     // (Owner, Nov 4, §172; replaces batch 17 §14) No Rate here: a test the team paused hides Rate as a suspension does.

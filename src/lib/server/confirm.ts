@@ -118,8 +118,9 @@ export async function bankWaitingReminders(now = new Date()) {
   const devs = await db.payment.findMany({ where: { actionPi: { not: null }, actionBy: { gt: now }, status: { in: ["needs_confirmation", "failed", "owed"] } }, select: { developerId: true }, distinct: ["developerId"] });
   let n = 0;
   for (const { developerId } of devs) {
-    const u = await db.user.findUnique({ where: { id: developerId }, select: { deletedAt: true, timeZone: true } });
+    const u = await db.user.findUnique({ where: { id: developerId }, select: { deletedAt: true, timeZone: true, devSuspendedAt: true, holdStartedAt: true } });
     if (!u || u.deletedAt) continue;
+    if (u.devSuspendedAt || u.holdStartedAt) continue; // (Owner, Nov 11, §386 A) Confirm with your bank waits while the money is frozen: no reminder to press it
     if (await bankLineToday(developerId, u.timeZone, now)) continue; // told today already
     await tellBankWaiting(developerId, now);
     n++;
@@ -442,6 +443,8 @@ async function refuseInAll(p: { coveredById: string | null; settledAt: Date | nu
 /** (Owner, Nov 2, batch 35 §122) "This payment is paused until your tests resume.": its check was cancelled when a hold started; it waits for the lift. */
 export const CONFIRM_PAUSED = "This payment is paused until your tests resume.";
 const CONFIRM_WITH_BANK_PRESS = "Confirm with your bank";
+/** (§386 A) The payments for work that a freeze stops (Confirm all's kinds). */
+export const FROZEN_KINDS = ["review", "call", "dispute", "extra"];
 async function refusePaused(p: { status: string; kind: string; note: string; developerId: string }) {
   const paused = p.status === "deferred" || (p.kind === "owed" && p.status === "cancelled" && p.note.endsWith(":charges") && !!(await db.user.findUnique({ where: { id: p.developerId }, select: { holdStartedAt: true } }))?.holdStartedAt);
   if (paused) throw new HttpError(409, "paused", RF.pressRefused(RF.HELD_CAUSE, CONFIRM_WITH_BANK_PRESS)); // (§364 item 7)
@@ -453,6 +456,12 @@ async function refusePaused(p: { status: string; kind: string; note: string; dev
  */
 export async function confirmStart(dev: { id: string }, paymentId: string, body: Record<string, unknown> = {}) {
   const p = await startable(dev.id, paymentId, typeof body.tab === "string" ? body.tab : "");
+  // (Owner, Nov 11, §386 A; replaces §368) No money moves while the test or the developer is paused: Confirm with your bank on a payment for work (a Pay, Pay more,
+  // a tester's Charge, an automatic call charge, a team decision) is refused, before the stop box. Pay what you owe, a repaid chargeback and a renewal go on.
+  if (p.contractId && FROZEN_KINDS.includes(p.kind)) {
+    const c = await db.contract.findUnique({ where: { id: p.contractId }, select: { test: { select: { adminPausedAt: true, status: true } } } });
+    await (await import("./payments")).moneyFrozenRefusal(dev.id, c?.test ?? null, CONFIRM_WITH_BANK_PRESS);
+  }
   // (Owner, Oct 29, batch 23 section 9) On the test page, the developer's stop-once check first, exactly like Pay on that piece: a stop, close or End early (batch 17 §12), a
   // dispute, the tester's Charge or Let it go, a Pay or Pay more in another tab, a call change... (Alerts apply) stops it once; the second press opens the bank's check.
   // Existing bank confirmations remain available during a suspension or test pause; their original three-day deadline still applies.

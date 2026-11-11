@@ -158,7 +158,7 @@ describe("§365 refusal matrix: every cause × every button that reaches it", ()
       dev("invite", { testerIds: [] }, "Invite"),
       dev("next-round", {}, "Next round"),
       // (Owner, Nov 11, §379 item 1) Chat works during a team pause: tests/call-lines-379.test.ts and the chat tests.
-      // (Owner, Nov 9, §368) Pay and Pay more go through during a team pause: tests/pay-during-pauses-368.test.ts.
+      // (Owner, Nov 11, §386 A) Pay and Pay more are refused during a team pause: tests/money-frozen-386.test.ts.
     ])).toEqual([]);
   });
 
@@ -172,7 +172,7 @@ describe("§365 refusal matrix: every cause × every button that reaches it", ()
       { side: "tester", button: "Rate", go: () => sact(w.ana.sessionId, "rate", w.ana.tester.cookie, { stars: 5, seenAt: seen() }) },
       dev("next-round", {}, "Next round"),
       dev("invite", { testerIds: [] }, "Invite"),
-      // (Owner, Nov 9, §368) A suspended developer's Pay goes through: tests/pay-during-pauses-368.test.ts.
+      // (Owner, Nov 11, §386 A) A suspended developer's Pay is refused: tests/money-frozen-386.test.ts.
     ])).toEqual([]);
   });
 

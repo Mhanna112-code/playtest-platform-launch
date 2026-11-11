@@ -24,7 +24,7 @@ async function admin() {
   return a;
 }
 
-describe("a suspended developer keeps Cancel call, End early and Stop (and, §368, Pay), with or without a payment hold (batch 15 section 29: from the restricted view)", () => {
+describe("a suspended developer keeps Cancel call, End early and Stop (§386 A: not Pay), with or without a payment hold (batch 15 section 29: from the restricted view)", () => {
   it.each([["suspension only", false], ["suspension and a payment hold", true]])("%s", async (_name, hold) => {
     const s = await setup();
     const { tester, sessionId } = await joined(s.testId);
@@ -35,19 +35,14 @@ describe("a suspended developer keeps Cancel call, End early and Stop (and, §36
     const a = await admin();
     expect((await adm("suspend", a.cookie, { id: s.dev.user.id, note: "Spam" })).status).toBe(200);
     if (hold) await startHold(s.dev.user.id, "unpaid");
-    // (Owner, Nov 9, §368; was "refused whatever the hold") A suspension alone no longer stops Pay (it goes through, as the tester's Charge does); with a hold
-    // too it is refused and nothing is recorded.
-    if (hold) {
-      for (const body of [{ kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 }, { amount: "0", kind: "submission", id: sub.id, reason: "No thanks" }]) {
-        const r = await pay(s.dev.cookie, body);
-        expect(r.status).toBe(403);
-        expect(r.body.error.code).toBe("suspended");
-      }
-      expect(await db.review.count({ where: { submissionId: sub.id } })).toBe(0);
-    } else {
-      expect((await pay(s.dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 })).status).toBe(200);
-      expect(await db.review.count({ where: { submissionId: sub.id } })).toBe(1);
+    // (Owner, Nov 11, §386 A; replaces §368, back to "refused whatever the hold") No money moves while suspended: Pay is refused with the suspension's line, $0
+    // included, with or without a hold, and nothing is recorded.
+    for (const body of [{ kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 }, { amount: "0", kind: "submission", id: sub.id, reason: "No thanks" }]) {
+      const r = await pay(s.dev.cookie, body);
+      expect(r.status).toBe(403);
+      expect(r.body.error.code).toBe("suspended");
     }
+    expect(await db.review.count({ where: { submissionId: sub.id } })).toBe(0);
     // "Pay what you owe" exists only during a hold.
     expect((await owed(s.dev.cookie)).status).toBe(hold ? 200 : 403);
     // The three presses that stay.

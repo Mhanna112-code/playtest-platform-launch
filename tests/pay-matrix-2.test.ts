@@ -107,9 +107,9 @@ describe("§159: that tester leaving always stops a payment press on their parts
   });
 });
 
-// (Owner, Nov 9, §368; replaces §159's refusals) A suspended developer's payment presses go through, the same as the tester's Charge.
-describe("§159 / §368: a suspended developer's payment presses go through", () => {
-  it("Pay more goes through during the suspension; existing single and bulk bank confirmation remain available", async () => {
+// (Owner, Nov 11, §386 A; replaces §368, back to §159's refusals) No money moves while suspended: the developer's payment presses are refused.
+describe("§159 / §386 A: a suspended developer's payment presses are refused", () => {
+  it("Pay more, Confirm with your bank and Confirm all are refused during the suspension", async () => {
     const w = await world();
     const st = bank();
     expect((await pay(w.dev.cookie, { kind: "submission", id: w.anaSub.id, amount: "10.00", tickedCents: 1000, seenAt: seen(), confirmed: true })).status).toBe(200);
@@ -118,15 +118,14 @@ describe("§159 / §368: a suspended developer's payment presses go through", ()
     const u = await db.user.findUniqueOrThrow({ where: { id: w.dev.user.id } });
     expect(u.devSuspendedAt).not.toBeNull();
     const more = await act(w.testId, "pay-extra", w.dev.cookie, { contractId: w.ana.sessionId, submissionId: w.anaSub.id, amount: "1.00", tickedCents: 100, seenAt: seen(), confirmed: true });
-    expect(more.status, JSON.stringify(more.body)).toBe(200);
+    expect(more.body.error?.message, JSON.stringify(more.body)).toBe("Your account is suspended, so your Pay more didn't go through.");
     const c = await confirm(w.dev.cookie, { paymentId: one.id, start: true, seenAt: seen() });
-    expect(c.status, JSON.stringify(c.body)).toBe(200);
+    expect(c.body.error?.message, JSON.stringify(c.body)).toBe("Your account is suspended, so your Confirm with your bank didn't go through.");
     const a = await all(w.dev.cookie, { seenTotalCents: 1000, seenIds: [one.id] });
-    // One waiting charge: the bulk endpoint also remains available during suspension.
-    expect(a.status, JSON.stringify(a.body)).toBe(200);
+    expect(a.body.error?.message, JSON.stringify(a.body)).toBe("Your account is suspended, so your Confirm all didn't go through.");
   });
 
-  it("Pay and the suspension at the same moment: paid once either way", async () => {
+  it("Pay and the suspension at the same moment: paid once, or not at all", async () => {
     for (let i = 0; i < 4; i++) {
       const w = await world();
       bank();
@@ -135,16 +134,16 @@ describe("§159 / §368: a suspended developer's payment presses go through", ()
         suspendAccount(await admin(), w.dev.user.id, "abuse", "developer"),
       ]);
       const rows = await db.payment.findMany({ where: { submissionId: w.anaSub.id, status: { in: ["charged", "not_set_up"] } } });
-      // (A press that saw the suspension land since it was sent stops once naming it; never a refusal, never twice.)
+      // (A press that saw the suspension land is refused, §386 A, or stops once naming it; never twice.)
       if (p.status === 200) expect(rows).toHaveLength(1);
       else {
-        expect(p.body.error?.code, JSON.stringify(p.body)).toBe("stop_once");
+        expect(["stop_once", "suspended"], JSON.stringify(p.body)).toContain(p.body.error?.code);
         expect(rows).toHaveLength(0);
       }
     }
   });
 
-  it("the suspension no longer cancels the developer's own open Pay check (§368): its Complete goes through, as a tester's waiting charge's does", async () => {
+  it("the suspension cancels the developer's own open Pay check (§386 A; back to §159 rule 4a); a tester's charge already confirmed at the bank is still recorded", async () => {
     const w = await world();
     const st = bank();
     st.ask = true;
@@ -153,11 +152,8 @@ describe("§159 / §368: a suspended developer's payment presses go through", ()
     const away = await waitingCharge(w, w.ben, w.benSub.id, st);
     await suspendAccount(await admin(), w.dev.user.id, "abuse", "developer");
     const own = await db.payment.findUniqueOrThrow({ where: { id: r.body.paymentId } });
-    expect(own.status).toBe("needs_action");
-    st.pis.set(own.stripePaymentIntentId ?? [...st.pis.keys()][0], "succeeded");
-    const fin = await confirm(w.dev.cookie, { paymentId: own.id });
-    expect(fin.status, JSON.stringify(fin.body)).toBe(200);
-    expect(["charged", "not_set_up"]).toContain((await db.payment.findUniqueOrThrow({ where: { id: own.id } })).status);
+    expect(own.status).not.toBe("needs_action");
+    expect(["charged", "not_set_up"]).not.toContain(own.status);
     // The tester's waiting charge keeps its check: its Complete goes through and is recorded normally.
     const kept = await db.payment.findUniqueOrThrow({ where: { id: away.id } });
     expect([kept.status, !!kept.actionPi]).toEqual(["needs_confirmation", true]);

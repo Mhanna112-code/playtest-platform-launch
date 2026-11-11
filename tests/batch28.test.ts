@@ -484,7 +484,7 @@ describe("batch 28 §21: a listed call not paid 7 days after it is charged autom
     expect(st.of("pi.create")).toHaveLength(0);
   });
 
-  it("the bank asks: it waits as Your bank wants you to confirm; declined: a payment hold; during a hold: waits outside what is owed", async () => {
+  it("the bank asks: it waits as Your bank wants you to confirm; declined: a payment hold; during a hold: waits (§386 A: nothing is made)", async () => {
     strictStripe({ card: "3ds" });
     const a = await heldCall();
     expect(await run()).toBe(1);
@@ -502,7 +502,9 @@ describe("batch 28 §21: a listed call not paid 7 days after it is charged autom
     await startHold(c.dev.user.id, "unpaid");
     await run();
     expect(st.of("pi.create")).toHaveLength(0);
-    expect(await db.payment.findFirstOrThrow({ where: { callId: c.call.id } })).toMatchObject({ status: "deferred", amountCents: 1500 });
+    // (Owner, Nov 11, §386 A; replaces §113 here) No money moves while frozen: the call waits unpaid (no waiting charge), its window moving on by the hold.
+    expect(await db.payment.count({ where: { callId: c.call.id } })).toBe(0);
+    expect(await db.review.count({ where: { callId: c.call.id } })).toBe(0);
   });
 
   it("0 measured minutes: closed with nothing to pay; an unlisted call closes with nothing paid, never charged (§311e)", async () => {
@@ -676,9 +678,9 @@ describe("batch 28 §3-§7 and §9", () => {
   });
 });
 
-// (Owner, Nov 9, §368; replaces "waits for the reinstatement") During a suspension the automatic charge is made at once, as the tester's Charge is.
-describe("batch 28 §21 / §368: during a suspension the automatic charge is made at once", () => {
-  it("charged at once, with its own receipt", async () => {
+// (Owner, Nov 11, §386 A; replaces §368, back to "waits for the reinstatement") During a suspension the automatic charge waits; it is made after the reinstatement.
+describe("batch 28 §21 / §386 A: during a suspension the automatic charge waits for the reinstatement", () => {
+  it("nothing while suspended; charged after, with its own receipt", async () => {
     const { bookCall } = await import("./fixtures");
     const st = strictStripe();
     const s = await setup();
@@ -687,6 +689,9 @@ describe("batch 28 §21 / §368: during a suspension the automatic charge is mad
     await db.call.update({ where: { id: call.id }, data: { startsAt: new Date(Date.now() - 8 * DAY), actualMinutes: 30, payBy: new Date(Date.now() - 60_000) } });
     await db.user.update({ where: { id: s.dev.user.id }, data: { stripeCustomerId: "cus_" + randomUUID(), stripePaymentMethodId: "pm_x", devSuspendedAt: new Date() } });
     const { autoChargeCalls } = await import("@/lib/server/holds");
+    expect(await autoChargeCalls(new Date())).toBe(0);
+    expect(st.of("pi.create")).toHaveLength(0);
+    await db.user.update({ where: { id: s.dev.user.id }, data: { devSuspendedAt: null } });
     expect(await autoChargeCalls(new Date())).toBe(1);
     expect(st.of("pi.create")).toHaveLength(1);
     expect(await db.payment.findFirstOrThrow({ where: { callId: call.id } })).toMatchObject({ status: "charged", amountCents: 1500 });

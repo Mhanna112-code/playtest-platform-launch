@@ -21,28 +21,24 @@ async function dueCall() {
 }
 const devLines = async (userId: string) => (await db.notification.findMany({ where: { userId, groupKey: "payhold" }, orderBy: { createdAt: "asc" } })).map((n) => ({ ...n, text: renderTimes(n.text, "UTC") }));
 
-describe("§319 / §368 the automatic call charge during a suspension, the team's pause and a hold", () => {
-  it("a suspension: the automatic call charge is made at once (§368), with no waiting line", async () => {
-    const { s, call } = await dueCall();
-    await db.user.update({ where: { id: s.dev.user.id }, data: { devSuspendedAt: new Date() } });
-    await autoChargeCalls(new Date());
-    expect(["charged", "not_set_up"]).toContain((await db.payment.findFirstOrThrow({ where: { callId: call.id } })).status);
-    expect(await db.payment.count({ where: { callId: call.id } })).toBe(1);
-    expect((await devLines(s.dev.user.id)).filter((x) => x.text.includes(" is waiting: "))).toHaveLength(0);
-  });
-
-  it("the team's pause of its test: made at once too; a hold keeps its own line (added to what you owe)", async () => {
-    const a = await dueCall();
-    await db.test.update({ where: { id: a.s.testId }, data: { adminPausedAt: new Date() } });
-    await autoChargeCalls(new Date());
-    expect(["charged", "not_set_up"]).toContain((await db.payment.findFirstOrThrow({ where: { callId: a.call.id } })).status);
-    expect((await devLines(a.s.dev.user.id)).filter((x) => x.text.includes(" is waiting: "))).toHaveLength(0);
-    const b = await dueCall();
-    await startHold(b.s.dev.user.id, "unpaid");
-    await autoChargeCalls(new Date());
-    const hl = (await devLines(b.s.dev.user.id)).map((x) => x.text);
-    expect(hl.some((t) => t.includes(" is added to what you owe"))).toBe(true);
-    expect(hl.some((t) => t.includes(" is waiting: "))).toBe(false);
-    expect((await db.payment.findFirstOrThrow({ where: { callId: b.call.id } })).status).toBe("deferred");
+// (Owner, Nov 11, §386 A; replaces §368) No money moves while frozen: the automatic call charge waits during a suspension, the team's pause and a hold, with no
+// line at all (nothing is added to what's owed), and is made after the lift.
+describe("§319 / §386 A the automatic call charge during a suspension, the team's pause and a hold", () => {
+  it("each cause: nothing is made and no line is said; made after the lift", async () => {
+    for (const freeze of ["suspension", "team", "hold"] as const) {
+      const { s, call } = await dueCall();
+      if (freeze === "suspension") await db.user.update({ where: { id: s.dev.user.id }, data: { devSuspendedAt: new Date() } });
+      else if (freeze === "team") await db.test.update({ where: { id: s.testId }, data: { adminPausedAt: new Date() } });
+      else await startHold(s.dev.user.id, "unpaid");
+      await autoChargeCalls(new Date());
+      expect(await db.payment.count({ where: { callId: call.id } }), freeze).toBe(0);
+      const lines = (await devLines(s.dev.user.id)).map((x) => x.text);
+      expect(lines.some((t) => t.includes(" is waiting: ") || t.includes(" is added to what you owe"))).toBe(false);
+      if (freeze === "hold") continue;
+      await db.user.update({ where: { id: s.dev.user.id }, data: { devSuspendedAt: null } });
+      await db.test.update({ where: { id: s.testId }, data: { adminPausedAt: null } });
+      await autoChargeCalls(new Date());
+      expect(["charged", "not_set_up"]).toContain((await db.payment.findFirstOrThrow({ where: { callId: call.id } })).status);
+    }
   });
 });

@@ -428,8 +428,11 @@ export async function deferWhileHeld(paymentId: string) {
     const p = await tx.payment.findUniqueOrThrow({ where: { id: paymentId } });
     if (p.kind === "chargeback" || p.kind === "subscription" || p.kind === OWED_KIND) return false;
     await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${p.developerId} FOR UPDATE`;
-    const dev = await tx.user.findUniqueOrThrow({ where: { id: p.developerId }, select: { holdStartedAt: true } });
-    if (!dev.holdStartedAt) return false;
+    const dev = await tx.user.findUniqueOrThrow({ where: { id: p.developerId }, select: { holdStartedAt: true, devSuspendedAt: true, deletedAt: true } });
+    // (Owner, Nov 11, §386 A) Confirm with your bank is refused while the money is frozen (a suspension or the team's pause too), so its check running out then
+    // is never a decline: it waits for the lift like a hold's.
+    const test = p.contractId ? (await tx.contract.findUnique({ where: { id: p.contractId }, select: { test: { select: { adminPausedAt: true, status: true } } } }))?.test : null;
+    if (!dev.holdStartedAt && !(await import("@/lib/restricted")).moneyFrozen(dev, test)) return false;
     return (await tx.payment.updateMany({ where: { id: p.id, status: "needs_confirmation" }, data: { status: "deferred", actionPi: null, actionBy: null } })).count === 1;
   });
 }
