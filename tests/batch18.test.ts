@@ -70,9 +70,15 @@ describe("N) Block and Report live only on profiles", () => {
     const t = await makeUser({ tester: true, name: "Ana Silva" });
     expect((await report(dev.cookie, t.user.id, "no")).status).toBe(400);
     expect((await report(dev.cookie, t.user.id)).status).toBe(200);
+    // (Owner, Nov 11, §380 M) Again within a day: silent; after a day: the line (once per pair, ever).
     const again = await report(dev.cookie, t.user.id);
-    expect(again.status).toBe(409);
-    expect(again.body.error.message).toMatch(/^You already reported Ana Silva on /);
+    expect(again.status).toBe(200);
+    expect(again.body.already).toBe(true);
+    expect(await db.report.count({ where: { reporterId: dev.user.id, reportedId: t.user.id } })).toBe(1);
+    await db.report.updateMany({ where: { reporterId: dev.user.id, reportedId: t.user.id }, data: { createdAt: new Date(Date.now() - 25 * 3_600_000) } });
+    const later = await report(dev.cookie, t.user.id);
+    expect(later.status).toBe(409);
+    expect(later.body.error.message).toMatch(/^You already reported Ana Silva on /);
     expect((await report(t.cookie, dev.user.id)).status).toBe(200); // the other direction is another pair
     expect(await lines(t.user.id)).toHaveLength(0); // not told
     const mine = (await lines(a.user.id)).filter((l) => l.text.startsWith("New report: Nora Lane reported Ana Silva"));

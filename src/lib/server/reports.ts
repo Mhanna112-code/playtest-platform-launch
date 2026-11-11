@@ -10,6 +10,8 @@ import { adminUsers, notify } from "./notify";
 
 export const REPORT_NOTE_MIN = 10;
 
+/** (Owner, Nov 11, §380 M) A second Report within this long of the first is silent. */
+export const REPORT_AGAIN_SILENT_MS = 24 * 60 * 60_000;
 export async function reportPerson(me: { id: string }, body: Record<string, unknown>) {
   const otherId = String(body.userId ?? "");
   if (!otherId || otherId === me.id) throw new HttpError(400, "bad_user", "Choose someone to report.");
@@ -18,13 +20,21 @@ export async function reportPerson(me: { id: string }, body: Record<string, unkn
   if (other.deletedAt) throw new HttpError(409, "deleted", ACCOUNT_WAS_DELETED); // (Owner, Nov 9, §360) an old profile tab's Report
   const note = typeof body.note === "string" ? body.note.trim().slice(0, 2000) : "";
   const had = await db.report.findUnique({ where: { reporterId_reportedId: { reporterId: me.id, reportedId: otherId } } });
+  // (Owner, Nov 11, §380 M) A second Report on the same person within a day (another tab, a double press): already what it wanted, silent. Later, the line
+  // stays (a pair is reported once, ever).
+  if (had && Date.now() - had.createdAt.getTime() < REPORT_AGAIN_SILENT_MS) return { reported: true, already: true, at: had.createdAt.toISOString() };
   if (had) throw new HttpError(409, "already", `You already reported ${displayName(other)} on ${fmtDate(had.createdAt)}.`);
   if (note.length < REPORT_NOTE_MIN) throw new HttpError(400, "bad_note", "Say what happened (the team reads it).");
   // (Owner, Nov 5, §271) A tester reporting a developer whose test she works on: a pause of that test since the profile loaded (or the team's lift) stops it once.
   const m = await import("./stopMoment");
   m.pauseStopOnce(await m.testerPauseMomentsWith(me.id, otherId, body), body);
   const r = await db.report.create({ data: { reporterId: me.id, reportedId: otherId, note } }).catch(() => null);
-  if (!r) throw new HttpError(409, "already", `You already reported ${displayName(other)}.`);
+  if (!r) {
+    // (§380 M) The other Report of the same moment made it: silent.
+    const same = await db.report.findUnique({ where: { reporterId_reportedId: { reporterId: me.id, reportedId: otherId } } });
+    if (same) return { reported: true, already: true, at: same.createdAt.toISOString() };
+    throw new HttpError(409, "already", `You already reported ${displayName(other)}.`);
+  }
   // The admins are told (batch 29 §29: their own daily entry, "Reports · 2 new"; each line opens its row, marked); the reported person is NOT told.
   const flagged = await reportedOver3([me.id, otherId]);
   const meRow = await db.user.findUniqueOrThrow({ where: { id: me.id } });
