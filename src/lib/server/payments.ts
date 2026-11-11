@@ -312,7 +312,7 @@ async function paidOnPiece(q: Prisma.TransactionClient | typeof db, where: { sub
  * Tester: dispute once, on any part the developer reviewed (batch 10: listed or not, any amount, $0 included, or a Reject). (Owner, Nov 6, §288) Until the tester
  * rates the test or the part's closing date passes: RATED_NO_DISPUTE / disputeClosedLine after that.
  */
-export async function openDispute(tester: U, contractId: string, body: Record<string, unknown>): Promise<Awaited<ReturnType<typeof openDisputeOnce>>> {
+export async function openDispute(tester: U, contractId: string, body: Record<string, unknown>): Promise<Prisma.DisputeGetPayload<object>> {
   try {
     return await openDisputeOnce(tester, contractId, body);
   } catch (e) {
@@ -324,10 +324,18 @@ export async function openDispute(tester: U, contractId: string, body: Record<st
   }
 }
 
-async function openDisputeOnce(tester: U, contractId: string, body: Record<string, unknown>) {
+/**
+ * (Owner, Nov 11, §380 DO) Dispute's refusals alone (final first, then soft): the session route runs them before the stop-moment box, the NDA block and the red
+ * reason check, so a press that can only be refused is never stopped once or told to fix its reason first.
+ */
+export async function disputeRefusalsFirst(tester: U, contractId: string, body: Record<string, unknown>) {
+  await openDisputeOnce(tester, contractId, body, true);
+}
+
+async function openDisputeOnce(tester: U, contractId: string, body: Record<string, unknown>): Promise<Prisma.DisputeGetPayload<object>>;
+async function openDisputeOnce(tester: U, contractId: string, body: Record<string, unknown>, refusalsOnly: true): Promise<null>;
+async function openDisputeOnce(tester: U, contractId: string, body: Record<string, unknown>, refusalsOnly = false): Promise<Prisma.DisputeGetPayload<object> | null> {
   const kind = String(body.kind ?? ""), id = String(body.id ?? "");
-  const reason = readText(body.reason, LIMITS.disputeText, "bad_reason");
-  if (reason.length < 10) throw new HttpError(400, "bad_reason", "Say why you think the pay should be higher (at least a sentence).");
   const c = await db.contract.findUnique({ where: { id: contractId }, include: { test: { include: { developer: true } } } });
   if (!c || c.testerId !== tester.id) throw new HttpError(404, "not_found", "That session doesn't exist or isn't yours.");
   const where = kind === "call" ? { callId: id } : { submissionId: id };
@@ -339,14 +347,16 @@ async function openDisputeOnce(tester: U, contractId: string, body: Record<strin
     // stop-once that could only end in this refusal, §159). A part already disputed keeps its own line ("You already disputed this payment").
     const shut = await disputeClosedFor(contractId, where);
     if (shut && !(await db.dispute.findFirst({ where }))) throw new HttpError(409, "no_dispute", shut);
-    // (Owner, Oct 29, batch 32 §7) An open new-terms offer blocks Dispute until the tester answers it (Switch or Keep); (§267 / §302) an NDA change first.
-    await (await import("./terms")).answerTermsFirst(contractId, q);
     // (Owner, Oct 28 afternoon) Disputes work while the test is paused (and while the developer owes a declined payment): a decision for the tester during a hold is added to what is owed.
     const review = await q.review.findFirst({ where: { ...where, contractId } });
     // (Batch 30 §5, owner Oct 29) The team's $0 closure is final: no dispute.
     if (review?.teamClosedById) throw new HttpError(409, "no_dispute", TEAM_CLOSED_NO_DISPUTE);
     if (!review) throw new HttpError(409, "not_paid", "This hasn't been paid yet.");
-    return disputable(review);
+    const left = await disputable(review);
+    // (Owner, Oct 29, batch 32 §7) An open new-terms offer blocks Dispute until the tester answers it (Switch or Keep); (§267 / §302) an NDA change first.
+    // (Owner, Nov 11, §380 DO) These soft ones only after every final refusal (closed or rated, closed at $0, not paid, already disputed, nothing left).
+    await (await import("./terms")).answerTermsFirst(contractId, q);
+    return left;
   };
   // (Owner, Nov 3, §159) Whether anything is left to dispute is decided FIRST: a refusal is never shown as a stop-once whose second press could only be refused.
   // (Batch 20 section 15) Nothing a decision could add (the admin form's max, from disputeBounds): refused with the page's line (an older page).
@@ -366,6 +376,10 @@ async function openDisputeOnce(tester: U, contractId: string, body: Record<strin
     return { existing, roomCents: bounds ? bounds.max - bounds.min : 0 };
   };
   const first = await refusals(db);
+  if (refusalsOnly) return null;
+  // (Owner, Nov 11, §380 DO) The red reason check after every refusal.
+  const reason = readText(body.reason, LIMITS.disputeText, "bad_reason");
+  if (reason.length < 10) throw new HttpError(400, "bad_reason", "Say why you think the pay should be higher (at least a sentence).");
   // (§369) What this press saw: what was paid on the part.
   const sawPaid = await paidOnPiece(db, where);
   // (Batch 35 §68) A payment on this piece since the page loaded stops it once even with Alerts Off.

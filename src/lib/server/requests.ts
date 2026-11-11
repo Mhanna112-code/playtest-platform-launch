@@ -229,6 +229,14 @@ async function acceptClash(c: Ctx["c"], side: Side, times: Date[], minutes: numb
   return clashes;
 }
 
+/** (Owner, Nov 11, §380 DO) Accept's time clash for the picked row (its first call; a set's other weeks are checked when it books), "" when none. */
+async function acceptPickClash(c: Ctx["c"], side: Side, r: { id: string; minutes: number }, pick: Date | null) {
+  const rows = rowsOf(await db.callRequest.findUniqueOrThrow({ where: { id: r.id } }));
+  const row = rows.length === 1 && (!pick || sameTime(rows[0].startsAt, pick)) ? rows[0] : pick ? rows.find((x) => sameTime(x.startsAt, pick)) : undefined;
+  if (!row) return "";
+  return (await acceptClash(c, side, [row.startsAt], r.minutes))[0] ?? "";
+}
+
 type Tx = Prisma.TransactionClient | typeof db;
 /**
  * Booked times still ahead with this tester (a single call = 1, a daily/weekly set = 1). (Owner, Nov 4, §185) A Forever set counts as one booked time while it
@@ -644,6 +652,13 @@ export async function devRequestTime(dev: U, testId: string, body: Record<string
   {
     const first = await plan(exempt);
     if (first.refused.size === all.length) throw new HttpError(409, "limit", limitText([...first.refused.values()], ["day", "total"]));
+    // (Owner, Nov 11, §380 DO) The time clash ("You already have a call at …") is a refusal: checked BEFORE the stop-once box, never after it (and again below).
+    for (const m of first.match.values()) {
+      const clash = await acceptClash(m.x.c, "developer", [m.hit], m.match.minutes);
+      if (clash.length) throw new HttpError(409, "clash", clash[0]);
+    }
+    const own = await ownCallClash("developer", dev, all.map((x) => x.c.id), kind.rows, reqMinutes, end);
+    if (own) throw new HttpError(409, "clash", own);
   }
   // (Batch 16 section 21) Another tab's call action with any of these testers stops it once.
   // (§278) The press is about the ticked testers still in; a gone one's own leaving line is what their refusal line says (it doesn't stop the others' press).
@@ -770,15 +785,21 @@ export async function testerRequestTime(user: U, contractId: string, body: Recor
     const line = await limitNow((await autoMatches(contractId, "developer", kind.rows, minutes)).size);
     if (line) throw new HttpError(409, "limit", line);
   }
+  // (Owner, Nov 11, §380 DO) The time clash ("You already have a call at …", "This time is no longer free.") is a refusal: checked BEFORE the stop-once box.
+  const clashes = async () => {
+    // Auto-match (rates match): a row at exactly one of the developer's waiting single times books it.
+    const match = await autoMatches(contractId, "developer", kind.rows, minutes);
+    for (const m of match.values()) {
+      const clash = await acceptClash(c, "tester", [m.hit], m.match.minutes);
+      if (clash.length) throw new HttpError(409, "clash", clash[0]);
+    }
+    const own = await ownCallClash("tester", user, [contractId], kind.rows, minutes, end); // (batch 16 section 33; §208: two rows overlapping each other too)
+    if (own) throw new HttpError(409, "clash", own);
+    return match;
+  };
+  await clashes();
   await testerGate(c.testerId, contractId, c.testId, body, undefined, CALL_PRESS);
-  // Auto-match (rates match): a row at exactly one of the developer's waiting single times books it.
-  const match = await autoMatches(contractId, "developer", kind.rows, minutes);
-  for (const m of match.values()) {
-    const clash = await acceptClash(c, "tester", [m.hit], m.match.minutes);
-    if (clash.length) throw new HttpError(409, "clash", clash[0]);
-  }
-  const own = await ownCallClash("tester", user, [contractId], kind.rows, minutes, end); // (batch 16 section 33; §208: two rows overlapping each other too)
-  if (own) throw new HttpError(409, "clash", own);
+  const match = await clashes(); // again after the box (a call booked while it showed)
   const sendRows = kind.each.filter((_, i) => !match.has(i));
   if (sendRows.length) {
     const clash = await sendClash(contractId, sendRows.flatMap((k) => requestTimes(k, end)), minutes, devName, [...match.values()].map((m) => m.match.id), { side: "tester", otherPoss: pronouns(c.test.developer.pronoun).poss }, end);
@@ -895,6 +916,12 @@ export async function answerRequest(user: U, contractId: string, body: Record<st
   // (Owner, Nov 5, §271) Accept on a paused test is refused, so the refusal comes first: it tells them it's paused (never a pause stop, then the refusal).
   if (action === "accept") pausedRefusal(c, side, "Accept");
   // (Batch 35 §79) Accept / Decline never stops for the line about this request itself (the developer's: the tester's "requested …" on this contract).
+  // (Owner, Nov 11, §380 DO) Accept: the time clash is a refusal, checked BEFORE the stop-once box (and again when it books).
+  if (action === "accept") {
+    await refusals(c, side, "Accept"); // final refusals first
+    const clash = await acceptPickClash(c, side, r, pick);
+    if (clash) throw new HttpError(409, "clash", clash);
+  }
   if (side === "developer") await db.$transaction((tx) => devGate(tx, c.testId, body, {}, [], undefined, { acts: CALL_ACTS, keys: [`req:${r.id}`, `c:${contractId}`], answers: { item: r.id, kinds: ["requested"], contractId } }));
   else await testerGate(c.testerId, contractId, c.testId, body, undefined, { ...CALL_PRESS, answers: { item: r.id } });
   if (action === "accept") {

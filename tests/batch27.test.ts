@@ -140,7 +140,8 @@ describe("batch 27 section 1: an open new-terms offer blocks Send and calls unti
     // Every press, from a fresh page too (no second press gets through).
     expectBlocked(await sact(j.sessionId, "choose", j.tester.cookie, { submissionId: sub.id, choice: "letgo", seenAt: seen() }));
     expectBlocked(await sact(j.sessionId, "choose", j.tester.cookie, { submissionId: sub.id, choice: "charge", seenAt: seen(), ...again() }));
-    expectBlocked(await sact(j.sessionId, "dispute", j.tester.cookie, { kind: "submission", id: sub.id, reason: "The pay was not what we agreed.", seenAt: seen() }));
+    // (Owner, Nov 11, §380 DO) Dispute's final refusals come before the offer: on a part not paid yet, that one.
+    expect((await sact(j.sessionId, "dispute", j.tester.cookie, { kind: "submission", id: sub.id, reason: "The pay was not what we agreed.", seenAt: seen() })).body.error).toMatchObject({ code: "not_paid", message: "This hasn't been paid yet." });
     expect(await db.review.count({ where: { submissionId: sub.id } })).toBe(0);
     // Keep unlocks.
     expect((await sact(j.sessionId, "terms", j.tester.cookie, { offerId: offer.id, choice: "keep", seenAt: seen() })).status).toBe(200);

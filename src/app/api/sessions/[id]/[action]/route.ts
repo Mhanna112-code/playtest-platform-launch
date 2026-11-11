@@ -153,6 +153,8 @@ export async function POST(req: Request, { params }: Ctx) {
     // (§375) Starting an upload checks part over in its own pass under the lock too (startRecording), with the same line.
     if (!onePass && action !== "recording-start") await finalRefusal(u.id, id, action, body);
     if (!onePass) await pausedRefusal(u.id, id, action, body);
+    // (Owner, Nov 11, §380 DO) Dispute's refusals (final, then soft) before the NDA block, the stop-moment box and its red reason check.
+    if (action === "dispute") await (await import("@/lib/server/payments")).disputeRefusalsFirst(u, id, body);
     // (Owner, Nov 5, §267; Nov 6, §302: every NDA change) An NDA change not yet acknowledged blocks every press here but Rate and Leave (§268), the
     // Acknowledge button and the pill.
     if (!NDA_FREE_SET.has(action) && !onePass) await ndaBlockFirst(id);
