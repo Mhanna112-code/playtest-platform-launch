@@ -1,4 +1,5 @@
 import { withDateZone } from "@/lib/server/dateZone";
+import { renderNames } from "@/lib/server/lineNames";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { OnePage } from "@/components/OnePage";
 import { ownPageScope } from "@/lib/pageClaim";
@@ -32,7 +33,8 @@ export default async function Notifications() {
   // (Owner, Oct 30, batch 34 §5) The side in use's lines plus the account's; the settings' help names only this side's payment kinds.
   const side = isAdmin(u) ? null : sideFor(u);
   const freshV = await notificationsV(u);
-  const items = await db.notification.findMany({ where: { userId: u.id, ...await notificationScopeFor(u.id) }, orderBy: { createdAt: "desc" }, take: 200 });
+  // (Owner, Nov 11, §388) Each line with the current names of the people and tests it names.
+  const items = await renderNames(await db.notification.findMany({ where: { userId: u.id, ...await notificationScopeFor(u.id) }, orderBy: { createdAt: "desc" }, take: 200 }));
   // (Design doc 9) Same-day lines about the same test stack into one entry, except the lines that always arrive on their own (own); opening a stack marks its lines read, a single line is read when clicked (batch 29 §28).
   const titles = await testTitlesOf(items);
   // (Owner, Nov 5, §270) Every person and test a line names is its own green link: the reader's link pool, matched against each line (its own test's people first).

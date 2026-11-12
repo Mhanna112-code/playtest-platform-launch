@@ -842,6 +842,9 @@ model Notification {
   /// (Owner, Oct 27) Reminders also go in the summary email, each line once; a Weekly / Monthly email keeps only the newest copy of each reminder (same reminderKey)
   reminderKey String?
   readAt    DateTime?
+  /// (Owner, Nov 11, §388) Where the line names a person or a test ([{ k: "u" | "t", id, at, name }]): read with their CURRENT names (lib/server/lineNames.ts).
+  /// Null on lines written before (they keep their stored text).
+  names     Json?
   /// Included in a daily summary email (users on "One daily summary")
   summarizedAt DateTime?
   createdAt DateTime  @default(now())

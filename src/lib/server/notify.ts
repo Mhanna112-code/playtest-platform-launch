@@ -8,6 +8,7 @@ import { bellKeyIn, bellStacks, stackHeading } from "@/lib/bell";
 import { appUrl } from "./auth";
 import { MORNING_FULL, MORNING_SHORT, replacePendingMorning, sendEmail } from "./email";
 import { REMINDER_ONLY_GROUPS } from "@/lib/reminderPolicy";
+import { namesFor, renderNames } from "./lineNames";
 
 // Every update goes to the person's bell. Email follows their setting: each update (default), one daily summary,
 // or none. Sign-in links (sent elsewhere) and payment receipts (always: true) always send.
@@ -68,9 +69,12 @@ export async function notify(to: string, subject0: string, lines0: string[], pat
   // (Batch 15 section 11) Times in the line are written in the recipient's own time zone (unknown: UTC).
   const subject = renderTimes(subject0, user?.timeZone), lines = lines0.map((l) => renderTimes(l, user?.timeZone));
   if (!user && opts.recipientId) return; // A known account never falls back to a non-account email.
+  // (Owner, Nov 11, §388) The line's test, and where it names people and tests (read later with their current names).
+  const testId = opts.testId ?? (await testIdOfLink(path));
+  const names = user ? await namesFor(user.id, subject, testId, opts.about, client) : undefined;
   // (Owner, Nov 9, §360) A deleted account is never emailed (no summary, morning or immediate email): the line is kept in its bell as already emailed.
   if (user?.deletedAt) {
-    await client.notification.create({ data: { side: lineSide(user.id, path, opts.side), userId: user.id, text: subject, link: path, testId: opts.testId ?? (await testIdOfLink(path)), mustEmail: false, summarizedAt: new Date(), reminderKey: opts.reminder ?? null, ...flags(opts) } });
+    await client.notification.create({ data: { side: lineSide(user.id, path, opts.side), userId: user.id, text: subject, names, link: path, testId, mustEmail: false, summarizedAt: new Date(), reminderKey: opts.reminder ?? null, ...flags(opts) } });
     return;
   }
   if (!user) {
@@ -88,7 +92,7 @@ export async function notify(to: string, subject0: string, lines0: string[], pat
   // chargeback emails. (Owner, Nov 6, §299) Also the call reminder (24 hours before the call: calls.ts CALL_REMINDER_MIN): it goes at once, before the call, never in a later summary; (§324) with `always`
   // now, so an account with email Off gets it too.
   if (opts.now) {
-    await client.notification.create({ data: { side: lineSide(user.id, path, opts.side), userId: user.id, text: subject, link: path, testId: opts.testId ?? (await testIdOfLink(path)), mustEmail: !!opts.always, summarizedAt: new Date(), reminderKey: opts.reminder ?? null, ...flags(opts) } });
+    await client.notification.create({ data: { side: lineSide(user.id, path, opts.side), userId: user.id, text: subject, names, link: path, testId, mustEmail: !!opts.always, summarizedAt: new Date(), reminderKey: opts.reminder ?? null, ...flags(opts) } });
     if (!opts.always && !opts.payment && !EMAIL_ON.includes(user.emailPref)) return;
     try {
       await sendEmail({ to, subject, text: [...lines.filter(Boolean), "", `${appUrl()}${path}`].join("\n") /* (Owner, Nov 6, §325) no closing "Playtest" signature */, button: { label: "Open Playtest", url: `${appUrl()}${path}` }, recipientId: user.id, reminderKey: opts.reminder, expiresAt: opts.expiresAt });
@@ -99,7 +103,7 @@ export async function notify(to: string, subject0: string, lines0: string[], pat
   }
   // (Owner, Oct 27) Nothing is emailed right away: the notification waits for the person's email (the summary, or the morning payment email). `always` marks the few
   // that ignore Off (account paused / active again, the team pausing / stopping / closing a test, the owed reminder): they ride in ONE morning email, once.
-  await client.notification.create({ data: { side: lineSide(user.id, path, opts.side), userId: user.id, text: subject, link: path, testId: opts.testId ?? (await testIdOfLink(path)), mustEmail: !!opts.always, reminderKey: opts.reminder ?? null, ...flags(opts) } });
+  await client.notification.create({ data: { side: lineSide(user.id, path, opts.side), userId: user.id, text: subject, names, link: path, testId, mustEmail: !!opts.always, reminderKey: opts.reminder ?? null, ...flags(opts) } });
 }
 
 /**
@@ -111,8 +115,11 @@ export async function bell(userId: string, text0: string, link: string, about?: 
   if ((opts.reminder || REMINDER_ONLY_GROUPS.includes(opts.group ?? "")) && deleted) return;
   if (about && !opts.payment && !(await inReach(userId, about))) return; // (Owner, Nov 6, §299) payment lines always reach
   const text = await renderFor(userId, text0);
+  // (Owner, Nov 11, §388) Where the line names people and tests (read later with their current names).
+  const testId = opts.testId ?? (await testIdOfLink(link));
+  const names = await namesFor(userId, text, testId, about, client);
   // (Owner, Nov 9, §360) A deleted account's line is never emailed: written as already emailed.
-  await client.notification.create({ data: { side: lineSide(userId, link, opts.side), userId, text, link, testId: opts.testId ?? (await testIdOfLink(link)), mustEmail: !deleted && !!opts.always, reminderKey: opts.reminder ?? null, ...(deleted ? { summarizedAt: new Date() } : {}), ...flags(opts) } });
+  await client.notification.create({ data: { side: lineSide(userId, link, opts.side), userId, text, names, link, testId, mustEmail: !deleted && !!opts.always, reminderKey: opts.reminder ?? null, ...(deleted ? { summarizedAt: new Date() } : {}), ...flags(opts) } });
 }
 
 /** (Batch 15 section 11) A line's time tokens, in this person's time zone. */
@@ -288,7 +295,8 @@ export async function sendSummaries(now = new Date(), only?: string[]) {
     const t = due ? team.get(u.id) : undefined;
     // (Owner, Nov 7, §328) The NEWEST 200 unsent lines (it was the oldest 200, so a backlog came as a flood over the next days); the older ones are marked emailed
     // too and the email ends with "And N older updates — see your bell".
-    const fetched = (await db.notification.findMany({ where: { userId: u.id, summarizedAt: null, ...only }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: SUMMARY_MAX })).reverse();
+    // (Owner, Nov 11, §388) Each line with the current names of the people and tests it names.
+    const fetched = await renderNames((await db.notification.findMany({ where: { userId: u.id, summarizedAt: null, ...only }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: SUMMARY_MAX })).reverse());
     const olderIds = fetched.length === SUMMARY_MAX
       ? (await db.notification.findMany({ where: { userId: u.id, summarizedAt: null, ...only, id: { notIn: fetched.map((n) => n.id) }, createdAt: { lte: fetched[0].createdAt } }, select: { id: true } })).map((n) => n.id)
       : [];

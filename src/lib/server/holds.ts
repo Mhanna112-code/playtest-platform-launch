@@ -2266,7 +2266,8 @@ async function dailyReminders(now: Date) {
     data: tests.filter((t) => !told.has(t.id)).map((t) => {
       const n = count.get(t.id)!;
       // (Owner, Nov 6, §317b) One stack a day across tests ("Applications waiting · N"), still daily per test, following the email setting.
-      return { userId: t.developerId, side: "developer", testId: t.id, groupKey: APPS_WAITING_GROUP, reminderKey: `applications:${t.id}`, text: `“${t.title}”: ${n} ${n === 1 ? "application or rejoin ask waits" : "applications and rejoin asks wait"} for your answer`, link: `/app/tests/${t.id}#needs-you` };
+      // (Owner, Nov 11, §388) The test's name read as it is then (its place: right after the opening quote).
+      return { userId: t.developerId, side: "developer", testId: t.id, groupKey: APPS_WAITING_GROUP, reminderKey: `applications:${t.id}`, names: [{ k: "t", id: t.id, at: 1, name: t.title }], text: `“${t.title}”: ${n} ${n === 1 ? "application or rejoin ask waits" : "applications and rejoin asks wait"} for your answer`, link: `/app/tests/${t.id}#needs-you` };
     }),
   });
 }

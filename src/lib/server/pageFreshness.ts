@@ -1,4 +1,5 @@
 import { revealedRatingsWhere } from "./ratings";
+import { renderNames } from "./lineNames";
 import { createHash } from "node:crypto";
 import type { User } from "@prisma/client";
 import { db } from "@/lib/db";
@@ -61,7 +62,8 @@ export async function chargebackStateV(userId: string) {
 }
 
 export async function notificationsV(u: User) {
-  const rows = await db.notification.findMany({ where: { userId: u.id, ...await notificationScopeFor(u.id) }, orderBy: [{ createdAt: "desc" }, { id: "asc" }], take: 200 });
+  // (Owner, Nov 11, §388) As the page reads them: a rename of a person or test a line names redraws it.
+  const rows = await renderNames(await db.notification.findMany({ where: { userId: u.id, ...await notificationScopeFor(u.id) }, orderBy: [{ createdAt: "desc" }, { id: "asc" }], take: 200 }));
   const titles = await db.test.findMany({ where: { id: { in: rows.flatMap((r) => r.testId ? [r.testId] : []) } }, orderBy: { id: "asc" }, select: { id: true, title: true } });
   return stateV([rows, titles, u.emailPref]);
 }
