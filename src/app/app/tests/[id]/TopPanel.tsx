@@ -268,7 +268,7 @@ export function TopPanel(p: { timeZone?: string | null; joinClosedLine?: string;
             )}
             {box("end-early")}
             {at === "end-early" && <PressDone line={doneLine} />}
-            <FormMistakes text={at === "end-early" && error.startsWith(FIELD) ? error : ""} press="End their work now" />
+            <FormMistakes text={at === "end-early" && error.startsWith(FIELD) ? error : ""} press="End their work now" refused={at === "end-early" && !!error && !error.startsWith(FIELD)} />
           </div>
         )}
       </section>

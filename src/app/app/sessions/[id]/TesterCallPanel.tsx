@@ -9,6 +9,7 @@ import { ReportProblem } from "@/components/ReportProblem";
 import { CallPresence, CallTimelineLine } from "@/components/CallPresence";
 import { LIVE_SECTIONS, LiveSection } from "@/components/LivePanel";
 import { CancelMenu, cancelButton } from "@/components/CancelMenu";
+import { FIELD } from "@/lib/client";
 import { CallCheck } from "@/components/CallCheck";
 import { LIST_PANEL } from "@/components/ScrollList";
 
@@ -26,6 +27,8 @@ const fmt = (iso: string) => new Date(iso).toLocaleString("en-US", { weekday: "s
  */
 export function TesterCallPanel(p: { sessionId: string; seenAt: string; mine: Mine[]; sets?: TesterSet[]; refusal: string; lateNote?: string; devName: string; noReport?: boolean }) {
   const { press, changes, error, busy, at, finish } = usePress(p.seenAt);
+  /** (§387 3) This key's press was refused: its menu's red list drops "press … again". */
+  const refusedAt = (k: string) => at === k && !!error && !error.startsWith(FIELD);
   const box = (k: string) => (at === k ? <div className="basis-full"><ChangesBox side="tester" changes={changes} error={error} button={cancelButton(k)} /></div> : null);
   async function go(action: string, body: Record<string, unknown>, key = action) {
     const r = await press(`/api/sessions/${p.sessionId}/${action}`, body, key);
@@ -65,7 +68,7 @@ export function TesterCallPanel(p: { sessionId: string; seenAt: string; mine: Mi
       {!m.cancelled && m.joinable && <JoinCall callId={m.id} />}
       {!m.cancelled && !m.ended && <a href={`/api/calls/${m.id}/ics`} className="btn-secondary px-3 py-1 text-xs no-underline hover:no-underline"><CalendarPlus className="h-3.5 w-3.5" /> Add to calendar</a>}
       {/* (Batch 16 section 24) Once the work is over (a stop, a closure, an early end): no Cancel call and no Join call. */}
-      {!m.cancelled && !m.started && !p.refusal && <CancelMenu needsReason={!m.canCancel} busy={busy} other={p.devName} onCancel={(why) => go("cancel-call", { callId: m.id, reason: why }, "cancel-" + m.id)} />}
+      {!m.cancelled && !m.started && !p.refusal && <CancelMenu needsReason={!m.canCancel} busy={busy} other={p.devName} refused={refusedAt("cancel-" + m.id)} onCancel={(why) => go("cancel-call", { callId: m.id, reason: why }, "cancel-" + m.id)} />}
       {!m.cancelled && m.started && !p.noReport && <ReportProblem path={`/api/sessions/${p.sessionId}/no-show`} callId={m.id} otherName={p.devName} seenAt={p.seenAt} reported={m.report ?? null} />}
       {/* (Batch 15 section 40) The app measures the length while you're both connected in the call room; nobody enters it. */}
       {m.started && !m.cancelled && m.lengthText && <span className="badge border-sky-300/40 text-sky-200" data-measuring="">{m.lengthText}</span>}
@@ -85,7 +88,7 @@ export function TesterCallPanel(p: { sessionId: string; seenAt: string; mine: Mi
         <div className="flex flex-wrap items-center gap-2">
           <span className="mr-auto text-slate-200">{st.label} · {st.minutes} min · {st.rate}</span>
           <button className="btn-ghost text-xs" onClick={() => setOpen({ ...open, [st.id]: !shown })}>{shown ? "Hide calls" : "Show calls"}</button>
-          {!p.refusal && <CancelMenu needsReason={st.needsReason} busy={busy} other={p.devName} label="Cancel the remaining calls"
+          {!p.refusal && <CancelMenu needsReason={st.needsReason} busy={busy} other={p.devName} label="Cancel the remaining calls" refused={refusedAt("cancel-set-" + st.id)}
             rule={`Cancels every call still ahead and ${p.devName} is told.${st.needsReason ? " The next one is less than 24 hours away: say why." : ""}`}
             onCancel={(why) => go("cancel-set", { setId: st.id, reason: why }, "cancel-set-" + st.id)} />}
         </div>

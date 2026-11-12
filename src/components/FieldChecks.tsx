@@ -433,10 +433,15 @@ export function FieldChecks() {
   return null;
 }
 
-/** "Fix the mistake above, then press Save again." / "Fix the 2 mistakes above, …". */
-export const fixLine = (n: number, press: string, top = false) =>
+/**
+ * "Fix the mistake above, then press Save again." / "Fix the 2 mistakes above, …". (Owner, Nov 11, §387 3) `refused`: the server refused this form's press, so
+ * no "press again" wording remains on it: "Fix the mistake above." / "Fix these 2 mistakes.".
+ */
+export const fixLine = (n: number, press: string, top = false, refused = false) => {
   // (Owner, Oct 30) A list shown at the top of its form doesn't point up: "Fix these 5 mistakes, then press Send my answers again."
-  top ? `Fix ${n === 1 ? "this mistake" : `these ${n} mistakes`}, then press ${press} again.` : `Fix the ${n === 1 ? "mistake" : `${n} mistakes`} above, then press ${press} again.`;
+  const head = top ? `Fix ${n === 1 ? "this mistake" : `these ${n} mistakes`}` : `Fix the ${n === 1 ? "mistake" : `${n} mistakes`} above`;
+  return refused ? `${head}.` : `${head}, then press ${press} again.`;
+};
 
 /**
  * (Batch 16 section 10) The list under a button: the heading and one bullet per field red right now (the same text as its line), each a link to its
@@ -444,7 +449,7 @@ export const fixLine = (n: number, press: string, top = false) =>
  * follows the fields live: fixing a field removes its bullet at the same moment, and the list goes with the last one. (Batch 35 §31) A mistake that belongs to
  * no field is a bullet in the same list too (never a loose red line).
  */
-export function MistakeList({ press, orphans = [], shown, top = false }: { press: string; orphans?: string[]; shown?: boolean; top?: boolean }) {
+export function MistakeList({ press, orphans = [], shown, top = false, refused = false }: { press: string; orphans?: string[]; shown?: boolean; top?: boolean; /** (§387 3) a refusal shows on this form: no "press again" */ refused?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   const [pressed, setPressed] = useState(false);
   const [items, setItems] = useState<{ el: HTMLElement; text: string }[]>([]);
@@ -494,7 +499,7 @@ export function MistakeList({ press, orphans = [], shown, top = false }: { press
     <div ref={ref} data-mistake-list="" className="space-y-1" hidden={!on || n === 0} role={on && n > 0 ? "alert" : undefined}>
       {on && n > 0 && (
         <>
-          <p className="err-field">{fixLine(n, press, top)}</p>
+          <p className="err-field" data-fix-line="">{fixLine(n, press, top, refused)}</p>
           <ul className="err-field list-disc pl-5">
             {shownItems.map((i, k) => (
               <li key={k}>

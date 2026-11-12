@@ -116,7 +116,7 @@ export function ChoiceBox({ paused = false, sessionId, submissionId, callId, lin
       <ChangesBox side="tester" changes={box && !box.top ? box.changes : null} tail={box?.tail} didntGo press={pressed} button={pressed === "Charge" ? chargeText(devName, typed) : "Let it go"} /* (§387 2) the button's words */ />
       {/* (Batch 32 §12) Names the press ("Your Charge didn't go through: …"); "Answer the new terms first: Switch or Keep." reads exactly so. */}
       <Err text={err && !err.startsWith(FIELD) ? refusalLine(pressed, err) : ""} />
-      <FormMistakes text={err.startsWith(FIELD) ? err : ""} press="Charge" />
+      <FormMistakes text={err.startsWith(FIELD) ? err : ""} press="Charge" refused={!!err && !err.startsWith(FIELD)} /* (§387 3) */ />
     </div>
   );
 }

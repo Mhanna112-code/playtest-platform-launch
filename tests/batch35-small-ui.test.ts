@@ -149,7 +149,7 @@ describe("§170 (3) refusals name the press, not the button's sentence", () => {
     expect(box).toContain("Your Dispute didn&#x27;t go through: This part was already disputed.");
     expect(box).not.toContain("Send the dispute didn");
     const form = src("app/app/sessions/[id]/SessionActions.tsx");
-    expect(form).toContain('<FormMistakes text={err} press="Send the dispute" named={DISPUTE_PRESS} />');
+    expect(form).toContain('<FormMistakes text={err} press="Send the dispute" named={DISPUTE_PRESS} refused={!!meanwhile}');
     expect(form).toContain("refusalLine(DISPUTE_PRESS, meanwhile)");
     expect(form).not.toContain('refusalLine("Send the dispute"');
   });

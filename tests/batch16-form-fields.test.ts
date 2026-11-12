@@ -105,7 +105,7 @@ describe("every Post / Edit field mistake lands on its field (section 10)", () =
     expect(form).toContain('lowMsg: partLowLine("written answers"), highMsg: partHighLine("written answers")');
     expect(form).toContain("lowMsg: rateLowLine(), highMsg: rateHighLine()");
     expect(form).toContain('"data-required-msg": OPEN_UNTIL_RANGE');
-    expect(form).toContain('<MistakeList press={edit ? "Save" : "Post the test"} orphans={orphans} />');
+    expect(form).toContain('<MistakeList press={edit ? "Save" : "Post the test"} orphans={orphans} refused={!!refusal} />');
     expect(form).toContain("markServerMistakes(formRef.current, messages,");
     expect(form).toContain("focusFirstMistake(formRef.current)");
     expect(form).not.toContain("FIELD_WORDS");

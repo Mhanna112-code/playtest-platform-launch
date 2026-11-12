@@ -105,6 +105,8 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
   const [open, setOpen] = useState<Record<string, boolean>>({});
   // (Batch 16 section 10) A mistake in the request form is red at its box and listed under Request a time (not as a plain line).
   const red = error.startsWith(FIELD);
+  /** (§387 3) This key's press was refused: its menu's red list drops "press … again". */
+  const refusedAt = (k: string) => at === k && !!error && !error.startsWith(FIELD);
   const box = (k: string) => (at === k ? <div className="basis-full"><ChangesBox changes={changes} button={cancelButton(k)} error={k === "request" && red ? "" : error} link={typeof errData.requestId === "string" ? `req-${errData.requestId}` : undefined} {...(k === "request" && typeof errData.tail === "string" ? { tail: errData.tail } : {}) /* (§350) the server's own tail: "Press again to send to the others (…)" */} /></div> : null);
   const go = async (path: string, body: Record<string, unknown>, key: string) => {
     const r = await press<{ message?: string }>(`/api/tests/${testId}/${path}`, body, key);
@@ -173,7 +175,7 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
       <span className="flex max-w-full flex-wrap items-center gap-2" data-call-buttons="">
         {c.joinable && <JoinCall callId={c.id} />}
         {!c.started && <a href={`/api/calls/${c.id}/ics`} className="btn-secondary px-3 py-1 text-xs no-underline hover:no-underline"><CalendarPlus className="h-3.5 w-3.5" /> Add to calendar</a>}
-        {!c.started && <CancelMenu needsReason={!c.canCancel} busy={busy} other={t.name} onCancel={(why) => go("cancel-call", { callId: c.id, reason: why }, "cancel-" + c.id)} />}
+        {!c.started && <CancelMenu needsReason={!c.canCancel} busy={busy} other={t.name} refused={refusedAt("cancel-" + c.id)} onCancel={(why) => go("cancel-call", { callId: c.id, reason: why }, "cancel-" + c.id)} />}
         {c.started && <ReportProblem path={`/api/tests/${testId}/no-show`} callId={c.id} otherName={t.name} seenAt={seenAt} reported={c.report ?? null} />}
       </span>
       {box("cancel-" + c.id)}
@@ -190,7 +192,7 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
       <div className="flex flex-wrap items-center gap-2">
         <span className="mr-auto min-w-0">{s.label} · {s.minutes} min · {s.rate}</span>
         <button className="btn-ghost text-xs" onClick={() => setOpen({ ...open, [s.id]: !(open[s.id] ?? s.calls.some((c) => c.joinable)) })}>{(open[s.id] ?? s.calls.some((c) => c.joinable)) ? "Hide calls" : "Show calls"}</button>
-        <CancelMenu needsReason={s.needsReason} busy={busy} other={t.name} label="Cancel the remaining calls"
+        <CancelMenu needsReason={s.needsReason} busy={busy} other={t.name} label="Cancel the remaining calls" refused={refusedAt("cancel-set-" + s.id)}
           rule={`Cancels every call still ahead and ${t.name} is told.${s.needsReason ? " The next one is less than 24 hours away: say why." : ""}`}
           onCancel={(why) => go("cancel-set", { contractId: t.contractId, setId: s.id, reason: why }, "cancel-set-" + s.id)} />
       </div>
@@ -246,7 +248,7 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
           {goneLines.length > 0 && at === "request" && <div className="info" role="status" data-request-gone="">{goneLines.map((g) => <p key={g.contractId} data-refusal="">{g.text}</p>)}</div>}
           {box("request")}
           <PressDone line={doneLine} />
-          <FormMistakes text={at === "request" && red ? error : ""} press="Request a time" />
+          <FormMistakes text={at === "request" && red ? error : ""} press="Request a time" refused={at === "request" && !!error && !red} />
         </div>
       )}
       {/* (Owner, Nov 4, §181) The waiting call requests (theirs and yours) are no longer here: they are the page's own Call requests box (CallRequestsBox), one

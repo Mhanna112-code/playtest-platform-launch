@@ -12,7 +12,7 @@ import { useGoneOnNewVersion } from "@/lib/pageVersion";
  * press first: "Your Save profile didn't go through: …". (Owner, Nov 4, batch 35 §170) `named`: the press's own name for that refusal when the button's words
  * read wrong after "Your" (the button "Send the dispute" is the press Dispute: "Your Dispute didn't go through: …"); "press <press> again" keeps the button's words.
  */
-export function FormMistakes({ text, press, named, find, top = false }: { text: string; press: string; named?: string; find?: (msg: string) => Element | null | undefined; top?: boolean }) {
+export function FormMistakes({ text, press, named, find, top = false, refused = false }: { text: string; press: string; named?: string; find?: (msg: string) => Element | null | undefined; top?: boolean; /** (Owner, Nov 11, §387 3) a refusal shows elsewhere on this form (its own text here counts too): the list drops "then press … again" */ refused?: boolean }) {
   const ref = useRef<HTMLSpanElement>(null);
   const [orphans, setOrphans] = useState<string[]>([]);
   const red = text.startsWith(FIELD);
@@ -33,7 +33,7 @@ export function FormMistakes({ text, press, named, find, top = false }: { text: 
     <>
       <span ref={ref} hidden />
       {!red && <Err text={text} press={named ?? press} />}
-      <MistakeList press={press} orphans={gone ? [] : orphans} top={top} />
+      <MistakeList press={press} orphans={gone ? [] : orphans} top={top} refused={refused || (!!text && !red)} />
     </>
   );
 }

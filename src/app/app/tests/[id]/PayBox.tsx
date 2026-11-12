@@ -268,7 +268,7 @@ export function PayBox(p: {
       {bank.view}
       <PressDone line={doneLine} />
       {at === "pay" && <ChangesBox changes={changes} error={error.startsWith(FIELD) ? "" : error} press={`${pressName} on ${p.name}'s ${p.kind === "call" ? "call" : /recording/.test(p.listingText) ? "recording" : "written answers"}`} />}
-      <FormMistakes text={at === "pay" && error.startsWith(FIELD) ? error : ""} press={pressName} />
+      <FormMistakes text={at === "pay" && error.startsWith(FIELD) ? error : ""} press={pressName} refused={(at === "pay" && !!error && !error.startsWith(FIELD)) || !!bankErr} /* (§387 3) after a refusal no "press Pay again" */ />
       {/* (§156) The bank's check ended without the payment: named like any refusal ("Your Pay didn't go through: Your bank didn't confirm …"). */}
       {bankErr && <p className="info" data-bank-not-confirmed="">{refusalLine(pressName, bankErr)}</p>}
       {!done && !more && underLine && <p className="note" data-pay-under="">{underLine}</p>}

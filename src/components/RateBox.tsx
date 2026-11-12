@@ -66,7 +66,7 @@ export function RateBox(p: { path: string; seenAt: string; name: string; body?: 
       {!done && p.disabledLine && <p className="text-xs text-ink-400" data-rate-disabled="">{p.disabledLine}</p>}
       {!done && keep.restored && comment !== "" && <p><DraftTag disabled={busy} kind="discard" onUseSaved={() => setComment("")} /></p>}
       <ChangesBox changes={changes} error={error.startsWith(FIELD) ? "" : error} didntGo={p.working} button={p.working ? "Rate and finish" : "Rate"} />
-      <FormMistakes text={error.startsWith(FIELD) ? error : ""} press={p.working ? "Rate and finish" : "Rate"} />
+      <FormMistakes text={error.startsWith(FIELD) ? error : ""} press={p.working ? "Rate and finish" : "Rate"} refused={!!error && !error.startsWith(FIELD)} />
     </div>
   );
 }

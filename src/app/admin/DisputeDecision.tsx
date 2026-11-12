@@ -141,7 +141,7 @@ export function DisputeDecision({ id, minCents: min0, maxCents: max0, range: ran
       )}
       </>}
       {/* (Batch 16 section 10) A mistake is red at its box and listed here. */}
-      <FormMistakes text={msg && !msg.ok && msg.text.startsWith(FIELD) ? msg.text : ""} press="Decide" />
+      <FormMistakes text={msg && !msg.ok && msg.text.startsWith(FIELD) ? msg.text : ""} press="Decide" refused={!!msg && !msg.ok && !msg.text.startsWith(FIELD)} />
     </div>
   );
 }

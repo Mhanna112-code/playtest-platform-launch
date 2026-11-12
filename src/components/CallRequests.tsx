@@ -150,7 +150,7 @@ export function CallRequests(p: {
           </div>
           {box("request")}
           <PressDone line={doneLine} />
-          <FormMistakes text={at === "request" && red ? error : ""} press="Request a time" />
+          <FormMistakes text={at === "request" && red ? error : ""} press="Request a time" refused={at === "request" && !!error && !red} />
         </div>
       )}
     </div>

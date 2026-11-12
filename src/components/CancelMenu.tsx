@@ -17,7 +17,7 @@ export const CANCEL_REMAINING = "Cancel the remaining calls";
 /** (§387 2) A call panel's box key ("cancel-<id>", "cancel-set-<id>") → the button pressed, for "Press … again". */
 export const cancelButton = (key: string) => (key.startsWith("cancel-set-") ? CANCEL_REMAINING : key.startsWith("cancel-") ? CANCEL_THIS_CALL : undefined);
 export const CANCEL_REASON_LINE = "The call is less than 24 hours away: say why you're cancelling (the other side sees it).";
-export function CancelMenu(p: { needsReason: boolean; busy: boolean; other: string; onCancel: (reason: string) => void; label?: string; rule?: string }) {
+export function CancelMenu(p: { needsReason: boolean; busy: boolean; other: string; onCancel: (reason: string) => void; label?: string; rule?: string; /** (§387 3) its press was refused (the row shows it): the red list drops "press … again" */ refused?: boolean }) {
   const [reason, setReason] = useState("");
   // (Owner, Nov 5, §261) While THIS menu's Cancel is going through (`busy` is the whole panel's), its Why is read-only; another press in the panel leaves it be.
   const [mine, setMine] = useState(false);
@@ -51,7 +51,7 @@ export function CancelMenu(p: { needsReason: boolean; busy: boolean; other: stri
             ? `Less than ${CANCEL_HOURS} hours ahead: say why. ${p.other} is told.`
             : `${CANCEL_HOURS} hours or more ahead: it's cancelled at once and ${p.other} is told. A reason is optional.`)}
         </p>
-        <div className="w-full"><MistakeList press={p.label ?? "Cancel this call"} /></div>
+        <div className="w-full"><MistakeList press={p.label ?? "Cancel this call"} refused={p.refused} /></div>
       </div>
     </details>
   );

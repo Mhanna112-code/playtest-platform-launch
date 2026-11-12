@@ -897,7 +897,7 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
         {/* (Owner, Oct 28) Above the button: "Fix the N mistakes above…". (Batch 16 section 10) One linked bullet per field red right now, read from the
             fields themselves, so the list and the fields always agree; then any server mistake that belongs to no field. */}
         {!edit && !hasCard && <p className="note" data-card-needed="">Posting needs a card in Payments. <a className="underline" href="/app/payments">Add a card</a>.</p>}
-        <MistakeList press={edit ? "Save" : "Post the test"} orphans={orphans} />
+        <MistakeList press={edit ? "Save" : "Post the test"} orphans={orphans} refused={!!refusal} />
         {/* (Owner, Oct 28, batch 19 section 7) Required, just above the button: on Post (and a draft's Post) always; on Edit only while Save is enabled. Unticked, the
             server refuses the press with its red line at the tick. */}
         {/* (Owner, Oct 28, batch 20 section 21) The updated-Terms tick (only while the account hasn't agreed to the current version), then the Charge tick. */}

@@ -2,6 +2,7 @@
 import { NameLink } from "@/components/Cut";
 import { ChangesBox } from "@/components/ChangesBox";
 import { CANCEL_THIS_CALL, CancelMenu } from "@/components/CancelMenu";
+import { FIELD } from "@/lib/client";
 import { usePress } from "@/lib/usePress";
 import { ResizeBox } from "@/components/Panel";
 import { LIST_PANEL } from "@/components/ScrollList";
@@ -28,7 +29,7 @@ export function RestrictedCalls({ testId, seenAt, calls, embedded = false, perso
           <li key={c.id} id={`call-${c.id}`} className="flex flex-wrap items-center gap-2">
             {/* (Owner, Nov 4, §187) Inside the person's own Needs you drop-down their name is on the drop-down, once: not on every row. */}
             <span className="mr-auto min-w-0 text-slate-200">{fmt(c.when)} · {!person && <><NameLink fit text={c.who} href={c.whoHref} /> · </>}{c.minutes} min</span>
-            <CancelMenu needsReason={c.needsReason} busy={busy} other={c.who} onCancel={async (why) => { if (await press(`/api/tests/${testId}/cancel-call`, { callId: c.id, reason: why }, c.id)) finish(); }} />
+            <CancelMenu needsReason={c.needsReason} busy={busy} other={c.who} refused={at === c.id && !!error && !error.startsWith(FIELD)} onCancel={async (why) => { if (await press(`/api/tests/${testId}/cancel-call`, { callId: c.id, reason: why }, c.id)) finish(); }} />
             {at === c.id && <div className="basis-full"><ChangesBox changes={changes} error={error} press="Cancel call" button={CANCEL_THIS_CALL} /></div>}
           </li>
         ))}

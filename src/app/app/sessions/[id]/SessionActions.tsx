@@ -334,7 +334,7 @@ export function WrittenForm({ sessionId, questions, newQs = [], initial, initial
       the server; without it a required answer left empty, or one the server had marked red, stopped the press before it was sent (no box, no refusal). */ className="space-y-3" onSubmit={send} data-red-and-blue="" noValidate>
       {/* (Owner, Oct 30) The mistake list sits once, at the top of the written part. (Batch 16 section 10) The server's "answer every required question" goes to the first empty required box. */}
       <FormMistakes top text={msg && !msg.ok && msg.text.startsWith(FIELD) ? msg.text : ""} press={SEND_ANSWERS}
-        find={(m) => (m === ANSWER_ONE || isShortLine(m) ? document.getElementById(`a${missingAt ?? 0}`) : m === ANSWER_REQUIRED ? (missingAt != null ? document.getElementById(`a${missingAt}`) : null) ?? Array.from(document.querySelectorAll<HTMLTextAreaElement>(`textarea[data-required-msg="${ANSWER_REQUIRED}"]`)).find((t) => !t.value.trim()) : null)} />
+        refused={!!refused || pausedNow || (!!msg && !msg.ok && !msg.text.startsWith(FIELD))} /* (§387 3) */ find={(m) => (m === ANSWER_ONE || isShortLine(m) ? document.getElementById(`a${missingAt ?? 0}`) : m === ANSWER_REQUIRED ? (missingAt != null ? document.getElementById(`a${missingAt}`) : null) ?? Array.from(document.querySelectorAll<HTMLTextAreaElement>(`textarea[data-required-msg="${ANSWER_REQUIRED}"]`)).find((t) => !t.value.trim()) : null)} />
       {/* (Batch 20 section 1) More than 3 questions: the questions and their answer boxes sit in a scroll box about 3 questions tall; the notes, counter, files
           and Send stay below it, and a red mistake scrolls the box to its question. */}
       <QuestionBox count={questions.length} size="form" className="space-y-3" >
@@ -541,7 +541,7 @@ export function WrittenAddForm({ sessionId, seenAt, canSend = true, known = [], 
       {/* (Owner, Nov 4, batch 35 §170) A refusal names the press Add (§146), not "Your Add to my answer didn't go through". */}
       {/* (§222) A question's first answer is the press Answer this question. */}
       <Err text={refused} press={first ? ANSWER_PRESS : PRESS_VERBS["written-add"]} />
-      <FormMistakes text={err} press={sender} named={first ? ANSWER_PRESS : PRESS_VERBS["written-add"]} find={(msg) => isShortLine(msg) || msg === NOTHING_TO_ADD ? root.current?.querySelector("textarea") : null} />
+      <FormMistakes text={err} press={sender} named={first ? ANSWER_PRESS : PRESS_VERBS["written-add"]} find={(msg) => isShortLine(msg) || msg === NOTHING_TO_ADD ? root.current?.querySelector("textarea") : null} refused={!!refused || pausedNow} /* (§387 3) */ />
     </div>
     </SendingScope.Provider>
   );
@@ -664,7 +664,7 @@ export function DisputeForm({ sessionId, kind, id, seenAt, disabledNote = "", li
       <ChangesBox side="tester" changes={box && !box.top ? box.changes : null} tail={box?.tail} press={DISPUTE_PRESS} button="Send the dispute" /* (§387 2) the button's label in "Press … again" */ />
       {/* (Owner, Nov 4, batch 35 §170) A refusal names the press Dispute (its route's label), not the button's words: "Your Dispute didn't go through: …". */}
       {meanwhile && <p className="info" data-dispute-meanwhile="">{refusalLine(DISPUTE_PRESS, meanwhile)}</p>}
-      <FormMistakes text={err} press="Send the dispute" named={DISPUTE_PRESS} />
+      <FormMistakes text={err} press="Send the dispute" named={DISPUTE_PRESS} refused={!!meanwhile} /* (§387 3) */ />
     </details>
   );
 }

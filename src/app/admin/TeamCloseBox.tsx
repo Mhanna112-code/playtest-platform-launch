@@ -91,7 +91,7 @@ export function TeamCloseBox({ id, scope }: { id: string; scope: "developer" | "
         </>
       )}
       {msg && !msg.text.startsWith(FIELD) && <p className={msg.ok ? "ok" : "err"} data-team-close-result="">{msg.ok ? msg.text : refusalLine(pressed, msg.text)}</p>}
-      <FormMistakes text={msg && !msg.ok && msg.text.startsWith(FIELD) ? msg.text : ""} press={label} />
+      <FormMistakes text={msg && !msg.ok && msg.text.startsWith(FIELD) ? msg.text : ""} press={label} refused={!!msg && !msg.ok && !msg.text.startsWith(FIELD)} />
     </div>
   );
 }

@@ -347,3 +347,62 @@ describe("§387 2: the server's answer under the button is one thing; the box na
     });
   }
 });
+
+describe("§387 3: once a refusal shows, no \"press … again\" remains on the form (red list or box)", () => {
+  // Cancel's menu draws no refusal itself (the call's row does): it is checked on its own below.
+  for (const k of CASES.filter((x) => !/^Cancel/.test(x.name))) {
+    it(k.name, async () => {
+      const m = await mount(await k.el());
+      try {
+        await k.open?.(m.container);
+        // A press with the form's fields wrong: the red list (and the box where there is one).
+        reply = k.noBox ? { status: 400, data: { error: { code: "bad", message: "This needs fixing (the server)." } } } : STOP;
+        await press(m.container, k.button);
+        reply = REFUSED;
+        await press(m.container, k.button);
+        expect(textOf(m.container), `${k.name}: the refusal shows`).toContain("This test was stopped, so nothing can go through.");
+        expect(textOf(m.container), k.name).not.toMatch(/\bpress\b[^.]*\bagain\b/i);
+      } finally {
+        await m.done();
+      }
+    });
+  }
+
+  it("Cancel's menu: its red list says \"then press Cancel this call again\" until the row shows a refusal (refused), then \"Fix the mistake above.\"", async () => {
+    const { CancelMenu } = await import("@/components/CancelMenu");
+    const el = (refused: boolean) => R.createElement(CancelMenu, { needsReason: true, busy: false, other: "Nora Lane", refused, onCancel: () => {} });
+    const doc = dom.doc as MiniDocument;
+    const container = doc.createElement("div");
+    doc.body.appendChild(container);
+    const root = createRoot(container as unknown as Element);
+    try {
+      await act(async () => root.render(R.createElement(R.Fragment, null, R.createElement(FieldChecks), el(false))));
+      await press(container, /^Cancel this call$/);
+      expect(textOf(container.querySelector("[data-fix-line]"))).toBe("Fix the mistake above, then press Cancel this call again.");
+      await act(async () => root.render(R.createElement(R.Fragment, null, R.createElement(FieldChecks), el(true))));
+      expect(textOf(container.querySelector("[data-fix-line]"))).toBe("Fix the mistake above.");
+    } finally {
+      await act(async () => root.unmount());
+      container.remove();
+    }
+  });
+
+  it("Pay (case 3): the red list said \"then press Pay again\" with the box; after the final refusal it reads \"Fix the mistake above.\"", async () => {
+    const { PayBox } = await import("@/app/app/tests/[id]/PayBox");
+    const m = await mount(R.createElement(PayBox, { kind: "submission", id: "sub1", name: "Ruth Okafor", listingCents: 1000, listingText: "$10.00 for the written answers", seenAt: SEEN }));
+    try {
+      await act(async () => type(m.container.querySelector("input[data-amount]")!, "5.00"));
+      reply = STOP;
+      await press(m.container, /^Pay$/);
+      const fix = () => m.container.querySelector("[data-fix-line]");
+      expect(textOf(fix())).toMatch(/then press Pay again\.$/);
+      reply = { status: 409, data: { error: { code: "already_charged", message: "Ruth Okafor already charged $10.00 for this part." } } };
+      await press(m.container, /^Pay$/);
+      expect(textOf(m.container)).toContain("Ruth Okafor already charged $10.00 for this part.");
+      expect(textOf(fix())).toMatch(/^Fix the (mistake|\d+ mistakes) above\.$/);
+      expect(textOf(m.container)).not.toMatch(/press Pay again/i);
+    } finally {
+      await m.done();
+    }
+  });
+});

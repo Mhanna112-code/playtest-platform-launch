@@ -124,7 +124,7 @@ export function AdminButton({ action, id, label, fields = [], danger, disabled, 
       <PressDone line={fin.line} />
       <ChangesBox changes={stop.changes} press={label} heading={ADMIN_STOP_HEADING} />
       {/* (Batch 16 section 10) A mistake is red at its box and listed here. */}
-      <FormMistakes text={msg && !msg.ok && msg.text.startsWith(FIELD) ? msg.text : ""} press={label} />
+      <FormMistakes text={msg && !msg.ok && msg.text.startsWith(FIELD) ? msg.text : ""} press={label} refused={!!msg && !msg.ok && !msg.text.startsWith(FIELD)} />
     </span>
   );
 }
