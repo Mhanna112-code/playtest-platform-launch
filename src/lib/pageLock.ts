@@ -23,6 +23,11 @@ let redraw = false;
 let grace: ReturnType<typeof setTimeout> | null = null;
 let safety: ReturnType<typeof setTimeout> | null = null;
 let engagedOn: Document | null = null;
+/**
+ * (Owner, Nov 12, §380 J) A new copy of a one-at-a-time page whose claim hasn't answered yet (OnePage): one key per claim in progress. Not a press: never counted
+ * by pressInFlight / onPressIdle (so no busy mark, nobody waits for it), and apart from the other locks (a Stop, End early or Block's lockPage, a press's own).
+ */
+const claims = new Set<object>();
 
 const doc = (): Document | undefined => (typeof document === "undefined" ? undefined : document);
 
@@ -54,7 +59,7 @@ function ensureStyle(d: Document) {
 function apply(d: Document | undefined = engagedOn ?? doc()) {
   noteIdle();
   if (!d) return;
-  const on = explicit || presses > 0 || redraw || !!grace;
+  const on = explicit || presses > 0 || redraw || !!grace || claims.size > 0;
   // (A document without a head or a body, e.g. a test's small one, only misses the grey look.)
   const mark = (f: () => void) => {
     try {
@@ -88,7 +93,21 @@ export function releaseAll() {
   redraw = false;
   if (grace) clearTimeout(grace);
   grace = null;
+  claims.clear();
   apply();
+}
+
+/**
+ * (§380 J) Lock the page while a new copy's claim is on its way (OnePage). Returns its own release (once; a newer claim or a press lock is never released by it).
+ * (Owner, Nov 12: the new copy is locked from its first draw until its claim answers) `d`: tests.
+ */
+export function lockForClaim(d: Document | undefined = doc()): () => void {
+  const key = {};
+  claims.add(key);
+  apply(d);
+  return () => {
+    if (claims.delete(key)) apply();
+  };
 }
 
 /** (A) Lock the page for a Stop, End early or Block on its way. `d`: tests. */

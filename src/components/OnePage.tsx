@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { TAB, leaveMovedPage, pageScope, pageUser, resetMovedPage, setPageScope } from "@/lib/client";
-import { lockPage, onPressIdle, pressInFlight, releaseAll, unlockPage } from "@/lib/pageLock";
+import { lockForClaim, onPressIdle, pressInFlight, releaseAll } from "@/lib/pageLock";
 import { flushKept } from "@/lib/useKept";
 import { HANDOVER_LINE, HANDOVER_OPEN_NOW } from "@/lib/pageClaim";
 import { LIVE_TICK, rideLiveClock } from "@/lib/liveSync";
@@ -26,6 +26,9 @@ const post = (path: string, body: Record<string, unknown>) =>
  * over; then it redraws with what that press changed. The old copy, once its press is over, keeps its drafts, hands over and goes to the dashboard ("This page
  * was opened somewhere else."). A bank check left open isn't a press on its way (the page was freed when it showed), so it is never waited for.
  * Going BACK to an older copy (the browser's memory, `pageshow` persisted) is opening it again: the same claim and handover, and the other copy leaves.
+ * (Owner, Nov 12: the new copy is locked from its first draw until its claim answers) Until then its presses would name no page (x-page) and so go unchecked,
+ * possibly while the old copy's press is still on its way. Claimed: unlocked. Waiting: stays locked, with the wait line. The claim failed (an error, offline):
+ * unlocked, the page stays usable. Back (`pageshow` persisted) re-claims the same way. This lock is not a press (lib/pageLock.ts lockForClaim): nobody waits for it.
  */
 export function OnePage({ scope, poll = false }: { scope: string; /** (§380 K) a page with no poll of its own (AutoRefresh) asks on the live beat whether it was opened somewhere else */ poll?: boolean }) {
   const router = useRouter();
@@ -34,6 +37,8 @@ export function OnePage({ scope, poll = false }: { scope: string; /** (§380 K) 
   useEffect(() => {
     let alive = true;
     let run = 0;
+    /** The newest claim's lock: let go at once when this copy goes away (its claim stops asking). */
+    let freeClaim: (() => void) | null = null;
     let channel: BroadcastChannel | null = null;
     try {
       channel = typeof BroadcastChannel === "undefined" ? null : new BroadcastChannel(CHANNEL);
@@ -53,13 +58,21 @@ export function OnePage({ scope, poll = false }: { scope: string; /** (§380 K) 
       if (afterWait) {
         setWaiting(false);
         setOpenNow(null);
-        unlockPage();
         router.refresh(); // what the old copy's press changed
       }
     };
-    /** Open (or re-open) the page: claim it, waiting for the old copy's press when it has one on its way. */
+    /** Open (or re-open) the page: claim it, waiting for the old copy's press when it has one on its way. Every button locked until the claim answers. */
     const claim = async () => {
       const mine = ++run;
+      const unlock = lockForClaim();
+      freeClaim = unlock;
+      try {
+        await claimLoop(mine);
+      } finally {
+        unlock(); // claimed, failed, or this copy closed / re-claimed (a newer claim keeps its own lock)
+      }
+    };
+    const claimLoop = async (mine: number) => {
       let now = false;
       let waited = false;
       for (;;) {
@@ -68,15 +81,11 @@ export function OnePage({ scope, poll = false }: { scope: string; /** (§380 K) 
         // Only a claim that landed names the page: a press or poll before it never reads as an older copy's.
         if (r?.claimed === true) return hold(waited);
         if (r?.waiting !== true) {
-          if (waited) {
-            setWaiting(false);
-            unlockPage();
-          }
+          if (waited) setWaiting(false);
           return;
         }
         if (!waited) {
           waited = true;
-          lockPage();
           setWaiting(true);
           say("want");
         }
@@ -143,6 +152,7 @@ export function OnePage({ scope, poll = false }: { scope: string; /** (§380 K) 
     if (poll) window.addEventListener(LIVE_TICK, ask);
     return () => {
       alive = false;
+      freeClaim?.();
       offClock?.();
       if (poll) window.removeEventListener(LIVE_TICK, ask);
       offIdle();
