@@ -678,7 +678,7 @@ From Every page: the live box, long lists, number format, and the blue box when 
 
 ### How it looks in each state
 
-- **Test** (on its card): Draft (a next round, not yet open); Open: "Accepting testers" (green) while at least one spot is free, "Full" (grey) when every spot is taken; Joining closed ("Joining closed · testers working until <date>"); Paused ("Paused: account suspended / payment hold / chargeback hold / paused by the team"); Stopped (a Stopped label); Closed ("Closed after 7 days paused").
+- **Test** (on its card): Draft (a next round, not yet open); Open: "Accepting testers" (green) while at least one spot is free, "Full" (grey) when every spot is taken; Joining closed (the pill reads "Joining closed" in grey, never "Accepting testers", beside the amber "Joining closed · testers working until <date>"; owner, Nov 2026); Paused ("Paused: account suspended / payment hold / chargeback hold / paused by the team"); Stopped (a Stopped label); Closed ("Closed after 7 days paused").
 
   [image: Draft: the next round, not open yet.]
 

@@ -46,7 +46,7 @@ const endedCount = (n: number) => (n === 1 ? "1 tester's" : `${n} testers'`);
 
 const joinModeLabel = (m: string) => (m === "apply" ? "You approve each tester" : m === "invite" ? "Invite only" : "Anyone who matches joins instantly");
 
-export function TopPanel(p: { timeZone?: string | null; joinClosedLine?: string; id: string; title: string; status: string; workEnded?: boolean; terms: string; spotsLine: string; seenAt: string; working: Tester[]; joinMode?: string; deadlineDays?: number; categories?: string[]; openUntil?: string | null; version?: number; productName?: string; mature?: boolean; nda?: boolean; keysLeft?: number | null; parts?: { written: boolean; recording: boolean; live: boolean }; paused?: boolean; ignoredAlerts?: string[]; /** (§169) the version of ignoredAlerts */ alertsV?: number; restricted?: boolean; /** The team stopped it: no Next round either. */ teamStopped?: boolean; /** (Batch 8) false on the free plan: "Subscribers" on Next round */ perks?: boolean; /** (Owner, Oct 28 afternoon) every spot taken: "Full" instead of "Accepting testers" */ full?: boolean;
+export function TopPanel(p: { timeZone?: string | null; joinClosedLine?: string; /** (Owner, Nov 2026) open and past Open until: the pill reads "Joining closed", never "Accepting testers" */ joiningClosed?: boolean; id: string; title: string; status: string; workEnded?: boolean; terms: string; spotsLine: string; seenAt: string; working: Tester[]; joinMode?: string; deadlineDays?: number; categories?: string[]; openUntil?: string | null; version?: number; productName?: string; mature?: boolean; nda?: boolean; keysLeft?: number | null; parts?: { written: boolean; recording: boolean; live: boolean }; paused?: boolean; ignoredAlerts?: string[]; /** (§169) the version of ignoredAlerts */ alertsV?: number; restricted?: boolean; /** The team stopped it: no Next round either. */ teamStopped?: boolean; /** (Batch 8) false on the free plan: "Subscribers" on Next round */ perks?: boolean; /** (Owner, Oct 28 afternoon) every spot taken: "Full" instead of "Accepting testers" */ full?: boolean;
   /** (Batch 15 section 39) The Alerts types this state can still have (a paused or stopped test shows fewer); omitted: all. */ alertKeys?: string[];
   /** (Batch 15 section 29) After Stop / End early from the restricted view: on to the dashboard top with "Done: …". */ doneTo?: string }) {
   const router = useRouter();
@@ -131,7 +131,7 @@ export function TopPanel(p: { timeZone?: string | null; joinClosedLine?: string;
             {p.productName && <p className="kicker">{p.productName}</p>}
             <h1 className="text-3xl font-bold tracking-tight text-white">{p.title}</h1>
             <div className="flex flex-wrap gap-2">
-              <StatusPill status={p.workEnded ? "closed" : p.status} full={p.full} />
+              <StatusPill status={p.workEnded ? "closed" : p.status} full={p.full} joiningClosed={p.joiningClosed} />
               {p.paused && p.status !== "stopped" && <span className="badge border-amber-300/40 text-amber-200">Paused</span>}
               {p.parts && <PartBadges written={p.parts.written} recording={p.parts.recording} live={p.parts.live} />}
               {p.mature && <span className="badge border-rose-300/40 text-rose-200">Mature (18+)</span>}

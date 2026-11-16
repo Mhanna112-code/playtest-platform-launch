@@ -493,7 +493,7 @@ describe("follow-up 4) the redirect for a restricted developer", () => {
 
 describe("follow-up 5, 7, 8, 9, 10) cards, the mistakes line, End early, profile stops, drafts", () => {
   it("(undone by batch 6 item 2) an Open test's card shows Accepting testers or Full", () => {
-    expect(src("app/app/page.tsx")).toContain("<StatusPill status={t.status} full={inIt.length >= t.spots} />");
+    expect(src("app/app/page.tsx")).toContain("<StatusPill status={t.status} full={inIt.length >= t.spots} joiningClosed={!!t.openUntil && t.openUntil < now} />"); // (Owner, Nov 2026) + joiningClosed
   });
 
   it("'Fix the N mistakes above…' sits above the Save / Post button", () => {

@@ -126,7 +126,7 @@ describe("batch 6 item 2: 'Accepting testers' only when open with a spot", () =>
     expect(html({ status: "draft" })).toContain("Draft");
     expect(html({ status: "stopped", full: true })).toContain("Stopped");
     expect(html({ status: "closed" })).toContain("Not accepting testers");
-    expect(src("app/app/page.tsx")).toContain("<StatusPill status={t.status} full={inIt.length >= t.spots} />");
+    expect(src("app/app/page.tsx")).toContain("<StatusPill status={t.status} full={inIt.length >= t.spots} joiningClosed={!!t.openUntil && t.openUntil < now} />"); // (Owner, Nov 2026) + joiningClosed
     expect(src("app/app/page.tsx")).not.toContain('t.status === "open" ? null');
     expect(src("app/app/tests/[id]/page.tsx")).toContain("full={working.length >= t.spots}");
   });

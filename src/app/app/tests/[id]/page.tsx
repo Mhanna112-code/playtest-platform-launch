@@ -591,6 +591,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
           parts={{ written: t.writtenCents != null, recording: t.recordingCents != null, live: t.liveRateCents != null }} paused status={t.status} workEnded={!!t.workEndedAt}
           terms={termsLine({ ...asListing(t), testerDays: t.testerDays })} openUntil={t.openUntil ? t.openUntil.toISOString() : null} version={t.version} seenAt={seenAt}
           teamStopped={!!t.adminStoppedAt} perks={perks} spotsLine={`${working.length} of ${t.spots} spots used`} full={working.length >= t.spots}
+          joiningClosed={!!t.openUntil && t.openUntil < new Date()}
           joinMode={t.joinMode} deadlineDays={t.deadlineDays} categories={t.categories}
           alertKeys={t.status === "stopped" ? [...STOPPED_ALERTS] : [...PAUSED_ALERTS]}
           doneTo={accountPaused ? "/app" : undefined}
@@ -698,6 +699,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
         perks={perks}
         spotsLine={`${working.length} of ${t.spots} spots used`}
         full={working.length >= t.spots}
+        joiningClosed={!!t.openUntil && t.openUntil < new Date()}
         joinMode={t.joinMode}
         deadlineDays={t.deadlineDays}
         categories={t.categories}

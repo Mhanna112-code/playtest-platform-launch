@@ -32,10 +32,13 @@ export const mainCategory = (categories: string[]) => (categories[0] && CATEGORY
 /**
  * "Accepting testers" (green, pulsing: open with at least one spot free), "Full" (grey: open with every spot taken), "Not accepting testers" (grey), "Stopped", or a draft.
  * (Owner, Oct 28 afternoon) `full` = no spot is free.
+ * (Owner, Nov 2026) `joiningClosed` = open but its Open until has passed (testers still working, nobody new can join): "Joining closed" (grey, like "Full"),
+ * never "Accepting testers". It wins over `full` (a freed spot can't be taken any more).
  */
-export function StatusPill({ status, full = false }: { status: string; full?: boolean }) {
+export function StatusPill({ status, full = false, joiningClosed = false }: { status: string; full?: boolean; joiningClosed?: boolean }) {
   if (status === "stopped") return <span className="badge border-sky-300/40 text-sky-200"><span className="h-2 w-2 rounded-sm bg-sky-300" /> Stopped</span>;
   if (status === "draft") return <span className="badge"><span className="h-2 w-2 rounded-full bg-slate-500" /> Draft</span>;
+  if (status === "open" && joiningClosed) return <span className="badge" data-status-pill="joining-closed"><span className="h-2 w-2 rounded-full bg-slate-500" /> Joining closed</span>;
   if (status === "open" && full) return <span className="badge" data-status-pill="full"><span className="h-2 w-2 rounded-full bg-slate-500" /> Full</span>;
   return status === "open" ? (
     <span className="badge border-emerald-400/30 bg-emerald-400/10 text-emerald-300">
