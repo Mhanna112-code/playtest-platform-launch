@@ -157,6 +157,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   // (Owner, Nov 9, §368) The restricted view shows Pay during a team pause or a developer suspension (not a hold). (Owner, Nov 11, §386 A) The buttons stay, and a
   // press is refused while the money is frozen ("The team paused this test, so your Pay didn't go through."): the owner prefers refusals to hidden buttons.
   const restrictedPays = restricted && !u.holdStartedAt;
+  // (Hotfix) `now` is needed here already (it was declared further down: "Cannot access 'now' before initialization" on a test with a call).
+  const now = new Date();
   // (Owner, Nov 11, §386 G) Each unpaid call's automatic-charge (or $0 closing) date, moved on by a freeze after the test closed.
   const chargeAts = new Map(await Promise.all(t.contracts.flatMap((c) => c.calls).filter((x) => !x.review && x.payBy).map(async (x) => [x.id, await callChargeAt(x.id, now)] as const)));
   const bannerCause: BannerCause | null = t.adminStoppedAt ? "team-stopped" : teamPaused ? "team-paused" : u.devSuspendedAt ? "suspended" : u.holdStartedAt ? (u.holdReason === "chargeback" ? "chargeback" : "hold") : t.status === "stopped" ? "stopped" : null;
@@ -196,7 +198,6 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const inviteInfo = await testerRowInfo(u.id, t, inviteUsers);
   const expired = inviteExpired(t);
   const soon = t.openUntil && t.openUntil > new Date() && t.openUntil.getTime() - Date.now() < 3 * 86_400_000;
-  const now = new Date();
   // (Owner, Nov 11, §378; replaces batch 17 §19's one date per test) Pay more on a piece closes on that piece's own date, with its Pay and the tester's Charge
   // (pieceCloseOut); in its last 7 days that piece's box says "Pay more closes on <date>.".
   const paidKeys: { submissionId?: string; callId?: string }[] = t.contracts.flatMap((c) => [...c.submissions.filter((x) => x.review).map((x) => ({ submissionId: x.id })), ...c.calls.filter((x) => x.review).map((x) => ({ callId: x.id }))]);
