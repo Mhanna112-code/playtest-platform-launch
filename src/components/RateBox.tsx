@@ -20,7 +20,7 @@ import { lockText, useSending } from "@/lib/sendLock";
  * short grey line under it; the page's poll updates both as things are decided. `anchor`: the box's id (a developer's page has one per tester: "rate-<contract>").
  * (Batch 35 §40, §41) Rated: the page redraws in place; until it has, the stars and the note are hidden and the button stays greyed with "Rated <name> N of 5.".
  */
-export function RateBox(p: { path: string; seenAt: string; name: string; body?: Record<string, unknown>; headline: string; lines: string[]; working: boolean; disabledLine?: string; anchor?: string; /** (Owner, Nov 5, §268) in the pop-up: the open-terms notice (information only) */ notice?: ReactNode }) {
+export function RateBox(p: { /** (Owner, Nov 11, §387 4) "Rate until Nov 25", next to the button */ closes?: string; path: string; seenAt: string; name: string; body?: Record<string, unknown>; headline: string; lines: string[]; working: boolean; disabledLine?: string; anchor?: string; /** (Owner, Nov 5, §268) in the pop-up: the open-terms notice (information only) */ notice?: ReactNode }) {
   const [stars, setStars] = useState("");
   const [comment, setComment] = useState("");
   // (Owner, Nov 10, §371) Kept by the box (lib/pressCarry.ts): the session page is keyed by its status, so a redraw mid-press can draw a new box; the server's
@@ -61,6 +61,7 @@ export function RateBox(p: { path: string; seenAt: string; name: string; body?: 
         ) : (
           <button className="btn-secondary" disabled={busy || !!p.disabledLine} onClick={send}>Rate</button>
         )}
+        {!done && p.closes && <span className="self-center text-xs text-slate-400" data-rate-closes="">{p.closes}</span>}
       </div>
       <PressDone line={doneLine} />
       {!done && p.disabledLine && <p className="text-xs text-ink-400" data-rate-disabled="">{p.disabledLine}</p>}

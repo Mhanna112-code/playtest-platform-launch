@@ -146,8 +146,8 @@ describe("(Owner, Nov 11, §378; replaces batch 17 §19's one date per test) Pay
     // Ben's call: its own date, with the grey line; Pay more on it goes through.
     const at = await pieceCloseOut({ callId: booked.id }, now);
     expect(at!.getTime()).toBe(callBy.getTime() + 14 * DAY);
-    expect(R.closeOutSoon(at, now)).toBe(true);
-    expect(R.payClosesLine(fmtDate(at!), true)).toBe(`Pay more closes on ${fmtDate(at!)}.`);
+    expect(R.closesAhead(at, now)).toBe(true);
+    expect(R.payByLine(fmtDate(at!), true)).toBe(`Pay more until ${fmtDate(at!)}`);
     expect((await payMore(w.testId, w.dev.cookie, { contractId: b.sessionId, callId: booked.id, amount: "1.00", tickedCents: 100 })).status).toBe(200);
   });
 });
@@ -291,27 +291,28 @@ describe("the reminders 3 days and 1 day before close-out (DEFAULT protections)"
 });
 
 describe("the pages (section 19)", () => {
-  it("the developer's test page: the piece leaves Needs you, its place reads the closed line; Pay closes on <date> in the last 7 days", () => {
+  it("the developer's test page: the piece leaves Needs you, its place reads the closed line; Pay by <date> next to Pay, always (§387 4)", () => {
     const page = src("app/app/tests/[id]/page.tsx");
     expect(page).toContain(".filter((x) => confirmingPay(x.id) || !payShut(x.id))");
-    expect(page).toContain("{paySoon(x.id) && <p className=\"note\" data-pay-closes=\"\">{payClosesLine(paySoon(x.id))}</p>}");
+    expect(page).toContain("<PayBox closes={payBy(x.s!.id)}");
+    expect(page).toContain("<PayBox closes={payBy(x.x!.id)}");
     expect(page).toContain("closedNotPaidLine(shutOn(r.sub.id))");
     expect(page).toContain("closedNotPaidLine(shutOn(x.id))");
     expect(page).toContain("testerPayable(c.tester) && !payShut(x.id);");
     expect(page).toContain('await pieceCloseOut(k, now)');
     expect(R.closedNotPaidLine("Dec 6, 2026")).toBe("Closed on Dec 6, 2026: not paid.");
-    expect(R.payClosesLine("Dec 6, 2026")).toBe("Pay closes on Dec 6, 2026.");
+    expect(R.payByLine("Dec 6, 2026")).toBe("Pay by Dec 6, 2026");
   });
 
-  it("the tester's session page: Not paid (closed on <date>), no Charge box after, Charge closes on <date> before", () => {
+  it("the tester's session page: Not paid (closed on <date>), no Charge box after, \"Charge or let go by <date>\" before (§387 4)", () => {
     const page = src("app/app/sessions/[id]/page.tsx");
     expect(page).toContain('await pieceCloseOut(k, now)');
     expect(page).toContain("closedOn={chargeShut(sub.id) ? shutOn(sub.id) : null}");
     expect(page).toContain("closedOn={chargeShut(x.id) ? shutOn(x.id) : null}");
     expect(page.match(/!chargeShut\((sub|x)\.id\)/g)!.length).toBeGreaterThanOrEqual(3); // (batch 28 §21) no Charge for listed calls
-    expect(page.match(/data-charge-closes=""/g)).toHaveLength(1);
+    expect(page).toContain("<ChoiceBox paused={moneyPaused} closes={chargeBy(sub.id)}");
     expect(R.notPaidClosedLine("Dec 6, 2026")).toBe("Not paid (closed on Dec 6, 2026)");
-    expect(R.chargeClosesLine("Dec 6, 2026")).toBe("Charge closes on Dec 6, 2026.");
+    expect(R.chargeByLine("Dec 6, 2026")).toBe("Charge or let go by Dec 6, 2026");
   });
 
   it("the dashboards drop such pieces: the developer's Needs review rows and counts, the tester's Charge or cancel and Waiting for review", () => {

@@ -30,14 +30,14 @@ async function paidWork(over: Record<string, unknown> = {}) {
 }
 
 describe("Pay more closes with the test's last Pay / Charge (Batch 17 §19 replaces section 22's 30 days after the test ended)", () => {
-  it("the rule: the grey line in its last 7 days; the refusal line", () => {
+  it("the rule: the date line always (§387 4; was its last 7 days); the refusal line", () => {
     const now = new Date("2026-12-01T12:00:00Z");
     const at = (days: number) => new Date(now.getTime() + days * DAY);
-    expect(R.closeOutSoon(null, now)).toBe(false); // not known yet: the test still runs
-    expect(R.closeOutSoon(at(8), now)).toBe(false);
-    expect(R.closeOutSoon(at(6), now)).toBe(true);
-    expect(R.closeOutSoon(at(-1), now)).toBe(false); // closed
-    expect(R.payClosesLine("Dec 2, 2026", true)).toBe("Pay more closes on Dec 2, 2026.");
+    expect(R.closesAhead(null, now)).toBe(false); // not known yet: the test still runs
+    expect(R.closesAhead(at(30), now)).toBe(true); // (§387 4) weeks ahead too
+    expect(R.closesAhead(at(6), now)).toBe(true);
+    expect(R.closesAhead(at(-1), now)).toBe(false); // closed
+    expect(R.payByLine("Dec 2, 2026", true)).toBe("Pay more until Dec 2, 2026");
     expect(R.payClosedLine("Dec 2, 2026", true)).toBe("Pay more closed on Dec 2, 2026.");
   });
 
@@ -58,7 +58,9 @@ describe("Pay more closes with the test's last Pay / Charge (Batch 17 §19 repla
     // (Owner, Nov 11, §378) Each piece's own date (pieceCloseOut), no longer one date per test.
     expect(page).toContain("const moreCloses = new Map(await Promise.all(paidKeys.map(async (k) => [k.submissionId ?? k.callId!, await pieceCloseOut(k, now)] as const)));");
     expect(page.match(/payMore\((r\.sub\.id|x\.id)\)\.open && \(rooms\.get/g)).toHaveLength(3); // the two rows and Needs you's update rows
-    expect(page.match(/note=\{payMore\((r\.sub\.id|x\.id)\)\.line \|\| undefined\}/g)).toHaveLength(3); // (batch 30 §2) and the update row's Pay more
+    // (Owner, Nov 11, §387 4) Next to the button: "Pay more until <date>" on the two rows, "Pay by <date>" on Needs you's update row (its button reads Pay).
+    expect(page.match(/closes=\{payMore\((r\.sub\.id|x\.id)\)\.line\}/g)).toHaveLength(2);
+    expect(page).toContain("closes={payMoreAsPay(x.id)}");
   });
 });
 

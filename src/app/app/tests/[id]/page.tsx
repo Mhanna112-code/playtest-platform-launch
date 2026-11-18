@@ -20,7 +20,7 @@ import { requireOpenPage } from "@/lib/server/page-auth";
 import { PageLoaded } from "@/components/PageLoaded";
 import { OnePage } from "@/components/OnePage";
 import { testScope } from "@/lib/pageClaim";
-import { devRestricted } from "@/lib/restricted";
+import { devRestricted, moneyFrozen } from "@/lib/restricted";
 import { PAUSED_ALERTS, STOPPED_ALERTS } from "@/lib/alerts";
 import { TestBanner, allowedLine, type BannerCause } from "./TestBanner";
 import { RestrictedCalls } from "./RestrictedCalls";
@@ -44,7 +44,7 @@ import { callEndProps, devRateLabel, pageRows, rateLabel } from "@/lib/server/re
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { DisputeSide } from "./DisputeSide";
 import { PayOwedLink } from "@/components/PayOwedLink";
-import { inviteBlocked, rateNeedsLine, NOT_LISTED, callListed, deletedNoPayoutsLine, joiningClosedLine, closeOutSoon, closedNotPaidLine, payClosesLine, testerPayable, stopReasonOf, workDeadlineOf } from "@/lib/rules";
+import { inviteBlocked, rateNeedsLine, NOT_LISTED, callListed, deletedNoPayoutsLine, joiningClosedLine, closesAhead, FROZEN_WAITS_LINE, payByLine, closedNotPaidLine, testerPayable, stopReasonOf, workDeadlineOf } from "@/lib/rules";
 import { ChargebackSteps } from "@/components/ChargebackSteps";
 import { chargebackSteps } from "@/lib/server/chargeback";
 import { PayBox } from "./PayBox";
@@ -198,13 +198,17 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const soon = t.openUntil && t.openUntil > new Date() && t.openUntil.getTime() - Date.now() < 3 * 86_400_000;
   const now = new Date();
   // (Owner, Nov 11, §378; replaces batch 17 §19's one date per test) Pay more on a piece closes on that piece's own date, with its Pay and the tester's Charge
-  // (pieceCloseOut); in its last 7 days that piece's box says "Pay more closes on <date>.".
+  // (pieceCloseOut). (Owner, Nov 11, §387 4; replaces "its last 7 days") Its box always says "Pay more until <date>" next to the button; while the money is
+  // frozen (moneyFrozen), "Waits while the test is paused".
+  const frozen = !!moneyFrozen(u, t);
   const paidKeys: { submissionId?: string; callId?: string }[] = t.contracts.flatMap((c) => [...c.submissions.filter((x) => x.review).map((x) => ({ submissionId: x.id })), ...c.calls.filter((x) => x.review).map((x) => ({ callId: x.id }))]);
   const moreCloses = new Map(await Promise.all(paidKeys.map(async (k) => [k.submissionId ?? k.callId!, await pieceCloseOut(k, now)] as const)));
   const payMore = (pieceId: string) => {
     const at = moreCloses.get(pieceId) ?? null;
-    return { open: !closedOut(at, now), line: closeOutSoon(at, now) ? payClosesLine(fmtDate(at!), true) : "" };
+    return { open: !closedOut(at, now), line: frozen ? FROZEN_WAITS_LINE : closesAhead(at, now) ? payByLine(fmtDate(at!), true) : "", at };
   };
+  /** (§387 4) Needs you's Pay for what's new on a paid part (Pay more's route, its button reads Pay): "Pay by <date>". */
+  const payMoreAsPay = (pieceId: string) => { const at = moreCloses.get(pieceId) ?? null; return frozen ? FROZEN_WAITS_LINE : closesAhead(at, now) ? payByLine(fmtDate(at!)) : ""; };
   // (Owner, Oct 26) A chargeback hold's steps. (A paused test's closing date is told by bell and shown to the admin, not on the page.)
   const cbSteps = await chargebackSteps(u.id);
   // (Batch 17 §11) Charges made while the developer was away that their bank wants confirmed: "Confirm with your bank" under the affected piece (Payments and the bell link here).
@@ -269,7 +273,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const payCloses = new Map(await Promise.all(unpaidKeys.map(async (k) => [k.submissionId ?? k.callId!, await pieceCloseOut(k, now)] as const)));
   const payShut = (pieceId: string) => closedOut(payCloses.get(pieceId) ?? null, now);
   const shutOn = (pieceId: string) => fmtDate(payCloses.get(pieceId)!);
-  const paySoon = (pieceId: string) => (closeOutSoon(payCloses.get(pieceId) ?? null, now) ? fmtDate(payCloses.get(pieceId)!) : "");
+  // (Owner, Nov 11, §387 4) "Pay by <date>" next to Pay, always (frozen: "Waits while the test is paused").
+  const payBy = (pieceId: string) => (frozen ? FROZEN_WAITS_LINE : closesAhead(payCloses.get(pieceId) ?? null, now) ? payByLine(fmtDate(payCloses.get(pieceId)!)) : "");
   const callsWarn = new Map(t.contracts.map((c) => [c.id, callsLeftWarning(callsLeft.get(c.id) ?? 0, callListed(t, c) ? c.liveRateCents : null, "developer", displayName(c.tester))] as const));
   // (Owner, Oct 28, batch 16 section 33) The developer's other booked calls still ahead (any tester, any test), for the clash checks while Request a time is filled.
   const otherCalls = (await db.call.findMany({ where: { status: "booked", startsAt: { gt: new Date(now.getTime() - 6 * 3_600_000) }, contract: { test: { developerId: u.id } } }, include: { contract: { include: { tester: true } } } }))
@@ -485,8 +490,6 @@ export default async function TestPage({ params, searchParams }: { params: Promi
           <p className="text-xs text-slate-400" data-part-when="">
             {x.kind === "sub" ? `${additionsOf(x.s!.additions).length ? "Updated" : "Sent"} ${fmtDateTime(x.s!.updatedAt)}` : `${x.x!.minutes} min booked`} · {(x.kind === "sub" ? x.s!.agreedCents : x.x!.rateCents) == null ? NOT_LISTED : `In ${pronouns(x.c.tester.pronoun).poss} contract`}
           </p>
-          {/* (Batch 17 §19) The last 7 days before close-out. */}
-          {paySoon(x.id) && <p className="note" data-pay-closes="">{payClosesLine(paySoon(x.id))}</p>}
           {/* (Owner, Nov 5, §225; was §152's payments list here too) A part's individual payments are listed only in the Testers list, never in Needs you. */}
           {x.kind === "sub" ? (
             <>
@@ -505,7 +508,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                 <SentWork id={`needs-${x.s!.id}`} timeZone={u.timeZone} kind={x.s!.kind} answers={x.s!.answers} questions={writtenQuestions(x.c)} notes={x.s!.notes} additions={x.s!.additions} files={x.s!.recordings} newOnly={{ since: paidCut(x.s!) }} questionsFold={{ open: true, ownScroll: false }} />
               </>)}
               <HoldFold openOn={[anchor]} className={PART_PANEL} summaryClassName="text-sm font-medium text-white" data={{ "data-fold": `needs-pay-${x.id}`, "data-part-panel": "pay" }} summary="Pay">
-              <PayBox owes={owesNow} disputable={!ratedTesters.has(x.c.id)} key={x.s!.id} kind="submission" fromNeeds id={x.s!.id} name={displayName(x.c.tester)} seenAt={seenAt} room={rooms.get(x.s!.id)?.box} confirming={confirmingPay(x.s!.id)}
+              <PayBox closes={payBy(x.s!.id)} owes={owesNow} disputable={!ratedTesters.has(x.c.id)} key={x.s!.id} kind="submission" fromNeeds id={x.s!.id} name={displayName(x.c.tester)} seenAt={seenAt} room={rooms.get(x.s!.id)?.box} confirming={confirmingPay(x.s!.id)}
                 /* (Batch 30 §3) Late work never opens Charge: no "<tester> can charge" line. */
                 note={x.s!.agreedCents != null && !x.s!.late && chargeOpensAt(x.s!, t, x.c, now) && !x.s!.choiceOfferedAt ? choiceNoteLine(pieceDay(chargeOpensAt(x.s!, t, x.c, now)!, u.timeZone), displayName(x.c.tester), chargeAmount(x.s!.agreedCents, partPaid(x.s!.id)), pronouns(x.c.tester.pronoun).poss) : undefined}
                 listingCents={x.s!.agreedCents} listingText={`${money(x.s!.agreedCents)} for ${x.s!.kind === "written" ? "written answers" : "a recording"}`} />
@@ -520,7 +523,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                 {x.x!.actualMinutes != null && x.x!.lengthNote && <ReasonQuote text={x.x!.lengthNote} />}
               </div>
               <HoldFold openOn={[anchor]} className={PART_PANEL} summaryClassName="text-sm font-medium text-white" data={{ "data-fold": `needs-pay-${x.id}`, "data-part-panel": "pay" }} summary="Pay">
-              <PayBox owes={owesNow} disputable={!ratedTesters.has(x.c.id)} key={`${x.x!.actualMinutes ?? 0}`} kind="call" fromNeeds id={x.x!.id} name={displayName(x.c.tester)} seenAt={seenAt} room={rooms.get(x.x!.id)?.box} confirming={confirmingPay(x.x!.id)}
+              <PayBox closes={payBy(x.x!.id)} owes={owesNow} disputable={!ratedTesters.has(x.c.id)} key={`${x.x!.actualMinutes ?? 0}`} kind="call" fromNeeds id={x.x!.id} name={displayName(x.c.tester)} seenAt={seenAt} room={rooms.get(x.x!.id)?.box} confirming={confirmingPay(x.x!.id)}
                 /* (Owner, Oct 29, batch 28 §21) A listed call is charged automatically 7 days after it if it is not paid. (Owner, Nov 6, §311e) An unlisted one closes
                    with nothing paid then: the same note, in its words. */
                 note={chargeAts.get(x.x!.id) && chargeAts.get(x.x!.id)! > now ? (x.x!.rateCents != null ? autoChargeLine(pieceDay(chargeAts.get(x.x!.id)!, u.timeZone), Math.min(callReference(x.x!.rateCents, callMinutesOf(x.x!)!).cents ?? 0, callsLeft.get(x.c.id) ?? Infinity), callMinutesOf(x.x!)!, x.x!.rateCents) : unlistedCloseLine(pieceDay(chargeAts.get(x.x!.id)!, u.timeZone))) : undefined}
@@ -552,7 +555,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
         </>)}
         {/* (Owner, Nov 5, §226) In Needs you the press for what's new on a paid part is "Pay" (Pay more's route, checks and stops; the Testers list keeps Pay more). */}
         <HoldFold openOn={[`update-${x.id}`]} className={PART_PANEL} summaryClassName="text-sm font-medium text-white" data={{ "data-fold": `update-pay-${x.id}`, "data-part-panel": "pay" }} summary="Pay">
-        <PayBox more={{ testId: t.id, contractId: c.id }} moreLabel="Pay" update owes={owesNow} fromNeeds kind="submission" id={x.id} name={displayName(c.tester)} seenAt={seenAt} bankWaits={waitsOf(x.id)} bankWaitsId={waitsIdOf(x.id)} bankWaitsKind={waitsKindOf(x.id)} note={payMore(x.id).line || undefined}
+        <PayBox more={{ testId: t.id, contractId: c.id }} moreLabel="Pay" update owes={owesNow} fromNeeds kind="submission" id={x.id} name={displayName(c.tester)} seenAt={seenAt} bankWaits={waitsOf(x.id)} bankWaitsId={waitsIdOf(x.id)} bankWaitsKind={waitsKindOf(x.id)} closes={payMoreAsPay(x.id)}
           room={rooms.get(x.id)?.box} listingCents={x.agreedCents} listingText={`${money(x.agreedCents)} for ${x.kind === "recording" ? "a recording" : "written answers"}`} />
         </HoldFold>
       </HoldFold>
@@ -812,7 +815,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                         // (Owner, Oct 29, batch 11 section 6 / batch 12 section 3) A paid piece keeps its Pay box as "Pay more" until its cap is reached.
                         r.sub && r.sub.review && !r.sub.review.rejected && !restricted && !blockedEither.has(c.testerId) && !r.sub.review.teamClosedById && payMore(r.sub.id).open && (rooms.get(r.sub.id)?.room ?? 0) > 0 && (
                           <div key="box" className="w-full space-y-1" data-part-pay-more="">
-                          <PayBox more={{ testId: t.id, contractId: c.id }} awayInNeeds owes={owesNow} kind="submission" id={r.sub.id} name={name} seenAt={seenAt} bankWaits={waitsOf(r.sub.id)} bankWaitsId={waitsIdOf(r.sub.id)} bankWaitsKind={waitsKindOf(r.sub.id)} note={payMore(r.sub.id).line || undefined}
+                          <PayBox more={{ testId: t.id, contractId: c.id }} awayInNeeds owes={owesNow} kind="submission" id={r.sub.id} name={name} seenAt={seenAt} bankWaits={waitsOf(r.sub.id)} bankWaitsId={waitsIdOf(r.sub.id)} bankWaitsKind={waitsKindOf(r.sub.id)} closes={payMore(r.sub.id).line}
                             room={rooms.get(r.sub.id)?.box} listingCents={r.sub.agreedCents} listingText={`${money(r.sub.agreedCents)} for ${r.name === "Recording" ? "a recording" : "written answers"}`} />
                           </div>
                         ),
@@ -914,7 +917,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                           x.review?.reason === UNLISTED_CALL_CLOSED && <p key="unlisted" className="text-sm text-slate-300" data-unlisted-closed="">{UNLISTED_CALL_CLOSED}</p>,
                           x.review && !x.review.rejected && !restricted && !blockedEither.has(c.testerId) && !x.review.teamClosedById && x.review.reason !== UNLISTED_CALL_CLOSED && payMore(x.id).open && (rooms.get(x.id)?.room ?? 0) > 0 && (
                             <div key="box" className="space-y-1" data-call-pay-more="">
-                            <PayBox more={{ testId: t.id, contractId: c.id }} awayInNeeds owes={owesNow} kind="call" id={x.id} name={name} seenAt={seenAt} bankWaits={waitsOf(x.id)} bankWaitsId={waitsIdOf(x.id)} bankWaitsKind={waitsKindOf(x.id)} note={payMore(x.id).line || undefined}
+                            <PayBox more={{ testId: t.id, contractId: c.id }} awayInNeeds owes={owesNow} kind="call" id={x.id} name={name} seenAt={seenAt} bankWaits={waitsOf(x.id)} bankWaitsId={waitsIdOf(x.id)} bankWaitsKind={waitsKindOf(x.id)} closes={payMore(x.id).line}
                               room={rooms.get(x.id)?.box} minutes={m ?? x.minutes} rateCents={x.rateCents} warning={callsWarn.get(c.id)}
                               listingCents={callReference(x.rateCents, m ?? x.minutes, c.liveRateCents).cents}
                               listingText={callReference(x.rateCents, m ?? x.minutes, c.liveRateCents).text.replace(/^(Listing|Agreed): /, "")} />

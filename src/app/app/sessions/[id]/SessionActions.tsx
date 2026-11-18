@@ -587,7 +587,7 @@ export function LeaveButton({ sessionId, seenAt, title, notice }: { sessionId: s
 }
 
 /** Dispute once, on any part the developer reviewed (batch 10). `limit`: how far a decision can raise the pay (batch 28 §15: "up to $20.00 more", to the piece's cap). */
-export function DisputeForm({ sessionId, kind, id, seenAt, disabledNote = "", limit = "up to the piece's cap" }: { disabledNote?: string; sessionId: string; kind: "submission" | "call"; id: string; seenAt?: string; limit?: string }) {
+export function DisputeForm({ sessionId, kind, id, seenAt, disabledNote = "", limit = "up to the piece's cap", closes = "" }: { /** (Owner, Nov 11, §387 4) "Dispute until Nov 20" (or "Waits while the test is paused"), next to the button */ closes?: string; disabledNote?: string; sessionId: string; kind: "submission" | "call"; id: string; seenAt?: string; limit?: string }) {
   // (Owner, Nov 10, §371) The press's state (and the reason typed) is kept by the piece (lib/pressCarry.ts): a redraw while Send the dispute is on its way can draw
   // a new form (the session page is keyed by its status; a call's row moves into the Had panel once there are more than 3), and the server's stop box or refusal
   // shows under ITS button, the fold open.
@@ -658,6 +658,7 @@ export function DisputeForm({ sessionId, kind, id, seenAt, disabledNote = "", li
       >
         Send the dispute
       </button>
+      {closes && !fin.done && <span className="ml-2 text-xs text-slate-400" data-dispute-closes="">{closes}</span>}
       <PressDone line={fin.line} />
       {!fin.done && disabledNote && <p className="note" data-owed-note="">{disabledNote}</p>}
       {keep.restored && reason !== "" && <DraftTag disabled={busy || fin.done} kind="discard" onUseSaved={() => setReason("")} />}

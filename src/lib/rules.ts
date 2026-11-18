@@ -2008,19 +2008,22 @@ export const ratingClosedLine = (date: string) => `Rating closed on ${date}.`;
 // own date (server/closeOut pieceCloseOut: the test's close-out, or 14 days after its Charge opened if later, plus the time the tester's tester side was suspended).
 // Unpaid work stays unpaid. Disputes are unchanged.
 
-/** The last days before close-out in which the boxes and Needs you rows say when they close. */
-export const CLOSE_OUT_WARN_DAYS = 7;
 /** The bell reminders before close-out (3 days and 1 day before), each sent once. */
 export const CLOSE_OUT_REMINDER_DAYS = [3, 1] as const;
-/** Is the close-out within its last CLOSE_OUT_WARN_DAYS (and not passed yet)? */
-export const closeOutSoon = (at: Date | null, now = new Date()) => !!at && at.getTime() > now.getTime() && at.getTime() - now.getTime() <= CLOSE_OUT_WARN_DAYS * 86_400_000;
+// (Owner, Nov 11, §387 4; replaces batch 17 §19's "the last 7 days" rule) Each money button always says its closing date next to it, in the reader's zone: the
+// tester's Charge / Let it go, Dispute and Rate; the developer's Pay and Pay more. While the money is frozen (moneyFrozen) the line reads FROZEN_WAITS_LINE instead
+// (the tester's Rate is hidden then, with RATE_TEST_PAUSED). The developer's "Rate X · N days left" is unchanged.
+/** Is the date still ahead (the line shows it)? */
+export const closesAhead = (at: Date | null, now = new Date()) => !!at && at.getTime() > now.getTime();
+export const FROZEN_WAITS_LINE = "Waits while the test is paused";
+export const chargeByLine = (date: string) => `Charge or let go by ${date}`;
+export const disputeUntilLine = (date: string) => `Dispute until ${date}`;
+export const rateUntilLine = (date: string) => `Rate until ${date}`;
+export const payByLine = (date: string, more = false) => (more ? `Pay more until ${date}` : `Pay by ${date}`);
 /** The developer's Pay (more) pressed after close-out: "Pay closed on Dec 6." / "Pay more closed on Dec 6.". */
 export const payClosedLine = (date: string, more = false) => `${more ? "Pay more" : "Pay"} closed on ${date}.`;
 /** The tester's Charge or Let it go pressed after their close-out. */
 export const chargeClosedLine = (date: string) => `Charge and Let it go closed on ${date}.`;
-/** The grey line in the last 7 days: under the Charge box, on Needs you's rows, and under a Pay more box. */
-export const chargeClosesLine = (date: string) => `Charge closes on ${date}.`;
-export const payClosesLine = (date: string, more = false) => `${more ? "Pay more" : "Pay"} closes on ${date}.`;
 /** Where an unpaid piece was: the developer's test page, and the tester's part. */
 export const closedNotPaidLine = (date: string) => `Closed on ${date}: not paid.`;
 export const notPaidClosedLine = (date: string) => `Not paid (closed on ${date})`;

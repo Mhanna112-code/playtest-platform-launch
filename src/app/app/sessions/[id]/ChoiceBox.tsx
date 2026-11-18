@@ -30,7 +30,7 @@ function ChargeLabel({ devName, cents }: { devName: string; cents: number | null
  * is red at its box with the server's own line, and listed under the buttons.
  * (Batch 35 §40, §41) Once it goes through, the page redraws in place (the scroll stays here); until it has, only the pressed button (greyed) and its line show.
  */
-export function ChoiceBox({ paused = false, sessionId, submissionId, callId, line, devName, cents, seenAt }: { paused?: boolean; sessionId: string; submissionId?: string; callId?: string; line: string; devName: string; cents: number; seenAt: string }) {
+export function ChoiceBox({ paused = false, closes = "", sessionId, submissionId, callId, line, devName, cents, seenAt }: { paused?: boolean; /** (Owner, Nov 11, §387 4) "Charge or let go by Nov 20" (or "Waits while the test is paused"), next to the buttons */ closes?: string; sessionId: string; submissionId?: string; callId?: string; line: string; devName: string; cents: number; seenAt: string }) {
   // (Owner, Nov 10, §371) The press's state is kept by the piece (lib/pressCarry.ts): the session page is keyed by its status, so a redraw while Charge / Let it go
   // is on its way (the work ended, the test closed) draws a new box; it shows "busy", and the server's stop box or refusal, under its buttons.
   const carry = `choice:${submissionId ?? callId}`;
@@ -110,6 +110,7 @@ export function ChoiceBox({ paused = false, sessionId, submissionId, callId, lin
             <input type="checkbox" checked={letGo} onChange={(e) => setLetGo(e.target.checked)} /> {letGoTickLabel(devName)}
           </label>
           <button className="btn-secondary" disabled={busy || !letGo} onClick={() => go("letgo")}>Let it go</button>
+          {closes && <span className="text-xs text-slate-400" data-charge-closes="">{closes}</span>}
         </div>
       )}
       {!fin.done && amountNeed && amount !== redAmount && <p className="text-xs text-slate-400" data-field-need="charge">{amountNeed}</p>}

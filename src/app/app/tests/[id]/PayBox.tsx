@@ -62,6 +62,8 @@ export function PayBox(p: {
   fromNeeds?: boolean;
   /** (Owner, Nov 6, §288) false once the tester rated the test (their disputes are closed): the line under Pay says nothing about disputing. */
   disputable?: boolean;
+  /** (Owner, Nov 11, §387 4) "Pay by Nov 20" / "Pay more until Nov 20" (or "Waits while the test is paused"), next to the button */
+  closes?: string;
 }) {
   const listed = p.listingCents != null;
   const underLine = payUnderLine(p.name, listed, p.disputable !== false);
@@ -264,6 +266,7 @@ export function PayBox(p: {
         {/* (Owner, Nov 5, §227) Pay what you owe is on Payments, never on the test page: the link goes there. */}
         {!done && p.owes && <span className="text-xs text-amber-200" data-owes-note="">{PAY_WAITS} <PayOwedLink /></span>}
         {!done && <span className="text-xs text-slate-500">at least $0.50 (or 0)</span>}
+        {!done && p.closes && <span className="text-xs text-slate-400" data-pay-closes="">{p.closes}</span>}
       </div>
       {bank.view}
       <PressDone line={doneLine} />
