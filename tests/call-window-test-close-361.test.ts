@@ -65,8 +65,9 @@ describe("§361 calls are booked up to test close, not each tester's own deadlin
   it("call sets stop at test close: a Weekly set is cut there, and Forever books nothing after it", async () => {
     const w = await world();
     const close = eod(16);
-    const start = new Date(Date.now() + 2 * DAY);
-    start.setUTCMinutes(0, 0, 0);
+    // (§387 5) A fixed time of day: 11:00 on day 2 (UTC), so the set's calls (and Ben's an hour later) never cross into the next day whatever the time now
+    // (from 23:00 the old "now + 2 days, to the hour" put Ben's third call at 00:00 on day 17, after test close: 2 calls, not 3).
+    const start = new Date(eod(2).getTime() - 13 * HOUR + 1000);
     const fit = callsUntil(start, "weekly", close);
     expect(fit).toBe(3); // days 2, 9 and 16 (before the end of day 16); Open until (day 11) would have allowed only 2
     expect(callsUntil(start, "weekly", eod(11))).toBe(2);
