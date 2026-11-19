@@ -36,11 +36,8 @@ export function CallRequests(p: {
     /** (Owner, Nov 6, §292) The developer's calls booked with other testers (any test): time ranges only, never who with (their private bookings). */
     busy?: Slot[] };
 }) {
-  // (NEXT-UI 12b) What the limit box said: the next press sends it, and stops again if who is blocked / at the limit changed.
-  const [limitSeen, setLimitSeen] = useState("");
-  const { press, changes, error, busy, at, errData, doneLine, finish } = usePress(p.seenAt, (d) => {
-    if (typeof d.limitSeen === "string") setLimitSeen(d.limitSeen);
-  }, { onFresh: () => { setFrozen(null); setMade(null); } });
+  // (Owner, Nov 2026: refuse naming who can't get it; no partial send) No limit box any more (NEXT-UI 12b `limitSeen` is gone): a limit is a refusal.
+  const { press, changes, error, busy, at, errData, doneLine, finish } = usePress(p.seenAt, undefined, { onFresh: () => { setFrozen(null); setMade(null); } });
   const [minutes, setMinutes] = useState("");
   const [rows, setRows] = useState<RowState[]>([newRow()]);
   const [ticked, setTicked] = useState<string[]>(p.targets.length === 1 ? [p.targets[0].contractId] : []);
@@ -97,7 +94,7 @@ export function CallRequests(p: {
       {
         rows: filled,
         minutes: minutes.trim() ? minutes.trim() : "",
-        ...(p.side === "developer" ? { contractIds: ticked, limitSeen } : {}),
+        ...(p.side === "developer" ? { contractIds: ticked } : {}),
       },
       "request",
     );

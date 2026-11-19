@@ -1107,7 +1107,7 @@ This source index covers explicit HTTP-error messages and selected client notice
 
 | Handler and code | When | Wording or template | Source |
 |---|---|---|---|
-|  `` devRequestTime ``  ·  `` stop_once ``  |  `` blocked.length &#124;&#124; limited.length → body.confirmed !== true &#124;&#124; body.limitSeen !== text ``  |  `` Press again to send to the others. ``  | [lib/server/requests.ts:692](../src/lib/server/requests.ts#L692) |
+|  `` devRequestTime ``  ·  `` limit `` / `` clash ``  |  `` blocked.length &#124;&#124; limited.length `` (any ticked tester; owner, Nov 2026: refuse naming who can't get it; no partial send; no more stop-once / `limitSeen`)  |  the clash line(s), then `` limitText `` (the §185 line(s))  | [lib/server/requests.ts](../src/lib/server/requests.ts) |
 
 ### `src/lib/server/stopMoment.ts`
 

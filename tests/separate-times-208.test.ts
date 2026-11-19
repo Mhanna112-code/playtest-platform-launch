@@ -162,20 +162,21 @@ describe("§208 each time is its own request", () => {
     expect(sentRoomLine("Ana Silva", 3)).toBe("You've sent 3 call requests to Ana Silva today. You can send more tomorrow.");
   });
 
-  it("several ticked testers: one the press doesn't fit is named in the \"Press again to send to the others\" box; the second press sends to the others", async () => {
+  it("several ticked testers: one the press doesn't fit refuses it, naming her (nothing sent to anyone); unticking her sends to the others", async () => {
     const s = await setup({ spots: 5 });
     const ana = await joined(s.testId);
     const ben = await joined(s.testId, "Ben Carter", "he");
     expect((await testerReq(ana.sessionId, ana.tester.cookie, { rows: [once(atHours(40)), once(atHours(44))] })).status).toBe(200);
     const rows = [once(atHours(50)), once(atHours(74))];
-    const first = await devReq(s.testId, s.dev.cookie, [ana.sessionId, ben.sessionId], { rows });
-    expect(first.body.error.code).toBe("stop_once");
-    const text = first.body.error.limitSeen as string;
-    expect(text).toBe("You already have 2 calls or requests with Ana Silva: you can send 1 more.");
-    expect(first.body.error.tail).toBe("Press again to send to the others (Ben Carter).");
-    expect(first.body.error.sendTo).toEqual([ben.sessionId]); // (§350) who the next press goes to (the page stops checking the others red)
-    expect(await db.callRequest.count({ where: { testId: s.testId, fromSide: "developer" } })).toBe(0);
-    const second = await devReq(s.testId, s.dev.cookie, [ana.sessionId, ben.sessionId], { rows, limitSeen: text });
+    // (Owner, Nov 2026: refuse naming who can't get it; no partial send) Every press with Ana ticked is refused naming her; Ben gets nothing.
+    for (const n of [1, 2]) {
+      const press = await devReq(s.testId, s.dev.cookie, [ana.sessionId, ben.sessionId], { rows });
+      expect(press.body.error, `press ${n}`).toMatchObject({ code: "limit", message: "You already have 2 calls or requests with Ana Silva: you can send 1 more." });
+      expect(press.body.error.limitSeen).toBeUndefined();
+      expect(await db.callRequest.count({ where: { testId: s.testId, fromSide: "developer" } })).toBe(0);
+    }
+    // Ana unticked: Ben gets both times.
+    const second = await devReq(s.testId, s.dev.cookie, [ben.sessionId], { rows });
     expect(second.status).toBe(200);
     expect((await pendingOf(ben.sessionId, "developer")).map((q) => q.startsAt.toISOString())).toEqual(rows.map((r) => r.startsAt));
     expect(await pendingOf(ana.sessionId, "developer")).toHaveLength(0);

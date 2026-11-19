@@ -164,10 +164,11 @@ describe("§185 sends a day: at most 3 call requests a day to the same person, e
     expect(await sentToday(a.sessionId, "developer", "")).toBe(3);
     expect((await devReq(f.testId, f.dev.cookie, a.sessionId, { times: [atHours(70)] })).body.error).toMatchObject({ code: "limit", message: "You've sent 3 call requests to Ana Silva today. You can send more tomorrow." });
     expect((await devReq(f.testId, f.dev.cookie, b.sessionId, { times: [atHours(70)] })).status).toBe(200);
-    // Ticking both: Ana is named in the box, Ben's goes on the second press.
+    // (Owner, Nov 2026: refuse naming who can't get it; no partial send) Ticking both: refused naming Ana; nothing is sent, not even Ben's.
+    const before = await db.callRequest.count({ where: { contractId: { in: [a.sessionId, b.sessionId] } } });
     const both = await act(f.testId, "request-time", f.dev.cookie, { seenAt: seen(), contractIds: [a.sessionId, b.sessionId], minutes: 30, times: [atHours(75)] });
-    expect(both.body.error.code).toBe("stop_once");
-    expect(both.body.error.limitSeen).toBe("You've sent 3 call requests to Ana Silva today.");
+    expect(both.body.error).toMatchObject({ code: "limit", message: "You've sent 3 call requests to Ana Silva today. You can send more tomorrow." });
+    expect(await db.callRequest.count({ where: { contractId: { in: [a.sessionId, b.sessionId] } } })).toBe(before);
   });
 
   it("the day is the sender's own calendar day in their saved zone", async () => {

@@ -2,25 +2,29 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-// (Owner, Nov 9, §350; audit D04) A group Request a time where one tester's time is over a limit (or busy): the server stops once with "Press again to send to the
-// others (Ben Okafor)." and limitSeen, but the page's box said "Press Request a time again to go ahead.", marked Ana's time red (blocking the press) and never sent
-// limitSeen back, so Ben never got the request. The server side (sendTo, the second press) is tested in separate-times-208; here, the page's wiring.
-const page = fs.readFileSync(path.join(process.cwd(), "src/app/app/tests/[id]/DevCallPanel.tsx"), "utf8");
+// (Owner, Nov 9, §350; audit D04) A group Request a time where one ticked tester was over a limit (or busy) used to stop once ("Press again to send to the
+// others (Ben Okafor)." with limitSeen / sendTo) and send to the others on the second press.
+// (Owner, Nov 2026: refuse naming who can't get it; no partial send) Now it is a refusal naming who and why, shown under the button like other refusals;
+// nothing is sent. The server side is tested in separate-times-208, no-clash-requests-292, call-limit-request-boxes-185 and stop-again; here, the pages' wiring.
+const read = (f: string) => fs.readFileSync(path.join(process.cwd(), f), "utf8");
+const panel = read("src/app/app/tests/[id]/DevCallPanel.tsx");
+const session = read("src/components/CallRequests.tsx");
+const server = read("src/lib/server/requests.ts");
 
-describe("§350 the developer's Request a time follows the server's partial-group stop", () => {
-  it("the box shows the server's tail", () => {
-    expect(page).toContain('{...(k === "request" && typeof errData.tail === "string" ? { tail: errData.tail } : {})');
+describe("§350 / D04 → (Owner, Nov 2026) the group Request a time refuses instead of stopping once", () => {
+  it("the developer's panel keeps no limitSeen / sendTo, sends none back, and shows no server tail", () => {
+    for (const gone of ["setLimitSeen", "data.limitSeen", "limitSeen }", "limitSendTo", "takeLimit", "errData.tail", "sendTo"]) expect(panel).not.toContain(gone);
+    expect(panel).toContain("rows: filled }); }}");
   });
-  it("the stop's limitSeen and sendTo are kept, and the next press sends limitSeen back", () => {
-    expect(page).toContain("takeLimit(data);");
-    expect(page).toContain("setLimitSeen(data.limitSeen);");
-    expect(page).toContain("setLimitSendTo(Array.isArray(data.sendTo) ? (data.sendTo as string[]) : null);");
-    expect(page).toContain("rows: filled, ...(limitSeen ? { limitSeen } : {})");
+  it("every ticked tester is checked red as the form is filled (none skipped)", () => {
+    expect(panel).toContain("checked.filter((t) => ticked.includes(t.contractId)).map");
   });
-  it("the testers the stop leaves out aren't checked red (their red line blocked the second press)", () => {
-    expect(page).toContain("checked.filter((t) => ticked.includes(t.contractId) && (!limitSendTo || limitSendTo.includes(t.contractId)))");
+  it("the session page's form sends no limitSeen", () => {
+    for (const gone of ["setLimitSeen", "d.limitSeen", "ticked, limitSeen"]) expect(session).not.toContain(gone);
+    expect(session).toContain("{ contractIds: ticked }");
   });
-  it("another time, length or tick clears it (the server stops again if it still applies)", () => {
-    expect(page).toContain('setLimitSeen(""); setLimitSendTo(null);');
+  it("the server has no 'Press again to send to the others' stop", () => {
+    expect(server).not.toMatch(/HttpError\(409, "stop_once", "Press again to send to the others/);
+    expect(server).not.toContain("body.limitSeen");
   });
 });

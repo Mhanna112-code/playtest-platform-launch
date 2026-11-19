@@ -51,7 +51,7 @@ describe("stop again when something new happened since the box", () => {
     expect(ok.status).toBe(200);
   });
 
-  it("12b: the call-request limit box: a second press goes ahead only if who is blocked / at the limit is as the box said", async () => {
+  it("12b (Owner, Nov 2026: refuse naming who can't get it; no partial send): a ticked tester at the call limit refuses the press, naming her; no box, nothing sent", async () => {
     const { dev, testId } = await setup({ spots: 5 });
     const a = await joined(testId, "Ana Silva");
     const b = await joined(testId, "Ben Ito");
@@ -61,13 +61,15 @@ describe("stop again when something new happened since the box", () => {
     const seenAt = new Date().toISOString();
     const body = { seenAt, contractIds: [a.sessionId, b.sessionId], startsAt: start(300) };
     const first = await act(testId, "request-time", dev.cookie, body);
-    expect(first.body.error.code).toBe("stop_once");
-    const text = first.body.error.limitSeen as string;
-    expect(text).toContain("Ana Silva");
-    // Who is at the limit changed (Ben now too): the second press stops again with the new line.
-    for (const h of [190, 220, 250]) await db.callRequest.create({ data: { testId, contractId: b.sessionId, fromSide: "developer", startsAt: new Date(start(h)), times: [new Date(start(h))], weeks: 0, repeat: "", minutes: 30 } });
-    const second = await act(testId, "request-time", dev.cookie, { ...body, confirmed: true, boxAt: first.body.error.now, limitSeen: text });
-    expect(second.status).toBe(409);
+    expect(first.body.error).toMatchObject({ code: "limit", message: "You've sent 3 call requests to Ana Silva today. You can send more tomorrow." }); // (§208) a tie: today's
+    expect(first.body.error.limitSeen).toBeUndefined();
+    expect(await db.callRequest.count({ where: { contractId: b.sessionId } })).toBe(0);
+    // Pressing again with her still ticked: refused again (no second press goes ahead).
+    expect((await act(testId, "request-time", dev.cookie, { ...body, confirmed: true })).body.error.code).toBe("limit");
+    expect(await db.callRequest.count({ where: { contractId: b.sessionId } })).toBe(0);
+    // Ana unticked: Ben gets it.
+    expect((await act(testId, "request-time", dev.cookie, { ...body, contractIds: [b.sessionId], confirmed: true })).status).toBe(200);
+    expect(await db.callRequest.count({ where: { contractId: b.sessionId } })).toBe(1);
   });
 
   it("the tester's Leave still stops just once (no box time sent)", async () => {

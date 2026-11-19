@@ -52,7 +52,7 @@ describe("§292 a request can't be sent for a time the other person already has 
     expect((await testerReq(bb.sessionId, bb.tester.cookie, once(plus(t, 30)))).status).toBe(200);
   });
 
-  it("the developer's request overlapping the tester's call on another developer's test is refused (no name); ticked with a free tester, a stop names it and the others go", async () => {
+  it("the developer's request overlapping the tester's call on another developer's test is refused (no name); ticked with a free tester, the press is refused naming her, then unticking her sends to the other", async () => {
     const { dev, testId } = await setup();
     const dee = await joined(testId, "Dee Moss", "she");
     const bb = await joined(testId, "Bo Brown", "he");
@@ -66,15 +66,42 @@ describe("§292 a request can't be sent for a time the other person already has 
     expect(JSON.stringify(r.body)).not.toContain("Omar");
     expect(JSON.stringify(r.body)).not.toContain("Night Ferry");
     expect(await db.callRequest.count({ where: { contractId: dee.sessionId } })).toBe(0);
-    // Dee and Bo ticked: one stop naming Dee's busy time; the second press sends to Bo only.
-    const both = await devReq(testId, dev.cookie, [dee.sessionId, bb.sessionId], once(at));
-    expect(both.status).toBe(409);
-    expect(both.body.error.code).toBe("stop_once");
-    expect(JSON.stringify(both.body.error)).toContain(line);
-    const again = await devReq(testId, dev.cookie, [dee.sessionId, bb.sessionId], { ...once(at), limitSeen: line });
+    // (Owner, Nov 2026: refuse naming who can't get it; no partial send) Dee and Bo ticked: refused with Dee's busy line; nothing is sent, not even Bo's, and
+    // pressing again (no stop-once any more) is refused the same.
+    for (const n of [1, 2]) {
+      const both = await devReq(testId, dev.cookie, [dee.sessionId, bb.sessionId], once(at));
+      expect(both.status, `press ${n}`).toBe(409);
+      expect(both.body.error).toMatchObject({ code: "clash", message: line });
+      expect(JSON.stringify(both.body.error)).not.toContain("send to the others");
+      expect(await db.callRequest.count({ where: { contractId: { in: [dee.sessionId, bb.sessionId] } } })).toBe(0);
+    }
+    // Dee unticked: it goes to Bo.
+    const again = await devReq(testId, dev.cookie, [bb.sessionId], once(at));
     expect(again.status).toBe(200);
     expect(await db.callRequest.count({ where: { contractId: bb.sessionId, status: "pending" } })).toBe(1);
     expect(await db.callRequest.count({ where: { contractId: dee.sessionId } })).toBe(0);
+  });
+
+  it("(Owner, Nov 2026; §386 C) that refusal comes before another change's stop-once box on the same press; unticking her, the box, then it goes", async () => {
+    const { dev, testId } = await setup();
+    const dee = await joined(testId, "Dee Moss", "she");
+    const bb = await joined(testId, "Bo Brown", "he");
+    const other = await otherDevTest(dee.tester.cookie);
+    const call = await bookCall(other.testId, other.dev2.cookie, other.sessionId, dee.tester.cookie, 50);
+    const at = plus(call.startsAt.toISOString(), 10);
+    const loaded = seen();
+    await settle();
+    // Bo's own new request after the page loaded: a change that stops the developer's press once (Call changes).
+    expect((await testerReq(bb.sessionId, bb.tester.cookie, once(atHours(90)))).status).toBe(200);
+    await settle();
+    const press = (ids: string[], extra: Record<string, unknown> = {}) => act(testId, "request-time", dev.cookie, { seenAt: loaded, minutes: "30", contractIds: ids, ...once(at), ...extra });
+    const both = await press([dee.sessionId, bb.sessionId]);
+    expect(both.body.error).toMatchObject({ code: "clash", message: busyLine("Dee Moss", fmt.at(call.startsAt)) });
+    expect(await db.callRequest.count({ where: { contractId: bb.sessionId, fromSide: "developer" } })).toBe(0);
+    const box = await press([bb.sessionId]);
+    expect(box.body.error.code).toBe("stop_once");
+    expect((await press([bb.sessionId], { confirmed: true, boxAt: box.body.error.now })).status).toBe(200);
+    expect(await db.callRequest.count({ where: { contractId: bb.sessionId, fromSide: "developer", status: "pending" } })).toBe(1);
   });
 
   it("the developer's request overlapping the tester's call with the same developer on another test is refused too", async () => {

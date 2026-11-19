@@ -315,11 +315,11 @@ function roomOf(now: { sent: number; taken: number }, sends: number, adds: numbe
   if (!dayOver && !totalOver) return null;
   return dayOver && (!totalOver || MAX_SENT_PER_DAY - now.sent <= MAX_CALLS - now.taken) ? { kind: "day", have: now.sent } : { kind: "total", have: now.taken };
 }
-/** The refusal's words; `short`: the developer's "Press again to send to the others" box (§185's shorter lines when nothing more can go). */
-const roomText = (name: string, r: Room, short = false) =>
-  r.kind === "day"
-    ? short && r.have >= MAX_SENT_PER_DAY ? `You've sent ${MAX_SENT_PER_DAY} call requests to ${name} today.` : sentRoomLine(name, r.have)
-    : short && r.have >= MAX_CALLS ? `You already have ${MAX_CALLS} calls booked or requested with ${name}.` : callRoomLine(name, r.have);
+/**
+ * The refusal's words. (Owner, Nov 2026: refuse naming who can't get it; no partial send) The shorter lines of the old "Press again to send to the others" box
+ * are gone with it: a group press says the same lines as a single one.
+ */
+const roomText = (name: string, r: Room) => (r.kind === "day" ? sentRoomLine(name, r.have) : callRoomLine(name, r.have));
 /** (§208) The press's refusal line for one person ("" when it fits). */
 export function roomLine(name: string, now: { sent: number; taken: number }, sends: number, adds: number) {
   const r = roomOf(now, sends, adds);
@@ -585,19 +585,22 @@ export const alreadyRequestedLine = (names: string[]) => `You already requested 
 
 /** (§208) Who a press can't go to for the limits, and why: grouped into one line per kind and room ("You can send 1 more request to Ana Silva and Ben Carter today."). */
 type Limited = { name: string; room: Room };
-function limitText(list: Limited[], order: Room["kind"][], short = false) {
+function limitText(list: Limited[], order: Room["kind"][]) {
   const groups = new Map<string, { room: Room; names: string[] }>();
   for (const k of order) for (const l of list.filter((x) => x.room.kind === k)) {
     const key = `${l.room.kind}:${l.room.have}`;
     groups.set(key, { room: l.room, names: [...(groups.get(key)?.names ?? []), l.name] });
   }
-  return [...groups.values()].map((g) => roomText(andList(g.names), g.room, short)).join(" ");
+  return [...groups.values()].map((g) => roomText(andList(g.names), g.room)).join(" ");
 }
 
 /**
  * Developer: Request a time with one or more ticked working testers. (Owner, Nov 5, §208) Each row of the form is its OWN request: one batch per row, sent to every
  * ticked tester (the first tester to accept a row's request takes it and that row's other copies close, as before); the rows never close each other. Each counts
  * toward the §185 limits (3 in total, 3 sends a day): a tester the whole press doesn't fit is refused for all of it, saying how many more can go.
+ * (Owner, Nov 2026: refuse naming who can't get it; no partial send) If ANY ticked tester can't get it (at a §185 limit, or busy at that time), the whole press is
+ * refused with the line(s) naming who and why, and nothing is sent to anyone: the developer unticks them (or picks another time) and presses again. No more
+ * "Press again to send to the others" stop-once (§350, NEXT-UI 12b `limitSeen`).
  */
 export async function devRequestTime(dev: U, testId: string, body: Record<string, unknown>) {
   const ids = Array.isArray(body.contractIds) ? body.contractIds.map(String) : body.contractId ? [String(body.contractId)] : [];
@@ -675,6 +678,37 @@ export async function devRequestTime(dev: U, testId: string, body: Record<string
       if (!more) return { match, refused };
     }
   };
+  /**
+   * Who the press can't go to (`skip`: not checked here): a tester at a §185 limit (from the plan), or one a time can't go to: a clash between the two (sendClash)
+   * or (Owner, Nov 6, §292) a time this tester already has booked with another developer or test (only the time is named). Clashes: (§280) no longer the $500.
+   */
+  const cantGet = async (p: Awaited<ReturnType<typeof plan>>, skip: Set<string>) => {
+    const sendRows = kind.each.filter((_, i) => !p.match.has(i));
+    const matchIds = [...p.match.values()].map((m) => m.match.id);
+    const blocked: string[] = [], limited: Limited[] = [];
+    for (const x of all) {
+      if (skip.has(x.c.id)) continue;
+      const lim = p.refused.get(x.c.id);
+      if (lim) {
+        limited.push(lim);
+        continue;
+      }
+      if (!sendRows.length) continue;
+      const clash = await sendClash(x.c.id, sendRows.flatMap((k) => requestTimes(k, end)), reqMinutes, displayName(x.c.tester), matchIds, all.length === 1 ? { side: "developer", otherPoss: pronouns(x.c.tester.pronoun).poss } : undefined, end);
+      const busy = clash ? "" : await recipientBusyClash(x.me, "developer", { id: x.c.testerId, name: displayName(x.c.tester) }, x.c.id, sendRows.flatMap((k) => k.rows), reqMinutes, end);
+      if (clash || busy) blocked.push(clash || busy);
+    }
+    return { sendRows, blocked, limited };
+  };
+  /**
+   * (Owner, Nov 2026: refuse naming who can't get it; no partial send) Any ticked tester who can't get it refuses the whole press, with the clash line(s) then
+   * the §185 limit line(s) ("You already have 3 calls booked or requested with Ana Silva. …" / "You can send 1 more request to Cara Diaz today."): nothing is
+   * sent to anyone, and the developer unticks them or picks another time. One ticked tester: her line alone, as before.
+   */
+  const refuseAny = ({ blocked, limited }: { blocked: string[]; limited: Limited[] }) => {
+    if (all.length === 1 && blocked.length) throw new HttpError(409, "clash", blocked[0]);
+    if (blocked.length || limited.length) throw new HttpError(409, limited.length ? "limit" : "clash", [...blocked, ...(limited.length ? [limitText(limited, ["total", "day"])] : [])].join(" "));
+  };
   // (Owner, Nov 4, §185) Every ticked tester over the limits (3 in total, 3 sent today): refused on the first press, never a stop first. (§208) With several times,
   // the line says how many more can go: "You already have 2 calls or requests with Ana Silva: you can send 1 more." / "You can send 1 more request to Ana Silva today."
   const exempt = new Set<string>();
@@ -689,6 +723,9 @@ export async function devRequestTime(dev: U, testId: string, body: Record<string
     }
     const own = await ownCallClash("developer", dev, all.map((x) => x.c.id), kind.rows, reqMinutes, end);
     if (own) throw new HttpError(409, "clash", own);
+    // (Owner, Nov 2026: refuse naming who can't get it; no partial send; §386 C) Some ticked testers at a limit or busy at that time: a refusal, so before the
+    // stop-once box. A tester whose same time is already requested is left to the "already" line after the box.
+    refuseAny(await cantGet(first, exempt));
   }
   await gate();
   // (Batch 16 section 21) The same time again (e.g. requested in another tab meanwhile): already done, said plainly; the request shows in the panel.
@@ -706,49 +743,15 @@ export async function devRequestTime(dev: U, testId: string, body: Record<string
     const own = await ownCallClash("developer", dev, all.map((x) => x.c.id), kind.rows, reqMinutes, end);
     if (own) throw new HttpError(409, "clash", own);
   }
-  const sendRows = kind.each.filter((_, i) => !p.match.has(i));
-  const matchIds = [...p.match.values()].map((m) => m.match.id);
-  // Clashes per tester (Owner, Nov 6, §280: no longer the $500); (§185) the limits from the plan.
-  const blocked: string[] = [], limited: Limited[] = [], ok: Ctx[] = [];
-  for (const x of all) {
-    const lim = p.refused.get(x.c.id);
-    if (lim) {
-      limited.push(lim);
-      continue;
-    }
-    if (sendRows.length) {
-      const clash = await sendClash(x.c.id, sendRows.flatMap((k) => requestTimes(k, end)), reqMinutes, displayName(x.c.tester), matchIds, all.length === 1 ? { side: "developer", otherPoss: pronouns(x.c.tester.pronoun).poss } : undefined, end);
-      if (clash) {
-        blocked.push(clash);
-        continue;
-      }
-      // (Owner, Nov 6, §292) Never a time this tester already has booked with another developer or test (only the time is named).
-      const busy = await recipientBusyClash(x.me, "developer", { id: x.c.testerId, name: displayName(x.c.tester) }, x.c.id, sendRows.flatMap((k) => k.rows), reqMinutes, end);
-      if (busy) {
-        blocked.push(busy);
-        continue;
-      }
-    }
-    ok.push(x);
-  }
-  if (all.length === 1 && blocked.length) throw new HttpError(409, "clash", blocked[0]);
-  if (all.length === 1 && limited.length) throw new HttpError(409, "limit", limitText(limited, ["total", "day"]));
-  if (!ok.length) throw new HttpError(409, "limit", [...blocked, ...(limited.length ? [limitText(limited, ["total", "day"])] : [])].join(" "));
-  if (blocked.length || limited.length) {
-    // (§185) "You already have 3 calls booked or requested with Ana Silva and Ben Carter." / "You've sent 3 call requests to Cara Diaz today." (§208) / "You can send
-    // 1 more request to Cara Diaz today." (the others go on the second press).
-    const text = [...blocked, ...(limited.length ? [limitText(limited, ["total", "day"], true)] : [])].join(" ");
-    // (Owner, NEXT-UI 12b) The second press names what the box said (limitSeen); if who is blocked / at the limit changed
-    // since, it stops again with the new line.
-    if (body.confirmed !== true || body.limitSeen !== text) {
-      throw new HttpError(409, "stop_once", "Press again to send to the others.", { changes: [{ text, at: new Date() }], tail: `Press again to send to the others (${ok.map((x) => displayName(x.c.tester)).join(", ")}).`, limit: true, /* (§350) who goes on the next press */ sendTo: ok.map((x) => x.c.id), limitSeen: text });
-    }
-  }
+  // (Owner, Nov 2026: refuse naming who can't get it; no partial send) Checked again after the box (it can have changed meanwhile): any ticked tester who can't
+  // get it still refuses the whole press; otherwise it goes to every ticked tester.
+  const { sendRows, ...cant } = await cantGet(p, new Set());
+  refuseAny(cant);
+  const ok = all;
   // The auto-matches book first (each turns their request into one booked time; §184: its own match is booked here, never dropped).
   const callIds: string[] = [];
   let bookedLine = "";
   for (const m of p.match.values()) {
-    if (!ok.includes(m.x)) continue;
     const c = m.x.c;
     const call = await bookAt(c.id, m.hit, m.match.minutes, bookRate(c.test, c), null, true, false, { id: m.match.id });
     await db.callRequest.update({ where: { id: m.match.id }, data: { status: "booked", callId: call.id, decidedAt: new Date(), closedReason: "matched" } });
