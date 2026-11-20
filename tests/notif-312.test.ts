@@ -69,7 +69,7 @@ describe("§312c and §312d: lines removed", () => {
     expect(t).not.toContain("keyGivenToYouLine(displayName(dev), result.title)");
     expect(t).toContain("for (const g of keysGiven) await logEvent(testId, KEY_GIVEN,");
     expect(t).not.toContain("`Work sent: your ${part} for");
-    expect(t).toContain("if (added) await notify(tester.email, youAddedLine(");
+    expect(t).not.toContain("await notify(tester.email, youAddedLine("); // (Owner, Nov 11) the addition's own line is gone too
     const f = await setup();
     const a = await joined(f.testId, "Ana Silva");
     const n = ((await db.contract.findUniqueOrThrow({ where: { id: a.sessionId } })).questions as string[]).length || 1;

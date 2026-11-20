@@ -1725,7 +1725,7 @@ export async function tellSentByBell(
   // (Owner, Nov 6, §295) An addition doesn't read as a second send: "You added to your answer to “…” on “Harbor Run”" (Anything else: "You added to your notes on
   // …"). (Owner, Nov 6, §312d) A first send rings nothing for the tester any more (it was "Work sent: your written answers for …"); the addition's line is asked
   // about: removing it is this one line.
-  if (added) await notify(tester.email, youAddedLine(c0.test.title, part, n, question), [`What you added ${part === "recording" ? `to your ${part}` : addedToWhat("your", question)} was sent to ${dev}.`], `/app/sessions/${c0.id}#${anchor}`);
+  // (Owner, Nov 11) No bell line or email about the tester's own addition either (it was "You added to your notes / answer on …"): her own press, seen on her page.
   if (afterPaid) return notifyPaidUpdate(c0, tester, sub.id, part, afterPaid, n, question);
   const title = added ? `${name} ${addedWhat(poss, part, n, question)} for “${c0.test.title}”` : `${name} sent ${part === "recording" ? "a recording" : part} for “${c0.test.title}”`;
   const what = added ? addedWhat(poss, part, n, question) : `sent ${poss} ${part === "recording" ? "screen recording" : part}`;

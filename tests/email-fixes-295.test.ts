@@ -97,7 +97,7 @@ describe("§295 point 1: testers are told when a test pauses", () => {
 });
 
 describe("§295 point 3: an addition doesn't read as a second send", () => {
-  it("Ana's own line names what she added; the developer's line is unchanged", async () => {
+  it("Ana gets no line for her own addition (Owner, Nov 11); the developer's line is unchanged", async () => {
     const w = await world();
     await sact(w.sessionId, "written", w.tester.cookie, { answers: ["a", "b"] });
     await settle();
@@ -108,14 +108,13 @@ describe("§295 point 3: an addition doesn't read as a second send", () => {
     expect((await sact(w.sessionId, "written-add", w.tester.cookie, { text: "And a note", question: ANYTHING_ELSE_KEY, seenAt: seen(), confirmed: true })).status).toBe(200);
     const ana = (await lines(w.anaId)).map((n) => n.text);
     expect(ana.filter((t) => t.startsWith("Work sent:"))).toEqual([]); // (Owner, Nov 6, §312d) no line for a first send any more
-    expect(ana).toContain("You added to your answer to “What did you like?” on “Harbor Run”");
-    expect(ana).toContain("You added to your notes on “Harbor Run”");
+    expect(ana.filter((t) => t.startsWith("You added"))).toEqual([]); // (Owner, Nov 11) no line for her own addition either
     const dev = (await lines(w.devId)).map((n) => n.text);
     expect(dev).toContain("Ana Silva added to her answer to “What did you like?” for “Harbor Run”");
     expect(dev).toContain("Ana Silva added to “Anything else” in her written answers for “Harbor Run”");
     // In her summary too.
     await sendSummaries(new Date(), [w.anaId]);
-    expect((await mails(w.tester.user.email)).at(-1)!.text).toContain("• You added to your answer to “What did you like?” on “Harbor Run”");
+    expect((await mails(w.tester.user.email)).map((m) => m.text).join(" | ")).not.toContain("You added to your");
   });
 
   it("the line's other shapes: a long question is cut; recordings; an addition with no question", () => {
