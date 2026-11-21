@@ -7,7 +7,7 @@ import { renderTimes, safeZone } from "@/lib/tz";
 import { BOOKED_GROUP, bellKeyIn, bellStacks, stackHeading } from "@/lib/bell";
 import { appUrl } from "./auth";
 import { MORNING_FULL, MORNING_SHORT, replacePendingMorning, sendEmail } from "./email";
-import { REMINDER_ONLY_GROUPS } from "@/lib/reminderPolicy";
+import { newestOnlyEverywhere, REMINDER_ONLY_GROUPS } from "@/lib/reminderPolicy";
 import { namesFor, renderNames } from "./lineNames";
 
 // Every update goes to the person's bell. Email follows their setting: each update (default), one daily summary,
@@ -51,7 +51,7 @@ export type Opts = { recipientId?: string; side?: Side | null; always?: boolean;
   /** (Owner, Nov 11, §383 7) with `now`: the email is never delivered after this moment (the call reminder: the call's start); the bell keeps the line */ expiresAt?: Date };
 
 /**
- * `reminder`: (Owner, Oct 27) names a reminder ("invite:<id>"): reminders also go in the summary email, each line once; a Weekly or Monthly email shows only the newest copy of each.
+ * `reminder`: (Owner, Oct 27) names a reminder ("invite:<id>"): reminders also go in the summary email, each line once; a Weekly or Monthly email shows only the newest copy of each, and every morning email the newest copy of an invite or applications reminder (NEWEST_ONLY_EVERYWHERE).
  * `group`: lines with the same group stack together on one day even across tests (see lib/bell.ts). `payment`: payment-related (failures, holds, retries, paid,
  * rejected, delayed, payouts, chargebacks): it is its own line unless it has a group, and it also goes out in the morning payment email.
  */
@@ -326,8 +326,11 @@ export async function sendSummaries(now = new Date(), only?: string[]) {
       continue;
     }
     // (Owner, Oct 27) Reminders go in the summary email too, each line once. A Weekly or Monthly email shows only the newest copy of each reminder (the older copies are marked done).
+    // (Owner, Nov 2026: one copy of an invite or applications reminder per email, whatever the setting) The keys in NEWEST_ONLY_EVERYWHERE collapse the same
+    // way in every morning email (Daily and the short emails too), including copies carried from a replaced email. `all` runs oldest to newest.
     const newest = new Map<string, string>();
-    if (due && (u.emailPref === "weekly" || u.emailPref === "monthly")) for (const n of all) if (n.reminderKey) newest.set(`${n.side}:${n.reminderKey}`, n.id);
+    const collapseEvery = due && (u.emailPref === "weekly" || u.emailPref === "monthly");
+    for (const n of all) if (n.reminderKey && (collapseEvery || newestOnlyEverywhere(n.reminderKey))) newest.set(`${n.side}:${n.reminderKey}`, n.id);
     const items = all.filter((n) => !n.reminderKey || !newest.has(`${n.side}:${n.reminderKey}`) || newest.get(`${n.side}:${n.reminderKey}`) === n.id);
     const dropped = all.filter((n) => !items.includes(n)).map((n) => n.id);
     try {
