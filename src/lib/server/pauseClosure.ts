@@ -27,6 +27,7 @@ export async function closePausedTest(testId: string, by: "daily" | "admin", now
   const reason = pauseClosedReason(info.causes, by);
   const cs = await db.contract.findMany({ where: { testId, status: "working" }, include: { tester: true, test: { select: { title: true } } } });
   let invitesClosed: string[] = [];
+  let appsClosed: string[] = [];
   const cancelled = await db.$transaction(async (tx) => {
     // (Nov 2, §119) The same test lock as Stop: two Close nows (or a Close now and a Stop) at once can't both close it; the second reads who did it once settled.
     await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${testId} FOR UPDATE`;
@@ -39,6 +40,7 @@ export async function closePausedTest(testId: string, by: "daily" | "admin", now
     await tx.callRequest.updateMany({ where: { contractId: { in: cs.map((c) => c.id) }, status: "pending" }, data: { status: "closed", closedReason: "the test ended", decidedAt: now } });
     await tx.callSlot.updateMany({ where: { testId, status: "open" }, data: { status: "removed" } });
     await tx.invite.updateMany({ where: { testId, status: "sent" }, data: { status: "cancelled" } });
+    appsClosed = await (await import("./blocks")).pendingAppIds(testId, tx); // (Owner, Nov 22 2026) each applicant is told (below)
     await tx.application.updateMany({ where: { testId, status: "pending" }, data: { status: "closed", closedReason: "stopped", decidedAt: now } });
     await recordEvent(tx, testId, "stopped", "The test was closed", true, { status: "stopped", stoppedAt: now, pauseClosedAt: now, pauseClosedReason: reason, ...(by === "admin" ? { adminStoppedById: adminId } : {}) });
     return list;
@@ -46,6 +48,7 @@ export async function closePausedTest(testId: string, by: "daily" | "admin", now
   if (!cancelled) return { closed: false };
   await tellCancelled(cancelled, "closed");
   await (await import("./invites")).tellInvitesClosed(invitesClosed); // (batch 30 §6)
+  await (await import("./blocks")).tellAppsClosed(appsClosed, "closed"); // (Owner, Nov 22 2026) like invited testers
   for (const c of cs) await notify(c.tester.email, `“${c.test.title}” ended`, [`“${c.test.title}” ended. Work you already sent is still reviewed and paid. Calls ahead are cancelled.`], `/app/sessions/${c.id}`, { group: "tstopped", always: true /* (Owner, Nov 2026: emailed whatever the setting) */ });
   // (A system explanation, never a typed reason: it stays in the line.)
   // (Owner, Nov 11, §390 a) With the calls the closure cancelled: "… Your call with Ana Silva on … was cancelled."

@@ -60,9 +60,10 @@ export async function closeWorkIfDueIn(tx: Prisma.TransactionClient, testId: str
   await tx.callRequest.updateMany({ where: { contractId: { in: ids }, status: "pending" }, data: { status: "closed", closedReason: "the test ended", decidedAt: at } });
   await tx.callSlot.updateMany({ where: { testId, status: "open" }, data: { status: "removed" } });
   await tx.invite.updateMany({ where: { testId, status: "sent" }, data: { status: "cancelled" } });
+  const appsClosed = await (await import("./blocks")).pendingAppIds(testId, tx); // (Owner, Nov 22 2026) each applicant is told (afterWorkClosed)
   await tx.application.updateMany({ where: { testId, status: "pending" }, data: { status: "closed", closedReason: "stopped", decidedAt: at } });
   await recordEvent(tx, testId, "stopped", "The test was closed", true, { status: "closed", workEndedAt: at });
-  return { at, cancelled, ending };
+  return { at, cancelled, ending, appsClosed };
 }
 
 /** What a closure tells once its transaction is committed: the testers' bells, the calls at the deadline, the cancelled calls. */
@@ -74,6 +75,7 @@ export async function afterWorkClosed(testId: string, result: NonNullable<Awaite
   await (await import("./tests")).tellCancelled(result.cancelled, "closed");
   // (Owner, Nov 11, §390 a) The developer didn't cause it either: their bell names each call.
   await (await import("./tests")).tellDevCancelled(result.cancelled, "the test ended");
+  await (await import("./blocks")).tellAppsClosed(result.appsClosed, "closed"); // (Owner, Nov 22 2026) like invited testers
 }
 
 /** Checked on the live beat as well as daily, so unattended tests also finish. */

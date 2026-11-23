@@ -913,6 +913,7 @@ export async function stopTest(dev: U, testId: string, body: Record<string, unkn
   };
   let cancelled: Awaited<ReturnType<typeof cancelCallsAhead>> = [];
   let invitesClosed: string[] = [];
+  let appsClosed: string[] = [];
   const contracts = await db.$transaction(async (tx) => {
     const t = await lockTest(tx, testId);
     // (Owner, Nov 11, §380; replaces batch 16 section 21's stop then refusal) Already stopped: what Stop wanted, so no stop box and no refusal (the page redraws).
@@ -929,6 +930,7 @@ export async function stopTest(dev: U, testId: string, body: Record<string, unkn
     await closeOffersOfEnded(tx, cs.map((c) => c.id)); // (batch 35 §118)
     await tx.callRequest.updateMany({ where: { contractId: { in: cs.map((c) => c.id) }, status: "pending" }, data: { status: "closed", closedReason: "the test was stopped", decidedAt: new Date() } });
     // (Owner, Oct 31, batch 35 §83) Waiting applications and rejoin asks close too, like the team's Stop (restrictions.ts): nothing left to Accept on a stopped test.
+    appsClosed = await (await import("./blocks")).pendingAppIds(testId, tx); // (Owner, Nov 22 2026) each applicant is told (below)
     await tx.application.updateMany({ where: { testId, status: "pending" }, data: { status: "closed", closedReason: "stopped", decidedAt: new Date() } });
     await tx.callSlot.updateMany({ where: { testId, status: "open" }, data: { status: "removed" } });
     invitesClosed = await (await import("./invites")).openInviteIds({ testId }, tx);
@@ -939,6 +941,7 @@ export async function stopTest(dev: U, testId: string, body: Record<string, unkn
   if (!contracts) return { stopped: true, testers: 0, already: true };
   await tellCancelled(cancelled, "stopped");
   await (await import("./invites")).tellInvitesClosed(invitesClosed); // (batch 30 §6)
+  await (await import("./blocks")).tellAppsClosed(appsClosed, "stopped"); // (Owner, Nov 22 2026) like invited testers
   // (Batch 17 §15) The reason in full in the email, never in the bell line.
   for (const c of contracts)
     await notify(c.tester.email, `“${c.test.title}” was stopped`, [`${displayName(dev)} stopped “${c.test.title}”: “${reason}”`, "Your work on it has ended. Work you already sent is still reviewed and paid. Calls ahead are cancelled."], `/app/sessions/${c.id}`, { group: "tstopped", always: true /* (Owner, Nov 2026: emailed whatever the setting) */ });

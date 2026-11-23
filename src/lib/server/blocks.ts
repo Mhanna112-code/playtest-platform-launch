@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { ACCOUNT_WAS_DELETED, displayName, fmtTime } from "@/lib/format";
 import { joinCallRefusal, testPaused } from "@/lib/rules";
@@ -138,6 +139,30 @@ export async function blockUser(me: { id: string; email: string; name: string },
 
 /** The tester's line when a block closed their application: "“Harbor Run”: your application was closed." */
 export const appClosedLine = (title: string) => `“${title}”: your application was closed.`;
+
+/**
+ * (Owner, Nov 22 2026) applicants are told when a stop or closure closes their application, like invited testers (tellInvitesClosed). A Stop (the developer's,
+ * the team's, or a deleted developer's tests): "“Harbor Run” was stopped, so your application was closed."; a closure (a pause running out, the work ending):
+ * "“Harbor Run” closed, so your application was closed." A rejoin ask reads "your ask to rejoin was closed". In "Applications and invites", following the email setting.
+ */
+export const appStoppedLine = (title: string, how: "stopped" | "closed", rejoin = false) =>
+  `“${title}” ${how === "stopped" ? "was stopped" : "closed"}, so your ${rejoin ? "ask to rejoin" : "application"} was closed.`;
+/** The pending applications and rejoin asks a stop or closure is about to close (read in its transaction, before the close; told by tellAppsClosed after it). */
+export const pendingAppIds = async (testId: string, tx: Prisma.TransactionClient | typeof db = db) =>
+  (await tx.application.findMany({ where: { testId, status: "pending" }, select: { id: true } })).map((a) => a.id);
+/** Each applicant whose application (or rejoin ask) the stop or closure closed reads appStoppedLine; deleted accounts are skipped. */
+export async function tellAppsClosed(appIds: string[], how: "stopped" | "closed") {
+  if (!appIds.length) return;
+  const list = await db.application.findMany({ where: { id: { in: appIds }, status: "closed", closedReason: "stopped" }, select: { testId: true, testerId: true, kind: true } });
+  const titles = new Map((await db.test.findMany({ where: { id: { in: list.map((a) => a.testId) } }, select: { id: true, title: true } })).map((t) => [t.id, t.title]));
+  const people = new Map((await db.user.findMany({ where: { id: { in: list.map((a) => a.testerId) }, deletedAt: null }, select: { id: true, email: true } })).map((u) => [u.id, u.email]));
+  for (const a of list) {
+    const to = people.get(a.testerId);
+    if (!to) continue;
+    const line = appStoppedLine(titles.get(a.testId) ?? "", how, a.kind === "rejoin");
+    await notify(to, line, [line], `/app/find/${a.testId}`, { recipientId: a.testerId, group: "apps", testId: a.testId });
+  }
+}
 
 export async function unblockUser(me: { id: string }, otherId: string) {
   await db.block.deleteMany({ where: { blockerId: me.id, blockedId: otherId } });
