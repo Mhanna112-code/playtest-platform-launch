@@ -524,6 +524,11 @@ describe("the final list of emails that ignore Off, and each notification emaile
     // fewer: the line while a suspension continues is gone.
     // (Owner, Dec 2026) tests.ts one: cancelledOpts, every notice that a booked call was cancelled by anything but the reader's own press (the morning email
     // whatever the setting, in the test's own stack).
-    expect(names).toEqual(["tests.ts", "calls.ts", "calls.ts", "chargeback.ts", "chargeback.ts", "chargeback.ts", "confirm.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "pauseClosure.ts", "pauseClosure.ts", "pauseClosure.ts", "ratings.ts", "ratings.ts", "requests.ts", "requests.ts", "requests.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts"].sort());
+    // (Owner, Dec 2026) holds.ts one more: the developer's Open until heads-ups (in the morning email whatever the setting, like review).
+    // (Owner, Nov 2026) The tester's test stopped / ended / work ended early lines (tstopped), emailed whatever the setting: tests.ts two (the developer's Stop,
+    // End early), restrictions.ts two (the developer deleting their account, the team's Stop), pauseClosure.ts one (a paused test closed), workWindow.ts one (the
+    // work deadline passed). Her joined lines: joining.ts six (You're in / You're back in on Accept, an Invite meeting an application or ask, the
+    // switch to Anyone). "wasn't accepted" and "A spot opened" follow the setting.
+    expect(names).toEqual(["tests.ts", "tests.ts", "tests.ts", "joining.ts", "joining.ts", "joining.ts", "joining.ts", "joining.ts", "joining.ts", "workWindow.ts", "pauseClosure.ts", "restrictions.ts", "restrictions.ts", "holds.ts", "calls.ts", "calls.ts", "chargeback.ts", "chargeback.ts", "chargeback.ts", "confirm.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "pauseClosure.ts", "pauseClosure.ts", "pauseClosure.ts", "ratings.ts", "ratings.ts", "requests.ts", "requests.ts", "requests.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts"].sort());
   });
 });

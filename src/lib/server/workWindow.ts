@@ -69,7 +69,7 @@ export async function closeWorkIfDueIn(tx: Prisma.TransactionClient, testId: str
 export async function afterWorkClosed(testId: string, result: NonNullable<Awaited<ReturnType<typeof closeWorkIfDueIn>>>, now = new Date()) {
   // (§286) In the words of the same closure's other bells (a pause running out, pauseClosure): "“Harbor Run” ended", in the day's "Tests stopped or ended" stack.
   const { notify } = await import("./notify");
-  for (const c of result.ending) await notify(c.tester.email, `“${c.test.title}” ended`, [`“${c.test.title}” ended. Work you already sent is still reviewed and paid. Calls ahead are cancelled.`], `/app/sessions/${c.id}`, { recipientId: c.testerId, group: "tstopped" });
+  for (const c of result.ending) await notify(c.tester.email, `“${c.test.title}” ended`, [`“${c.test.title}” ended. Work you already sent is still reviewed and paid. Calls ahead are cancelled.`], `/app/sessions/${c.id}`, { recipientId: c.testerId, group: "tstopped", always: true /* (Owner, Nov 2026: emailed whatever the setting) */ });
   await (await import("./calls")).endCallsAtWorkDeadline(testId, result.at, now);
   await (await import("./tests")).tellCancelled(result.cancelled, "closed");
   // (Owner, Nov 11, §390 a) The developer didn't cause it either: their bell names each call.

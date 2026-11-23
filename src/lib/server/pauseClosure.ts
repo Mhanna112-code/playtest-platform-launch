@@ -46,7 +46,7 @@ export async function closePausedTest(testId: string, by: "daily" | "admin", now
   if (!cancelled) return { closed: false };
   await tellCancelled(cancelled, "closed");
   await (await import("./invites")).tellInvitesClosed(invitesClosed); // (batch 30 §6)
-  for (const c of cs) await notify(c.tester.email, `“${c.test.title}” ended`, [`“${c.test.title}” ended. Work you already sent is still reviewed and paid. Calls ahead are cancelled.`], `/app/sessions/${c.id}`, { group: "tstopped" });
+  for (const c of cs) await notify(c.tester.email, `“${c.test.title}” ended`, [`“${c.test.title}” ended. Work you already sent is still reviewed and paid. Calls ahead are cancelled.`], `/app/sessions/${c.id}`, { group: "tstopped", always: true /* (Owner, Nov 2026: emailed whatever the setting) */ });
   // (A system explanation, never a typed reason: it stays in the line.)
   // (Owner, Nov 11, §390 a) With the calls the closure cancelled: "… Your call with Ana Silva on … was cancelled."
   // (Owner, Nov 11, §390 d) And how many open invites it closed: "… 3 open invites were closed."

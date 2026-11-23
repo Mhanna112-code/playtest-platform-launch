@@ -101,8 +101,12 @@ export async function notify(to: string, subject0: string, lines0: string[], pat
     }
     return;
   }
-  // (Owner, Oct 27) Nothing is emailed right away: the notification waits for the person's email (the summary, or the morning payment email). `always` marks the few
-  // that ignore Off (account paused / active again, the team pausing / stopping / closing a test, the owed reminder): they ride in ONE morning email, once.
+  // (Owner, Oct 27) Nothing is emailed right away: the notification waits for the person's email (the summary, or the morning payment email). `always` marks the lines
+  // that ignore Off: they ride in ONE morning email, once. Today: an account or side paused / active again; holds and chargebacks starting, changing or lifted, and the
+  // developer's owed / hold / confirm-a-payment / Pay now / review / close-out / Open until reminders; the team pausing / lifting / stopping / closing a test or moving its close; a test paused or
+  // running again (tester); booked calls, a call cancelled (cancelledOpts) and the call reminder (`now`); the tester's deadline reminders, Charge or let go, and the
+  // last rating reminders; and (Owner, Nov 2026) the tester's test stopped / ended / work ended early lines (`tstopped`) and her "You're in" / "You're back in" lines
+  // (accepted or joined). Her "wasn't accepted" and "A spot opened" lines follow the setting.
   await client.notification.create({ data: { side: lineSide(user.id, path, opts.side), userId: user.id, text: subject, names, link: path, testId, mustEmail: !!opts.always, reminderKey: opts.reminder ?? null, ...flags(opts) } });
 }
 

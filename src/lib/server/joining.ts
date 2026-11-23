@@ -538,10 +538,10 @@ export async function decideApplication(dev: U, testId: string, body: Record<str
     .catch(async (e) => { throw e instanceof HttpError && e.code === "application_gone" ? await goneNow() : e; });
   if (isRejoin) {
     const line = `You're back in ${t.title}: your deadline is ${T(c.dueAt)}.`;
-    await notify(tester.email, line, [line, `Your session is restored on the current listing: ${termsLine(c, true)}.`], `/app/sessions/${c.id}`, { about: dev.id, group: "joined" });
+    await notify(tester.email, line, [line, `Your session is restored on the current listing: ${termsLine(c, true)}.`], `/app/sessions/${c.id}`, { about: dev.id, group: "joined", always: true /* (Owner, Nov 2026: emailed whatever the setting) */ });
     return { accepted: true, sessionId: c.id, line: `${name} rejoined: ${pronouns(tester.pronoun).poss} deadline is ${fmtDateTime(c.dueAt)}.` };
   }
-  await notify(tester.email, `You're in: ${t.title}`, [`You're in: ${t.title}. Your contract: ${termsLine(c, true)}.`], `/app/sessions/${c.id}`, { group: "joined" });
+  await notify(tester.email, `You're in: ${t.title}`, [`You're in: ${t.title}. Your contract: ${termsLine(c, true)}.`], `/app/sessions/${c.id}`, { group: "joined", always: true /* (Owner, Nov 2026: emailed whatever the setting) */ });
   return { accepted: true, sessionId: c.id };
 }
 
@@ -572,7 +572,7 @@ export async function onSwitchToAnyone(testId: string) {
       const c = await joinTest({ ...tester, isTester: true }, testId, {
         listingVersion: t.listingVersion, confirmed: true, anyway: true, acceptedByDeveloper: true,
       }, { applicationId: a.id, quietJoinEvent: true });
-      await notify(tester.email, `You're in: ${t.title}`, [`You're in: ${t.title}.`], `/app/sessions/${c.id}`, { group: "joined" });
+      await notify(tester.email, `You're in: ${t.title}`, [`You're in: ${t.title}.`], `/app/sessions/${c.id}`, { group: "joined", always: true /* (Owner, Nov 2026: emailed whatever the setting) */ });
       accepted++;
     } catch (error) {
       if (error instanceof HttpError && error.code === "application_gone") continue;
@@ -724,9 +724,9 @@ export async function matchInviteAndAsk(testId: string, testerId: string, opts: 
   await db.application.update({ where: { id: app.id }, data: { status: opts.byDeveloper ? "accepted" : "joined", decidedAt: new Date() } });
   if (opts.byDeveloper) {
     // As Accept (decideApplication) tells them.
-    if (back) await notify(tester.email, `You're back in ${t.title}: your deadline is ${T(c.dueAt)}.`, [`You're back in ${t.title}: your deadline is ${T(c.dueAt)}.`, `Your session is restored on the current listing: ${termsLine(c, true)}.`], `/app/sessions/${c.id}`, { about: t.developerId, group: "joined" });
-    else await notify(tester.email, `You're in: ${t.title}`, [`You're in: ${t.title}. Your contract: ${termsLine(c, true)}.`], `/app/sessions/${c.id}`, { group: "joined" });
-  } else await notify(tester.email, back ? `You're back in ${t.title}` : `You're in: ${t.title}`, [back ? `You're back in ${t.title}: your deadline is ${T(c.dueAt)}.` : `You're in: ${t.title}.`], `/app/sessions/${c.id}`, { about: t.developerId, group: "joined" });
+    if (back) await notify(tester.email, `You're back in ${t.title}: your deadline is ${T(c.dueAt)}.`, [`You're back in ${t.title}: your deadline is ${T(c.dueAt)}.`, `Your session is restored on the current listing: ${termsLine(c, true)}.`], `/app/sessions/${c.id}`, { about: t.developerId, group: "joined", always: true /* (Owner, Nov 2026: emailed whatever the setting) */ });
+    else await notify(tester.email, `You're in: ${t.title}`, [`You're in: ${t.title}. Your contract: ${termsLine(c, true)}.`], `/app/sessions/${c.id}`, { group: "joined", always: true /* (Owner, Nov 2026: emailed whatever the setting) */ });
+  } else await notify(tester.email, back ? `You're back in ${t.title}` : `You're in: ${t.title}`, [back ? `You're back in ${t.title}: your deadline is ${T(c.dueAt)}.` : `You're in: ${t.title}.`], `/app/sessions/${c.id}`, { about: t.developerId, group: "joined", always: true /* (Owner, Nov 2026: emailed whatever the setting) */ });
   await notify(t.developer.email, `${displayName(tester)} ${back ? "rejoined" : "joined"} “${t.title}”`, [`${displayName(tester)} ${back ? "rejoined" : "joined"} (you'd invited ${pronouns(tester.pronoun).obj} and ${pronouns(tester.pronoun).subj === "they" ? "they'd" : `${pronouns(tester.pronoun).subj} had`} asked).`], `/app/tests/${testId}#tester-${c.id}`, { about: testerId, testId }); // (Owner, Nov 6, §308) a plain per-test line: the test's own "Harbor Run · N updates" stack
   return c;
 }

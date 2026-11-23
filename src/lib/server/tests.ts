@@ -941,7 +941,7 @@ export async function stopTest(dev: U, testId: string, body: Record<string, unkn
   await (await import("./invites")).tellInvitesClosed(invitesClosed); // (batch 30 §6)
   // (Batch 17 §15) The reason in full in the email, never in the bell line.
   for (const c of contracts)
-    await notify(c.tester.email, `“${c.test.title}” was stopped`, [`${displayName(dev)} stopped “${c.test.title}”: “${reason}”`, "Your work on it has ended. Work you already sent is still reviewed and paid. Calls ahead are cancelled."], `/app/sessions/${c.id}`, { group: "tstopped" });
+    await notify(c.tester.email, `“${c.test.title}” was stopped`, [`${displayName(dev)} stopped “${c.test.title}”: “${reason}”`, "Your work on it has ended. Work you already sent is still reviewed and paid. Calls ahead are cancelled."], `/app/sessions/${c.id}`, { group: "tstopped", always: true /* (Owner, Nov 2026: emailed whatever the setting) */ });
   // (Owner, Nov 11, §390 d) The developer's own Stop says how many open invites it closed (its done line): "You stopped the test; 3 open invites were closed."
   const invites = (await import("./invites")).invitesClosedTail(invitesClosed.length);
   return { stopped: true, testers: contracts.length, ...(invites ? { done: `${withTail("You stopped the test", invites)}.` } : {}) };
@@ -1010,7 +1010,7 @@ export async function endEarly(dev: U, testId: string, body: Record<string, unkn
   });
   await tellCancelled(cancelled, "ended");
   for (const c of ended)
-    await notify(c.tester.email, `Your work on “${c.test.title}” was ended early`, [`${displayName(dev)} ended your work on “${c.test.title}”: “${reason}”`, "Work you already sent is still reviewed and paid. Calls ahead are cancelled."], `/app/sessions/${c.id}`, { about: dev.id, group: "tstopped" });
+    await notify(c.tester.email, `Your work on “${c.test.title}” was ended early`, [`${displayName(dev)} ended your work on “${c.test.title}”: “${reason}”`, "Work you already sent is still reviewed and paid. Calls ahead are cancelled."], `/app/sessions/${c.id}`, { about: dev.id, group: "tstopped", always: true /* (Owner, Nov 2026: emailed whatever the setting) */ });
   await spotOpened(testId);
   // (§278) With refusal lines for ticked testers already out: the done line they show beside.
   if (!ended.length) return { ended: true, count: 0, endedIds: [], already: true }; // (§380 I) already what the press wanted

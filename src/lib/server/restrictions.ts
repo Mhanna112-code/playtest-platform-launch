@@ -326,7 +326,7 @@ export async function deleteAccount(userId: string, by: "self" | "admin", reason
       });
       await tellCancelled(cancelled, "stopped");
       await (await import("./invites")).tellInvitesClosed(invitesClosed); // (batch 30 §6)
-      for (const c of cs) await notify(c.tester.email, `“${c.test.title}” was stopped`, [`“${c.test.title}” was stopped. Work you already sent is still reviewed and paid. Calls ahead are cancelled.`], `/app/sessions/${c.id}`, { group: "tstopped" });
+      for (const c of cs) await notify(c.tester.email, `“${c.test.title}” was stopped`, [`“${c.test.title}” was stopped. Work you already sent is still reviewed and paid. Calls ahead are cancelled.`], `/app/sessions/${c.id}`, { group: "tstopped", always: true /* (Owner, Nov 2026: emailed whatever the setting) */ });
     }
   }
   // (Owner, Nov 3) Testers' Charges and team decisions that were waiting for a hold (or a suspension) to end are charged to the saved card now: a deleted
@@ -553,7 +553,7 @@ export async function adminStopTest(testId: string, note: string, adminId: strin
   });
   await tellCancelled(cancelled, "stopped");
   await (await import("./invites")).tellInvitesClosed(invitesClosed); // (batch 30 §6) never who
-  for (const c of cs) await notify(c.tester.email, `“${c.test.title}” was stopped`, [`“${c.test.title}” was stopped. Work you already sent is still reviewed and paid. Calls ahead are cancelled.`], `/app/sessions/${c.id}`, { group: "tstopped" });
+  for (const c of cs) await notify(c.tester.email, `“${c.test.title}” was stopped`, [`“${c.test.title}” was stopped. Work you already sent is still reviewed and paid. Calls ahead are cancelled.`], `/app/sessions/${c.id}`, { group: "tstopped", always: true /* (Owner, Nov 2026: emailed whatever the setting) */ });
   // (Owner, Nov 11, §390 a) With the calls the stop cancelled: "The team stopped “…”; your call with Ana Silva on … was cancelled".
   await notify(t.developer.email, withTail(withTail(`The team stopped “${t.title}”`, devCallsGoneTail(cancelled)), (await import("./invites")).invitesClosedTail(invitesClosed.length)) /* (§390 d) */, [`The team stopped “${t.title}”${note ? `: ${note}` : "."}`, "What testers sent still waits for you to pay. Contact us in Settings if you think this is a mistake."], `/app/tests/${testId}`, { always: true, group: "payhold" }); // (batch 29 §33) in the day's "Payments and holds" entry with the hold lines
   return { ok: true };
