@@ -24,7 +24,7 @@ import { PAUSE_CLOSE_DAYS } from "@/lib/pause";
 import { callMinutesOf } from "@/lib/callMeasure";
 import { callReference, disputeDecisionName, disputedCentsOf, movedDue, nearestDayEnd, partOf, pausedUntil, pieceName, reversedOf, reversedPart, reversedWords, paymentWords, OWED_OVER_TICK, PAY_TICK_CENTS } from "@/lib/rules";
 import { callsLeftCents } from "./callMoney";
-import { callChargeAt, closedOut, disputeClosedFor, lastLift, moneySpans, pieceCloseOut } from "./closeOut";
+import { callChargeAt, closedOut, disputeClosedFor, lastLift, moneySpans, pieceCloseOut, testerPauseSpans } from "./closeOut";
 import { DAILY_LOCK_WAIT_MS, withTimersLock } from "./timers";
 import { pieceWords } from "@/lib/bankTop";
 import { describedOnce, stripeDescription } from "./paymentRows";
@@ -1830,6 +1830,19 @@ async function moneyLiftedAt(testIds: string[], now: Date) {
   }
   return at;
 }
+/**
+ * (Owner, Nov 26 2026) When the tester's Charge lines last came back from a freeze: the money of any of her listed pieces' tests (moneyLiftedAt) or her own
+ * tester-side suspension (testerPauseSpans, from her suspended / reinstated AccountEvents, as pieceCloseOut counts it), or null.
+ */
+async function testerChargeLiftedAt(testerId: string, testIds: string[], now: Date) {
+  const money = await moneyLiftedAt(testIds, now);
+  const [u, events] = await Promise.all([
+    db.user.findUnique({ where: { id: testerId }, select: { testerSuspendedAt: true } }),
+    db.accountEvent.findMany({ where: { userId: testerId, kind: { in: ["suspended", "reinstated"] } }, select: { kind: true, side: true, createdAt: true } }),
+  ]);
+  const own = lastLift(testerPauseSpans(events, u?.testerSuspendedAt ?? null, now), now);
+  return !own || (money && money > own) ? money : own;
+}
 /** (§383) The mark a piece gets once a "Pay now" line has named it (in its devMarks, beside the "tc:" and review marks). */
 const PAY_NOW_MARK = "pn";
 /**
@@ -1886,6 +1899,9 @@ async function payNowLines(now: Date, co: CloseOuts, /** (§383) the daily job: 
  * stops when nothing is open. Emailed whatever the setting (money);
  * waits while the tester side is suspended. Never names a hold, a suspension or a failure. (Owner, Dec 2026: one line a day, a lift included) §367's fresh line
  * for a moved date never comes on a UTC day that already had her line; the moved dates count as named, and the 3-day slot names them.
+ * (Owner, Nov 26 2026) after a freeze lifts, one fresh line even when no date was named (like Pay now): a money freeze of one of her listed pieces' tests, or her
+ * own tester-side suspension, that ENDED after her last line and on a later UTC day than it gives ONE line at once (from the 5-minute sweep too), naming the
+ * dates known now; the 3 days count from it. Not when her line already went out earlier today (UTC): a lift on the day of a line gets none (the 3-day slot).
  */
 async function testerChargeLines(now: Date, co: CloseOuts, /** (§383) the daily job: the repeats too */ repeats: boolean) {
   const byTester = new Map<string, (OpenPiece & { marks: string[]; offered: Date | null })[]>();
@@ -1906,7 +1922,10 @@ async function testerChargeLines(now: Date, co: CloseOuts, /** (§383) the daily
     // (Owner, Dec 2026: one line a day, a lift included) A moved date gets no fresh line when her line already went out earlier today (UTC), nor tomorrow: the
     // next is the 3-day slot from today's line, naming the dates then. The moved dates count as named now (below), so they don't fire tomorrow.
     const movedNow = moved && !(last && utcDayNo(last) === utcDayNo(now));
-    if (!movedNow && !moneyLineDue(last, fresh.length > 0, repeats, now)) {
+    // (Owner, Nov 26 2026) A freeze lifted since her last line (her line is dated after the lift, so never twice), like Pay now: even when that line named no date
+    // ("tc:0", sent while the test was still open). Not when the last line went out earlier today (UTC), and not deferred: a lift on a line's day gets none.
+    const lifted = async () => { if (!last || utcDayNo(last) === utcDayNo(now)) return false; const at = await testerChargeLiftedAt(testerId, [...new Set(list.map((p) => p.testId))], now); return !!at && at > last && utcDayNo(at) !== utcDayNo(last); };
+    if (!movedNow && !moneyLineDue(last, fresh.length > 0, repeats, now) && !(await lifted())) {
       // Opened on a day that already had its line: named in the next line, never a second line today (the date it will name is recorded now).
       for (const p of fresh) await db.submission.update({ where: { id: p.id }, data: { devMarks: { push: `tc:${p.closes?.getTime() ?? 0}` } } });
       if (moved) for (const p of list) { const n = chargeNamed(p.marks); if (n && p.closes && p.closes.getTime() > n) await db.submission.update({ where: { id: p.id }, data: { devMarks: { push: `tc:${p.closes.getTime()}` } } }); }
