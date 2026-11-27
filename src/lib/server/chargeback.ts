@@ -528,7 +528,8 @@ export async function approveChargebackHold(devId: string, adminId: string | nul
   } else if (lifted) {
     // Lifted while an admin suspension is still on: the same one notice says the tests stay paused (ignores Off, like "running again").
     const line = still ? approvedStillSuspendedLine(taken) : approvedLiftedLine(taken);
-    await notify(dev.email, line, [line, ...(still ? [] : ["Every deadline moved on by the pause."])], "/app", { side: "developer", always: true, payment: true, group: "admindecision" });
+    const team = still ? null : await (await import("./holds")).teamStillPausesLine(devId); // (§389) a test the team still pauses moves when the team lifts it
+    await notify(dev.email, line, [line, ...(still ? [] : ["Every deadline moved on by the pause.", ...(team ? [team] : [])])], "/app", { side: "developer", always: true, payment: true, group: "admindecision" });
   } else await notify(dev.email, APPROVED_LINE, [`${APPROVED_LINE}.`, ...(taken ? [`The ${money(taken)} reserved on your card was taken.`] : [])], "/app/payments", { side: "developer", payment: true, group: "admindecision" });
   return { ok: true, lifted, takenCents: taken };
 }

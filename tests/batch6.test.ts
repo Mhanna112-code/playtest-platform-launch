@@ -328,7 +328,7 @@ describe("batch 6 item 4: a paused test, what testers can do", () => {
 
   it("(DEFAULT) deadlines and Open until move on by the pause; overlapping pauses count once", async () => {
     expect(R.pauseShiftMs(new Date(0), new Date(5 * DAY))).toBe(5 * DAY);
-    expect(R.pauseShiftMs(new Date(0), new Date(5 * DAY), [new Date(2 * DAY)])).toBe(2 * DAY); // the rest counts when the other lifts
+    expect(R.pauseShiftMs(new Date(0), new Date(5 * DAY), [new Date(2 * DAY)])).toBe(0); // (§389) another pause still on: nothing moves until the last lift
     expect(R.pauseShiftMs(new Date(2 * DAY), new Date(4 * DAY), [new Date(0)])).toBe(0); // inside another pause still on
     const { dev, testId } = await setup({ openUntil: new Date(Date.now() + 30 * DAY).toISOString().slice(0, 10) });
     const { tester, sessionId } = await joined(testId);

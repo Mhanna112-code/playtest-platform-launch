@@ -255,7 +255,8 @@ export async function reinstateAccount(userId: string, asked?: unknown, adminId:
     throw new HttpError(409, "not_suspended", `That account's ${sideWord(side)} was already reinstated${by ? ` (by ${by.email})` : ""}.`);
   }
   if (side === "developer" && u.isDeveloper) {
-    // (Owner, Oct 28 afternoon, DEFAULT) Deadlines and Open until move on by the pause; a hold still on keeps the tests paused (they resume, and move on the rest, when it lifts).
+    // (Owner, Nov 11, §389; replaces "move on by the part not covered") Deadlines and Open until move on only for the tests no longer paused at all (`running`),
+    // once, by the whole paused stretch; a hold or the team's pause still on keeps a test paused, and its dates move when that last pause lifts.
     if (!u.holdStartedAt) await chargeDeferred(userId);
     await (await import("./subscription")).resumeBilling(userId, now);
     const testers = await db.contract.findMany({ where: { status: "working", testId: { in: running } }, include: { tester: true, test: { select: { title: true } } } });
@@ -489,7 +490,8 @@ export async function unpauseTest(testId: string, adminId: string | null = null,
     if (cur.status === "stopped" || cur.adminPausedAt?.getTime() !== start.getTime()) return liftRefusal(testId, presserOf(adminId, seen), tx);
     const now = new Date();
     await tx.test.update({ where: { id: testId }, data: { adminPausedAt: null, adminNote: "", ...(dev.holdStartedAt || dev.devSuspendedAt ? {} : { pausedSince: null }) } });
-    // (Owner, Oct 28 afternoon, DEFAULT) The same clock shift as a hold lift or a reinstatement (only the part not covered by the developer's own pause, if one is still on).
+    // (Owner, Nov 11, §389) The same clock shift as a hold lift or a reinstatement: nothing while the developer's own hold or suspension still pauses it; when this is
+    // the last pause, every date once by the whole paused stretch (from the test's pausedSince).
     await shiftAfterPause(tx, cur, start, now, [dev.holdStartedAt, dev.devSuspendedAt]);
     await recordEvent(tx, testId, "resumed", "The team lifted the pause on this test", true);
     if (adminId) await recordAction(tx, adminId, "unpause-test", testId, now);

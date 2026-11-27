@@ -1000,14 +1000,14 @@ export const testerPaused = (dev: { holdStartedAt?: Date | null; devSuspendedAt?
     ? [dev.holdStartedAt, dev.devSuspendedAt, PAUSE_DEFAULTS.teamPauseSameRules ? test.adminPausedAt : null].some((d) => startedBeforeWorkEnd(d, test))
     : !!(dev.holdStartedAt || dev.devSuspendedAt || (PAUSE_DEFAULTS.teamPauseSameRules && test?.adminPausedAt));
 /**
- * (Owner, Oct 28 afternoon, DEFAULT) How far a pause that ran from `start` to `now` moves deadlines, Open until and review clocks. When another pause of the same test is still on
- * (`others`: the start of each), only the part before the earliest of them counts now: the rest is counted when that one lifts, so overlapping pauses never count twice.
+ * (Owner, Oct 28 afternoon, DEFAULT) How far a paused stretch that ran from `start` to `now` moves deadlines, Open until and review clocks. (Owner, Nov 11, §389;
+ * replaces "only the part before another pause still on counts now") While a test is paused in ANY way nothing moves: with another pause still on (`others`: the
+ * start of each) it is 0, and when the last one lifts the whole continuous stretch counts once (`start`: the stretch's start, overlapping pauses counted once).
  */
 export function pauseShiftMs(start: Date, now: Date, others: (Date | null | undefined)[] = []) {
   if (!PAUSE_DEFAULTS.shiftDeadlines) return 0;
-  const still = others.filter((d): d is Date => !!d).map((d) => d.getTime());
-  const until = still.length ? Math.min(now.getTime(), Math.min(...still)) : now.getTime();
-  return Math.max(0, until - start.getTime());
+  if (others.some(Boolean)) return 0;
+  return Math.max(0, now.getTime() - start.getTime());
 }
 export const PAY_WAITS = "Pay what you owe first.";
 /** (Owner, Nov 5, §227) The test page's link to Pay what you owe, which lives on Payments only (and the dashboard, and the bell). */

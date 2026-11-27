@@ -186,9 +186,9 @@ export async function startHold(devId: string, reason: string, /** (§315) the d
 }
 
 /**
- * A pause ended (a payment hold paid off, or a developer's suspension lifted): every working tester's deadline, Open until and the 7-day review clocks (batch 12) move on by its length
- * (PAUSE_DEFAULTS.shiftDeadlines; a pause that overlapped another one still on counts only up to when that one started, see pauseShiftMs), and each test that is no longer
- * paused says it is running again. `others`: the starts of the developer's OTHER pauses still on (a hold left after a reinstatement, a suspension left after a hold lift).
+ * A pause ended (a payment hold paid off, or a developer's suspension lifted): each test that is no longer paused at all has every working tester's deadline, Open
+ * until and the 7-day review clocks (batch 12) moved on ONCE by the whole paused stretch (PAUSE_DEFAULTS.shiftDeadlines; (Owner, Nov 11, §389) a test still
+ * paused another way moves nothing now, see shiftAfterPause), and says it is running again. `others`: the starts of the developer's OTHER pauses still on (a hold left after a reinstatement, a suspension left after a hold lift).
  * Returns the ids of the tests that run again.
  */
 export async function resumeTests(tx: Prisma.TransactionClient, devId: string, start: Date, now: Date, others: (Date | null | undefined)[] = []) {
@@ -203,6 +203,15 @@ export async function resumeTests(tx: Prisma.TransactionClient, devId: string, s
     if (t.status !== "stopped" && startedBeforeWorkEnd(start, t)) await recordEvent(tx, t.id, "resumed", "Your tests are running again", false); // (§358) not a closed test it never paused
   }
   return running;
+}
+
+/**
+ * (Owner, Nov 11, §389) Dates move only when a test is completely unpaused: after the developer's hold or suspension lifts, a test the team still pauses keeps its
+ * dates until the team lifts its pause. The developer's "every deadline moved on by the pause" says so then (null when no test of theirs is still paused by the team).
+ */
+export const TEAM_STILL_PAUSES_LINE = "A test the team paused stays paused: its deadlines move on when the team lifts the pause.";
+export async function teamStillPausesLine(devId: string) {
+  return (await db.test.count({ where: { developerId: devId, adminPausedAt: { not: null }, status: { not: "stopped" } } })) ? TEAM_STILL_PAUSES_LINE : null;
 }
 
 /** (Owner, Nov 6, §295) The tester's line when a test she works on pauses: "“Harbor Run” is paused" (never why: no hold, suspension or team named). */
@@ -257,14 +266,22 @@ export async function shiftPieceDeadlines(tx: Prisma.TransactionClient, where: P
 }
 
 /**
- * (Owner, Oct 28 afternoon, DEFAULT) One test's clocks after one of its pauses lifted: working testers' deadlines and Open until (and the review clocks of sent work) move later by
- * the pause's length (pauseShiftMs: only the part not covered by another pause still on). The same for a hold lift, a reinstatement and the team's unpause.
+ * (Owner, Oct 28 afternoon, DEFAULT) One test's clocks after one of its pauses lifted: working testers' deadlines and Open until (and the review clocks of sent work)
+ * move later. The same for a hold lift, a reinstatement and the team's unpause. (Owner, Nov 11, §389; replaces "each lift moves the part not covered by another
+ * pause still on") While the test is paused in ANY way (the team's pause, the developer's hold or suspension, any combination) nothing moves: a lift with another
+ * pause still on (`others`) moves nothing, and the LAST lift moves every date once by the whole continuous paused stretch, from its start (the test's
+ * `pausedSince`, else this pause's `start`) to now, overlapping pauses counted once; each date is rounded once (deadlines up to the end of their day, Open until to
+ * the nearest day end; review clocks and call pay dates exact).
  */
-export async function shiftAfterPause(tx: Prisma.TransactionClient, t: { id: string; status: string; openUntil: Date | null; workEndedAt?: Date | null; pauseClosedAt?: Date | null }, start: Date, now: Date, others: (Date | null | undefined)[] = []) {
-  // (Owner, Nov 9, §358) A pause that began after the test's work ended (closed, or the 7-day pause closure) moves none of its dates. (Owner, Nov 11, §386 A) Its
-  // frozen time still moves each piece's money window (pieceCloseOut counts it from the piece's own dates, which stay: never counted twice).
-  if (!startedBeforeWorkEnd(start, t)) return 0;
-  const ms = pauseShiftMs(start, now, others);
+export async function shiftAfterPause(tx: Prisma.TransactionClient, t0: { id: string; status: string; openUntil: Date | null; workEndedAt?: Date | null; pauseClosedAt?: Date | null; pausedSince?: Date | null }, lifted: Date, now: Date, others: (Date | null | undefined)[] = []) {
+  // (Owner, Nov 9, §358) A pause that began after the test's work ended (closed, or the 7-day pause closure) never paused it: it neither moves dates nor holds
+  // them back. (Owner, Nov 11, §386 A) Its frozen time still moves each piece's money window (pieceCloseOut counts it from the piece's own dates, which stay).
+  const t = t0;
+  if (others.some((d) => !!d && startedBeforeWorkEnd(d, t))) return 0; // (§389) still paused another way: nothing moves yet
+  const starts = [lifted, t.pausedSince].filter((d): d is Date => !!d && startedBeforeWorkEnd(d, t));
+  if (!starts.length) return 0;
+  const start = new Date(Math.min(...starts.map((d) => d.getTime()))); // (§389) the whole stretch
+  const ms = pauseShiftMs(start, now);
   if (ms <= 0) return 0;
   const later = <T extends Date | null>(d: T, by = ms) => (d ? (new Date(d.getTime() + by) as T) : d);
   // (Owner, Nov 2) Open until stays the END of a day in the developer's zone (the nearest one to the moved time), so joining closing and Edit's lock (by calendar
@@ -280,7 +297,7 @@ export async function shiftAfterPause(tx: Prisma.TransactionClient, t: { id: str
   for (const c of await tx.contract.findMany({ where: { testId: t.id, status: "working", dueAt: { gt: start } } })) await tx.contract.update({ where: { id: c.id }, data: { dueAt: movedDue(c.dueAt, ms, tz) } });
   await shiftPieceDeadlines(tx, { testId: t.id }, start, ms); // (§366 C)
   for (const x of await tx.submission.findMany({ where: { contract: { testId: t.id }, review: null, payBy: { not: null } } })) {
-    const by = pauseShiftMs(x.updatedAt > start ? x.updatedAt : start, now, others); // only the part of the pause after it was sent
+    const by = pauseShiftMs(x.updatedAt > start ? x.updatedAt : start, now); // only the part of the stretch after it was sent
     // (Owner, Nov 9, §346) Like a deadline: a review date (Charge open) that had already passed when the pause began stays. Its close-out counts the whole pause
     // after it (pieceCloseOut); moving it too counted the pause twice (a 48 h pause moved the close-out ~60 h).
     if (by > 0) await tx.submission.update({ where: { id: x.id }, data: { payBy: x.payBy && x.payBy > start ? later(x.payBy, by) : x.payBy, choiceBy: later(x.choiceBy, by) } });
@@ -288,7 +305,7 @@ export async function shiftAfterPause(tx: Prisma.TransactionClient, t: { id: str
   // (Batch 15 sections 15 and 40) A call's review clock moves the same way (only the part of the pause after its length was final).
   for (const x of await tx.call.findMany({ where: { contract: { testId: t.id }, review: null, payBy: { not: null }, status: "booked" } })) {
     const from = x.measuredAt && x.measuredAt > start ? x.measuredAt : start;
-    const by = pauseShiftMs(from, now, others);
+    const by = pauseShiftMs(from, now);
     if (by > 0) await tx.call.update({ where: { id: x.id }, data: { payBy: x.payBy && x.payBy > start ? later(x.payBy, by) : x.payBy, choiceBy: later(x.choiceBy, by) } }); // (§346)
   }
   return ms;
@@ -507,7 +524,10 @@ export async function liftHoldIfClear(devId: string, opts: { /** (batch 24) the 
   // went through, and the suspension's own line says the tests are paused.
   if (opts.quietDev) {
     // (Batch 24, a batch 23 leftover) The team's Approve tells the developer in its own single notice.
-  } else if (!dev.devSuspendedAt) await notify(dev.email, "Your tests are running again", ["Everything you owed is paid: your tests are running again, and every deadline moved on by the pause."], "/app", { side: "developer", always: true, payment: true, group: "payhold" });
+  } else if (!dev.devSuspendedAt) {
+    const team = await teamStillPausesLine(devId); // (§389)
+    await notify(dev.email, "Your tests are running again", ["Everything you owed is paid: your tests are running again, and every deadline moved on by the pause.", ...(team ? [team] : [])], "/app", { side: "developer", always: true, payment: true, group: "payhold" });
+  }
   const testers = await db.contract.findMany({ where: { status: "working", testId: { in: running } }, include: { tester: true, test: { select: { title: true } } } });
   for (const c of testers) await notify(c.tester.email, `“${c.test.title}” is running again`, [`“${c.test.title}” is running again. Your deadline moved on by the pause.`], `/app/sessions/${c.id}`, { group: "paused", always: true });
   return true;
@@ -583,7 +603,8 @@ export async function approveHoldLift(adminId: string, devId: string, note: stri
     // A suspension still keeps the tests paused: the same one line says so. (Owner, Nov 6, §310c) A payment charged right after the lift was declined (a new hold):
     // the same approval wording as every other approval, never claiming the tests run (was "… so your tests are paused again."); the new hold's notice tells the rest.
     const line = (after.holdStartedAt ? cb.approvedNewHoldLine(0) : after.devSuspendedAt ? cb.approvedStillSuspendedLine(0) : cb.approvedLiftedLine(0)) + noted;
-    await notify(dev.email, line, [line, ...(after.holdStartedAt || after.devSuspendedAt ? [] : ["Everything you owed is paid, and every deadline moved on by the pause."])], after.holdStartedAt ? "/app/payments#owed" : "/app", { side: "developer", always: true, payment: true, group: "admindecision" });
+    const team = after.holdStartedAt || after.devSuspendedAt ? null : await teamStillPausesLine(devId); // (§389)
+    await notify(dev.email, line, [line, ...(after.holdStartedAt || after.devSuspendedAt ? [] : ["Everything you owed is paid, and every deadline moved on by the pause.", ...(team ? [team] : [])])], after.holdStartedAt ? "/app/payments#owed" : "/app", { side: "developer", always: true, payment: true, group: "admindecision" });
   }
   return { ok: true, lifted };
 }
