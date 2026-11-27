@@ -1675,11 +1675,17 @@ export function reviewMarksFor(sentAt: Date, reviewDate: Date): ReviewMark[] {
 /**
  * (Owner, Nov 6, §311g) One countdown's mark due now, with its sent marks KEYED BY THE DATE they count to (`key` = "<prefix><date ms>:"), so a date that moves (an
  * extension, a pause, an outage, a rejoin) re-arms its marks. The rule ownDeadlineMarkDue set (batch 16, §295): the latest mark passed is sent and every earlier one
- * recorded with it (a missed mark is never sent late); when the date moved (`mine` holds marks only for earlier dates), what's already behind the new date is
- * recorded, and its latest passed mark is sent only when it was never sent for an earlier date (so a move never repeats a line). `mine`: this countdown's records
- * (keyed, plus any bare legacy mark); "seen" marks a date the job has looked at.
+ * recorded with it (a missed mark is never sent late). `mine`: this countdown's records (keyed, plus any bare legacy mark); "seen" marks a date the job has looked at.
+ * (Owner, Nov 27 2026; replaces §367's "a fresh line only after the series' last mark") When the date moved (`mine` holds marks only for other dates):
+ * - to a LATER CALENDAR DAY than the date the series' last line named (the latest recorded date with a mark other than "seen"; the day in the reader's zone `tz`,
+ *   the zone their line prints the date in): ONE fresh line at this run naming the new date, in the wording of the latest mark passed for it; none passed, the
+ *   series' plain line naming only the date (`plain`: the mark name recorded for it) when it has one; else no line (its next mark comes on schedule, naming the
+ *   new date). A few hours' move after "by tomorrow (Mon)" that stays Monday gives nothing; a 2-day pause between the 3-day and 1-day marks gives the fresh line.
+ * - on the SAME day (or an earlier one, or no line named a date yet): no fresh line. The marks behind the new date are recorded (re-keyed silently), and its
+ *   latest passed mark is sent only when it was never sent for any date (§295: a mark that came due between the move and this run is not swallowed).
+ * Its marks are keyed by the new date, so nothing is sent twice for one date; the marks still ahead come on schedule.
  */
-export function datedMarkDue<M extends { mark: string; at: Date }>(key: string, mine: string[], marks: M[], date: Date, now: Date, /** (§367) the series' last mark ("1d") */ lastMark?: string): { send: M | null; record: string[] } {
+export function datedMarkDue<M extends { mark: string; at: Date }>(key: string, mine: string[], marks: M[], date: Date, now: Date, opts: { /** the reader's zone */ tz?: string | null; /** the plain line's mark name */ plain?: string } = {}): { send: M | null; /** send the series' plain line naming the date */ plain?: true; record: string[] } {
   const here = mine.filter((x) => x.startsWith(key)).map((x) => x.slice(key.length));
   const firstLook = here.length ? [] : [`${key}seen`];
   if (now.getTime() >= date.getTime()) return { send: null, record: [] };
@@ -1687,48 +1693,59 @@ export function datedMarkDue<M extends { mark: string; at: Date }>(key: string, 
   const behind = passed.filter((m) => !here.includes(m.mark)).map((m) => `${key}${m.mark}`);
   const last = passed[passed.length - 1];
   if (!here.length && mine.length) {
-    // (Owner, Nov 9, §367) The date moved LATER after the series' last reminder already went out for an earlier date (a pause or its lift, an outage, Open until
-    // extended, a rejoin, the dispute rating extension): ONE fresh reminder now, naming the new date (the latest mark passed for it: "within 3 days (Nov 22)"),
-    // then the series goes on for the new date. Its marks are keyed by the new date, so it is never sent twice; nothing more comes for the old one.
-    if (lastMark && last && finishedBefore(mine, lastMark, date)) return { send: last, record: [...firstLook, ...behind] };
+    const named = lastNamedDate(mine);
+    if (named && dayIn(date, opts.tz) > dayIn(named, opts.tz)) {
+      // (Owner, Nov 27 2026) The date shown moved to a later day: ONE fresh line naming it.
+      if (last) return { send: last, record: [...firstLook, ...behind] };
+      if (opts.plain) return { send: null, plain: true, record: [...firstLook, `${key}${opts.plain}`] };
+      return { send: null, record: firstLook };
+    }
     const sentBefore = new Set(mine.map((x) => x.slice(x.lastIndexOf(":") + 1)));
     return { send: last && !sentBefore.has(last.mark) ? last : null, record: [...firstLook, ...behind] };
   }
   if (!last || here.includes(last.mark)) return { send: null, record: firstLook };
   return { send: last, record: [...firstLook, ...behind] };
 }
-/** (§367) Did the series' last mark go out for a date EARLIER than `date` ("r:<ms>:1d" with ms before it)? A bare legacy mark has no date: no. */
-function finishedBefore(mine: string[], lastMark: string, date: Date) {
-  return mine.some((x) => {
-    const m = /:(\d+):([^:]+)$/.exec(x);
-    return !!m && m[2] === lastMark && Number(m[1]) < date.getTime();
-  });
+/** (Owner, Nov 27 2026) The date a countdown's last line named: the latest recorded date ("<prefix><ms>:<mark>") with a mark other than "seen". A bare legacy mark names none. */
+function lastNamedDate(mine: string[]) {
+  for (let i = mine.length - 1; i >= 0; i--) {
+    const m = /:(\d+):([^:]+)$/.exec(mine[i]);
+    if (m && m[2] !== "seen") return new Date(Number(m[1]));
+  }
+  return null;
 }
+/** (Owner, Nov 27 2026) A countdown's fresh line when none of its marks has passed for its new date: its plain line naming only the date (Open until's, the tester's own deadline's). */
+export const DATE_LINE = { mark: "date", ms: 0, label: "" } as const;
 /** (§311g) The key prefix of a piece's review marks for one review date (a call's: its pay date), kept in its devMarks beside the Closing soon "co:" marks. */
 export const reviewMarkKey = (reviewDate: Date) => `r:${reviewDate.getTime()}:`;
 /**
  * The review reminder due now and what to record in the piece's devMarks (the latest mark passed and not sent yet; an earlier missed one is never sent late);
  * nothing on or after the review date. (Owner, Nov 6, §311g) Keyed by the review date (datedMarkDue): an extended deadline, a pause or an outage re-arms the marks
  * still ahead. A bare mark ("1w", from before §311g) counts as sent for an earlier date. The Closing soon "co:" marks are not this countdown's.
+ * (Owner, Nov 27 2026) A review date moved to a later day (in the developer's zone `tz`) than the one the last reminder named: ONE fresh reminder at the next run,
+ * in the wording of the latest mark passed for the new date ("within 3 days (Nov 22)"). The review lines have no plain wording ("within 1 week" is untrue with 10
+ * days left), so while none of the new date's marks has passed nothing is sent: its next mark comes on schedule naming it. Moved within the same day: nothing.
  */
-export function reviewMarkDue(sentAt: Date, reviewDate: Date, now: Date, recorded: string[]): { send: ReviewMark | null; record: string[] } {
+export function reviewMarkDue(sentAt: Date, reviewDate: Date, now: Date, recorded: string[], tz?: string | null): { send: ReviewMark | null; record: string[] } {
   const mine = recorded.filter((x) => x.startsWith("r:") || REVIEW_MARKS.some((m) => m.mark === x));
-  return datedMarkDue(reviewMarkKey(reviewDate), mine, reviewMarksFor(sentAt, reviewDate), reviewDate, now, REVIEW_MARKS[REVIEW_MARKS.length - 1].mark); // (§367)
+  return datedMarkDue(reviewMarkKey(reviewDate), mine, reviewMarksFor(sentAt, reviewDate), reviewDate, now, { tz });
 }
 /** (§311g) The key prefix of Open until's heads-up marks for one Open until, kept in Test.notifiedMarks (beside the testers' "due:" marks). */
 export const openUntilMarkKey = (openUntil: Date) => `open:${openUntil.getTime()}:`;
 /**
  * (Owner, Nov 6, §311g) Open until's heads-up due now (1 month, only when Open until was more than a month after the test was made; 1 week, 3 days, 1 day) and what
  * to record, keyed by the Open until it counts to (datedMarkDue): moving Open until (Edit, a pause, an outage) re-arms the marks still ahead. Bare marks ("1w",
- * from before §311g) count as sent for an earlier Open until. (Owner, Dec 2026) Without §367's fresh line (no `lastMark`): a moved Open until after its 1-day
- * heads-up went out sends nothing more for it, unlike the tester's own deadline (ownDeadlineMarkDue) and the review countdown.
+ * from before §311g) count as sent for an earlier Open until. (Owner, Nov 27 2026; replaces Dec 2026's "without §367's fresh line") An Open until moved to a
+ * later day (in the developer's zone `tz`) than the one the last heads-up named: ONE fresh heads-up at the next daily run naming it. Its line names only the date
+ * ("closes to new testers on Nov 22"), so it is sent even when none of its marks has passed for the new date (`send` is then DATE_LINE). Moved within the same day: nothing.
  */
-export function openUntilMarkDue(t: { openUntil: Date | null; createdAt: Date }, recorded: string[], now: Date) {
+export function openUntilMarkDue(t: { openUntil: Date | null; createdAt: Date }, recorded: string[], now: Date, tz?: string | null): { send: ((typeof MARKS)[number] & { at: Date }) | typeof DATE_LINE | null; record: string[] } {
   if (!t.openUntil) return { send: null, record: [] as string[] };
   const date = t.openUntil;
   const marks = MARKS.filter((m) => m.mark !== "1m" || date.getTime() - t.createdAt.getTime() > m.ms).map((m) => ({ ...m, at: new Date(date.getTime() - m.ms) }));
   const mine = recorded.filter((x) => x.startsWith("open:") || MARKS.some((m) => m.mark === x));
-  return datedMarkDue(openUntilMarkKey(date), mine, marks, date, now);
+  const due = datedMarkDue(openUntilMarkKey(date), mine, marks, date, now, { tz, plain: DATE_LINE.mark });
+  return { send: due.plain ? DATE_LINE : due.send, record: due.record };
 }
 
 /**
@@ -1751,19 +1768,20 @@ export const deadlineMarkKey = (contractId: string, dueAt: Date) => `due:${contr
  * (Batch 16 section 1) The tester's deadline reminder due now, and what to record. Sent marks are kept per contract AND per deadline (`due:<contract>:<deadline ms>:<mark>`),
  * so a mark is never sent twice for the same deadline. When the deadline moved (an Edit moving Open until later, a pause shift), the first daily run that sees the new
  * deadline records the marks already behind it as passed: only the marks still ahead of the new deadline fire. As with the review reminders, the latest mark passed is
- * sent and every earlier one is recorded with it, so a missed mark is never sent late. `seen` marks a deadline the daily job has looked at. (Owner, Dec 2026) A
- * deadline moved later after her 1-day line went out for the earlier one gets one fresh line (§367, as the review reminders).
+ * sent and every earlier one is recorded with it, so a missed mark is never sent late. `seen` marks a deadline the daily job has looked at. (Owner, Nov 27 2026;
+ * replaces Dec 2026's "after her 1-day line") A deadline moved to a later day (in HER zone `tz`, the one her line prints the date in) than the one her last line
+ * named: ONE fresh line at the next daily run naming it. Her line names only the date ("Your deadline on “X” is Nov 22"), so it is sent even when none of its marks
+ * has passed for the new deadline (`send` is then DATE_LINE). Moved within the same day: nothing. (The rounding of a moved deadline to the end of its day stays.)
  */
-export function ownDeadlineMarkDue(c: { id: string; joinedAt: Date; dueAt: Date }, recorded: string[], now: Date): { send: (typeof MARKS)[number] | null; record: string[] } {
+export function ownDeadlineMarkDue(c: { id: string; joinedAt: Date; dueAt: Date }, recorded: string[], now: Date, tz?: string | null): { send: (typeof MARKS)[number] | typeof DATE_LINE | null; record: string[] } {
   // The deadline moved: what's already behind the new one is recorded, never sent. (Owner, Nov 6, §295) Except the latest mark passed when it was never sent for
   // an earlier deadline of hers: a mark that came due between the move and this run (a pause moves a deadline to the end of a later day, and the daily job runs once
   // a day) was swallowed, and a tester 20 hours from her deadline got no reminder. (§311g) The same rule as every dated countdown (datedMarkDue). A rejoin starts
   // a fresh deadline: the rejoin drops her earlier stint's marks (forgetDeadlineMarks), so its latest passed mark is sent once.
-  // (Owner, Dec 2026; replaces "already told for the earlier deadline: not again" here) §367's fresh line, as the review countdown has: when her deadline moved
-  // LATER after her last mark ("1d", LAST_MARK) already went out for an earlier deadline, ONE fresh line naming the new date comes at the next run (the latest
-  // mark passed for it), keyed by the new deadline so never twice. Open until's heads-ups (openUntilMarkDue) stay without it (owner's choice).
-  const due = datedMarkDue(deadlineMarkKey(c.id, c.dueAt), recorded.filter((x) => x.startsWith(`due:${c.id}:`)), deadlineMarksFor(c.joinedAt, c.dueAt), c.dueAt, now, LAST_MARK);
-  return { send: due.send ? MARKS.find((m) => m.mark === due.send!.mark)! : null, record: due.record };
+  // (Owner, Nov 27 2026; replaces Dec 2026's §367 "after her last mark") Her deadline moved to a later day than her last line named: ONE fresh line naming the
+  // new date at the next run (datedMarkDue), keyed by the new deadline so never twice; the same day: nothing.
+  const due = datedMarkDue(deadlineMarkKey(c.id, c.dueAt), recorded.filter((x) => x.startsWith(`due:${c.id}:`)), deadlineMarksFor(c.joinedAt, c.dueAt), c.dueAt, now, { tz, plain: DATE_LINE.mark });
+  return { send: due.plain ? DATE_LINE : due.send ? MARKS.find((m) => m.mark === due.send!.mark)! : null, record: due.record };
 }
 /** (§311g) A contract's recorded deadline marks dropped (a rejoin: a fresh deadline whose reminders start over). */
 export const forgetDeadlineMarks = (recorded: string[], contractId: string) => recorded.filter((x) => !x.startsWith(`due:${contractId}:`));

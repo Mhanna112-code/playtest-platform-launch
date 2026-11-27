@@ -227,7 +227,7 @@ describe("§311f the outage lines stack into one entry a day", () => {
 });
 
 describe("§311g reminder marks follow the date they count to", () => {
-  it("(fake clock) Open until extended after its 1-day heads-up: the new 1 week, 3 days and 1 day heads-ups come", async () => {
+  it("(fake clock) Open until extended after its 1-day heads-up: (Owner, Nov 27 2026) one fresh heads-up naming the new date at once, then the new 1 week, 3 days and 1 day heads-ups", async () => {
     const s = await setup();
     const t0 = Date.now();
     const open = new Date(t0 + 10 * DAY);
@@ -239,9 +239,12 @@ describe("§311g reminder marks follow the date they count to", () => {
     expect((await db.notification.findFirstOrThrow({ where: { userId: s.dev.user.id, reminderKey: `headsup:${s.testId}` } })).mustEmail).toBe(true);
     const later = new Date(open.getTime() + 15 * DAY); // (not over a month after the test was made: no 1-month mark)
     await db.test.update({ where: { id: s.testId }, data: { openUntil: later } });
-    await runDaily(new Date(open.getTime() - 0.4 * DAY)); // the day of the move: nothing (no stale line)
-    expect(await heads()).toBe(1);
-    for (const [left, n] of [[6.5, 2], [6.4, 2], [2.5, 3], [0.5, 4], [0.4, 4]] as const) {
+    // (Owner, Nov 27 2026; was "the day of the move: nothing") The date shown moved to a later day: one fresh heads-up naming it (its line names only the date).
+    await runDaily(new Date(open.getTime() - 0.4 * DAY));
+    expect(await heads()).toBe(2);
+    await runDaily(new Date(open.getTime() - 0.3 * DAY));
+    expect(await heads()).toBe(2); // never twice
+    for (const [left, n] of [[6.5, 3], [6.4, 3], [2.5, 4], [0.5, 5], [0.4, 5]] as const) {
       await runDaily(new Date(later.getTime() - left * DAY));
       expect(await heads(), `${left} days before`).toBe(n);
     }
@@ -267,17 +270,19 @@ describe("§311g reminder marks follow the date they count to", () => {
     for (const w of ["within 1 week", "within 3 days", "by tomorrow"]) expect(after.filter((x) => x.includes(` ${w} `)), w).toHaveLength(1);
   }, 120_000);
 
-  it("a pause moving the review date: no second line the same day; the marks still ahead come", () => {
+  it("a pause moving the review date a day later: one fresh line naming it (Owner, Nov 27 2026); the marks still ahead come", () => {
     const sent = new Date("2026-11-01T12:00:00Z");
     const D = new Date("2026-11-21T12:00:00Z");
     const at1 = new Date(D.getTime() - 2.5 * DAY);
     const first = R.reviewMarkDue(sent, D, at1, []);
     expect(first.send?.mark).toBe("3d");
     const rec = [...first.record];
-    // Paused for a day: the date moves; the same day's run sends nothing.
+    // Paused for a day: the date moves to a later day. (Owner, Nov 27 2026; was "the same day's run sends nothing") One fresh reminder naming the new date, in
+    // the wording of the latest mark passed for it (3.5 days left: "within 1 week"); then never twice.
     const D2 = new Date(D.getTime() + DAY);
     const moved = R.reviewMarkDue(sent, D2, new Date(at1.getTime() + 3_600_000), rec);
-    expect(moved.send).toBeNull();
+    expect(moved.send?.mark).toBe("1w");
+    expect(R.reviewMarkDue(sent, D2, new Date(at1.getTime() + 2 * 3_600_000), [...rec, ...moved.record]).send).toBeNull();
     rec.push(...moved.record);
     expect(R.reviewMarkDue(sent, D2, new Date(D2.getTime() - 0.5 * DAY), rec).send?.mark).toBe("1d");
     // Bare marks from before §311g count as sent for an earlier date.

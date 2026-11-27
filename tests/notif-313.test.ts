@@ -72,7 +72,7 @@ describe("§313a one line names the paused tests' closing dates", () => {
 });
 
 describe("§313b Closing soon follows a moved closing date", () => {
-  it("a pause moving the date: no repeat that day; the new date's marks come; plain \"co:3\" counts as sent before", () => {
+  it("a pause moving the date to a later day: one fresh line (Owner, Nov 27 2026); the new date's marks come; plain \"co:3\" counts as sent before", () => {
     const from = new Date("2026-11-01T10:00:00Z");
     const D = new Date("2026-11-20T15:00:00Z");
     const rec: string[] = [];
@@ -85,9 +85,11 @@ describe("§313b Closing soon follows a moved closing date", () => {
     expect(step(D, at("2026-11-10T09:00:00Z"))).toBeNull(); // first look
     expect(step(D, at("2026-11-13T09:00:00Z"))).toBe(7);
     expect(step(D, at("2026-11-17T09:00:00Z"))).toBe(3);
-    // Paused 5 days: the date moves; the same day's run sends nothing (3 days was sent for the old date).
+    // Paused 5 days: the date moves to a later day. (Owner, Nov 27 2026; was "the same day's run sends nothing") One fresh line naming it at once: none of its
+    // marks has passed (its 1 week is Nov 18), so the plain line ("close on Nov 25"), `send` = the 8 days left; then never twice.
     const D2 = new Date(D.getTime() + 5 * DAY);
-    expect(step(D2, at("2026-11-17T12:00:00Z"))).toBeNull();
+    expect(step(D2, at("2026-11-17T12:00:00Z"))).toBe(8);
+    expect(step(D2, at("2026-11-17T18:00:00Z"))).toBeNull();
     expect(step(D2, at("2026-11-22T09:00:00Z"))).toBe(3);
     expect(step(D2, at("2026-11-24T09:00:00Z"))).toBe(1);
     expect(step(D2, at("2026-11-24T18:00:00Z"))).toBeNull();

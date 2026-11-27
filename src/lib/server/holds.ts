@@ -1435,11 +1435,11 @@ async function runDailyLocked(now: Date) {
   // (Owner, Nov 6, §316) A developer on a hold: one reminder a day naming the closing dates, until it lifts or every paused test has closed (after the closures above).
   await pc.holdReminders(now);
   // 4. Open until heads-ups for the developer: 1 month (when it was more than a month away), 1 week, 3 days and 1 day before.
-  const closing = await db.test.findMany({ where: { status: { in: ["open", "closed"] }, openUntil: { gt: now }, ...PAUSE_FREE } });
+  const closing = await db.test.findMany({ where: { status: { in: ["open", "closed"] }, openUntil: { gt: now }, ...PAUSE_FREE }, include: { developer: { select: { timeZone: true } } } });
   for (const t of closing) {
     // (Owner, Nov 6, §311g) Keyed by the Open until they count to: moving it (Edit, a pause, an outage) re-arms the heads-ups still ahead (they were bare marks
     // that never cleared, so an extended Open until got none).
-    const due = openUntilMarkDue(t, t.notifiedMarks, now);
+    const due = openUntilMarkDue(t, t.notifiedMarks, now, t.developer.timeZone); // (Owner, Nov 27 2026) days in the developer's zone, as the line prints them
     if (!due.record.length && !due.send) continue;
     // (Owner, Nov 11, §383) The marks and the line in ONE transaction: a failure writing either leaves neither, so the next run sends it (never lost, never twice).
     // Bell lines, in the developer's morning email whatever the setting (owner, Dec 2026: `always`, like review). (Batch 15 sections 11 and 18) The reader's
@@ -1456,11 +1456,11 @@ async function runDailyLocked(now: Date) {
   // batch 29 §27, §34) They stack in one "Deadlines" entry a day across tests, and all of them go in the morning email whatever the email setting.
   const working = await db.contract.findMany({
     where: { status: "working", dueAt: { gt: now }, tester: { deletedAt: null, testerSuspendedAt: null }, test: { status: { in: ["open", "closed"] }, ...PAUSE_FREE } },
-    select: { id: true, testerId: true, joinedAt: true, dueAt: true, test: { select: { id: true, title: true, notifiedMarks: true } } },
+    select: { id: true, testerId: true, joinedAt: true, dueAt: true, tester: { select: { timeZone: true } }, test: { select: { id: true, title: true, notifiedMarks: true } } },
     take: 5000,
   });
   for (const c of working) {
-    const due = ownDeadlineMarkDue(c, c.test.notifiedMarks, now);
+    const due = ownDeadlineMarkDue(c, c.test.notifiedMarks, now, c.tester.timeZone); // (Owner, Nov 27 2026) days in her zone, as her line prints them
     if (!due.send && !due.record.length) continue;
     // (§383) The line and its marks in one transaction (they were written one after the other: a failure between them sent the line again next time).
     await db.$transaction(async (tx) => {
@@ -1611,12 +1611,12 @@ async function openCharges(now: Date, co: CloseOuts, /** (§383) the daily job: 
 export async function reviewReminders(now: Date, co: CloseOuts = closeOutMemo(now), contractIds?: string[]) {
   // A local rehearsal can generate reminders for selected sessions without running payment timers.
   const scope = contractIds ? { contractId: { in: contractIds } } : {};
-  const upcoming = await db.submission.findMany({ where: { ...scope, review: null, choiceOfferedAt: null, payBy: { not: null }, contract: { test: MONEY_FREE, tester: PAYABLE_TESTER } }, include: { contract: { include: { tester: true, test: true } } }, orderBy: { payBy: "asc" }, take: 2000 });
+  const upcoming = await db.submission.findMany({ where: { ...scope, review: null, choiceOfferedAt: null, payBy: { not: null }, contract: { test: MONEY_FREE, tester: PAYABLE_TESTER } }, include: { contract: { include: { tester: true, test: { include: { developer: { select: { timeZone: true } } } } } } }, orderBy: { payBy: "asc" }, take: 2000 });
   for (const s of upcoming) {
     const reviewDate = chargeOpensAt(s, s.contract.test, s.contract, now);
     // (Owner, Nov 6, §311g) The marks are keyed by the review date: an extended deadline, a pause or an outage re-arms the ones still ahead (never a repeat).
     if (!reviewDate) continue;
-    const due = reviewMarkDue(s.updatedAt, reviewDate, now, s.devMarks);
+    const due = reviewMarkDue(s.updatedAt, reviewDate, now, s.devMarks, s.contract.test.developer.timeZone); // (Owner, Nov 27 2026) days in the developer's zone
     if ((!due.send && !due.record.length) || (await co.payClosed({ submissionId: s.id }))) continue; // (batch 17 §19) Pay closed: no reminders
     const m = due.send;
     // The mark is recorded with every earlier one, so a missed mark is never sent late. (Owner, Nov 11, §383) In ONE transaction with its line: a failure
@@ -1638,12 +1638,12 @@ export async function reviewReminders(now: Date, co: CloseOuts = closeOutMemo(no
   // 5b. (Owner, Oct 29, batch 28 §21) Listed calls: "pay it within 3 days / by tomorrow" before the automatic charge (7 days after the call, moved by pauses and outages).
   // (Owner, Nov 6, §311e) Unlisted calls the same, counted to their pay date (7 days after the call), ending "(it isn't listed: pay any amount, or it closes with
   // nothing paid)" (was a weekly "Pay your calls" line after the date): at that date an unpaid one closes with $0 (autoChargeCalls).
-  const upcomingCalls = await db.call.findMany({ where: { ...scope, review: null, status: "booked", payBy: { not: null }, contract: { test: MONEY_FREE, tester: PAYABLE_TESTER } }, include: { contract: { include: { tester: true, test: true } } }, take: 2000 });
+  const upcomingCalls = await db.call.findMany({ where: { ...scope, review: null, status: "booked", payBy: { not: null }, contract: { test: MONEY_FREE, tester: PAYABLE_TESTER } }, include: { contract: { include: { tester: true, test: { include: { developer: { select: { timeZone: true } } } } } } }, take: 2000 });
   for (const x of upcomingCalls) {
     if (x.rateCents == null && (await co.payClosed({ callId: x.id }))) continue; // an unlisted call whose Pay closed: no reminders
     const chargeAt = (await callChargeAt(x.id, now)) ?? x.payBy!; // (§386 G) moved by a freeze after close; its marks follow the moved date (§311g / §367)
     const sent = x.measuredAt ?? x.startsAt;
-    const due = callMinutesOf(x) ? reviewMarkDue(sent, chargeAt, now, x.devMarks) : null; // (§311g) keyed by the pay date
+    const due = callMinutesOf(x) ? reviewMarkDue(sent, chargeAt, now, x.devMarks, x.contract.test.developer.timeZone) : null; // (§311g) keyed by the pay date
     if (!due) continue;
     const m = due.send;
     if (!m || (m.label !== "tomorrow" && m.label !== "in 3 days")) { // only the 3-day and 1-day marks are sent
@@ -1691,14 +1691,19 @@ export const closeSoonKey = (at: Date) => `co:${at.getTime()}:`;
  * ahead when the piece's Charge opened (`from`); the month only when the closing date was more than a month away then. (Owner, Nov 6, §313b) Keyed by the closing
  * date they count to (datedMarkDue, as §311g's reminders): a pause or an outage moving it gives a fresh countdown; marks already behind the new date are recorded,
  * not sent; the latest passed mark is sent once, unless it was sent for an earlier date; a plain "co:3" (before §313b) counts as sent for an earlier date.
+ * (Owner, Nov 27 2026) A closing date moved to a later day (in the developer's zone `tz`) than the one the last Closing soon line named: ONE fresh line at the next
+ * run naming it (the latest mark passed for it). Its line names only the date ("close on Nov 22"), so it is sent even when none of its marks has passed for the new date:
+ * `send` is then the days left, recorded as "co:<ms>:d<days left>" (one key per day, so that day's line keeps the piece when it is drawn again). Moved within the
+ * same day: nothing.
  */
-export function closeSoonMarkDue(at: Date | null, from: Date, now: Date, recorded: string[]): { send: number | null; record: string[] } {
+export function closeSoonMarkDue(at: Date | null, from: Date, now: Date, recorded: string[], tz?: string | null): { send: number | null; record: string[] } {
   if (!at) return { send: null, record: [] };
   const marks = CLOSE_SOON_MARKS
     .filter((m) => dayNo(at) - m >= dayNo(from) && (m !== 30 || at.getTime() - from.getTime() > 30 * 86_400_000))
     .map((m) => ({ mark: String(m), at: new Date((dayNo(at) - m) * 86_400_000) }));
-  const due = datedMarkDue(closeSoonKey(at), recorded.filter((x) => x.startsWith("co:")), marks, at, now, String(CLOSE_SOON_MARKS[CLOSE_SOON_MARKS.length - 1])); // (§367)
-  return { send: due.send ? Number(due.send.mark) : null, record: due.record };
+  const left = Math.max(1, dayNo(at) - dayNo(now));
+  const due = datedMarkDue(closeSoonKey(at), recorded.filter((x) => x.startsWith("co:")), marks, at, now, { tz, plain: `d${left}` });
+  return { send: due.plain ? left : due.send ? Number(due.send.mark) : null, record: due.record };
 }
 /**
  * (Batch 29 §22) "Closing soon: Ana's written answers on “Harbor Run” close on Nov 18" for one piece; "Closing soon: 2 pieces close by Nov 18 (Ana's written answers on
@@ -1743,14 +1748,15 @@ async function closeOutReminders(now: Date, co: CloseOuts) {
     for (const p of pieces) {
       const at = await co.at(p.k);
       if (!at || at.getTime() <= now.getTime()) continue;
-      const due = closeSoonMarkDue(at, p.from, now, p.sent);
+      const due = closeSoonMarkDue(at, p.from, now, p.sent, c.test.developer.timeZone); // (Owner, Nov 27 2026) days in the developer's zone
       const mark = due.send;
       // (§313b) What to record (the mark sent, every one behind it, the first look at this closing date).
       const entry = byDev.get(c.test.developerId) ?? { email: c.test.developer.email, today: [], fresh: false, records: [] };
       if (due.record.length) entry.records.push({ sub: p.sub, id: p.id, record: due.record });
       byDev.set(c.test.developerId, entry);
       // Already sent today (its mark is today's): it stays in today's line when that line is drawn again.
-      const today = !mark && CLOSE_SOON_MARKS.some((d) => d === dayNo(at) - dayNo(now) && p.sent.includes(`${closeSoonKey(at)}${d}`));
+      // (Owner, Nov 27 2026) A fresh line sent before any of its marks passed ("d<days left>") counts as today's too.
+      const today = !mark && (CLOSE_SOON_MARKS.some((d) => d === dayNo(at) - dayNo(now) && p.sent.includes(`${closeSoonKey(at)}${d}`)) || p.sent.includes(`${closeSoonKey(at)}d${dayNo(at) - dayNo(now)}`));
       if (!mark && !today) continue;
       entry.today.push({ who: firstName(c.tester), part: p.part, title: c.test.title, at, when: "when" in p ? p.when : null }); // (§327) a call's date and time
       if (mark) entry.fresh = true;
