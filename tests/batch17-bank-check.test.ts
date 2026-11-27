@@ -104,7 +104,8 @@ describe("batch 17 §11: the bank's check opens inline, under the button", () =>
     expect(real).toContain(`<iframe src="${CHECK_URL.replace(/&/g, "&amp;")}" title="Your bank&#x27;s check"`);
     expect(real).toContain(">Cancel</button>"); // (batch 35 §160) "Cancel" under the bank's frame again (it asks Stripe first), the stand-in keeps Cancel
     // Under the button that was pressed: Pay / Pay more, Pay what you owe, Subscribe (PressButton) and Verify a card each render the check right after their button.
-    expect(src("app/app/tests/[id]/PayBox.tsx")).toMatch(/at least \$0\.50 \(or 0\)<\/span>\}?\s*<\/div>\s*\{bank\.view\}/); // (batch 35 §41: hidden while a finished press waits for the redraw)
+    // (batch 35 §41: hidden while a finished press waits for the redraw) (§387 4) then the closing date beside Pay, still in the button's row.
+    expect(src("app/app/tests/[id]/PayBox.tsx")).toMatch(/at least \$0\.50 \(or 0\)<\/span>\}\s*\{!done && p\.closes && <span[^\n]*data-pay-closes=""[^\n]*\}\s*<\/div>\s*\{bank\.view\}/);
     expect(src("components/OwedBox.tsx")).toMatch(/<\/button>(<\/div>)?\}\s*\{bank\.view\}/); // (§150) the button sits in a row with its over-$200 tick
     expect(src("components/PressButton.tsx")).toMatch(/<\/button>\s*\{bank\.view\}/);
     expect(src("components/ChargebackSteps.tsx")).toContain("{bank.view}");

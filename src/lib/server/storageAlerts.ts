@@ -48,8 +48,11 @@ export const storageBellLine = (kind: StorageKind, pct: number) => `Storage is f
 /** The real sizes now: the whole database (pg_database_size) and the stored uploads (their recorded sizes). */
 export async function measureStorage() {
   const [row] = await db.$queryRaw<{ size: bigint }[]>`SELECT pg_database_size(current_database()) AS size`;
-  const uploads = (await db.recording.aggregate({ where: { uploadedAt: { not: null } }, _sum: { sizeBytes: true } }))._sum.sizeBytes ?? 0;
-  return { database: Number(row?.size ?? 0), uploads: Number(uploads) };
+  return { database: Number(row?.size ?? 0), uploads: await measureUploads() };
+}
+/** The stored uploads: the finished ones' sizes (a recording still uploading isn't counted). */
+export async function measureUploads() {
+  return Number((await db.recording.aggregate({ where: { uploadedAt: { not: null } }, _sum: { sizeBytes: true } }))._sum.sizeBytes ?? 0);
 }
 
 async function readState(): Promise<StorageState | null> {

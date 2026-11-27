@@ -9,7 +9,7 @@ import { startHold } from "@/lib/server/holds";
 import { closeJoiningAfterOpenUntil } from "@/lib/server/tests";
 import { T, renderTimes } from "@/lib/tz";
 import {
-  STORAGE_DEGRADED_KEYWORD, STORAGE_STATE_KEY, checkStorage, measureStorage, sizeText, storageAlerts, storageBellLine, storageBoxLine,
+  STORAGE_DEGRADED_KEYWORD, STORAGE_STATE_KEY, checkStorage, measureStorage, measureUploads, sizeText, storageAlerts, storageBellLine, storageBoxLine,
 } from "@/lib/server/storageAlerts";
 import { makeUser } from "./helpers";
 import { act, bookCall, joined, sact, seen, settle, setup } from "./fixtures";
@@ -102,14 +102,18 @@ describe("batch 30 §35: storage running out tells the admins, inside and outsid
   });
 
   it("the real measurement: the database's size and the stored uploads (only finished ones)", async () => {
-    const before = await measureStorage();
-    expect(before.database).toBeGreaterThan(0);
+    // (§388) pg_database_size scans the whole local database, every task's isolated schema included (452 schemas, ~60 s on Nov 26): measured once, and the
+    // uploads' change is read by measureUploads (the same sum measureStorage returns).
+    const measured = await measureStorage();
+    expect(measured.database).toBeGreaterThan(0);
+    expect(measured.uploads).toBeGreaterThanOrEqual(0);
+    const before = await measureUploads();
     const s = await setup();
     const j = await joined(s.testId);
     await db.recording.create({ data: { contractId: j.sessionId, storageKey: `k-${randomUUID()}`, filename: "a.mp4", sizeBytes: 1234, contentType: "video/mp4", uploadedAt: new Date() } });
     await db.recording.create({ data: { contractId: j.sessionId, storageKey: `k-${randomUUID()}`, filename: "b.mp4", sizeBytes: 999, contentType: "video/mp4" } });
-    expect((await measureStorage()).uploads - before.uploads).toBe(1234);
-  }, 120_000); // pg_database_size scans the whole local database, including other tasks’ isolated schemas.
+    expect((await measureUploads()) - before).toBe(1234);
+  }, 240_000);
 
   it("the daily job runs it; the admin console's red box", () => {
     expect(src("lib/server/holds.ts")).toContain('(await import("./storageAlerts")).checkStorage(now)');
@@ -211,7 +215,9 @@ describe("batch 30 §6: leftovers from the batch 29 design doc check", () => {
     const bell = src("lib/bell.ts");
     for (const g of ["textra", "appclosed", "reinvited", "team", "disputes", "trejected"]) expect(bell).not.toMatch(new RegExp(`^\\s+${g}:`, "m"));
     const rules = src("lib/rules.ts");
-    for (const f of ["bankConfirmLine", "bankConfirmTestLine", "chargeByLine", "payByLine"]) expect(rules).not.toMatch(new RegExp(`export const ${f}\\b`));
+    for (const f of ["bankConfirmLine", "bankConfirmTestLine"]) expect(rules).not.toMatch(new RegExp(`export const ${f}\\b`));
+    // (Owner, Nov 11, §387 4) chargeByLine and payByLine are the date lines beside Charge and Pay now ("Charge or let go by …", "Pay by …"), not batch 29's dead ones.
+    expect(rules).toContain("export const chargeByLine = (date: string) => `Charge or let go by ${date}`;");
     const route = src("app/api/sessions/[id]/[action]/route.ts");
     expect(route).not.toMatch(/still\s+\* work \(on the first press\)/);
     expect(route).toMatch(/where Dispute is the only\s+\* press, under the same stop-once rules as everywhere/);

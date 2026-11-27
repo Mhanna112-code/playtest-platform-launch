@@ -202,7 +202,7 @@ describe("batch 10 item 3: long written answers scroll on the developer's side",
     // (Batch 35 §136) One list: the answers under their questions, the notes, then what was added.
     // (Owner, Nov 5, §263) No `part` any more: the current questions (and a new answer to an old one, tagged Old).
     expect(page.slice(at)).toContain("<SentWork id={`needs-${x.s!.id}`} timeZone={u.timeZone} kind={x.s!.kind} answers={x.s!.answers} questions={writtenQuestions(x.c)} notes={x.s!.notes} additions={x.s!.additions}"); // (§167) fold ids and zone
-    expect(page.indexOf('<PayBox owes={owesNow} disputable={!ratedTesters.has(x.c.id)} key={x.s!.id} kind="submission"')).toBeGreaterThan(at);
+    expect(page.indexOf('<PayBox closes={payBy(x.s!.id)} owes={owesNow} disputable={!ratedTesters.has(x.c.id)} key={x.s!.id} kind="submission"')).toBeGreaterThan(at); // (§387 4) its date beside Pay
   });
 });
 

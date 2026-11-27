@@ -225,10 +225,13 @@ const testerAnswer = (sessionId: string, cookie: string, requestId: string, acti
   sact(sessionId, "answer-request", cookie, { requestId, action, seenAt: seen(), confirmed: true, ...extra });
 
 describe("§187 item 10: a \"one of\" request is one row per time", () => {
+  // (§388) Times ahead of the test's own clock (fixed dates from Nov 12–19 fell in the past once the clock passed them, and past times aren't offered): the
+  // same days apart and hours as before (+3 d 21:22, +10 d 21:22, +5 d 18:22, UTC).
+  const dayAt = (days: number, h: number, m: number) => { const d = new Date(Date.now() + days * 86_400_000); d.setUTCHours(h, m, 0, 0); return d.toISOString(); };
   const ROWS = [
-    { startsAt: new Date("2026-11-12T21:22:00Z").toISOString(), repeat: "once" as const, count: 1 },
-    { startsAt: new Date("2026-11-19T21:22:00Z").toISOString(), repeat: "once" as const, count: 1 },
-    { startsAt: new Date("2026-11-14T18:22:00Z").toISOString(), repeat: "once" as const, count: 1 },
+    { startsAt: dayAt(3, 21, 22), repeat: "once" as const, count: 1 },
+    { startsAt: dayAt(10, 21, 22), repeat: "once" as const, count: 1 },
+    { startsAt: dayAt(5, 18, 22), repeat: "once" as const, count: 1 },
   ];
   const req = (mine: boolean): PanelReq => ({ id: "r1", contractId: "c1", tester: "Ana Silva", testerHref: "/app/testers/a", asker: mine ? "you" : "Ana Silva", rows: ROWS, minutes: 30, mine, rate: "Contract $31/h" });
   it("each time its own row with its own buttons; no \"one of:\", no \"asked by\"; Accept never names a time", () => {

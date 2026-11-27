@@ -28,7 +28,9 @@ describe("every stop names the press (section 36)", () => {
     const box = src("components/ChangesBox.tsx");
     expect(box).toContain("Your ${named} didn't go through.");
     expect(box).toContain("Since you opened this page:");
-    expect(box).toContain("`Press ${pressVerb(named)} again to go ahead.`");
+    // (Owner, Nov 11, §387 2) "Press … again" names the button as it reads (`button`) where it differs from the press's name.
+    expect(box).toContain('const again = button || (named ? pressVerb(named) : "");');
+    expect(box).toContain("`Press ${again} again to go ahead.`");
     // The bold action line comes last, after the Alerts lines.
     expect(box.indexOf("<QuickIgnore alerts={alerts} />")).toBeLessThan(box.indexOf('data-press-again=""'));
   });
