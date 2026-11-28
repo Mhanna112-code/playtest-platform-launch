@@ -3,7 +3,7 @@ import { withLineLinks } from "@/components/LineLinks";
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/client";
 import type { Change } from "@/components/ChangesBox";
-import { announce, clearShown, mergeChanges, setShown, setShownOnPage, wasShownInBox } from "@/lib/live";
+import { announce, clearShown, handOver, mergeChanges, setShown, setShownOnPage, takeOver, wasShownInBox } from "@/lib/live";
 import { LongList } from "@/components/LongList";
 import { ContractLink } from "@/components/ContractLink";
 import { jumpTo, jumpToFirst } from "@/lib/markJump";
@@ -14,6 +14,7 @@ import { LIVE_TICK, boxSync, rideLiveClock, whileRedrawn } from "@/lib/liveSync"
 
 const time = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 const key = (c: Change) => `${c.at}|${c.text}`;
+const time0 = (at: string | Date) => new Date(at).getTime();
 /** (Owner, Nov 6, §284) An ignored line's words that open its row: still the line's grey, underlined on hover. */
 const IGNORED_REST = "text-inherit no-underline hover:underline";
 
@@ -42,6 +43,10 @@ export function LiveTop({ scope, seenAt, seeIt, contractLink }: { scope: string;
   const known = useRef(new Set<string>());
   const since = useRef(seenAt); // the page-open time: the list always covers everything since then
   const box = useRef<HTMLDivElement>(null);
+  // (Owner, Nov 28) What this box has shown every line up to (its last shown check), and the lines it picked up but still holds for the page's redraw: a box
+  // drawn again in its place (lib/live.ts handOver) checks from before them.
+  const shownTo = useRef(seenAt);
+  const held = useRef<Change[]>([]);
 
   // (Owner, Oct 29, batch 27 section 4; replaces batch 15 section 28's first-update scroll) Nothing moves on its own any more: EVERY live update that arrives while
   // this box is out of view raises the floating pill ("1 new update", counting up), whether or not anything is being typed. Its arrow points where the updates are
@@ -130,7 +135,7 @@ export function LiveTop({ scope, seenAt, seeIt, contractLink }: { scope: string;
 
   useEffect(() => {
     let alive = true;
-    const tick = async () => {
+    const tick = async (tookOver = false) => {
       const started = Date.now();
       const r = await api<{ changes: Change[]; now: string }>(`/api/live?scope=${encodeURIComponent(scope)}&since=${encodeURIComponent(since.current)}`).catch(() => null);
       if (!r || !alive) return;
@@ -138,6 +143,8 @@ export function LiveTop({ scope, seenAt, seeIt, contractLink }: { scope: string;
       added.forEach((c) => known.current.add(key(c)));
       const apply = (redrawn: boolean) => {
         if (!alive) return;
+        held.current = held.current.filter((c) => !added.includes(c));
+        if (time0(r.now) > time0(shownTo.current)) shownTo.current = r.now;
         // (Batch 35 §34) A keyed line (the one listing line) replaces the box's earlier one, covering its fields too.
         if (added.length) setLines((old) => mergeChanges(old, added));
         // Only a live update nobody pressed for is announced (lines a stop box showed are quiet); (batch 27 section 4) each one raises the pill when the box is out of view.
@@ -151,7 +158,11 @@ export function LiveTop({ scope, seenAt, seeIt, contractLink }: { scope: string;
         whileRedrawn(redrawn, () => announce(added));
       };
       // (Batch 35 §37) New lines redraw the page at once and show as it lands (at once if it already redrew during this check).
+      // (Owner, Nov 28) The first check of a box drawn again in place of the old one: lines from before this render came with the redraw that just landed.
+      const cameWithRedraw = tookOver && added.every((c) => time0(c.at) <= time0(drawnWith.current));
+      if (!cameWithRedraw) held.current.push(...added);
       if (!added.length) apply(false);
+      else if (cameWithRedraw) apply(true);
       else sync.lines(started, apply);
     };
     check.current = tick;
@@ -159,12 +170,23 @@ export function LiveTop({ scope, seenAt, seeIt, contractLink }: { scope: string;
     const leave = rideLiveClock();
     const onTick = () => void tick();
     window.addEventListener(LIVE_TICK, onTick);
+    // (Owner, Nov 28) Drawn again in place of this scope's box (lib/live.ts takeOver): check at once from what that one had shown, so nothing it picked up but
+    // hadn't shown is lost; the page has just drawn.
+    const from = takeOver(scope);
+    if (from) {
+      if (time0(from) < time0(since.current)) since.current = from;
+      sync.drawn();
+      void tick(true);
+    }
     return () => {
       alive = false;
       leave();
       window.removeEventListener(LIVE_TICK, onTick);
       sync.stop();
       clearShown(scope);
+      // (Owner, Nov 28) The box drawn in its place counts from before any line this one hasn't shown.
+      const firstHeld = Math.min(...held.current.map((c) => time0(c.at)));
+      handOver(scope, firstHeld - 1 < time0(shownTo.current) ? new Date(firstHeld - 1).toISOString() : shownTo.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- announceFresh and where read refs and setters only
   }, [scope, sync]);

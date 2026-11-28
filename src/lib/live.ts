@@ -26,6 +26,22 @@ export function clearShown(s: string) {
     shownUpTo = "";
   }
 }
+
+/**
+ * (Owner, Nov 28) A live box drawn again in place of the same scope's box (the session page's main section is keyed by the part's status and end, so the
+ * redraw that brings the end of her work mounts a new one): the box leaving hands over the time up to which it showed every line (`handOver`), and the new box
+ * checks from there at once (`takeOver`), so the lines the old one picked up but hadn't shown (held for that redraw, or a check still on its way) show in the
+ * new one. Only the box mounted right after it (the same commit), and only for the same scope.
+ */
+let handed: { scope: string; from: string; at: number } | null = null;
+export function handOver(s: string, from: string) {
+  handed = { scope: s, from, at: Date.now() };
+}
+export function takeOver(s: string): string {
+  const h = handed;
+  handed = null;
+  return h && h.scope === s && Date.now() - h.at < 1000 ? h.from : "";
+}
 /**
  * (Owner, Oct 28, batch 16 section 38B) When this page first loaded in this tab (a refresh of its data never moves it), and the newest change a stop box under a button
  * has listed. A tester's press sends both: a call change stops it once even when the live box or a refresh already showed it, until a stop box has listed it.
