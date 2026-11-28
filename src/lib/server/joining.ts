@@ -280,6 +280,18 @@ const noKeyLine = (testerId: string, testId: string, press: string) => async (e:
   throw e instanceof HttpError && e.code === "no_key" ? new HttpError(409, "refused", joinPressRefusal((await joinRefusal(testerId, testId)) || NO_FREE_KEY, press)) : e;
 };
 
+/**
+ * (Owner, Nov 27, shared rule 4: refusals → box → field mistakes; batch 18 section 1) The updated Terms of Use tick on Join, Apply and Ask to rejoin: a red mistake
+ * at the tick, so step 5 with the NDA tick (after every refusal and box; it used to come before them, on the route); agreed with the save (step 6).
+ */
+async function termsTick(tx: Tx, testerId: string, body: Record<string, unknown>) {
+  const me = await tx.user.findUnique({ where: { id: testerId }, select: { termsVersion: true } });
+  return me ? (await import("./users")).termsTickMistake(me, body) : null;
+}
+const agreeTerms = async (tx: Tx, testerId: string, body: Record<string, unknown>) => {
+  if (body.agreeTerms === true) await (await import("./users")).agreeCurrentTerms(tx, testerId);
+};
+
 /** (§377) Step 1's invite for Apply / Ask to rejoin: one the page hadn't shown (it joins at once), a refusal (the page showed it), or none. */
 async function inviteMet(tx: Tx, tester: U, testId: string, body: Record<string, unknown>, devName: string) {
   let invite: Awaited<ReturnType<typeof inviteBeforePress>> = null;
@@ -319,9 +331,12 @@ async function joinSteps(tx: Tx, tester: U, t: TestRow, body: Record<string, unk
   // 5. The gap box, then (design doc 7.3) the NDA tick.
   const gap = await stopOf(async () => gapStop(t, profile, body, as));
   if (gap) return { stop: gap };
+  const tick = await termsTick(tx, tester.id, body);
+  if (tick) return { stop: tick };
   if (t.ndaText && body.ndaAccepted !== true) return { stop: new HttpError(400, "nda", as === "Ask" ? "Accept the NDA to ask to rejoin." : "Accept the NDA to join.") };
   // 6. The join; any waiting application or ask of theirs closes as joined.
   const joined = await saveJoin(tx, t, tester, body);
+  await agreeTerms(tx, tester.id, body);
   await tx.application.updateMany({ where: { testId, testerId: tester.id, status: "pending" }, data: { status: "joined", decidedAt: new Date() } });
   return { saved: joined };
 }
@@ -402,9 +417,12 @@ export async function apply(tester: U, testId: string, body: Record<string, unkn
     // 5. The gap box, then (7.3) the NDA tick: the NDA is accepted when applying; the developer's Accept joins them on it.
     const gap = await stopOf(async () => gapStop(t, profile, body, "Apply"));
     if (gap) return { stop: gap };
+    const tick = await termsTick(tx, tester.id, body);
+    if (tick) return { stop: tick };
     if (t.ndaText && body.ndaAccepted !== true) return { stop: new HttpError(400, "nda", "Accept the NDA to apply.") };
     // 6. The application.
     const note = typeof body.note === "string" ? body.note.trim().slice(0, LIMITS.joinNote) : "";
+    await agreeTerms(tx, tester.id, body);
     await storeJoinRequest(tx, tester.id, testId, { note, listing: listingSnapshot(t) as Prisma.InputJsonValue, kind: "apply", ndaAcceptedAt: t.ndaText ? new Date() : null }, `${displayName(tester)} applied to join`);
     return { saved: { requested: { note } } };
   }).catch(noKeyLine(tester.id, testId, "Apply"));
@@ -502,6 +520,13 @@ export async function decideApplication(dev: U, testId: string, body: Record<str
   if (body.action !== "decline") await (await import("./blocks")).ownBlockStop(dev.id, tester.id, name, "Accept");
   if (body.action !== "decline" && a.status === "pending" && (await (await import("./blocks")).iBlocked(tester.id, dev.id))) throw new HttpError(409, "gone", `${name}'s application was closed.`);
   if (a.status !== "pending") throw gone(a);
+  const isRejoin = a.kind === "rejoin";
+  // (Owner, Nov 27, shared rule 4: refusals → box → field mistakes) Accept's own refusals (stopped, joining closed, paused, full, a block, the 10-test limit…)
+  // before the stop-once box, never after it. (§341) No free key: refused when it joins (joinTest), with the key line.
+  if (body.action !== "decline") {
+    const refusal = await joinRefusal(tester.id, testId, { rejoin: isRejoin, byDeveloper: true });
+    if (refusal) throw new HttpError(409, "refused", asPressRefusal(refusal, "Accept").replace("You've already joined", `${name} already joined`).replace(TEST_LIMIT_LINE, `${name} can't join more tests right now.`)); // (§363)
+  }
   const extra: TestEventLike[] = [];
   const shownTesters = body.seenTesters && typeof body.seenTesters === "object" ? body.seenTesters as Record<string, unknown> : {};
   const shownRaw = shownTesters[tester.id] && typeof shownTesters[tester.id] === "object" ? shownTesters[tester.id] as Record<string, unknown> : null;
@@ -529,7 +554,7 @@ export async function decideApplication(dev: U, testId: string, body: Record<str
     else await notify(tester.email, `Your application to “${title}” wasn't accepted`, ["Thanks for applying. There are other tests to find."], `/app/find/${testId}`, { group: "joined", testId }); // (batch 29 §24) its own join page
     return { declined: true };
   }
-  const isRejoin = a.kind === "rejoin";
+  // (Rule 4) Read again after the box: something that changed while it showed refuses the confirmed press with the same line.
   const refusal = await joinRefusal(tester.id, testId, { rejoin: isRejoin, byDeveloper: true }); // (§341) no free key: refused below with the key line
   if (refusal) throw new HttpError(409, "refused", asPressRefusal(refusal, "Accept").replace("You've already joined", `${name} already joined`).replace(TEST_LIMIT_LINE, `${name} can't join more tests right now.`)); // (§363)
   const t = await db.test.findUniqueOrThrow({ where: { id: testId } });
@@ -664,9 +689,12 @@ export async function askToRejoin(tester: U, testId: string, body: Record<string
     // 5. (§377; was the NDA tick first) The gap box, then the NDA tick, as Join and Apply.
     const gap = await stopOf(async () => gapStop(t, profile, body, "Ask"));
     if (gap) return { stop: gap };
+    const tick = await termsTick(tx, tester.id, body);
+    if (tick) return { stop: tick };
     if (t.ndaText && body.ndaAccepted !== true) return { stop: new HttpError(400, "nda", "Accept the NDA to ask to rejoin.") };
     // 6. The ask.
     const note = typeof body.note === "string" ? body.note.trim().slice(0, LIMITS.joinNote) : "";
+    await agreeTerms(tx, tester.id, body);
     await storeJoinRequest(tx, tester.id, testId, { note, listing: listingSnapshot(t) as Prisma.InputJsonValue, kind: "rejoin", ndaAcceptedAt: t.ndaText ? new Date() : null }, `${displayName(tester)} asks to rejoin`);
     // (Owner, Oct 28) A test a suspension removed them from leaves the dashboard top once they ask (or dismiss it).
     if (old.endKind === "suspended" && !old.removedDismissedAt) await tx.contract.update({ where: { id: old.id }, data: { removedDismissedAt: new Date() } });

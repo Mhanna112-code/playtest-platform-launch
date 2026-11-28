@@ -182,12 +182,13 @@ export async function sendRecording(tester: U, contractId: string, body: Record<
     // upload still running is something to send: this comes before "nothing to add").
     const soft = await softRefusals(tx, c, press, async () => ((await tx.recording.count({ where: { contractId, ...stillUploading("recording") } })) ? new HttpError(409, "uploading", STILL_UPLOADING) : null));
     if (soft) return { stop: soft };
-    // 3c. Nothing new to send ((Owner, Nov 3, batch 35 §136) sent recordings are locked, a later Send ADDS the ones not sent yet).
-    if (!(await tx.recording.count({ where: { contractId, part: "recording", submissionId: null, uploadedAt: { not: null } } }))) return { stop: new HttpError(400, "none", sent ? NO_RECORDING_TO_ADD : "Upload a recording first.") };
     // 5. The tester's one gate ((Owner, Nov 4, §183) adding to a sent recording stops once for a developer payment on it since the page loaded, whatever the
     // tester's Alerts; another tab's Send).
     const box = await testerSendGate(tx, contractId, body, sent?.id);
     if (box) return { stop: box };
+    // 6. Nothing new to send ((Owner, Nov 3, batch 35 §136) sent recordings are locked, a later Send ADDS the ones not sent yet). (Owner, Nov 27, shared rule 4:
+    // refusals → box → field mistakes) Its red line comes after the stop-once box.
+    if (!(await tx.recording.count({ where: { contractId, part: "recording", submissionId: null, uploadedAt: { not: null } } }))) return { stop: new HttpError(400, "none", sent ? NO_RECORDING_TO_ADD : "Upload a recording first.") };
     // 7. The save.
     return { saved: await saveRecording(tx, tester, contractId, sent, body) };
   });

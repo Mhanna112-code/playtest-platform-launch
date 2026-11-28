@@ -201,9 +201,18 @@ export async function saveProfile(userId: string, body: Record<string, unknown>)
  * unticked press is refused with the box's line. Nothing else checks this: running tests, pay, charges, disputes and chat carry on under the terms they started with.
  */
 export async function requireCurrentTerms(u: { id: string; termsVersion: number }, body: Record<string, unknown>) {
+  const mistake = termsTickMistake(u, body);
+  if (mistake) throw mistake;
   if (!needsTermsAgain(u)) return;
-  // (Owner, Oct 28, batch 20 section 21) The tick sits above the button with the other ticks: unticked, a red mistake at it ("Tick to agree to the updated Terms of Use.").
-  if (body.agreeTerms !== true) throw new HttpError(400, TERMS_UPDATED_CODE, TERMS_TICK_MISSING, { termsHref: TERMS_CHANGED_HREF, termsVersion: TERMS_VERSION, errors: [TERMS_TICK_MISSING] });
-  await db.user.updateMany({ where: { id: u.id, termsVersion: { lt: TERMS_VERSION } }, data: { termsVersion: TERMS_VERSION, termsAcceptedAt: new Date() } });
+  await agreeCurrentTerms(db, u.id);
   u.termsVersion = TERMS_VERSION;
+}
+/** (Owner, Oct 28, batch 20 section 21) The tick sits above the button with the other ticks: unticked, a red mistake at it ("Tick to agree to the updated Terms of Use."). */
+export function termsTickMistake(u: { termsVersion: number }, body: Record<string, unknown>) {
+  if (!needsTermsAgain(u) || body.agreeTerms === true) return null;
+  return new HttpError(400, TERMS_UPDATED_CODE, TERMS_TICK_MISSING, { termsHref: TERMS_CHANGED_HREF, termsVersion: TERMS_VERSION, errors: [TERMS_TICK_MISSING] });
+}
+/** The updated Terms of Use agreed (the tick was given): recorded once, with the press's save when it has one (`q`: its transaction). */
+export async function agreeCurrentTerms(q: Pick<typeof db, "user">, userId: string) {
+  await q.user.updateMany({ where: { id: userId, termsVersion: { lt: TERMS_VERSION } }, data: { termsVersion: TERMS_VERSION, termsAcceptedAt: new Date() } });
 }

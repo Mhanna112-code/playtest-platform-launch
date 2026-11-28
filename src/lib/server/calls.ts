@@ -115,10 +115,11 @@ export async function reportNoShow(user: U, callId: string, body: Record<string,
   // (The full app's Report a problem) No-show / Late, plus an optional note; without a kind, the note says what happened.
   const kind = body.kind === "late" ? "was late" : body.kind === "no_show" ? "didn't show up" : "";
   const typed = typeof body.note === "string" ? body.note.trim().slice(0, 1000) : "";
-  if (!kind && typed.length < 10) throw new HttpError(400, "bad_note", "Say what happened.");
   const note = kind ? `${kind[0].toUpperCase()}${kind.slice(1)}${typed ? `: ${typed}` : "."}` : typed;
   if (side === "developer") await devGateIfSeen(call.contract.testId, body, { acts: ["no-show", "cancel-call", "cancel-set"], keys: [`call:${call.id}`] });
   else await sharedTesterGate(user.id, call.contractId, call.contract.testId, body);
+  // (Owner, Nov 27, shared rule 4: refusals → box → field mistakes) The note's mistake after the stop-once box; nothing is reported while it's red.
+  if (!kind && typed.length < 10) throw new HttpError(400, "bad_note", "Say what happened.");
   // (Owner, Nov 3, §157) Claimed: of two reports at the same moment (two tabs, or both sides) one is kept; the other is refused and never overwrites it.
   const claimed = await db.call.updateMany({ where: { id: call.id, noShowBy: null }, data: { noShowBy: side, noShowNote: note, noShowAt: new Date() } });
   if (claimed.count !== 1) throw new HttpError(409, "reported", "A problem with this call was already reported.");

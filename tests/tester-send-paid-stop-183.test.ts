@@ -225,14 +225,19 @@ describe("§183 adding recordings after a payment on the recording", () => {
     expect(r.status, JSON.stringify(r.body)).toBe(200);
   });
 
-  it("nothing new to add after a payment on it: refused at once, never a stop first", async () => {
+  // (Owner, Nov 27, shared rule 4; replaces "refused at once, never a stop first") Nothing new to add is a red mistake: the payment's stop-once box first, then
+  // on the confirmed press the red line.
+  it("nothing new to add after a payment on it: the payment's box first, then the red line on the confirmed press", async () => {
     const w = await world();
     const loaded = seen();
     await settle();
     expect((await more(w, w.rec.id)).status).toBe(200);
     await settle();
     const r = await sact(w.sessionId, "recording-send", w.tester.cookie, { seenAt: loaded, loadedAt: loaded });
-    expect(r.body.error?.code, JSON.stringify(r.body)).toBe("none");
+    expect(r.body.error?.code, JSON.stringify(r.body)).toBe("stop_once");
+    await settle();
+    const again = await sact(w.sessionId, "recording-send", w.tester.cookie, { seenAt: loaded, loadedAt: loaded, confirmed: true, boxAt: seen() });
+    expect(again.body.error?.code, JSON.stringify(again.body)).toBe("none");
   });
 });
 

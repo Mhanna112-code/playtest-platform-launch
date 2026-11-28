@@ -70,7 +70,7 @@ describe("batch 35 §77 a re-send with nothing new isn't 'updated'", () => {
     const refusal = "const final = sendRefusal(sent, page.qs, answers, answersNew, !!fresh?.length);";
     expect(send.indexOf(refusal)).toBeGreaterThan(0);
     expect(send.indexOf(refusal)).toBeLessThan(send.indexOf("await testerSendGate(tx, contractId, body, sent?.id, { stale: [] });"));
-    // §183: the recordings' nothing-to-add, before the gate too.
-    expect(rec.indexOf('sent ? NO_RECORDING_TO_ADD : "Upload a recording first."')).toBeLessThan(rec.indexOf("await testerSendGate(tx, contractId, body, sent?.id);"));
+    // (Owner, Nov 27, shared rule 4; was §183's "before the gate too") The recordings' nothing to send / nothing to add is a red mistake: after the stop-once box.
+    expect(rec.indexOf('sent ? NO_RECORDING_TO_ADD : "Upload a recording first."')).toBeGreaterThan(rec.indexOf("await testerSendGate(tx, contractId, body, sent?.id);"));
   });
 });

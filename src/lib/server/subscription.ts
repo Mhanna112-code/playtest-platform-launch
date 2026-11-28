@@ -131,8 +131,12 @@ async function stripeProduct(stripe: Stripe) {
 }
 
 /** Subscribe for $7/month (needs a saved card). During a free launch with an end date it starts now and is first charged on that date. */
-export async function subscribe(dev: Dev, now = new Date()) {
-  const u = await userOf(dev.id);
+/**
+ * (Owner, Nov 27, shared rule 4: refusals → box → field mistakes) Subscribe's refusals, in their order: not a developer, a hold or a suspension, already subscribed,
+ * a free launch, no card, a check already waiting. The route runs them before the Payments stop-once box; subscribe() runs them again.
+ */
+export async function subscribeRefusals(devId: string, now = new Date()) {
+  const u = await userOf(devId);
   if (!u.isDeveloper) throw new HttpError(403, "not_developer", "Only developers subscribe.");
   // (Section 8 item 3) Refused during a hold or a suspension.
   if (u.holdStartedAt || u.devSuspendedAt) throw new HttpError(409, "restricted", RF.pressRefused(u.devSuspendedAt ? RF.ACCOUNT_SUSPENDED_CAUSE : RF.HELD_CAUSE, `Subscribe for ${SUBSCRIPTION_PRICE}`)); // (§364 items 7, 8)
@@ -140,9 +144,14 @@ export async function subscribe(dev: Dev, now = new Date()) {
   const launch = await launchState(now);
   if (launch.free && !launch.until) throw new HttpError(409, "free", "Everything is free during launch: there's nothing to subscribe to yet.");
   if (stripeOn() && (!u.stripeCustomerId || !u.stripePaymentMethodId)) throw new HttpError(409, "no_card", "Add a card first, then subscribe.");
-  const startsCharging = launch.free && launch.until ? launch.until : now;
   // (Owner, Nov 3, §157) A Subscribe from another tab already waits for the bank: one check at a time (finish or cancel that one).
   if (await openSubCheck(u.id)) throw new HttpError(409, "check_waiting", SUBSCRIBE_CHECK_WAITING);
+  return { u, launch };
+}
+
+export async function subscribe(dev: Dev, now = new Date()) {
+  const { u, launch } = await subscribeRefusals(dev.id, now);
+  const startsCharging = launch.free && launch.until ? launch.until : now;
   // (Batch 19 section 5) A Subscribe whose bank check was cancelled (or failed) freed the press: the next one is a new attempt with a new one-time key (a double press
   // of one attempt shares it, so it is charged once).
   const tries = await db.payment.count({ where: { kind: "subscription", developerId: u.id, status: { in: ["cancelled", "failed"] }, note: { startsWith: "sub:" } } });
@@ -272,11 +281,17 @@ export async function subscriptionConfirmed(paymentId: string, now = new Date())
 }
 
 /** Cancel any time (also during a hold or suspension: Payments stays open). It lasts until the end of the paid month; no refunds. */
-export async function cancelSubscription(dev: Dev, now = new Date()) {
-  const u = await userOf(dev.id);
+/** (Owner, Nov 27, shared rule 4) Cancel's refusals: the route runs them before the Payments stop-once box; cancelSubscription() runs them again. */
+export async function cancelRefusals(devId: string, now = new Date()) {
+  const u = await userOf(devId);
   // (Batch 16 section 27) A repeat (cancelled in another tab or device) is a plain refusal.
   if (subscribed(u, now) && u.subscriptionCanceling) throw new HttpError(409, "already", "Your subscription is already cancelled.");
   if (!subscribed(u, now)) throw new HttpError(409, "none", "There's no subscription to cancel.");
+  return u;
+}
+
+export async function cancelSubscription(dev: Dev, now = new Date()) {
+  const u = await cancelRefusals(dev.id, now);
   if (billingOn() && u.subscriptionId && u.subscriptionId !== "manual") {
     const gone = await getStripe().subscriptions.update(u.subscriptionId, { cancel_at_period_end: true }).then(() => false, (e) => { if (isMissing(e)) return true; throw e; });
     if (gone) {
@@ -290,10 +305,16 @@ export async function cancelSubscription(dev: Dev, now = new Date()) {
 }
 
 /** "Keep my subscription": undo a cancel before the paid month ends (charges nothing, so it works during a hold too). */
-export async function keepSubscription(dev: Dev, now = new Date()) {
-  const u = await userOf(dev.id);
+/** (Owner, Nov 27, shared rule 4) Keep's refusals: the route runs them before the Payments stop-once box; keepSubscription() runs them again. */
+export async function keepRefusals(devId: string, now = new Date()) {
+  const u = await userOf(devId);
   if (subscribed(u, now) && !u.subscriptionCanceling) throw new HttpError(409, "already", "You're already subscribed."); // (batch 16 section 27) kept elsewhere
   if (!u.subscriptionCanceling || !subscribed(u, now)) throw new HttpError(409, "none", "There's nothing to keep.");
+  return u;
+}
+
+export async function keepSubscription(dev: Dev, now = new Date()) {
+  const u = await keepRefusals(dev.id, now);
   if (billingOn() && u.subscriptionId && u.subscriptionId !== "manual") {
     const gone = await getStripe().subscriptions.update(u.subscriptionId, { cancel_at_period_end: false }).then(() => false, (e) => { if (isMissing(e)) return true; throw e; });
     if (gone) {

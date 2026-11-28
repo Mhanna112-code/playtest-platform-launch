@@ -19,8 +19,9 @@ import { bodyPressVerb } from "@/lib/pressLabels";
 // (Owner, Oct 27) Email confirmation is needed only for Post a test (its own route), Join (which is also accepting an invite) and Apply. A blocked press is a blue notice under the button with Resend the link.
 const NEEDS_CONFIRMED = new Set(["join", "apply", "post-draft"]);
 // (Batch 18 section 1) An account on an older Terms of Use version agrees again (the box's tick) on these presses only: post a draft, and Join (also accepting an
-// invite), Apply and Ask to rejoin.
-const NEEDS_CURRENT_TERMS = new Set(["join", "apply", "rejoin-ask", "post-draft"]);
+// invite), Apply and Ask to rejoin. (Owner, Nov 27, shared rule 4: refusals → box → field mistakes) Join, Apply and Ask to rejoin check the tick themselves, as
+// a red mistake after their refusals and boxes, with the NDA tick (joining.ts termsTick); only Post the test checks it here.
+const NEEDS_CURRENT_TERMS = new Set(["post-draft"]);
 import { devRate } from "@/lib/server/ratings";
 import { logTestAction } from "@/lib/server/actionText";
 

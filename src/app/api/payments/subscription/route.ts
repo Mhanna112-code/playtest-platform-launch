@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import * as RF from "@/lib/refusal";
 import { HttpError, handle, ok, readJson } from "@/lib/server/http";
 import { requireUser } from "@/lib/server/session";
-import { cancelSubscription, keepSubscription, subscribe } from "@/lib/server/subscription";
+import { cancelRefusals, cancelSubscription, keepRefusals, keepSubscription, subscribe, subscribeRefusals } from "@/lib/server/subscription";
 import { accountGate, logAccountChange } from "@/lib/server/accountChanges";
 import { subscribed } from "@/lib/subscription";
 
@@ -21,6 +21,11 @@ export async function POST(req: Request) {
     const on = subscribed(u);
     if (body.action === "cancel" && on && u.subscriptionCanceling) throw new HttpError(409, "already", "Your subscription is already cancelled.");
     if (body.action !== "cancel" && on && !u.subscriptionCanceling) throw new HttpError(409, "already", "You're already subscribed.");
+    // (Owner, Nov 27, shared rule 4: refusals → box → field mistakes) The press's own refusals (a hold or suspension, already subscribed, nothing to cancel or
+    // keep, no card, a check waiting…) before the stop-once box, never after it; each is read again when the press goes ahead.
+    if (body.action === "subscribe") await subscribeRefusals(u.id);
+    else if (body.action === "cancel") await cancelRefusals(u.id);
+    else await keepRefusals(u.id);
     // Otherwise the card, the subscription or the payout account changed elsewhere since this page opened: the first press stops once; the second goes ahead.
     await accountGate(u.id, body, "payments");
     const r = body.action === "subscribe" ? await subscribe(u) : body.action === "cancel" ? await cancelSubscription(u) : await keepSubscription(u);

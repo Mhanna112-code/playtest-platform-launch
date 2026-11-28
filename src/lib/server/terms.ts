@@ -173,17 +173,23 @@ export async function decideTerms(tester: { id: string }, contractId: string, bo
     await closeOffersOfEnded(db, [contractId], c.endedAt ?? new Date());
     throw new HttpError(409, "gone", overPressLine(c, body.choice === "keep" ? "Keep" : "Switch")); // (Owner, Nov 9, §363 / §364 item 3)
   }
-  await testerGate(c.testerId, contractId, c.testId, body, undefined, { skipTerms: true });
   // (Owner, Oct 28, batch 16 section 38A) The press names the offer its page showed. Missing, unknown or not the newest open one: the newest open offer is decided on,
   // after the "changed the terms again" stop-once. Only with no open offer at all is it refused, and never as "doesn't exist".
+  // (Owner, Nov 27, shared rule 4: refusals → box → field mistakes) That refusal comes before the tester's stop-once box, never after it.
   const asked = typeof body.offerId === "string" && body.offerId ? await db.termsOffer.findUnique({ where: { id: body.offerId } }) : null;
   const offer = asked && asked.contractId === contractId ? asked : null;
-  const newest = await openOffer(contractId);
-  if (!newest) {
-    if (offer?.status === "switched") throw new HttpError(409, "gone", "You already switched to these terms.");
-    if (offer?.status === "kept") throw new HttpError(409, "gone", "You already decided on these terms.");
+  const noOffer = async () => {
+    const newest = await openOffer(contractId);
+    if (newest) return newest;
+    const now = asked ? await db.termsOffer.findUnique({ where: { id: asked.id } }) : null;
+    const mine = now && now.contractId === contractId ? now : offer;
+    if (mine?.status === "switched") throw new HttpError(409, "gone", "You already switched to these terms.");
+    if (mine?.status === "kept") throw new HttpError(409, "gone", "You already decided on these terms.");
     throw new HttpError(409, "gone", NO_LONGER_ON_OFFER);
-  }
+  };
+  await noOffer();
+  await testerGate(c.testerId, contractId, c.testId, body, undefined, { skipTerms: true });
+  const newest = await noOffer(); // read again after the box (decided in another tab while it showed)
   if ((!offer || offer.id !== newest.id) && body.confirmed !== true) {
     throw new HttpError(409, "stop_once", "Press again to go ahead.", { top: true, changes: [{ text: `${displayName(c.test.developer)} changed the terms again: ${newest.diff}`, at: newest.createdAt }], offerId: newest.id, tail: "Press again to decide on these newest terms.",
       // (Batch 17 section 13) Her Alerts (`alertsOff`); (Owner, Nov 10, §374) and the rule the box was built under, so with Alerts Off a line picked up live joins it only if it

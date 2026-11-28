@@ -2091,6 +2091,14 @@ export async function chooseOutcome(tester: { id: string; email: string; name: s
   // (Batch 30 §3) Work sent after the tester's own deadline never opens Charge or Let it go.
   if (s.late) throw new HttpError(409, "late", NO_CHARGE_LATE);
   if (!s.choiceOfferedAt) throw new HttpError(409, "not_yet", `You can choose once ${REVIEW_DAYS} days have passed since you sent it and your deadline has passed.`);
+  // (Owner, Nov 27, shared rule 4: refusals → box → field mistakes) Already paid in full is a refusal: before the stop-once box, never after it (and again after).
+  const capNow = async () => {
+    const paidForPart = (await db.payment.aggregate({ where: { submissionId: s.id, status: { in: ["charged", "not_set_up"] } }, _sum: { amountCents: true } }))._sum.amountCents ?? 0;
+    const left = chargeAmount(s.agreedCents, paidForPart);
+    if (left === 0) throw new HttpError(409, "paid_in_full", "This part is already paid in full.");
+    return left;
+  };
+  await capNow();
   try {
     await testerTermsGate(contractId, displayName(dev), body, s.id);
   } catch (e) {
@@ -2101,9 +2109,7 @@ export async function chooseOutcome(tester: { id: string; email: string; name: s
   }
   const choice = body.choice === "letgo" ? "letgo" : body.choice === "charge" ? "charge" : null;
   if (!choice) throw new HttpError(400, "bad_choice", "Choose Charge or Let it go.");
-  const paidForPart = (await db.payment.aggregate({ where: { submissionId: s.id, status: { in: ["charged", "not_set_up"] } }, _sum: { amountCents: true } }))._sum.amountCents ?? 0;
-  const cap = chargeAmount(s.agreedCents, paidForPart);
-  if (cap === 0) throw new HttpError(409, "paid_in_full", "This part is already paid in full.");
+  const cap = await capNow();
   // Any amount up to the cap (the box starts at the cap); the tick must name the typed amount.
   // (Owner, Nov 11, §380 D2) Charge is pressable with the amount box empty: an empty box is its mistake ("Enter an amount like 5.00."), never the whole cap (only a
   // press that sends no amount at all, an older page, means the cap).
@@ -2251,6 +2257,8 @@ async function chooseCallOutcome(tester: { id: string; email: string; name: stri
   // (Batch 17 §19) After the piece closed nothing is offered any more (even a piece whose Charge never opened).
   await chargeCloseOutGate({ callId: x.id });
   if (!x.choiceOfferedAt) throw new HttpError(409, "not_yet", `You can choose once ${REVIEW_DAYS} days have passed since the call and your deadline has passed.`);
+  // (Owner, Nov 27, shared rule 4) Nothing left to charge is a refusal: before the stop-once box (and again after it, below).
+  if (body.choice === "charge" && (await callChargeCap(x)).cents === 0) throw new HttpError(409, "paid_in_full", "There's nothing left to charge for this call (the $500 for calls on this test is used).");
   try {
     await testerTermsGate(contractId, displayName(dev), body, x.id);
   } catch (e) {

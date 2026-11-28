@@ -238,12 +238,29 @@ async function acceptClash(c: Ctx["c"], side: Side, times: Date[], minutes: numb
   return clashes;
 }
 
-/** (Owner, Nov 11, §380 DO) Accept's time clash for the picked row (its first call; a set's other weeks are checked when it books), "" when none. */
-async function acceptPickClash(c: Ctx["c"], side: Side, r: { id: string; minutes: number }, pick: Date | null) {
+/**
+ * (Owner, Nov 11, §380 DO; Nov 27, shared rule 4: refusals → box → field mistakes) Accept's refusals that need the picked row, before the stop-once box, in the
+ * booking's own order and words (it checks them all again when it books): a time less than the lead ahead now ("less than 24 hours away"), a time after testers'
+ * work ends, then the time clash: the picked row's first call, then (a daily / weekly set) every other day or week of it. A press whose time isn't one of the
+ * request's is left to "Pick one of the times." after the box.
+ */
+async function acceptRowRefusals(c: Ctx["c"], side: Side, r: { id: string; minutes: number }, pick: Date | null) {
   const rows = rowsOf(await db.callRequest.findUniqueOrThrow({ where: { id: r.id } }));
   const row = rows.length === 1 && (!pick || sameTime(rows[0].startsAt, pick)) ? rows[0] : pick ? rows.find((x) => sameTime(x.startsAt, pick)) : undefined;
-  if (!row) return "";
-  return (await acceptClash(c, side, [row.startsAt], r.minutes))[0] ?? "";
+  if (!row) return;
+  if (!farEnoughAhead(row.startsAt)) throw new HttpError(409, "too_soon", tooSoonToBookLine(fmtDateTime(row.startsAt), CALL_MIN_AHEAD_MINUTES));
+  const end = await workEndOf(db, c.testId);
+  const inWindow = cutRow(row, end);
+  if (!inWindow) throw new HttpError(409, "after_end", afterEndToBookLine(fmtDateTime(row.startsAt), fmtDateTime(end!)));
+  const first = (await acceptClash(c, side, [row.startsAt], r.minutes))[0];
+  if (first) throw new HttpError(409, "clash", first);
+  if (inWindow.repeat === "once") return;
+  const bad: string[] = [];
+  for (const [i, t] of occurrences(inWindow, end).entries()) {
+    const cl = await acceptClash(c, side, [t], r.minutes);
+    if (cl.length) bad.push(`${inWindow.repeat === "daily" ? "day" : "week"} ${i + 1} (${fmtDateTime(t)}): ${cl[0]}`);
+  }
+  if (bad.length) throw new HttpError(409, "clash", `These ${inWindow.repeat === "daily" ? "days" : "weeks"} clash: ${bad.join(" ")}`);
 }
 
 type Tx = Prisma.TransactionClient | typeof db;
@@ -832,19 +849,21 @@ export async function testerRequestTime(user: U, contractId: string, body: Recor
     }
     const own = await ownCallClash("tester", user, [contractId], kind.rows, minutes, end); // (batch 16 section 33; §208: two rows overlapping each other too)
     if (own) throw new HttpError(409, "clash", own);
+    // (Owner, Nov 27, shared rule 4) The rows sent as requests: a call or a waiting request with the developer at that time (sendClash), and (Owner, Nov 6, §292)
+    // never a time the developer already has booked with another tester (this test or another: the time only, never with whom). Refusals too: before the box.
+    const sendRows = kind.each.filter((_, i) => !match.has(i));
+    if (sendRows.length) {
+      const clash = await sendClash(contractId, sendRows.flatMap((k) => requestTimes(k, end)), minutes, devName, [...match.values()].map((m) => m.match.id), { side: "tester", otherPoss: pronouns(c.test.developer.pronoun).poss }, end);
+      if (clash) throw new HttpError(409, "clash", clash);
+      const busy = await recipientBusyClash(x.me, "tester", { id: c.test.developerId, name: devName }, contractId, sendRows.flatMap((k) => k.rows), minutes, end);
+      if (busy) throw new HttpError(409, "clash", busy);
+    }
     return match;
   };
   await clashes();
   await testerGate(c.testerId, contractId, c.testId, body, undefined, CALL_PRESS);
   const match = await clashes(); // again after the box (a call booked while it showed)
   const sendRows = kind.each.filter((_, i) => !match.has(i));
-  if (sendRows.length) {
-    const clash = await sendClash(contractId, sendRows.flatMap((k) => requestTimes(k, end)), minutes, devName, [...match.values()].map((m) => m.match.id), { side: "tester", otherPoss: pronouns(c.test.developer.pronoun).poss }, end);
-    if (clash) throw new HttpError(409, "clash", clash);
-    // (Owner, Nov 6, §292) Never a time the developer already has booked with another tester (this test or another): the time only, never with whom.
-    const busy = await recipientBusyClash(x.me, "tester", { id: c.test.developerId, name: devName }, contractId, sendRows.flatMap((k) => k.rows), minutes, end);
-    if (busy) throw new HttpError(409, "clash", busy);
-  }
   {
     const line = await limitNow(match.size); // (§185) changed since the first check
     if (line) throw new HttpError(409, "limit", line);
@@ -931,12 +950,11 @@ export async function answerRequest(user: U, contractId: string, body: Record<st
   if (side === "tester") await answerTermsFirst(contractId);
   if (r.status === "pending" && r.startsAt < new Date()) await db.callRequest.update({ where: { id: r.id }, data: { status: "closed", closedReason: TIME_PASSED_REASON } });
   const fresh = await db.callRequest.findUniqueOrThrow({ where: { id: r.id } });
-  // (Batch 16 section 21) Answered or withdrawn in another tab: the developer's press stops once naming it, then it's already done.
   // (Owner, Nov 4, §184) A request dropped when a call was booked: refused at once (a single refusal), never a stop first.
   // (Owner, Nov 4, §185) Likewise one the OTHER side withdrew: answering it is ONE refusal, "Ana Silva withdrew this request." (§385: the developer's withdrawal
   // is a stop-once line for the tester's other presses, like a cancel; never for the press answering that request.)
-  const theyWithdrew = fresh.status === "withdrawn" && !mine;
-  if (fresh.status !== "pending" && side === "developer" && !(fresh.status === "closed" && isDropReason(fresh.closedReason)) && !theyWithdrew) await db.$transaction((tx) => devGate(tx, c.testId, body, {}, [], undefined, { acts: CALL_ACTS, keys: [`req:${r.id}`, `c:${contractId}`] }));
+  // (Owner, Nov 27, shared rule 4; replaces batch 16 section 21's stop first) Answered or withdrawn in another tab: the developer's press is that ONE refusal too
+  // (below), never a stop-once box first.
   // (§187) The press names a time: on a request booked at another of its times, the line says so (not "This time was booked").
   const pick = body.time ? new Date(String(body.time)) : null;
   if (pick && isNaN(pick.getTime())) throw new HttpError(400, "pick", "Pick one of the times.");
@@ -957,8 +975,7 @@ export async function answerRequest(user: U, contractId: string, body: Record<st
   // (Owner, Nov 11, §380 DO) Accept: the time clash is a refusal, checked BEFORE the stop-once box (and again when it books).
   if (action === "accept") {
     await refusals(c, side, "Accept"); // final refusals first
-    const clash = await acceptPickClash(c, side, r, pick);
-    if (clash) throw new HttpError(409, "clash", clash);
+    await acceptRowRefusals(c, side, r, pick); // (rule 4) too soon, after the work ends, a clash: before the box
   }
   if (side === "developer") await db.$transaction((tx) => devGate(tx, c.testId, body, {}, [], undefined, { acts: CALL_ACTS, keys: [`req:${r.id}`, `c:${contractId}`], answers: { item: r.id, kinds: ["requested"], contractId } }));
   else await testerGate(c.testerId, contractId, c.testId, body, undefined, { ...CALL_PRESS, answers: { item: r.id } });

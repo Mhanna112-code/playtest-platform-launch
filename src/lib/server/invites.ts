@@ -383,10 +383,6 @@ export async function inviteTesters(dev: U & { holdStartedAt?: Date | null }, te
     const notTheirAsk = (e: TestEventLike) => !(e.kind === "applied" && askLines.has(e.text));
     const rowInfo = await testerRowInfo(dev.id, t, people);
     const testers = people.map((p) => ({ id: p.id, name: displayName(p), ...rowInfo.get(p.id)! }));
-    await devGate(tx, testId, body, { ...(gaps.length ? { lines: gaps, items: gapItems } : {}), testers }, extra, notTheirAsk, { acts: INVITE_ACTS, keys: ids.map((id) => `t:${id}`) });
-    // (Owner, Nov 9, §357) A ticked tester's devices or languages changing never stops the press: Invite anyway sends on what's missing now (no "everyone
-    // now meets" refusal, no "What's missing changed" stop).
-    if (gaps.length && body.anyway !== true) throw new HttpError(409, "needs_confirm", "CONFIRM:" + gaps.join("\n"), { lines: gaps, items: gapItems, testers });
     const invited: { id: string; name: string; email: string; pronoun: string }[] = [];
     const seen = (await import("./joining")).pressSeen(body);
     const others: string[] = [];
@@ -421,10 +417,16 @@ export async function inviteTesters(dev: U & { holdStartedAt?: Date | null }, te
       invited.push({ id: p.id, name, email: p.email, pronoun: p.pronoun });
     }
     // (Owner, Nov 2, batch 35 §128) At most 100 invites a day per developer, across all their tests: a press that would go over sends nothing.
+    // (Owner, Nov 27, shared rule 4: refusals → box → field mistakes) A whole-press refusal, so before the stop-once box (worked out here, under the test's lock;
+    // the per-tester lines above, the same-tester daily limit among them, stay lines in the done message).
     if (invited.length) {
       const sent = await tx.invite.count({ where: { test: { developerId: dev.id }, createdAt: { gt: new Date(now.getTime() - INVITE_WINDOW_MS) } } });
       if (!TESTING_NO_LIMITS && sent + invited.length > INVITES_PER_DAY) throw new HttpError(429, "too_many_invites", invitesLeftLine(INVITES_PER_DAY - sent));
     }
+    await devGate(tx, testId, body, { ...(gaps.length ? { lines: gaps, items: gapItems } : {}), testers }, extra, notTheirAsk, { acts: INVITE_ACTS, keys: ids.map((id) => `t:${id}`) });
+    // (Owner, Nov 9, §357) A ticked tester's devices or languages changing never stops the press: Invite anyway sends on what's missing now (no "everyone
+    // now meets" refusal, no "What's missing changed" stop).
+    if (gaps.length && body.anyway !== true) throw new HttpError(409, "needs_confirm", "CONFIRM:" + gaps.join("\n"), { lines: gaps, items: gapItems, testers });
     // (Correction 5) Invites never hold spots: any number can be open; the first to join gets a spot.
     for (const i of invited) await tx.invite.create({ data: { testId, testerId: i.id } });
     if (invited.length) await recordEvent(tx, testId, "invited", `You invited ${andList(invited.map((i) => i.name))}`, false);
@@ -483,10 +485,11 @@ export async function cancelInvite(dev: U, testId: string, body: Record<string, 
     if (line) lines.push(line);
     if (lines.length) extra.push({ kind: "profile", text: lines.join(" · "), createdAt: latest.at ?? new Date(), key: `needs:${tester.id}` });
   }
-  // (Batch 16 section 21) Cancelled in another tab: this press stops once naming it, then it's already done.
-  await db.$transaction((tx) => devGate(tx, testId, body, {}, extra, undefined, { acts: INVITE_ACTS, keys: [`t:${inv.testerId}`] }));
   const gone = (status: string) => new HttpError(409, "gone", status === "joined" ? `${pronouns(tester?.pronoun).Subj} already joined.` : status === "replaced" ? "This invite is no longer valid: it was re-sent on the new listing." : "This invite was already cancelled.");
+  // (Owner, Nov 27, shared rule 4: refusals → box → field mistakes) Joined or re-sent on the new listing: the refusal first, never after the stop-once box.
   if (inv.status !== "sent") throw gone(inv.status);
+  // (Batch 16 section 21) Another tab's invite action on this tester (or another change the page hadn't shown): this press stops once naming it.
+  await db.$transaction((tx) => devGate(tx, testId, body, {}, extra, undefined, { acts: INVITE_ACTS, keys: [`t:${inv.testerId}`] }));
   // (Nov 2, §119) Only a still-open invite is cancelled: a tester who joined (or a re-send) a moment ago wins, and the refusal says what happened.
   if ((await db.invite.updateMany({ where: { id: inv.id, status: "sent" }, data: { status: "cancelled" } })).count !== 1) {
     const now = (await db.invite.findUniqueOrThrow({ where: { id: inv.id } })).status;
