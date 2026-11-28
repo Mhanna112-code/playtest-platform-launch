@@ -10,7 +10,7 @@ import { bell, notify } from "./notify";
 import { finishedAndRatedLine, ratedYouLine, ratingClosedLine, RATE_CHARGE_FIRST, RATE_INACTIVE, RATE_MY_DISPUTE, RATE_TEST_PAUSED, chargeIsOpen, chargeOpensAt, ratePendingLine, rateOpensOnLine, rateOpensReviewLine, rateTheirDisputeLine, type TestEventLike } from "@/lib/rules";
 import { callsGoneTail, cancelCallsAhead, lockTest, ownContract, ownTest, recordEvent, spotOpened, tellDevCancelled, withTail, type CancelledCall } from "./tests";
 import { seenOf, unanswered, tabOf, testerPaymentChanges } from "./live";
-import { FINISHED_PART_REASON, payMoreLine, TESTER_CALL_KINDS, testerChanges, testerGate } from "./testerGate";
+import { FINISHED_PART_REASON, payMoreLine, testerChanges, testerGate } from "./testerGate";
 import { devPauseMoments, devStopSince, loadedOf, stopBox } from "./stopMoment";
 import { CONTRACTS, closeOutOf, testSpans, testerRateLiftedAt, testerRatingClosesAt, closedOut, devPauseSpans, lastLift, mergeSpans, teamPauseSpans, windowEnd, type Span } from "./closeOut";
 import { CLOSE_OUT_DAYS, closeOutBase, repeatDue, REPEAT_MIN_GAP_MS, utcDayNo } from "@/lib/rules";

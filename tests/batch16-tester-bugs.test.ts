@@ -86,7 +86,9 @@ async function everyPress() {
 }
 
 describe("B. every call change stops every tester press once (Alerts On), never with Alerts Off", () => {
-  it("root cause: the server already stops for a call request; a refresh of the page moved the press's seen marker past it. Now it's counted from when the page loaded", async () => {
+  // (Owner, Nov 28) Judged by the one seen time like every other change: a refresh never moves the marker a press sends (lib/live.ts seenNow starts from the
+  // page's first load); only the live notice showing the change does, and it now shows every change (tests/live-handover-ui.test.ts).
+  it("root cause: a refresh of the page moved the press's seen marker past a call request. A refresh never moves it; the live notice showing it does", async () => {
     const s = await everyPress();
     const loaded = seen();
     await settle();
@@ -104,8 +106,8 @@ describe("B. every call change stops every tester press once (Alerts On), never 
       ["terms", { offerId: s.offer.id, choice: "keep" }],
     ];
     for (const [action, body] of presses) {
-      // Without the page's load time (as before), the refreshed marker hides the request.
-      const r = await sact(s.sessionId, action, s.tester.cookie, { ...body, seenAt: refreshed, loadedAt: loaded });
+      // The page was refreshed after the request, but the live notice hasn't shown it: the marker the press sends is still the page's load.
+      const r = await sact(s.sessionId, action, s.tester.cookie, { ...body, seenAt: loaded, pageSeenAt: refreshed, loadedAt: loaded });
       // (Owner, Nov 11, §375) Send here re-sends what was sent: "already sent" (a refusal for good) comes before the open offer (a soft refusal).
       if (action === "written") {
         expect(r.body.error?.code, action).toBe("locked");
@@ -120,9 +122,9 @@ describe("B. every call change stops every tester press once (Alerts On), never 
       expect(r.body.error?.code, `${action} ${JSON.stringify(r.body)}`).toBe("stop_once");
       expect(r.body.error.changes.map((c: { text: string }) => c.text).join(" "), action).toMatch(/requested a call/);
     }
-    // Once a stop box in this tab listed it, it doesn't stop again.
-    const listed = await sact(s.sessionId, "terms", s.tester.cookie, { offerId: s.offer.id, choice: "keep", seenAt: refreshed, loadedAt: loaded, boxSeenAt: new Date().toISOString() });
-    expect(listed.status, JSON.stringify(listed.body)).toBe(200);
+    // Once the live notice showed it (the marker moves past it), it doesn't stop again, whatever the page's load time.
+    const shown = await sact(s.sessionId, "terms", s.tester.cookie, { offerId: s.offer.id, choice: "keep", seenAt: seen(), pageSeenAt: refreshed, loadedAt: loaded });
+    expect(shown.status, JSON.stringify(shown.body)).toBe(200);
   }, 60_000);
 
   it("a call the developer cancelled stops too; with Alerts Off nothing stops", async () => {
@@ -133,11 +135,12 @@ describe("B. every call change stops every tester press once (Alerts On), never 
     const loaded = seen();
     await settle();
     expect((await act(s.testId, "cancel-call", s.dev.cookie, { seenAt: seen(), confirmed: true, callId: s.call.id })).status).toBe(200);
-    const r = await sact(s.sessionId, "dispute", s.tester.cookie, { kind: "submission", id: s.sub.id, reason: "I answered every question in full.", seenAt: seen(), loadedAt: loaded });
+    // Not yet shown by the live notice: the marker is still the page's load.
+    const r = await sact(s.sessionId, "dispute", s.tester.cookie, { kind: "submission", id: s.sub.id, reason: "I answered every question in full.", seenAt: loaded, pageSeenAt: seen(), loadedAt: loaded });
     expect(r.body.error?.code, JSON.stringify(r.body)).toBe("stop_once");
     expect(r.body.error.changes.map((c: { text: string }) => c.text).join(" ")).toMatch(/was cancelled/);
     await db.user.update({ where: { id: s.tester.user.id }, data: { testerAlertsOff: true } });
-    const off = await sact(s.sessionId, "dispute", s.tester.cookie, { kind: "submission", id: s.sub.id, reason: "I answered every question in full.", seenAt: seen(), loadedAt: loaded });
+    const off = await sact(s.sessionId, "dispute", s.tester.cookie, { kind: "submission", id: s.sub.id, reason: "I answered every question in full.", seenAt: loaded, pageSeenAt: seen(), loadedAt: loaded });
     expect(off.status, JSON.stringify(off.body)).toBe(200);
   }, 60_000);
 

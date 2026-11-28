@@ -13,14 +13,6 @@ import { questionChangeTexts } from "@/lib/questionHistory";
 import { NDA_NOTICE, ndaChangedLine } from "@/lib/ndaNotice";
 import { unanswered, answersIt, asLines, listingSaveLines, ownChanges, type Answers, pageOf, seenOf, tabOf, testerPaymentChanges } from "./live";
 
-// The tester's ONE set of stop-once reasons (owner rule, NEWEST+3), used by every tester button on the session page:
-// Switch / Keep, Send written, Send recording, Charge / Let it go, Dispute, Leave, Block, Request a time, Accept /
-// Decline / Withdraw, Cancel call. Since what the page has shown (its render, moved on by what the live top notice showed):
-// (A) new terms; (B) the developer paid or rejected work; (C) the developer's call changes: their requests (new,
-// withdrawn, taken by another tester, closed), accepting or auto-matching the tester's own request, declining it,
-// cancelling a call; (E) anything the tester did themselves in another tab; (F) the listing's info changed.
-// Final refusals (ended early, stopped, Open until passed, already decided, holds) are checked separately and stay final.
-
 /** (Owner, Oct 29, batch 24 section 2) A tester who rates (finishing their part) closes their waiting call requests with this reason. */
 export const FINISHED_PART_REASON = "the tester finished their part";
 /** (Batch 35 §162) The stored reason as a row shows it, in the tester's recorded pronoun ("the tester finished her part"). */
@@ -47,18 +39,17 @@ export const testerSeesClosed = (reason: string) => !CLOSED_BY_TESTER.has(reason
 const byTheEnd = (c: { status: string; endedAt: Date | null }, at: Date | null) => c.status === "ended" && !!c.endedAt && !!at && Math.abs(at.getTime() - c.endedAt.getTime()) < 60_000;
 
 /**
- * The tester's changes on this session since `since` (the live box's lines, and what the gate judges). Offers count from the earlier of `since` and
- * `offersSince` (only the gate reads offer lines and cuts them at its own time; the live box and the rejoin lines drop them). `openOffersOnly`: the gate's own
- * reading, where an offer already replaced by a newer one never stops a press.
+ * The tester's changes on this session since `since` (the live box's lines, and what the gate judges). `openOffersOnly`: the gate's own reading, where an
+ * offer already replaced by a newer one never stops a press (the live box and the rejoin lines drop offer lines anyway).
  */
-export async function testerChanges(testerId: string, contractId: string, testId: string, since: Date, tab = "", offersSince: Date = since, /** (Owner, Nov 11, §380) the one-at-a-time page asking */ page = "", opts: { openOffersOnly?: boolean } = {}): Promise<TestEventLike[]> {
+export async function testerChanges(testerId: string, contractId: string, testId: string, since: Date, tab = "", /** (Owner, Nov 11, §380) the one-at-a-time page asking */ page = "", opts: { openOffersOnly?: boolean } = {}): Promise<TestEventLike[]> {
   const c = await db.contract.findUniqueOrThrow({ where: { id: contractId }, include: { test: { include: { developer: true } } } });
   const dev = displayName(c.test.developer);
   // (Design doc 8) The developer added their side to this tester's dispute: a stop-once reason for Dispute and the other buttons.
   const sides = await db.dispute.findMany({ where: { contractId, devSideAt: { gt: since } }, include: { submission: { select: { kind: true } }, call: { select: { startsAt: true } } } });
   const [offers, reviews, calls, devReqs, mine] = await Promise.all([
     // (Owner, reason A) An offer still waiting (or, outside the gate, replaced by a newer one); one the tester already decided on never.
-    db.termsOffer.findMany({ where: { contractId, createdAt: { gt: offersSince < since ? offersSince : since }, status: { in: opts.openOffersOnly ? ["open"] : ["open", "superseded"] } } }),
+    db.termsOffer.findMany({ where: { contractId, createdAt: { gt: since }, status: { in: opts.openOffersOnly ? ["open"] : ["open", "superseded"] } } }),
     db.review.findMany({ where: { contractId, createdAt: { gt: since }, reason: { notIn: TESTER_CHOICE_REASONS } }, include: { submission: true, call: { select: { startsAt: true } } } }),
     db.call.findMany({ where: { contractId, cancelledAt: { gt: since }, cancelledBy: { not: "tester" } } }),
     db.callRequest.findMany({ where: { contractId, fromSide: "developer", updatedAt: { gt: since } } }),
@@ -205,86 +196,102 @@ export async function testerBoxRule(testerId: string, part?: string) {
 const KINDS = ["terms", "paid", "rejected", "cancelled", "booked", "requested", "info", "payment", "admin", "own", "dispute", "nda"];
 /** The kinds of line that can stop a tester's press (any other kind, e.g. a quiet dropped-request line, never does). A rename stops nothing on its own (below). */
 const STOP_KINDS = new Set([...KINDS, "renamed", "keygiven"]);
-/**
- * The call changes a tester sees (the developer's requests: new, withdrawn, taken or closed; her own request accepted or declined; a call cancelled). The gate
- * counts these from an earlier time than the rest (`callsSeenUpTo` in testerGate): when the page first loaded in this tab, or the newest line a stop box there
- * listed, if that is earlier than the seen marker. Why: when a redraw changes the part's state (the session page is keyed by its status and end), the live box is
- * drawn again from the new render, and the lines the old box had picked up but not yet shown are dropped, so a call change can pass the seen marker without
- * ever showing in the live box.
- */
-export const TESTER_CALL_KINDS = new Set(["requested", "booked", "cancelled"]);
 
-/** The one tester gate: the first press stops (the box shows under that button); a second press goes ahead unless something new came since its box. */
+/** Lines her Alerts switch can never silence: they stop a press with Alerts Off too, and the box marks them `forced`. */
+function alwaysStops(e: TestEventLike, opts: { ordinaryTerms?: boolean }, pressPart?: string): boolean {
+  // New terms and what she did on another page (ALERTS_OFF_KINDS); Rate and Leave treat an offer as an ordinary change.
+  const contractOrOwnPress = ALERTS_OFF_KINDS.has(e.kind) && !(opts.ordinaryTerms && e.kind === "terms");
+  // The developer's side added to her dispute, or the team's decision on it.
+  const disputeChanged = disputeChange(e);
+  // About the part this press is about: e.g. a payment on the part she is sending, adding to or disputing.
+  const aboutThisPart = !!pressPart && e.piece === pressPart;
+  return contractOrOwnPress || disputeChanged || aboutThisPart;
+}
+
+/**
+ * The one tester gate: a press stops once for changes the page hasn't shown (the box shows under that button); a second press goes ahead unless something new
+ * came since its box. Final refusals (ended early, stopped, Open until passed, already decided, holds) are each press's own and come before it. Callers:
+ * - Send Answers, Add to this answer, a recording's Send / Add (testerSendGate, terms.ts): skipTerms, sendPiece (the part already sent, if any); written
+ *   answers also questionLines and staleQuestions.
+ * - Charge / Let it go (testerTermsGate, terms.ts): no options, only its own tail when new terms came.
+ * - Switch / Keep (decideTerms, terms.ts): skipTerms.
+ * - Call presses (requests.ts: Request a time, Accept / Decline / Withdraw, Cancel a set of calls; calls.ts: Cancel call): skipTerms; Accept / Decline also
+ *   answers (the request it answers).
+ * - Dispute (payments.ts): piece (the part disputed).
+ * - Rate (testerRateGate, ratings.ts): ordinaryTerms.
+ * - Leave (leaveTest, tests.ts): ordinaryTerms.
+ * - The session route's stop-moment box (an end of her work the page hasn't shown, with the press's own lines): piece for Dispute, skipTerms for Switch / Keep.
+ */
 export async function testerGate(testerId: string, contractId: string, testId: string, body: Record<string, unknown>, tail = "Press again to go ahead.", opts: { skipTerms?: boolean; piece?: string; /** (Batch 35 §79) what the press answers */ answers?: Answers;
   /**
    * (Owner, Nov 4, §183; restored Nov 9, §362) Send Answers / Add to this answer (written answers) and a recording's Send / Add on a part already sent (its
    * submission id): a developer payment on THAT part since the page showed it (Pay, Pay more, the developer's $0 answer to an update, the team's dispute-decision
    * charge on it, a delayed payment going through) stops the press once whatever the tester's Alerts, marked forced. Payments on their other parts follow Alerts.
    */ sendPiece?: string;
-  /** (Owner, Nov 5, §268; replaces §232's open-terms stop) Rate and Leave: new terms (and an NDA change) follow the ordinary rule: they stop once only with Alerts
-   * on, and only when the change came after what the page has shown. */ ordinaryTerms?: boolean;
+  /** (Owner, Nov 5, §268) Rate and Leave: new terms follow the ordinary rule: they stop once only with Alerts on, and only when the page hasn't shown them. */ ordinaryTerms?: boolean;
   /** (Owner, Nov 5, §269) Send Answers / Add to this answer: a questions change the page hasn't shown (the ordinary rule) is listed question by question. */ questionLines?: boolean;
   /** (§269) The press holds questions the contract no longer has (or lacks a new one): these lines (what changed) always stop it, whatever the Alerts, a
    * second press, a seen time or a box that listed them: the server never takes answers keyed to the old questions. The page then takes the new questions. */
   staleQuestions?: TestEventLike[] } = {}) {
-  // A stopped, closed or paused test, or a tester whose work ended: every press still allowed follows these same rules (Block never stops).
+  // The part the press is about (Send / Add's part, Dispute's part).
   const pressPart = opts.sendPiece ?? opts.piece;
-  // A page whose questions are out of date: its lines always stop the press, marked forced (the box tells the page to take the new questions).
+  // A page whose questions are out of date: its lines always stop the press, marked forced.
   const stale = (opts.staleQuestions ?? []).map((e) => ({ ...e, forced: true }));
 
-  // 1. What the page has shown up to. A second press (sent while its stop box is open) sends the box's latest time (`boxAt`); a first press sends the page's seen
-  // marker (`seenAt`: its render, moved on by what the live box showed).
-  const secondPress = body.confirmed === true;
-  const seenUpTo = secondPress ? seenOf(body.boxAt) : seenOf(body.seenAt);
-  // No time to compare with (a first press without a seen marker, or a second press from a page that sends no box time): only stale questions stop it.
+  // The one time: what the page has shown up to. A second press sends its box's latest time; a first press the page's seen marker (its render, moved on by
+  // what the live notice showed).
+  const seenUpTo = body.confirmed === true ? seenOf(body.boxAt) : seenOf(body.seenAt);
+  // No time to compare with: only stale questions stop the press.
   if (!seenUpTo) {
     if (stale.length) throw new HttpError(409, "stop_once", tail, { changes: asLines(stale), tail, top: false, questions: true, ...(await testerBoxRule(testerId, pressPart)) });
     return;
   }
-  // Call changes count from the page's first load in this tab (`loadedAt`), or the newest line a stop box there listed (`boxSeenAt`), whichever is later, when that
-  // is earlier than `seenUpTo` (see TESTER_CALL_KINDS). A second press counts them from its box's time like everything else.
-  const loadedAt = secondPress ? null : seenOf(body.loadedAt);
-  const boxListedUpTo = seenOf(body.boxSeenAt);
-  const callsShownFrom = loadedAt && boxListedUpTo && boxListedUpTo > loadedAt ? boxListedUpTo : loadedAt;
-  const callsSeenUpTo = callsShownFrom && callsShownFrom < seenUpTo ? callsShownFrom : seenUpTo;
 
-  // 2. Collect every change since then: the tester's changes (offers still open only: a replaced offer never stops a press), ...
-  const collected = await testerChanges(testerId, contractId, testId, callsSeenUpTo, tabOf(body), seenUpTo, pageOf(body), { openOffersOnly: true });
-  // ... the developer's $0 answer to what the tester added after a Pay, on the part Send / Add is about (it has no line elsewhere), ...
+  // Every change since then: hers (open offers only: a replaced offer never stops a press).
+  const collected = await testerChanges(testerId, contractId, testId, seenUpTo, tabOf(body), pageOf(body), { openOffersOnly: true });
+  // The developer's $0 answer to what she added after a Pay, on the part Send / Add is about (it has no line elsewhere).
   if (opts.sendPiece) collected.push(...(await zeroUpdateLines(opts.sendPiece, seenUpTo)));
-  // ... and for Send / Add (`questionLines`), what changed in the questions, one line per question; not when a stop box already listed the listing line for
-  // those Saves, nor for a stale page (its own lines, `stale`, say it).
-  if (opts.questionLines && !stale.length) {
-    const listingLine = collected.find((e) => e.key === "listing" && e.listing);
-    const shown = listingLine && wasListed(listingLine, shownIdsOf(body)) ? listingLine.createdAt : null;
-    const dev = displayName((await db.contract.findUniqueOrThrow({ where: { id: contractId }, select: { test: { select: { developer: true } } } })).test.developer);
-    collected.push(...(await questionChangeLines(testId, seenUpTo, dev)).filter((e) => !shown || e.createdAt > shown));
-  }
+  // Send / Add: what changed in the questions, one line per question (a stale page's own lines say it instead).
+  if (opts.questionLines && !stale.length) collected.push(...(await questionLinesNotYetListed(contractId, testId, seenUpTo, collected, body)));
 
-  // 3. Keep what the page hasn't shown: call changes after `callsSeenUpTo`, everything else after `seenUpTo`. Presses that new terms block instead
-  // (`skipTerms`) never list an offer.
-  const unseen = collected.filter((e) => (e.kind === "terms" ? !opts.skipTerms : true) && e.createdAt > (TESTER_CALL_KINDS.has(e.kind) ? callsSeenUpTo : seenUpTo));
-  const offers = unseen.filter((e) => e.kind === "terms");
-  const others = unseen.filter((e) => e.kind !== "terms" && STOP_KINDS.has(e.kind));
+  // What the page hasn't shown, of the kinds that can stop a press; no offer line for a press that new terms block instead (`skipTerms`).
+  const unseen = collected.filter((e) => e.createdAt > seenUpTo && STOP_KINDS.has(e.kind) && !(opts.skipTerms && e.kind === "terms"));
 
-  // 4. Her Alerts. Off: of the other lines, only those that always stop (her own other-tab actions, dispute changes) and a developer payment on the part this
-  // press is about (§362). Rate and Leave (`ordinaryTerms`) with Alerts Off: an offer never stops them either.
+  // Every possible reason a press stops:
+  // ALWAYS (whatever her Alerts): new terms (except for Rate and Leave); her own press on another page; the developer's side added to her dispute; the team's
+  //   decision on her dispute; a payment on this press's part.
+  // ONLY WITH ALERTS ON: other payments; call changes (requested, withdrawn, taken, declined, booked, cancelled); listing edits and changed questions; the NDA
+  //   changed; an access key given; new terms for Rate and Leave.
+  // NEVER ON ITS OWN: a rename.
+  // Her Alerts: Off keeps only the lines that always stop.
   const alertsOff = !!(await db.user.findUnique({ where: { id: testerId }, select: { testerAlertsOff: true } }))?.testerAlertsOff;
-  const onPressPart = (e: TestEventLike) => !!pressPart && e.piece === pressPart;
-  const othersThatStop = alertsOff ? others.filter((e) => stopsWithAlertsOff(e) || onPressPart(e)) : others;
-  const offersThatStop = alertsOff && opts.ordinaryTerms ? [] : offers;
+  const reasons = alertsOff ? unseen.filter((e) => alwaysStops(e, opts, pressPart)) : unseen;
 
-  // 5. Drop the line about the very thing this press answers (Accept on the request that just arrived, §79), lines the tester already answered, and lines any stop
-  // box on this page already listed (`shownIds`, §250). A rename alone never stops a press: if only renames are left, no box. Stale questions always join.
-  const kept = notListed((await unanswered(testerId, testId, [...offersThatStop, ...othersThatStop])).filter((e) => !answersIt(e, opts.answers)), body);
+  // Drop lines she already answered, the line about the very thing this press answers (§79), and lines a stop box on this page already listed (§250).
+  const kept = notListed((await unanswered(testerId, testId, reasons)).filter((e) => !answersIt(e, opts.answers)), body);
+  // A rename alone is never a reason: only renames left, no box. Stale question lines always join.
   const boxLines = [...(kept.every((e) => e.kind === "renamed") ? [] : kept), ...stale].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
   if (!boxLines.length) return;
 
-  // 6. The box. Each line says whether her Alerts could have switched it off (`forced`): her own other-tab actions, new terms (not for Rate and Leave), dispute
-  // changes, and a developer payment on the part the press is about always stop. `top`: an offer line sends the page up to the offer box. `alertsOff` and
-  // `liveRule`: the box's rule for lines that join it live (§373). `questions`: the box lists a questions change, so the page takes the new questions in place.
-  const forced = (e: TestEventLike) => (ALERTS_OFF_KINDS.has(e.kind) && !(opts.ordinaryTerms && e.kind === "terms")) || disputeChange(e) || onPressPart(e);
-  throw new HttpError(409, "stop_once", tail, { changes: asLines(boxLines.map((e) => (forced(e) ? { ...e, forced: true } : e))), tail, top: offersThatStop.some((t) => boxLines.includes(t)), alertsOff, ...liveRuleOf(alertsOff, pressPart), ...(stale.length || boxLines.some(isQuestionLine) ? { questions: true } : {}) });
+  // The box: each line marked `forced` when her Alerts could not have silenced it; `top` sends the page up to the offer box; `alertsOff` and `liveRule` are
+  // the rule for lines that join the open box live (§373).
+  throw new HttpError(409, "stop_once", tail, {
+    changes: asLines(boxLines.map((e) => (alwaysStops(e, opts, pressPart) ? { ...e, forced: true } : e))),
+    tail,
+    top: boxLines.some((e) => e.kind === "terms"),
+    alertsOff,
+    ...liveRuleOf(alertsOff, pressPart),
+    // The box lists old or changed questions: the page reloads the questions in the form before the next press.
+    ...(stale.length || boxLines.some(isQuestionLine) ? { questions: true } : {}),
+  });
+}
+
+/** Send / Add's question-change lines since `since`, one per question; none for the Saves whose listing line a stop box on this page already listed. */
+async function questionLinesNotYetListed(contractId: string, testId: string, since: Date, collected: TestEventLike[], body: Record<string, unknown>): Promise<TestEventLike[]> {
+  const listingLine = collected.find((e) => e.key === "listing" && e.listing);
+  const listedAt = listingLine && wasListed(listingLine, shownIdsOf(body)) ? listingLine.createdAt : null;
+  const dev = displayName((await db.contract.findUniqueOrThrow({ where: { id: contractId }, select: { test: { select: { developer: true } } } })).test.developer);
+  return (await questionChangeLines(testId, since, dev)).filter((e) => !listedAt || e.createdAt > listedAt);
 }
 
 /** (Owner, Nov 4, §183) "Nora Lane paid $0 more for what you added to your written answers" (the bell's words), when she closed the tester's update at $0 since `since`. */

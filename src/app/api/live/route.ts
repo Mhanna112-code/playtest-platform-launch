@@ -44,7 +44,7 @@ export async function GET(req: Request) {
       const c = await db.contract.findUnique({ where: { id } });
       if (!c || c.testerId !== u.id) throw new HttpError(404, "not_found", "That session doesn't exist.");
       // The offer of new terms has its own box right below this one: the live box lists every change except the contract's.
-      changes = (await testerChanges(u.id, c.id, c.testId, since, tab, since, page)).filter((x) => x.kind !== "terms");
+      changes = (await testerChanges(u.id, c.id, c.testId, since, tab, page)).filter((x) => x.kind !== "terms");
       // The test was stopped, or this tester's work was ended: a line in the live box (a final refusal for later presses, never a stop-once reason).
       if (c.status === "ended" && c.endedAt && c.endedAt > since && (c.endKind === "stopped" || c.endKind === "closed" || c.endKind === "early")) {
         const t = await db.test.findUniqueOrThrow({ where: { id: c.testId } });
