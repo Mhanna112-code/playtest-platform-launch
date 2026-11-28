@@ -21,37 +21,37 @@ import { savedZone } from "@/components/TimeZoneSync";
 import { seeItClick, useSeeItTarget } from "@/components/ListingInfo";
 import { useGoneOnNewVersion } from "@/lib/pageVersion";
 
-export type Change = { text: string; /** (Owner, Nov 5, §270) the people and tests it names, each its own green link */ links?: LineLink[]; at: string; kind?: string; alert?: string; ignored?: boolean; contract?: string; link?: string; /** (Batch 16 section 19) the fields another tab changed (API names) */ fields?: string[]; /** (Batch 20 section 4) one line per thing: a newer line with the same key replaces it */ key?: string; /** (Batch 20 section 25) a live-box line that never stops a press */ quiet?: boolean; /** (Batch 30 §10) the text says its own time ("… edited the listing at 6:55 PM: …") */ timed?: boolean; /** (Batch 30 §12) the join page's NDA changed (its tick clears) */ nda?: boolean; /** (Batch 34 §14) the developer's listing change: See it jumps to the Listing panel */ listing?: boolean; /** (Batch 35 §3) the listing Save the line is about: See it marks that Save's fields only */ saveAt?: string; /** (Batch 35 §34) the panel lines all the listing changes it covers changed */ keys?: string[]; /** (Owner, Nov 3, §160) it stops whatever the Alerts: no way to turn it off is offered for it */ forced?: boolean; /** (Owner, Nov 5, §250) the update's identity: once any stop box on the page lists it, no other press there stops for it */ sid?: string;
-  /** (Owner, Nov 10, §373) a live line on the tester's page: the part (submission or call id) it is about */ part?: string;
-  /** (§373) a live line on the developer's page that an Alerts tick could switch off: what the always-stop rules read (lib/pressForce.ts) */ facts?: LineFacts };
-/** (§373) What the developer's always-stop rules read from a line (lib/pressForce.ts alwaysStops). */
+export type Change = { text: string; /** the people and tests it names, each its own green link */ links?: LineLink[]; at: string; kind?: string; alert?: string; ignored?: boolean; contract?: string; link?: string; /** the fields another tab changed (API names) */ fields?: string[]; /** one line per thing: a newer line with the same key replaces it */ key?: string; /** a live-box line that never stops a press */ quiet?: boolean; /** the text says its own time ("… edited the listing at 6:55 PM: …") */ timed?: boolean; /** the join page's NDA changed (its tick clears) */ nda?: boolean; /** the developer's listing change: See it jumps to the Listing panel */ listing?: boolean; /** the listing Save the line is about: See it marks that Save's fields only */ saveAt?: string; /** the panel lines all the listing changes it covers changed */ keys?: string[]; /** it stops whatever the Alerts: no way to turn it off is offered for it */ forced?: boolean; /** the update's identity: once any stop box on the page lists it, no other press there stops for it */ sid?: string;
+  /** a live line on the tester's page: the part (submission or call id) it is about */ part?: string;
+  /** a live line on the developer's page that an Alerts tick could switch off: what the always-stop rules read (lib/pressForce.ts) */ facts?: LineFacts };
+/** What the developer's always-stop rules read from a line (lib/pressForce.ts alwaysStops). */
 export type LineFacts = { kind: string; contractId?: string; piece?: string; item?: string; charge?: boolean };
 
-/** (Owner, Nov 3, §160) The Alerts types the developer's box offers to turn off: only from lines that could be switched off (not `forced`, not already ignored, not terms). */
+/** The Alerts types the developer's box offers to turn off: only from lines that could be switched off (not `forced`, not already ignored, not terms). */
 export const optionalAlerts = (changes: Change[]) => [...new Set(changes.filter((c) => !c.forced && !c.ignored && c.kind !== "terms").map((c) => c.alert).filter((x): x is string => !!x))];
-/** (Owner, Nov 3, §160) The tester's box offers "Turn off alerts" only when a line in it is one the tester's Alerts could have switched off. */
-export const testerCanTurnOff = (changes: Change[]) => changes.some((c) => !c.forced && c.kind !== "terms" && c.kind !== "stop"); // (Owner, Nov 6, §304) no "keyfixed" kind any more
+/** The tester's box offers "Turn off alerts" only when a line in it is one the tester's Alerts could have switched off. */
+export const testerCanTurnOff = (changes: Change[]) => changes.some((c) => !c.forced && c.kind !== "terms" && c.kind !== "stop");
 
-/** (§270) A stop line or refusal drawn as it reads, its names and tests green links. */
+/** A stop line or refusal drawn as it reads, its names and tests green links. */
 const plain = (t: string) => t;
 const linked = (t: string, links?: LineLink[]) => withLineLinks(t, links ?? knownLinks(), { draw: plain });
 const namesIn = (t: string, links?: LineLink[]) => splitLinks(t, links ?? knownLinks()).some((p) => p.link);
-/** (Batch 28 §4) Every time in the box is in the reader's saved zone (the browser's only when none is saved), like the stop lines. */
+/** Every time in the box is in the reader's saved zone (the browser's only when none is saved), like the stop lines. */
 const time = (iso: string) => fmtTimeIn(iso, savedZone());
 const DEFAULT_TAILS = new Set(["Press again to go ahead.", "Press again to go ahead"]);
 
 /**
  * The stop-once box (and any refusal): a blue notice placed directly under the button that was pressed, scrolled into view.
- * (Owner, Oct 30, batch 15 section 36) Top to bottom: "Your <button> didn't go through."; "Since you opened this page:" and the list; the Alerts lines (the tester's
+ * Top to bottom: "Your <button> didn't go through."; "Since you opened this page:" and the list; the Alerts lines (the tester's
  * toggle wording on the tester side); and last, in bold, "Press <button> again to go ahead.". A refusal names the press first: "Your Pay didn't go through: <reason>".
  * `press` is the button's label; without one, the label of the press that was just stopped or refused (from its API path).
  */
 export function ChangesBox({ changes, error, tail = "Press again to go ahead.", link, didntGo = false, press, button, side = "developer", detail, seeIt, alertsWhere, heading }: { changes: Change[] | null; error?: string; tail?: string; link?: string; didntGo?: boolean; press?: string;
-  /** (Owner, Nov 11, §387 2) The button's own label when it differs from the press's name: "Press <button> again to go ahead." names what the button reads
+  /** The button's own label when it differs from the press's name: "Press <button> again to go ahead." names what the button reads
    * ("Send the dispute"), while "Your Dispute didn't go through." keeps the press's name. */
-  button?: string; side?: "developer" | "tester"; /** (Batch 16 section 19) more under a line (Edit: Before / What you typed) */ detail?: (c: Change) => React.ReactNode; /** (Batch 30 §10) a listing save's line ends "· See it" (where the listing is on this page) */ seeIt?: string; /** (Owner, Nov 11, §376; replaces batch 30 §10's "on your dashboard" hint) a join-page box (Join, Apply, Ask to rejoin, No thanks, Withdraw): it always stops, whatever the Alerts, so it never offers them */ alertsWhere?: "join"; /** (Batch 34 §1) the admin pages' heading: "Since this page loaded:" */ heading?: string }) {
+  button?: string; side?: "developer" | "tester"; /** more under a line (Edit: Before / What you typed) */ detail?: (c: Change) => React.ReactNode; /** a listing save's line ends "· See it" (where the listing is on this page) */ seeIt?: string; /** a join-page box (Join, Apply, Ask to rejoin, No thanks, Withdraw): it always stops, whatever the Alerts, so it never offers them */ alertsWhere?: "join"; /** the admin pages' heading: "Since this page loaded:" */ heading?: string }) {
   const ref = useRef<HTMLDivElement>(null);
-  // (Batch 34 §14) The developer's test page gives every box its Listing panel ("#listing").
+  // The developer's test page gives every box its Listing panel ("#listing").
   const pageSeeIt = useSeeItTarget();
   const seeTo = seeIt ?? pageSeeIt;
   const shown = !!(changes || error);
@@ -61,11 +61,11 @@ export function ChangesBox({ changes, error, tail = "Press again to go ahead.", 
   }, [shown, press, error]);
   useEffect(() => {
     if (changes) markShownInBox(changes); // seen: the top box lists them quietly, without its scroll
-    // (Batch 27 section 1) The new-terms line stays under its button while the page goes up to the Switch / Keep box.
-    // (§302) So does the NDA block's line while the page goes up to the NDA notice.
+    // The new-terms line stays under its button while the page goes up to the Switch / Keep box.
+    // So does the NDA block's line while the page goes up to the NDA notice.
     if (changes || (error && error !== ANSWER_TERMS_FIRST && error !== NDA_BLOCK_FIRST)) bringInView(ref.current);
   }, [changes, error]);
-  // (Batch 35 §60) A stop box or refusal under a button goes once the page redraws with a new version of itself; the same stop or refusal again shows again.
+  // A stop box or refusal under a button goes once the page redraws with a new version of itself; the same stop or refusal again shows again.
   const gone = useGoneOnNewVersion(changes ?? error ?? null, changes ? "" : error ?? "");
   if ((!changes && !error) || gone) return null;
   if (!changes && error && error.startsWith("\u0001")) return <p ref={ref as unknown as React.RefObject<HTMLParagraphElement>} className="err-field basis-full">{error.slice(1)}</p>;
@@ -73,35 +73,35 @@ export function ChangesBox({ changes, error, tail = "Press again to go ahead.", 
   const named = name && name !== "press" ? name : "";
   const again = button || (named ? pressVerb(named) : "");
   const action = DEFAULT_TAILS.has(tail) ? (again ? `Press ${again} again to go ahead.` : "Press again to go ahead.") : tail;
-  // (Owner, Nov 3, §160) Only the lines an Alerts tick could have switched off offer to turn their type off; a box of forced lines shows no turn-off hint at all.
+  // Only the lines an Alerts tick could have switched off offer to turn their type off; a box of forced lines shows no turn-off hint at all.
   const alerts = changes ? optionalAlerts(changes) : [];
   return (
     <div ref={ref} className="info basis-full" role="status" aria-live="polite" data-stop-box="">
       {changes && (
         <>
           <p className="font-medium" data-didnt-go="">{named ? `Your ${named} didn't go through.` : "Your press didn't go through."}</p>
-          {/* (Batch 16 section 27) Payments, the profile editor and Settings: what another tab or device changed on the account. */}
+          {/* Payments, the profile editor and Settings: what another tab or device changed on the account. */}
           <p className="font-medium">{heading ?? (changes.length > 0 && changes.every((c) => c.kind === "account" || c.kind === "account-at") ? "Changed in another tab or device since you opened this page:" : "Since you opened this page:")}</p>
-          {/* (Design doc 2) The newest 3 lines, then "Show N more" opening a scroll box about 8 lines tall. */}
+          {/* The newest 3 lines, then "Show N more" opening a scroll box about 8 lines tall. */}
           <LongList className="my-1 list-disc pl-5" tall="max-h-52">
             {[...changes].map((c, i) => (
               <li key={`${c.at}|${c.text}|${i}`}>
-                {/* (Batch 16 section 21) A line can open what it's about (e.g. the next round's draft another tab made). */}
-                {/* (Batch 26 section 4) A stop line ("This test was stopped at 3:10 PM.") already says its time: shown once. */}
-                {/* (Owner, Nov 5, §270) Each person and test the line names is its own green link (sent with the line; else the ones this page's replies carried); a
+                {/* A line can open what it's about (e.g. the next round's draft another tab made). */}
+                {/* A stop line ("This test was stopped at 3:10 PM.") already says its time: shown once. */}
+                {/* Each person and test the line names is its own green link (sent with the line; else the ones this page's replies carried); a
                     line that opens what it's about keeps its other words linked there, beside them. */}
-                {c.link?.startsWith("/") ? <>{namesIn(c.text, c.links) ? withLineLinks(c.text, c.links ?? knownLinks(), { rest: c.link, draw: plain }) : <a href={c.link} data-stop-link="">{c.text}</a>} · {time(c.at)}</> : c.kind === "account-at" ? <>{linked(c.text, c.links)} at {time(c.at)}</> : c.kind === "yours" ? <>{linked(c.text, c.links)} at {time(c.at)}.</> /* (batch 23 section 5) Edit: "Instructions: your version will replace the one saved in another tab at 3:54 PM." */ : c.kind === "account" || c.kind === "stop" || c.timed ? linked(c.text, c.links) /* (batch 30 §10) "… edited the listing at 6:55 PM: …" says its own time */ : <>{linked(c.text, c.links)} · {time(c.at)}</>}
-                {/* (Owner, Oct 28) "Ana switched to the new terms" / "kept their current terms": the same "See their contract" as the top box (scrolls on the test page; a new tab from Edit). */}
+                {c.link?.startsWith("/") ? <>{namesIn(c.text, c.links) ? withLineLinks(c.text, c.links ?? knownLinks(), { rest: c.link, draw: plain }) : <a href={c.link} data-stop-link="">{c.text}</a>} · {time(c.at)}</> : c.kind === "account-at" ? <>{linked(c.text, c.links)} at {time(c.at)}</> : c.kind === "yours" ? <>{linked(c.text, c.links)} at {time(c.at)}.</> /* Edit: "Instructions: your version will replace the one saved in another tab at 3:54 PM." */ : c.kind === "account" || c.kind === "stop" || c.timed ? linked(c.text, c.links) /* "… edited the listing at 6:55 PM: …" says its own time */ : <>{linked(c.text, c.links)} · {time(c.at)}</>}
+                {/* "Ana switched to the new terms" / "kept their current terms": the same "See their contract" as the top box (scrolls on the test page; a new tab from Edit). */}
                 {c.kind === "terms" && c.contract && <> <ContractLink contract={c.contract} /></>}
-                {/* (Batch 30 §10; batch 34 §14) A listing change (a tester's "… edited the listing at 6:55 PM: …", the developer's "You saved the listing in another tab: …"). */}
+                {/* A listing change (a tester's "… edited the listing at 6:55 PM: …", the developer's "You saved the listing in another tab: …"). */}
                 {seeTo && ((c.timed && c.kind === "info") || c.listing) && <> · <a href={seeTo} data-see-it="" onClick={(e) => seeItClick(e, seeTo, c.at, c.saveAt, c.keys)}>See it</a></>}
-                {/* (Batch 34 §12) The key the developer's Save gave this tester: See it jumps to the key box. */}
+                {/* The key the developer's Save gave this tester: See it jumps to the key box. */}
                 {c.kind === "keygiven" && <> · <a href={`#${KEY_BOX_ID}`} data-see-it="key" onClick={(e) => { e.preventDefault(); jumpTo(KEY_BOX_ID); }}>See it</a></>}
                 {(() => { const d = detail?.(c); return d ? <div className="mt-0.5 text-xs" data-stop-detail="">{d}</div> : null; })()}
               </li>
             ))}
           </LongList>
-          {/* (Owner, Nov 11, §376) A join-page box always stops (the tester's Alerts never switch it off): no "You can turn these stops off …" line and no Turn off alerts. */}
+          {/* A join-page box always stops (the tester's Alerts never switch it off): no "You can turn these stops off …" line and no Turn off alerts. */}
           {side === "tester" ? (alertsWhere === "join" ? null : <TesterAlertsOff show={testerCanTurnOff(changes)} />) : <QuickIgnore alerts={alerts} />}
           <p className="mt-1 font-semibold" data-press-again="">{action}</p>
         </>

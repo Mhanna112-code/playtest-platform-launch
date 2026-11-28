@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type SetStateAction } from "react";
 
 /**
- * (Owner, Nov 10, §371; recordings race-369 1 and 2) A press's own state, kept by its button's part OUTSIDE the component that pressed.
+ * A press's own state, kept by its button's part OUTSIDE the component that pressed.
  *
  * A live redraw can swap the pressing component for a new one mid-press: the written part's form is keyed "first" / "open", so another tab's Send (or a question
  * change) switched it while this tab's Send Answers was on its way; the old form unmounted and the server's stop-once box had nowhere to show. A box keyed by a

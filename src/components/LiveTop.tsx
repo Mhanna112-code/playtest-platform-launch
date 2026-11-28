@@ -15,7 +15,7 @@ import { LIVE_TICK, boxSync, rideLiveClock, whileRedrawn } from "@/lib/liveSync"
 const time = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 const key = (c: Change) => `${c.at}|${c.text}`;
 const time0 = (at: string | Date) => new Date(at).getTime();
-/** (Owner, Nov 6, §284) An ignored line's words that open its row: still the line's grey, underlined on hover. */
+/** An ignored line's words that open its row: still the line's grey, underlined on hover. */
 const IGNORED_REST = "text-inherit no-underline hover:underline";
 
 export function LiveNoticeText({ line: l, testId }: { line: Change; testId?: string }) {
@@ -32,10 +32,10 @@ export function LiveNoticeText({ line: l, testId }: { line: Change; testId?: str
 }
 
 /**
- * The live top notice (owner, NEWEST+3): one box at the top of the page listing every change since the page was opened
+ * The live top notice: one box at the top of the page listing every change since the page was opened
  * (new terms, payments, call changes, listing edits, your own actions in another tab), newest first, as the page's
  * 20-second refresh picks them up. Shown changes count as seen: the page's buttons then send a later "seen" marker.
- * (Batch 35 §37) It checks on the page's one 20-second beat (lib/liveSync.ts), at once whenever the page redraws, and a new line redraws the page at once.
+ * It checks on the page's one 20-second beat (lib/liveSync.ts), at once whenever the page redraws, and a new line redraws the page at once.
  */
 export function LiveTop({ scope, seenAt, seeIt, contractLink }: { scope: string; seenAt: string; seeIt?: string; contractLink?: "scroll" | { testId: string } }) {
   const [lines, setLines] = useState<Change[]>([]);
@@ -43,12 +43,12 @@ export function LiveTop({ scope, seenAt, seeIt, contractLink }: { scope: string;
   const known = useRef(new Set<string>());
   const since = useRef(seenAt); // the page-open time: the list always covers everything since then
   const box = useRef<HTMLDivElement>(null);
-  // (Owner, Nov 28) What this box has shown every line up to (its last shown check), and the lines it picked up but still holds for the page's redraw: a box
+  // What this box has shown every line up to (its last shown check), and the lines it picked up but still holds for the page's redraw: a box
   // drawn again in its place (lib/live.ts handOver) checks from before them.
   const shownTo = useRef(seenAt);
   const held = useRef<Change[]>([]);
 
-  // (Owner, Oct 29, batch 27 section 4; replaces batch 15 section 28's first-update scroll) Nothing moves on its own any more: EVERY live update that arrives while
+  // Nothing moves on its own: EVERY live update that arrives while
   // this box is out of view raises the floating pill ("1 new update", counting up), whether or not anything is being typed. Its arrow points where the updates are
   // ("↑" above the screen, "↓" below: on Edit the box sits under Save). Pressing it scrolls to the box and it goes; it also goes once the box comes into view.
   // The flash on the new line stays. Reduced motion: a jump, no animation.
@@ -57,8 +57,8 @@ export function LiveTop({ scope, seenAt, seeIt, contractLink }: { scope: string;
   const [flash, setFlash] = useState("");
   const where = () => pillSide(box.current?.getBoundingClientRect(), window.innerHeight);
   /**
-   * (Owner's finding, Oct 30, batch 32 §12) Lines count as seen (the press's seen marker moves on) only once this box is in view: lines that arrived while it was
-   * out of view, with only the pill up, still stop the next press once (another device's Send used to go straight through and replace what was sent there).
+   * Lines count as seen (the press's seen marker moves on) only once this box is in view: lines that arrived while it was
+   * out of view, with only the pill up, still stop the next press once.
    */
   const unseenUpTo = useRef("");
   const seenNowInView = () => {
@@ -72,14 +72,13 @@ export function LiveTop({ scope, seenAt, seeIt, contractLink }: { scope: string;
     seenNowInView();
   };
   /**
-   * (Owner, Oct 28, batch 20 section 13, bug found by the owner) EVERY live update nobody pressed for is announced, not only the page's first (batch 27 section 4:
-   * by the pill alone, adding to its count; the first one no longer scrolls). Before, only the first update of a page load was announced (later ones only checked a `pill` value frozen at 0 in the poll's
-   * closure), so a call request arriving while the tester typed in the Dispute box (after an earlier update had used the one scroll) showed nothing.
+   * EVERY live update nobody pressed for is announced, not only the page's first: by the pill alone, adding to its count (nothing scrolls). The count is read
+   * fresh each time, never a `pill` value frozen in the poll's closure.
    */
   function announceFresh(n: number, newest: string) {
     setFlash(newest);
     setTimeout(() => setFlash(""), 2500);
-    // (Batch 27 section 4) Out of view: the pill, never a scroll (typing or not).
+    // Out of view: the pill, never a scroll (typing or not).
     setTimeout(() => {
       const s = where();
       if (!s) return;
@@ -119,7 +118,7 @@ export function LiveTop({ scope, seenAt, seeIt, contractLink }: { scope: string;
   }, []);
 
   /**
-   * (Owner, Oct 31, batch 35 §37) One check, not two: the box checks on the page's one beat (the same tick as the page's redraw poll), and at once whenever the
+   * One check, not two: the box checks on the page's one beat (the same tick as the page's redraw poll), and at once whenever the
    * page redraws (a new server render time: the poll's redraw, a press, focus, another part of the page). New lines ask the page to redraw at once; while that
    * redraw is on its way they are held and show (with the pill) as it lands, so the rows and the line change together.
    */
@@ -145,20 +144,20 @@ export function LiveTop({ scope, seenAt, seeIt, contractLink }: { scope: string;
         if (!alive) return;
         held.current = held.current.filter((c) => !added.includes(c));
         if (time0(r.now) > time0(shownTo.current)) shownTo.current = r.now;
-        // (Batch 35 §34) A keyed line (the one listing line) replaces the box's earlier one, covering its fields too.
+        // A keyed line (the one listing line) replaces the box's earlier one, covering its fields too.
         if (added.length) setLines((old) => mergeChanges(old, added));
-        // Only a live update nobody pressed for is announced (lines a stop box showed are quiet); (batch 27 section 4) each one raises the pill when the box is out of view.
+        // Only a live update nobody pressed for is announced (lines a stop box showed are quiet); each one raises the pill when the box is out of view.
         // Ignored (greyed) Alerts lines count as updates too, since they still show.
         const fresh = added.filter((c) => !wasShownInBox(c));
         if (fresh.length) announceFresh(fresh.length, key(fresh[fresh.length - 1]));
-        // (Owner, Oct 31, batch 35 §90) Shown on the page (the redraw, the pill up or the box in view): seen at once, so no stop notice for it afterwards.
+        // Shown on the page (the redraw, the pill up or the box in view): seen at once, so no stop notice for it afterwards.
         unseenUpTo.current = "";
         if (added.length) setShownOnPage(scope, r.now);
         else setShown(scope, r.now);
         whileRedrawn(redrawn, () => announce(added));
       };
-      // (Batch 35 §37) New lines redraw the page at once and show as it lands (at once if it already redrew during this check).
-      // (Owner, Nov 28) The first check of a box drawn again in place of the old one: lines from before this render came with the redraw that just landed.
+      // New lines redraw the page at once and show as it lands (at once if it already redrew during this check).
+      // The first check of a box drawn again in place of the old one: lines from before this render came with the redraw that just landed.
       const cameWithRedraw = tookOver && added.every((c) => time0(c.at) <= time0(drawnWith.current));
       if (!cameWithRedraw) held.current.push(...added);
       if (!added.length) apply(false);
@@ -166,11 +165,11 @@ export function LiveTop({ scope, seenAt, seeIt, contractLink }: { scope: string;
       else sync.lines(started, apply);
     };
     check.current = tick;
-    // (Batch 35 §37) No timer of its own: the page's one 20-second clock beats for the box and the redraw together.
+    // No timer of its own: the page's one 20-second clock beats for the box and the redraw together.
     const leave = rideLiveClock();
     const onTick = () => void tick();
     window.addEventListener(LIVE_TICK, onTick);
-    // (Owner, Nov 28) Drawn again in place of this scope's box (lib/live.ts takeOver): check at once from what that one had shown, so nothing it picked up but
+    // Drawn again in place of this scope's box (lib/live.ts takeOver): check at once from what that one had shown, so nothing it picked up but
     // hadn't shown is lost; the page has just drawn.
     const from = takeOver(scope);
     if (from) {
@@ -184,7 +183,7 @@ export function LiveTop({ scope, seenAt, seeIt, contractLink }: { scope: string;
       window.removeEventListener(LIVE_TICK, onTick);
       sync.stop();
       clearShown(scope);
-      // (Owner, Nov 28) The box drawn in its place counts from before any line this one hasn't shown.
+      // The box drawn in its place counts from before any line this one hasn't shown.
       const firstHeld = Math.min(...held.current.map((c) => time0(c.at)));
       handOver(scope, firstHeld - 1 < time0(shownTo.current) ? new Date(firstHeld - 1).toISOString() : shownTo.current);
     };
@@ -201,30 +200,30 @@ export function LiveTop({ scope, seenAt, seeIt, contractLink }: { scope: string;
       </button>
     )}
     <div ref={box} className="info flex items-start gap-3 scroll-mt-24" role="status" aria-live="polite" data-live-top>
-      {/* (Design doc 2) The newest 3 lines, then "Show N more" opening a scroll box about 8 lines tall. */}
+      {/* The newest 3 lines, then "Show N more" opening a scroll box about 8 lines tall. */}
       <div className="mr-auto min-w-0">
       <LongList className="space-y-0.5" tall="max-h-52">
         {show.map((l) => (
           <li key={key(l)} className={`${l.ignored ? "text-sky-100/50" : ""} ${flash === key(l) ? "rounded bg-sky-300/20 transition-colors" : ""}`} data-flash={flash === key(l) ? "" : undefined} title={l.ignored ? "You turned these stops off in Alerts" : undefined}>
-            {/* (Batch 15 section 35) A line about a row on this page opens it (a new dispute: its Needs you row). */}
-            {/* (Batch 30 §10) A listing save's line says its own time ("Marc Hanna edited the listing at 6:55 PM: …"): not twice. */}
-            <b>{l.timed ? "Updated:" : `Updated · ${time(l.at)}:`}</b> {/* (Owner, Nov 5, §270) Each person and test it names is its own green link; a line about a row keeps its other words opening that row, beside them. */}
-            {/* (Owner, Nov 6, §284) Every line about something with a place on the page opens it (jumps and marks; a request whose row has left: its Call requests box),
+            {/* A line about a row on this page opens it (a new dispute: its Needs you row). */}
+            {/* A listing save's line says its own time ("Marc Hanna edited the listing at 6:55 PM: …"): not twice. */}
+            <b>{l.timed ? "Updated:" : `Updated · ${time(l.at)}:`}</b> {/* Each person and test it names is its own green link; a line about a row keeps its other words opening that row, beside them. */}
+            {/* Every line about something with a place on the page opens it (jumps and marks; a request whose row has left: its Call requests box),
                 ignored (greyed) lines too: those keep their grey and their title, the rest of the words linked in the line's own colour. */}
             <LiveNoticeText line={l} testId={typeof contractLink === "object" ? contractLink.testId : undefined} />
-            {/* (Owner, Oct 27) A tester switched to or kept after new terms: "See their contract" scrolls to their row on the test page; on Edit it opens the test page at that row in a new tab. */}
+            {/* A tester switched to or kept after new terms: "See their contract" scrolls to their row on the test page; on Edit it opens the test page at that row in a new tab. */}
             {l.kind === "terms" && l.contract && contractLink && (
               <>
                 {" "}
                 <ContractLink contract={l.contract} mode={contractLink} />
               </>
             )}
-            {/* (Batch 34 §12) "Nora Lane gave you an access key for “…”": See it jumps to the key box (the page redraws with it at once: the session's poll includes the key). */}
+            {/* "Nora Lane gave you an access key for “…”": See it jumps to the key box (the page redraws with it at once: the session's poll includes the key). */}
             {l.kind === "keygiven" && <> · <a href={`#${KEY_BOX_ID}`} data-see-it="key" onClick={(e) => { e.preventDefault(); jumpTo(KEY_BOX_ID); }}>See it</a></>}
             {(l.kind === "info" || l.listing) && seeIt && (
               <>
                 {l.timed || l.listing ? " · " : " "}
-                {/* (Batch 30 §15) The page can mark the lines that save changed (the session page's contract box; batch 34 §14: the developer's Listing panel). */}
+                {/* The page can mark the lines that save changed (the session page's contract box; the developer's Listing panel). */}
                 <a href={seeIt} data-see-it="" onClick={(e) => seeItClick(e, seeIt, l.at, l.saveAt, l.keys)}>See it</a>
               </>
             )}

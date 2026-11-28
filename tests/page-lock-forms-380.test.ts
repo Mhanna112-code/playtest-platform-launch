@@ -154,7 +154,7 @@ describe("§380 E: every press on every page waits for its answer (and its redra
       expect(notAPress(p, {}), p).toBe(false);
     const press = src("lib/usePress.ts");
     expect(press).toMatch(/holdForRedraw\(\);\s+if \(how\.reload\) \{/);
-    expect(press).toContain("redrawLanded(); // (§380 E)");
+    expect(press).toContain("redrawLanded(); // the page's buttons come back once the redraw landed");
     expect(press).not.toContain("pageScope()");
   });
 });

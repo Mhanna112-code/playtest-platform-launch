@@ -1,7 +1,7 @@
 import type { TestEventLike } from "@/lib/rules";
 
 /**
- * (Owner, Nov 5, §250) An update listed in ANY stop box on a page counts as seen for EVERY button on that page: no other press there stops again for it.
+ * An update listed in ANY stop box on a page counts as seen for EVERY button on that page: no other press there stops again for it.
  *
  * Per update, not by time: each stop line carries a stable identity (`sid`) and the page sends back the identities its stop boxes ACTUALLY LISTED (`shownIds`, every
  * press, lib/live.ts `shownIdsNow`). Both gates (the developer's devGate, the tester's testerGate, and the stop / pause moments with them) drop a line whose identity
@@ -10,7 +10,6 @@ import type { TestEventLike } from "@/lib/rules";
  *
  * Identity: the test event's row id when the line is one (`eventId`), otherwise its kind, time (ms) and raw text (before the reader's zone is applied), hashed short.
  *
- * (Owner, Nov 5, §268) No exceptions any more: §232's Rate / Leave open-terms line (`everyPress`) is gone.
  * Lines with no identity (`sid`) never count: Pay what you owe's stop (holds.ts keeps its own seenIds / seenAmounts) and other boxes outside the two gates.
  */
 export const SHOWN_IDS_MAX = 300;

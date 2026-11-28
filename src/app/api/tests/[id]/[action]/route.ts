@@ -16,10 +16,10 @@ import * as RF from "@/lib/refusal";
 import { RESTRICTED_OK_ACTIONS, TEAM_PAUSED_OK_ACTIONS, teamPausedNow } from "@/lib/restricted";
 import { bodyPressVerb } from "@/lib/pressLabels";
 
-// (Owner, Oct 27) Email confirmation is needed only for Post a test (its own route), Join (which is also accepting an invite) and Apply. A blocked press is a blue notice under the button with Resend the link.
+// Email confirmation is needed only for Post a test (its own route), Join (which is also accepting an invite) and Apply. A blocked press is a blue notice under the button with Resend the link.
 const NEEDS_CONFIRMED = new Set(["join", "apply", "post-draft"]);
-// (Batch 18 section 1) An account on an older Terms of Use version agrees again (the box's tick) on these presses only: post a draft, and Join (also accepting an
-// invite), Apply and Ask to rejoin. (Owner, Nov 27, shared rule 4: refusals → box → field mistakes) Join, Apply and Ask to rejoin check the tick themselves, as
+// An account on an older Terms of Use version agrees again (the box's tick) on these presses only: post a draft, and Join (also accepting an
+// invite), Apply and Ask to rejoin. Order: refusals → box → field mistakes, so Join, Apply and Ask to rejoin check the tick themselves, as
 // a red mistake after their refusals and boxes, with the NDA tick (joining.ts termsTick); only Post the test checks it here.
 const NEEDS_CURRENT_TERMS = new Set(["post-draft"]);
 import { devRate } from "@/lib/server/ratings";
@@ -27,10 +27,10 @@ import { logTestAction } from "@/lib/server/actionText";
 
 type Ctx = { params: Promise<{ id: string; action: string }> };
 
-/** (Owner, Oct 30, batch 15 section 29) A suspended or held developer: Stop, End early and Cancel call (and the side of a dispute). */
+/** A suspended or held developer: Stop, End early and Cancel call (and the side of a dispute). */
 const SUSPENDED_OK = RESTRICTED_OK_ACTIONS;
 
-/** (Design doc 5) The Edit page's live view of the test: its listing and version, and the In use / Free access keys. */
+/** The Edit page's live view of the test: its listing and version, and the In use / Free access keys. */
 export async function GET(req: Request, { params }: Ctx) {
   return handle(async () => {
     const { id, action } = await params;
@@ -38,22 +38,34 @@ export async function GET(req: Request, { params }: Ctx) {
     if (!u) throw new HttpError(401, "signed_out", "You're signed out. Sign in again to keep going.");
     if (action !== "listing") throw new HttpError(404, "not_found", "That doesn't exist.");
     const t = await ownTest(u.id, id);
-    const counting = await countingState(t); // (batch 35 §66) the count runs once a tester joined
+    const counting = await countingState(t); // the count runs once a tester joined
     return ok({ version: t.version, listing: asListing(t), keys: await keyBoxes(id), at: new Date().toISOString(), criticalCounts: counting.counts, everJoined: !!counting.since });
   });
 }
 
-// Developer actions on their test, and the tester's Join. Every one re-checks on the server.
+/**
+ * Developer actions on their test, and the tester's Join. Every one re-checks on the server.
+ *
+ * Flow:
+ *   1. The press's name (pressWhat / pressVerbOf): no checks.
+ *   2. The account: requireActive (another account, the page opened elsewhere, signed out, suspended or held, except what a restricted developer may still do);
+ *      readJson (a bad or too large body: red); requireConfirmed (Join, Apply, Post the test: confirm_email).
+ *   3. Silent: alreadyDone on the developer's own test (not the tester-side presses).
+ *   4. Refusals: adminRefusal (the team stopped the test: final; the team paused it: soft).
+ *   5. Post the test only: requireCurrentTerms (the Terms of Use tick: red).
+ *   6. run(): the press's own function: its own refusals, its gate (devGate / devGateIfSeen / listingGate / Edit's own box …), its red mistakes, the action.
+ *   7. After: the rename note, the action log (not for a silent no-op).
+ */
 export async function POST(req: Request, { params }: Ctx) {
   return handle(async () => {
     const { id, action } = await params;
-    // (Batch 17 section 2) Rate reaches its own refusal ("You can rate once your account is active again.") while the developer is suspended or on a hold.
+    // Rate reaches its own refusal ("You can rate once your account is active again.") while the developer is suspended or on a hold.
     const what = await pressWhat(req, action);
-    const verb = await pressVerbOf(req, what); // (§363 / §364) read before the body is (a refusal names the press)
-    const u = await requireActive(req, { devOk: SUSPENDED_OK.has(action) || action === "rate" || action === "edit", devSide: !TESTER_SIDE.has(action), what }); // (§386 A) Pay more too: refused while suspended or held
-    const body = await readJson(req, 900_000); // (batch 15 sections 3 and 17) an Edit with 20 questions and the steps at 20,000 characters each
+    const verb = await pressVerbOf(req, what); // read before the body is (a refusal names the press)
+    const u = await requireActive(req, { devOk: SUSPENDED_OK.has(action) || action === "rate" || action === "edit", devSide: !TESTER_SIDE.has(action), what }); // Pay more too: refused while suspended or held
+    const body = await readJson(req, 900_000); // an Edit with 20 questions and the steps at 20,000 characters each
     if (NEEDS_CONFIRMED.has(action)) requireConfirmed(u);
-    // (Owner, Nov 11, §380) Already what the press wanted (a cancelled call, a set with nothing left, a closed request of theirs): silent, before any refusal.
+    // Already what the press wanted (a cancelled call, a set with nothing left, a closed request of theirs): silent, before any refusal.
     if (!TESTER_SIDE.has(action) && (await db.test.count({ where: { id, developerId: u.id } }))) {
       const done = await alreadyDone("developer", { testId: id }, action, body);
       if (done) return ok(done);
@@ -64,38 +76,39 @@ export async function POST(req: Request, { params }: Ctx) {
     const data = await res0.clone().json().catch(() => null);
     // A rename the page hadn't shown: the press went ahead; the note goes under the button.
     const res = res0.ok && typeof body.__note === "string" && data && typeof data === "object" ? ok({ ...data, note: body.__note }) : res0;
-    if (res.ok && !data?.already) await logTestAction(u.id, id, action, body, data); // (§380) a silent no-op did nothing
+    if (res.ok && !data?.already) await logTestAction(u.id, id, action, body, data); // a silent no-op did nothing
     return res;
   });
 }
 
-/** What a test the team STOPPED still allows on this route (a team pause allows only TEAM_PAUSED_OK_ACTIONS and Rate's own refusal: §172). */
+/** What a test the team STOPPED still allows on this route (a team pause allows only TEAM_PAUSED_OK_ACTIONS and Rate's own refusal). */
 const STOPPED_ALLOWS = new Set(["message", "rate", "dispute-side", "pay-extra", "no-show"]);
 const TESTER_SIDE = new Set(["join", "apply", "rejoin-ask", "withdraw-application", "my-gaps"]);
 
 /**
- * (Design doc 6; owner, Nov 4, §172) The team paused the test: exactly what a developer suspension allows, for this test (Stop, End early, Cancel call, the side of a
+ * The team paused the test: exactly what a developer suspension allows, for this test (Stop, End early, Cancel call, the side of a
  * dispute; Rate reaches its own refusal). The team stopped it: every press the developer made fails and they are sent back to the test, where a permanent banner says
  * so and names the press that failed.
+ * Flow: the route's refusals after the silent already-done: the team's stop (final, "admin_stopped") → the team's pause (soft, "admin_paused").
  */
 async function adminRefusal(req: Request, userId: string, testId: string, action: string, what?: string, verb = "") {
   if (TESTER_SIDE.has(action)) return;
   const t = await db.test.findUnique({ where: { id: testId }, select: { developerId: true, status: true, adminPausedAt: true, adminStoppedAt: true } });
   if (!t || t.developerId !== userId) return;
-  // (Owner, Oct 28) A team stop is a HARD refusal for every press a stopped test does not allow (no stop-once); what a stopped test allows (chat, rate, a dispute reply, extra pay, a call's length
+  // A team stop is a HARD refusal for every press a stopped test does not allow (no stop-once); what a stopped test allows (chat, rate, a dispute reply, extra pay, a call's length
   // and problem report) goes on under its own rules.
-  // (Owner, Nov 9, §363/§364) The one stopped line, naming the press (the banner still says the team stopped it, why, and which press failed).
+  // The one stopped line, naming the press (the banner still says the team stopped it, why, and which press failed).
   if (t.adminStoppedAt && !STOPPED_ALLOWS.has(action) && action !== "edit") throw new HttpError(409, "admin_stopped", stoppedPressLine(verb), { failed: await failedLine(req, what) });
   if (t.adminStoppedAt) return;
-  // (Owner, Nov 4, §172; replaces batch 15 sections 1, 23 and 37) A test the team paused follows a developer suspension's rules: Stop, End early, Cancel call and the
-  // side of a dispute go on; Rate goes on to its own refusal (as a suspended developer's does: batch 17 section 2); every other press, chat included, goes to the
-  // banner. A stopped or closed test isn't paused any more.
-  // (Owner, Nov 11, §386 A; replaces §368) Pay more is refused too ("The team paused this test, so your Pay more didn't go through."), a closed test's pause included.
-  if (teamPausedNow(t) && !TEAM_PAUSED_OK_ACTIONS.has(action) && action !== "rate" && action !== "edit") throw new HttpError(409, "admin_paused", RF.pressRefused(RF.TEAM_PAUSED_CAUSE, verb), { failed: await failedLine(req, what), testId }); // (§364 item 6)
+  // A test the team paused follows a developer suspension's rules: Stop, End early, Cancel call and the
+  // side of a dispute go on; Rate goes on to its own refusal (as a suspended developer's does); every other press, chat included, goes to the
+  // banner. A stopped or closed test isn't paused.
+  // Pay more is refused too ("The team paused this test, so your Pay more didn't go through."), a closed test's pause included.
+  if (teamPausedNow(t) && !TEAM_PAUSED_OK_ACTIONS.has(action) && action !== "rate" && action !== "edit") throw new HttpError(409, "admin_paused", RF.pressRefused(RF.TEAM_PAUSED_CAUSE, verb), { failed: await failedLine(req, what), testId });
 }
 
 /**
- * (Batch 35 §2) An application's Accept / Decline is named by its body's `action`: the failed-press lines read "Your Accept on <test> didn't go through" (not "Answer").
+ * An application's Accept / Decline is named by its body's `action`: the failed-press lines read "Your Accept on <test> didn't go through" (not "Answer").
  * The body is peeked from a copy of the request (small bodies only), since the account checks run before it is read.
  */
 async function pressWhat(req: Request, action: string) {
@@ -109,13 +122,13 @@ async function run(u: Awaited<ReturnType<typeof requireActive>>, id: string, act
       case "edit": {
         const t = await editTest(u, id, body);
         return ok({ version: t.version, offered: (t as { offered?: number }).offered ?? 0, changed: (t as { changed?: string[] }).changed ?? [], notReinvited: (t as { notReinvited?: string[] }).notReinvited ?? [], resent: (t as { resent?: string[] }).resent ?? [], closedApps: (t as { closedApps?: string[] }).closedApps ?? [], spotClosed: (t as { spotClosed?: string[] }).spotClosed ?? [], spots: t.spots,
-          // (Batch 34 §9) What was just saved: the page's base becomes it (a Back / forward return or a tab switch never brings older text back).
+          // What was just saved: the page's base becomes it (a Back / forward return or a tab switch never brings older text back).
           listing: asListing(t), keys: await keyBoxes(id) });
       }
       case "open":
         await openDraft(u, id, body);
         return ok({ ok: true });
-      // (Owner, Oct 28 evening) A draft opens in Post a test: "Post the test" saves and opens it; it can also be deleted there.
+      // A draft opens in Post a test: "Post the test" saves and opens it; it can also be deleted there.
       case "post-draft":
         return ok({ id: (await postDraft(u, id, body)).id });
       case "delete-draft":
@@ -126,7 +139,7 @@ async function run(u: Awaited<ReturnType<typeof requireActive>>, id: string, act
         return ok(await devRate(u, id, body));
       case "end-early":
         return ok(await endEarly(u, id, body));
-      // (Owner, Nov 3, batch 35 §168) One tap: a new draft every press (Go to the next round is gone).
+      // One tap: a new draft every press.
       case "next-round":
         return ok(await nextRound(u, id));
       case "cancel-call":
@@ -148,30 +161,30 @@ async function run(u: Awaited<ReturnType<typeof requireActive>>, id: string, act
       case "my-gaps": {
         // The join page's "What this test needs" pop-up checks the profile and the test again while it is open.
         const t = await db.test.findUniqueOrThrow({ where: { id } });
-        // (Batch 30 §12) With the page's seen marker: what the needs-covered notice shows with it (every change the page hadn't shown), the box's time and its last line.
+        // With the page's seen marker: what the needs-covered notice shows with it (every change the page hadn't shown), the box's time and its last line.
         const verb = body.verb === "apply" || body.verb === "ask" ? body.verb : "join";
         const stop = typeof body.seenAt === "string" ? await joinStopList(u.id, id, body, verb) : null;
-        // (Batch 35 §14) `needsSaveAt`: the Save that last changed the needs, for the pop-up's own lines' See it.
+        // `needsSaveAt`: the Save that last changed the needs, for the pop-up's own lines' See it.
         const needsSave = await (await import("@/lib/server/listingPanel")).needsSaveAt(id);
-        // (Batch 35 §44) `profileAt` (the tester's own profile's last save) and `needsSaveAt` against the pop-up's open time (`now` as it opened) say where a change came from.
+        // `profileAt` (the tester's own profile's last save) and `needsSaveAt` against the pop-up's open time (`now` as it opened) say where a change came from.
         const profile = await db.testerProfile.findUnique({ where: { userId: u.id } });
         return ok({ gaps: gapsOf(t, profile), needs: { devices: t.devices, languages: t.languages }, ...(needsSave ? { needsSaveAt: needsSave } : {}), ...(profile ? { profileAt: profile.updatedAt.toISOString() } : {}), now: new Date().toISOString(), ...(stop ?? {}) });
       }
       case "invite-check":
         return ok(await inviteGaps(u.id, id, Array.isArray(body.testerIds) ? body.testerIds.map(String) : []));
       case "invite-search":
-        // (Batch 16 section 12) The invite panel's lists over every tester: Suggested after the ticks, and the name search.
+        // The invite panel's lists over every tester: Suggested after the ticks, and the name search.
         return ok(await invitePanel(u.id, id, { q: body.q, devices: body.devices, languages: body.languages }));
       case "invite-restore":
-        // (Owner, Nov 4, §173) The ticks this tab kept, after a reload: the ones still invitable (their rows) and who was dropped and why.
+        // The ticks this tab kept, after a reload: the ones still invitable (their rows) and who was dropped and why.
         return ok(await inviteRestore(u.id, id, Array.isArray(body.testerIds) ? body.testerIds.map(String) : []));
       case "cancel-invite":
         return ok(await cancelInvite(u, id, body));
       case "message": {
-        const m = body.testerId ? await sendChat(u, id, String(body.testerId), body.body, body.clientId, body) : await sendMessage(u, String(body.contractId ?? ""), body.body, body.clientId, body); // (§271) with the page's load time
+        const m = body.testerId ? await sendChat(u, id, String(body.testerId), body.body, body.clientId, body) : await sendMessage(u, String(body.contractId ?? ""), body.body, body.clientId, body); // with the page's load time
         return ok({ id: m.id });
       }
-      // (Security, §352) Join, Apply, Ask to rejoin and the developer's Accept never take the server-only join flags from the request.
+      // Security: Join, Apply, Ask to rejoin and the developer's Accept never take the server-only join flags from the request.
       case "join": {
         const c = await join(u, id, clientJoinBody(body));
         return ok({ sessionId: c.id });

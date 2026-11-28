@@ -22,10 +22,10 @@ export async function testerStopSince(contractId: string, loaded: Date | null, n
   if (!loaded) return null;
   const c = await db.contract.findUnique({ where: { id: contractId }, include: { tester: true, test: { include: { developer: true } } } });
   if (!c || c.status !== "ended" || !c.endedAt || c.endedAt <= loaded) return null;
-  // (Owner, Nov 9, §364) A stop by the developer deleting their account reads as the team's ("This test was stopped at 3:10 PM."), never "Deleted account stopped …".
+  // A stop by the developer deleting their account reads as the team's ("This test was stopped at 3:10 PM."), never "Deleted account stopped …".
   const kind = c.endKind === "closed" ? "closed" : c.endKind === "early" ? "early" : c.endKind === "stopped" ? (c.test.adminStoppedAt || c.test.developer.deletedAt ? "team" : "dev") : null;
   if (!kind) return null;
-  // (Batch 26 section 3) The time in the tester's own zone; a team Stop never names who stopped it ("This test was stopped at 3:10 PM.").
+  // The time in the tester's own zone; a team Stop never names who stopped it ("This test was stopped at 3:10 PM.").
   const tz = c.tester.timeZone;
   return { kind: "stop", text: stopMomentLine("tester", kind, c.endedAt, { dev: displayName(c.test.developer), tester: displayName(c.tester) }, (d) => fmtTimeIn(d, tz), (d) => fmtDateTimeIn(d, tz), now), createdAt: c.endedAt };
 }
@@ -35,7 +35,7 @@ export async function devStopSince(testId: string, contractId: string | null, lo
   if (!loaded) return null;
   const t = await db.test.findUnique({ where: { id: testId }, select: { status: true, stoppedAt: true, adminStoppedAt: true, pauseClosedAt: true, developer: { select: { timeZone: true } } } });
   if (!t) return null;
-  // (Batch 26 section 4) The time in the developer's own zone.
+  // The time in the developer's own zone.
   const tz = t.developer.timeZone;
   const time = (d: Date) => fmtTimeIn(d, tz), dateTime = (d: Date) => fmtDateTimeIn(d, tz);
   if (t.status === "stopped" && t.stoppedAt && t.stoppedAt > loaded) {
@@ -49,7 +49,7 @@ export async function devStopSince(testId: string, contractId: string | null, lo
 }
 
 /**
- * (Owner, Oct 29, batch 29 section 11) A pause the developer's page opened before it hasn't shown: the team's pause of this test, or the developer's hold or suspension
+ * A pause the developer's page opened before it hasn't shown: the team's pause of this test, or the developer's hold or suspension
  * (whichever began first after the page loaded and still holds). Like a stop, it stops the next press once ("The team paused this test at 3:10 PM."); the second goes ahead.
  */
 export async function devPauseSince(testId: string, loaded: Date | null, now = new Date(), skipTeamPause = false): Promise<TestEventLike | null> {
@@ -65,12 +65,12 @@ export async function devPauseSince(testId: string, loaded: Date | null, now = n
   return { kind: "stop", text: pauseMomentLine("developer", cause, at, (d) => fmtTimeIn(d, tz), (d) => fmtDateTimeIn(d, tz), now), createdAt: at };
 }
 
-/** (§172) The team's own pause and lift of one test, as recorded (restrictions.ts pauseTest / unpauseTest). */
+/** The team's own pause and lift of one test, as recorded (restrictions.ts pauseTest / unpauseTest). */
 export const TEAM_PAUSED_EVENT = "The team paused this test";
 export const TEAM_LIFTED_EVENT = "The team lifted the pause on this test";
 
 /**
- * (Owner, Nov 5, §207) The team lifting its pause on this test since the page loaded is named like the pause itself: the next press stops once with "The team
+ * The team lifting its pause on this test since the page loaded is named like the pause itself: the next press stops once with "The team
  * lifted its pause on this test at 3:10 AM." (testers: "This test resumed at 3:10 AM."). A pause that began after the page loaded and was lifted since is named
  * too ("The team paused this test at …"), since the page showed neither and devPauseSince only names a pause still on. Oldest first.
  */
@@ -89,7 +89,7 @@ async function teamLiftsSince(testId: string, loaded: Date, side: "tester" | "de
   });
 }
 
-/** (§207) The developer's page: the team's lift of this test's pause since the page loaded (and the pause it ended, when that came after the load too). */
+/** The developer's page: the team's lift of this test's pause since the page loaded (and the pause it ended, when that came after the load too). */
 export async function devLiftSince(testId: string, loaded: Date | null, now = new Date()): Promise<TestEventLike[]> {
   if (!loaded) return [];
   const t = await db.test.findUnique({ where: { id: testId }, select: { developer: { select: { timeZone: true } } } });
@@ -97,7 +97,7 @@ export async function devLiftSince(testId: string, loaded: Date | null, now = ne
 }
 
 /**
- * (§207) A tester's page: "This test resumed at 3:10 AM." once the team lifted its pause since the page loaded. Not while the developer's own hold or suspension
+ * A tester's page: "This test resumed at 3:10 AM." once the team lifted its pause since the page loaded. Not while the developer's own hold or suspension
  * still keeps the test paused for testers (it hasn't resumed for them).
  */
 export async function testerLiftSince(contractId: string, loaded: Date | null, now = new Date()): Promise<TestEventLike[]> {
@@ -107,7 +107,7 @@ export async function testerLiftSince(contractId: string, loaded: Date | null, n
   return teamLiftsSince(c.testId, loaded, "tester", c.tester.timeZone, now);
 }
 
-/** (Batch 29 section 11) The same for a tester's page: "This test was paused at 3:10 PM." (testers read only "paused": never why, never "hold" or "suspended"). */
+/** The same for a tester's page: "This test was paused at 3:10 PM." (testers read only "paused": never why, never "hold" or "suspended"). */
 export async function testerPauseSince(contractId: string, loaded: Date | null, now = new Date()): Promise<TestEventLike | null> {
   if (!loaded) return null;
   const c = await db.contract.findUnique({ where: { id: contractId }, select: { tester: { select: { timeZone: true } }, test: { select: { adminPausedAt: true, developer: { select: { holdStartedAt: true, devSuspendedAt: true } } } } } });
@@ -125,7 +125,7 @@ export async function testerPauseMoments(contractId: string, loaded: Date | null
   return [...(pause ? [pause] : []), ...(await testerLiftSince(contractId, loaded, now))].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
 }
 
-/** (§271) The same for the developer's presses, in their own words ("The team paused this test at …", "Your tests were paused at …", the team's lift). */
+/** The same for the developer's presses, in their own words ("The team paused this test at …", "Your tests were paused at …", the team's lift). */
 export async function devPauseMoments(testId: string, loaded: Date | null, now = new Date()): Promise<TestEventLike[]> {
   if (!loaded) return [];
   const pause = await devPauseSince(testId, loaded, now);
@@ -133,7 +133,7 @@ export async function devPauseMoments(testId: string, loaded: Date | null, now =
 }
 
 /**
- * (§271) Block and Report on a developer's profile, pressed by a tester working on that developer's tests: the pause moments of each of those tests since the
+ * Block and Report on a developer's profile, pressed by a tester working on that developer's tests: the pause moments of each of those tests since the
  * profile page loaded (none for anyone else, and none for the developer's own presses there).
  */
 export async function testerPauseMomentsWith(testerId: string, devId: string, body: Record<string, unknown>): Promise<TestEventLike[]> {
@@ -144,8 +144,9 @@ export async function testerPauseMomentsWith(testerId: string, devId: string, bo
 }
 
 /**
- * (§271) A press outside the two gates: the pause moments a stop box on this page hasn't listed yet (`shownIds`, §250) stop it once; the second press (its box's
+ * A press outside the two gates: the pause moments a stop box on this page hasn't listed yet (`shownIds`) stop it once; the second press (its box's
  * time as `boxAt`, loadedOf) goes ahead. A press from a page that sent no load time never stops (an older page).
+ * Flow: the stop-once box of a press outside the two gates (Block, Report, a message, an excerpt request, Confirm with your bank…): after its refusals, before its red mistakes and its action.
  */
 export function pauseStopOnce(lines: TestEventLike[], body: Record<string, unknown>) {
   const left = notListed(lines, body);
@@ -153,9 +154,9 @@ export function pauseStopOnce(lines: TestEventLike[], body: Record<string, unkno
 }
 
 /**
- * The stop box itself (the same shape as every stop-once box). (Batch 26 section 4) A stop line already says its time ("…stopped at 3:10 PM."), so it goes as kind
+ * The stop box itself (the same shape as every stop-once box). A stop line already says its time ("…stopped at 3:10 PM."), so it goes as kind
  * "stop": the box shows it without adding the time again.
  */
 export function stopBox(lines: TestEventLike[], extra: Record<string, unknown> = {}): never {
-  throw new HttpError(409, "stop_once", "Press again to go ahead.", { changes: lines.map((e) => ({ text: e.text, at: e.createdAt, ...sidOf(e) /* (§250) its identity */, ...(e.kind === "stop" ? { kind: "stop" } : {}), ...(e.forced ? { forced: true } : {}) /* (§160) no Alerts tick turns it off */ })), tail: "Press again to go ahead.", ...extra });
+  throw new HttpError(409, "stop_once", "Press again to go ahead.", { changes: lines.map((e) => ({ text: e.text, at: e.createdAt, ...sidOf(e) /* its identity */, ...(e.kind === "stop" ? { kind: "stop" } : {}), ...(e.forced ? { forced: true } : {}) /* no Alerts tick turns it off */ })), tail: "Press again to go ahead.", ...extra });
 }

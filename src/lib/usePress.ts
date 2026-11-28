@@ -11,20 +11,20 @@ import { useCarried, useCarriedLive } from "./pressCarry";
 
 const NO_DATA: Record<string, unknown> = {};
 
-/** (Batch 35 §41) How long a finished press's result line shows at least (the page's redraw may land sooner): the old reloads waited about as long. */
+/** How long a finished press's result line shows at least (the page's redraw may land sooner): the old reloads waited about as long. */
 export const DONE_HOLD_MS = 900;
-/** (Batch 35 §41) A press that must load the page again (`finish(line, { reload: true })`) shows its result line this long first. */
+/** A press that must load the page again (`finish(line, { reload: true })`) shows its result line this long first. */
 export const DONE_RELOAD_MS = 600;
 
 /** When a finished press lets go of its box: once the redraw has landed and the result line has shown its time. Milliseconds from now (0: at once). */
 export const releaseIn = (shownUntil: number, now = Date.now()) => Math.max(0, shownUntil - now);
 
 /**
- * (Owner, Oct 31, batch 35 §40, §41) One way for every press that went through:
- * - §40 Keep your place: the page redraws IN PLACE (router.refresh, the same redraw as the page's live poll, lib/liveSync.ts §37) instead of reloading, so the
+ * One way for every press that went through:
+ * - Keep your place: the page redraws IN PLACE (router.refresh, the same redraw as the page's live poll, lib/liveSync.ts) instead of reloading, so the
  *   scroll stays at the part pressed in and a "#…" in the address is never jumped to again. Where a full reload is truly needed (`{ reload: true }`), it keeps
  *   the scroll and drops the stale "#…" first (lib/keepPlace.ts).
- * - §41 A finished press stays finished: from `finish(line)` until the redraw has landed, `done` is true: the box's button stays greyed and disabled, its
+ * - A finished press stays finished: from `finish(line)` until the redraw has landed, `done` is true: the box's button stays greyed and disabled, its
  *   inputs (amount, note, tick) are hidden, and only the result line shows (`line`, e.g. "Paid $10.00 more to new@gmail.com."). No live-looking button flashes
  *   back before the page has its new state. Once the redraw lands the box lets go (`onFresh` empties its inputs): a Pay more that's still there is empty and
  *   can be pressed again.
@@ -53,7 +53,7 @@ export function useFinished(onFresh?: () => void) {
     const release = () => {
       waiting.current = null;
       setLine(null);
-      redrawLanded(); // (§380 E) the page's buttons come back once the redraw landed
+      redrawLanded(); // the page's buttons come back once the redraw landed
       fresh.current?.();
     };
     const left = releaseIn(w.until);
@@ -63,7 +63,7 @@ export function useFinished(onFresh?: () => void) {
   }, [refreshing, line]);
   function finish(result = "", how: { reload?: boolean } = {}) {
     setLine(result);
-    // (Owner, Nov 11, §380 E) Every button on the page waits for this redraw (or reload) too, after a press that locked the page.
+    // Every button on the page waits for this redraw (or reload) too, after a press that locked the page.
     holdForRedraw();
     if (how.reload) {
       waiting.current = null; // the page loads again: the box stays finished until then
@@ -81,9 +81,9 @@ export function useFinished(onFresh?: () => void) {
  * A panel's presses: sends the page's "seen" marker. If the server stops once, the box lists the changes directly under
  * the pressed button (its key) and the next press is sent as confirmed. A refusal shows in the same place.
  */
-export function usePress(seenAt: string, onStop?: (data: Record<string, unknown>) => void, opts: { /** (batch 35 §41) the redraw after a finished press landed: empty the box */ onFresh?: () => void; /** (batch 35 §75) each key is its own press: another
+export function usePress(seenAt: string, onStop?: (data: Record<string, unknown>) => void, opts: { /** the redraw after a finished press landed: empty the box */ onFresh?: () => void; /** each key is its own press: another
   key's box never confirms (or merges into) this one, and pressing another key clears it */ perKey?: boolean;
-  /** (§371) the button's part (lib/pressCarry.ts): a redraw that swaps this panel for a new one mid-press still shows the press's box or refusal (and its
+  /** the button's part (lib/pressCarry.ts): a redraw that swaps this panel for a new one mid-press still shows the press's box or refusal (and its
    * "done" line) under the button of the panel shown now */ carry?: string } = {}) {
   const carry = opts.carry;
   const [changes, setChanges] = useCarried<Change[] | null>(carry, "changes", null);
@@ -91,18 +91,23 @@ export function usePress(seenAt: string, onStop?: (data: Record<string, unknown>
   const [busy, setBusy] = useCarried(carry, "busy", false);
   const [at, setAt] = useCarried(carry, "at", "");
   const [errData, setErrData] = useCarried<Record<string, unknown>>(carry, "errData", NO_DATA);
-  // (Owner) When the box last updated (the stop, or a line added live): the next press goes ahead only if nothing new
+  // When the box last updated (the stop, or a line added live): the next press goes ahead only if nothing new
   // happened since.
   const [boxAt, setBoxAt] = useCarried(carry, "boxAt", "");
-  // (Owner, Nov 10, §373) The rule the server built the box under (Alerts Off, Alerts types ticked off): lines added live follow it.
+  // The rule the server built the box under (Alerts Off, Alerts types ticked off): lines added live follow it.
   const [rule, setRule] = useCarried<LiveRule | null>(carry, "liveRule", null);
 
+  /**
+   * Flow: sends the page's seen time; a second press (its box still open) sends `confirmed` and the box's time (`boxAt`). The server answers in the owner's
+   * order: a refusal (blue, `error`) → the stop-once box (`changes`, and its rule for lines added live) → a red mistake (`error` with the FIELD mark) → the
+   * result (its note shows under the button).
+   */
   async function press<T>(path: string, body: Record<string, unknown> = {}, key = ""): Promise<T | null> {
     setBusy(true);
     setError("");
     setErrData(NO_DATA);
     setAt(key);
-    // (Owner bug, Oct 31, batch 35 §75) With `perKey`, only this key's own box makes this press its second one.
+    // With `perKey`, only this key's own box makes this press its second one.
     const again = changes != null && (!opts.perKey || key === at);
     if (!again && opts.perKey) setChanges(null);
     try {
@@ -128,20 +133,20 @@ export function usePress(seenAt: string, onStop?: (data: Record<string, unknown>
       setBusy(false);
     }
   }
-  // The open box stays live: changes the page picks up meanwhile are added to it. (§373) Only those its rule keeps: a line left out never moves boxAt.
+  // The open box stays live: changes the page picks up meanwhile are added to it. Only those its rule keeps: a line left out never moves boxAt.
   useLiveAppend(changes != null, (added) => {
     setChanges((c) => (c ? mergeChanges(c, added) : c));
     const newest = added.map((a) => a.at).sort().pop();
     if (newest) setBoxAt((b) => (b && b > newest ? b : newest));
   }, rule);
-  // (Batch 35 §40, §41) A press that went through: `finish(line)` redraws the page in place; until it has, the panel stays busy (its buttons greyed) and `done`.
+  // A press that went through: `finish(line)` redraws the page in place; until it has, the panel stays busy (its buttons greyed) and `done`.
   const fin = useFinished(opts.onFresh);
-  // (§371) A press whose panel was swapped meanwhile finishes in the panel shown now.
+  // A press whose panel was swapped meanwhile finishes in the panel shown now.
   const shown = useCarriedLive(carry, fin);
   const finish: typeof fin.finish = (...a) => shown().finish(...a);
-  // (Owner, Nov 4, §181) A press under way, its stop box or its refusal keeps the Needs you drop-downs around it open (outside one: nothing).
+  // A press under way, its stop box or its refusal keeps the Needs you drop-downs around it open (outside one: nothing).
   useHoldOpen(busy || fin.done || changes != null || !!error);
-  /** (Batch 35 §75) Another button opened its panel or dialog: the box (and refusal) under the earlier press goes. */
+  /** Another button opened its panel or dialog: the box (and refusal) under the earlier press goes. */
   const clear = () => {
     setChanges(null);
     setError("");

@@ -8,7 +8,7 @@ import { rememberReply } from "./lineLinkRegistry";
 import { PAGE_MOVED_CODE, PAGE_MOVED_PATH } from "./pageClaim";
 import { pressAnswered, pressStarted } from "./pageLock";
 
-/** (Batch 15 section 36) The label of the last press that was stopped or refused: the box under it names it ("Your Pay didn't go through."). */
+/** The label of the last press that was stopped or refused: the box under it names it ("Your Pay didn't go through."). */
 let LAST_PRESS = "";
 export const lastPressLabel = () => LAST_PRESS;
 
@@ -30,15 +30,15 @@ let PAGE_USER = "";
 export const setPageUser = (id: string) => {
   PAGE_USER = id;
 };
-/** (Batch 35 §6) The account this page belongs to ("" before the layout set it): kept drafts name it too, so another account's cookie never takes them. */
+/** The account this page belongs to ("" before the layout set it): kept drafts name it too, so another account's cookie never takes them. */
 export const pageUser = () => PAGE_USER;
 
 /**
- * (Owner's bug, Oct 31, batch 35 §20) The sign-in page for a tab whose session is gone, keeping its place: `/login?next=<path + hash>` (the login page takes
+ * The sign-in page for a tab whose session is gone, keeping its place: `/login?next=<path + hash>` (the login page takes
  * only /app and /admin pages), or `/login?gone=1` for a deleted account. Every way there (a refused request's 401, SessionWatch) goes through `toLogin`, ONCE
  * per page: a background request that beats SessionWatch never sends the tab on without `next`, and nothing redirects twice.
  */
-// (Owner, Nov 2) With the account the tab belonged to (`as`): signing in as ANOTHER account goes to its dashboard, not to a page of the old one ("This page doesn't exist").
+// With the account the tab belonged to (`as`): signing in as ANOTHER account goes to its dashboard, not to a page of the old one ("This page doesn't exist").
 export const loginNext = (loc: { pathname: string; hash?: string }) => `/login?next=${encodeURIComponent(loc.pathname + (loc.hash ?? ""))}${PAGE_USER ? `&as=${encodeURIComponent(PAGE_USER)}` : ""}`;
 let LEAVING_FOR_LOGIN = false;
 export function toLogin(gone = false, w: { location: { pathname: string; hash: string; replace: (u: string) => void } } | undefined = typeof window === "undefined" ? undefined : window) {
@@ -47,7 +47,7 @@ export function toLogin(gone = false, w: { location: { pathname: string; hash: s
   w.location.replace(gone ? "/login?gone=1" : loginNext(w.location));
   return true;
 }
-/** (Batch 35 §20) Tests: a fresh page. */
+/** Tests: a fresh page. */
 export const resetToLogin = () => {
   LEAVING_FOR_LOGIN = false;
 };
@@ -55,7 +55,7 @@ export const resetToLogin = () => {
 /** This page load's id: the server never stops a press for what this same tab did ("another tab" only). */
 export const TAB = typeof window === "undefined" ? "" : Math.random().toString(36).slice(2, 12) + Date.now().toString(36);
 /**
- * (Owner, Oct 31, batch 35 §51) This PAGE load's id, sent with every press (x-load): the tab's id plus a new part for every page drawn in it (an admin page moving to
+ * This PAGE load's id, sent with every press (x-load): the tab's id plus a new part for every page drawn in it (an admin page moving to
  * another page in the same tab, Back included, starts a new one). Admins' "this page's own" change means one made from this same page load.
  */
 let PAGE_LOAD = TAB;
@@ -65,7 +65,7 @@ export const newPageLoad = () => {
 };
 
 /**
- * (Owner, Nov 11, §380, §380 K) The one-at-a-time page this tab shows (its scope, lib/pageClaim.ts: "test:<id>" for a test page or its Edit, "session:<id>",
+ * The one-at-a-time page this tab shows (its scope, lib/pageClaim.ts: "test:<id>" for a test page or its Edit, "session:<id>",
  * "join:<id>", "page:<name>" for Payments, Blocked people, Contact us and each settings page, "tester:<id>" / "developer:<id>" for profiles; "" elsewhere): every
  * press names it (x-page), and the server refuses a press from a copy that was opened somewhere else since. Set by OnePage while the page is shown.
  */
@@ -78,14 +78,14 @@ export const setPageScope = (scope: string) => {
 export const pageHeaders = (): Record<string, string> => (PAGE_SCOPE && TAB ? { "x-tab": TAB, "x-page": PAGE_SCOPE } : {});
 let LEFT_MOVED = false;
 /**
- * (Owner, Nov 11, §380) This copy was opened somewhere else (another tab, browser or device): every button here is disabled at once and the tab goes to the
+ * This copy was opened somewhere else (another tab, browser or device): every button here is disabled at once and the tab goes to the
  * dashboard, which says "This page was opened somewhere else." Once per page.
  */
 export function leaveMovedPage(w: (Window & typeof globalThis) | undefined = typeof window === "undefined" ? undefined : window) {
   if (!w || LEFT_MOVED) return false;
   LEFT_MOVED = true;
   PAGE_SCOPE = "";
-  // (Owner, Nov 11, §380 J) What was typed here and not yet kept is kept first (every form sends its draft: lib/useKept.tsx flushKept), at most a moment.
+  // What was typed here and not yet kept is kept first (every form sends its draft: lib/useKept.tsx flushKept), at most a moment.
   const waits: Promise<unknown>[] = [];
   try {
     w.dispatchEvent?.(new CustomEvent("kept-flush", { detail: { waits } }));
@@ -111,7 +111,7 @@ export const resetMovedPage = () => {
 };
 
 /**
- * (Owner, Oct 29, batch 27 section 1) While the page shows an open new-terms offer (the Switch / Keep box), Send and every call press don't go out: the page goes up
+ * While the page shows an open new-terms offer (the Switch / Keep box), Send and every call press don't go out: the page goes up
  * to the box (highlighted for a few seconds) and the press gets the line "Answer the new terms first: Switch or Keep." under its button, on every press until the
  * tester answers. True when `path` is such a press and it was stopped here.
  */
@@ -122,15 +122,15 @@ export function blockedByTerms(path: string) {
   return true;
 }
 
-/** (Batch 27 section 1) Does this page show an open new-terms offer (the Switch / Keep box)? A blocked press then skips its own form checks: the offer comes first.
- * (Owner, Nov 6, §302) ... or the NDA notice while it blocks: an NDA change comes first the same way. */
+/** Does this page show an open new-terms offer (the Switch / Keep box)? A blocked press then skips its own form checks: the offer comes first.
+ *... or the NDA notice while it blocks: an NDA change comes first the same way. */
 export const offerShown = () => termsBoxShown() || !!ndaBlockShown();
 const termsBoxShown = () => typeof document !== "undefined" && !!document.getElementById("terms-offer");
 
-/** (Owner, Nov 6, §302) The NDA notice while it blocks this page's presses (its session id), if the page shows it. */
+/** The NDA notice while it blocks this page's presses (its session id), if the page shows it. */
 const ndaBlockShown = () => (typeof document === "undefined" ? null : document.querySelector<HTMLElement>(`#${NDA_NOTICE}[data-nda-block]`)?.dataset.session ?? null);
 /**
- * (Owner, Nov 6, §302) While the page shows the NDA notice blocking (an NDA change not yet acknowledged), its presses don't go out, as with an open offer: the page
+ * While the page shows the NDA notice blocking (an NDA change not yet acknowledged), its presses don't go out, as with an open offer: the page
  * goes up to the notice (marked) and the press gets the line "Acknowledge the NDA change first." under its button. True when `path` was stopped here.
  */
 export function blockedByNda(path: string) {
@@ -141,13 +141,17 @@ export function blockedByNda(path: string) {
   return true;
 }
 
-/** (Batch 28 §9) Sent when the server refuses a press because the state changed: the page redraws at once (AutoRefresh). */
+/** Sent when the server refuses a press because the state changed: the page redraws at once (AutoRefresh). */
 export const PRESS_REFUSED_EVENT = "press-refused";
-/** (Batch 35 §60) Sent (with the message) whenever a press is refused or stopped. */
+/** Sent (with the message) whenever a press is refused or stopped. */
 export const PRESS_ERROR_EVENT = "press-error";
-/** (Batch 35 §60) Every press refused or stopped says so (lib/pageVersion.ts): a line hidden by a newer page shows again when the same press is refused again. */
+/**
+ * Every press refused or stopped says so (lib/pageVersion.ts): a line hidden by a newer page shows again when the same press is refused again.
+ * Flow of a press (a request with a body): lock every button on the page (pressStarted) → callApi (the page-side blocks, then the server: refusals → the
+ * stop-once box → red mistakes → the action) → release the page (pressAnswered; a press that went through waits for its redraw) → a refusal or box says so.
+ */
 export async function api<T = unknown>(path: string, body?: unknown, method?: string): Promise<T> {
-  // (Owner, Nov 11, §380 E) On EVERY page, ANY press disables every button on that page until the server answers; one that went through keeps them disabled
+  // On EVERY page, ANY press disables every button on that page until the server answers; one that went through keeps them disabled
   // until its redraw lands (useFinished), and a payment now waiting on the bank's inline check releases the page at once (its own Confirm / Cancel stay usable).
   // Never for what a page sends on its own (NOT_A_PRESS), an upload in progress, or a press made through freePress (the bank check's own finish).
   const locks = body !== undefined && typeof window !== "undefined" && !FREE && !notAPress(path, body);
@@ -163,17 +167,17 @@ export async function api<T = unknown>(path: string, body?: unknown, method?: st
   }
 }
 /**
- * (§380 E) What a page sends on its own (reads, heartbeats, a pill, an acknowledgement, the time zone, the bell's lines read, drafts kept, the page claim), an
+ * What a page sends on its own (reads, heartbeats, a pill, an acknowledgement, the time zone, the bell's lines read, drafts kept, the page claim), an
  * upload in progress (its start, its end, its heartbeat, its abandon; and the × that takes a just-uploaded file out of an answer being typed), and a live call's
  * "Report a problem with this call": never a press that locks the page.
  */
 const NOT_A_PRESS = /\/(my-gaps|invite-check|invite-search|invite-restore|recording-start|recording-done|recording-abandon|recording-alive|terms-pill|nda-seen|listing|no-show)$|^\/api\/(account\/timezone|notifications\/read|kept|page-claim|page-handover)/;
 export const notAPress = (path: string, body?: unknown) =>
   NOT_A_PRESS.test(path.split("?")[0]) || (/\/recording-remove$/.test(path.split("?")[0]) && (body as { written?: unknown } | null)?.written === true);
-/** (§380 E) The answer opens the bank's inline check (3D Secure): a Pay / Pay more / Confirm with your bank waiting on it. */
+/** The answer opens the bank's inline check (3D Secure): a Pay / Pay more / Confirm with your bank waiting on it. */
 const bankWaits = (r: unknown) => !!r && typeof r === "object" && ((r as { requiresAction?: unknown }).requiresAction === true || typeof (r as { clientSecret?: unknown }).clientSecret === "string");
 let FREE = 0;
-/** (§380 E) Requests started (synchronously) inside `f` never lock the page: the open bank check's own Confirm / Cancel / Close. */
+/** Requests started (synchronously) inside `f` never lock the page: the open bank check's own Confirm / Cancel / Close. */
 export function freePress<T>(f: () => T): T {
   FREE++;
   try {
@@ -182,14 +186,24 @@ export function freePress<T>(f: () => T): T {
     FREE--;
   }
 }
+/**
+ * Flow:
+ *   1. Page-side soft blocks, before anything is sent (a press only): the NDA notice blocking (blockedByNda) → an open offer box (blockedByTerms).
+ *   2. The seen marks: seenAt (later of the render and what the top box showed), pageSeenAt, loadedAt, boxSeenAt, and the lines stop boxes listed (shownIds).
+ *   3. The request, naming the tab, page load, account and one-at-a-time page.
+ *   4. A refusal: the page opened elsewhere → leave; another account → switch; signed out → login; the team stopped / paused the test → the test page;
+ *      work over → the session page's top; suspended / held → the dashboard; then the stop box's Alerts, and a 409 refusal (not a box, offer or NDA block)
+ *      is kept under the button and redraws the page.
+ *   5. The error goes to the button: 400 / 413 red (errOf), every other refusal blue, "stop_once" the box.
+ */
 async function callApi<T = unknown>(path: string, body?: unknown, method?: string, press = false): Promise<T> {
-  // (§302) The NDA block first, as the server checks it first.
+  // The NDA block first, as the server checks it first.
   if (body !== undefined && blockedByNda(path)) throw new ApiError(409, NDA_BLOCK_CODE, NDA_BLOCK_FIRST);
   if (body !== undefined && blockedByTerms(path)) throw new ApiError(409, ANSWER_TERMS_CODE, ANSWER_TERMS_FIRST);
-  // Every press sends the later of the page's render time and what the live top notice has shown (NEWEST+3).
-  // (Owner) New terms (reason A) are measured from the page itself: `pageSeenAt` is when the page was rendered, whatever the top box showed.
+  // Every press sends the later of the page's render time and what the live top notice has shown.
+  // New terms are measured from the page itself: `pageSeenAt` is when the page was rendered, whatever the top box showed.
   if (body && typeof body === "object" && typeof (body as { seenAt?: unknown }).seenAt === "string") body = { ...body, pageSeenAt: (body as { seenAt: string }).seenAt, seenAt: seenNow((body as { seenAt: string }).seenAt), ...(pageLoadedAt() ? { loadedAt: pageLoadedAt() } : {}), ...(boxSeenAt() ? { boxSeenAt: boxSeenAt() } : {}) };
-  // (Owner, Nov 5, §250) ... and what any stop box on this page has listed (by identity): no other press here stops again for those updates.
+  //... and what any stop box on this page has listed (by identity): no other press here stops again for those updates.
   if (body && typeof body === "object" && !Array.isArray(body) && ((body as { seenAt?: unknown }).seenAt !== undefined || (body as { boxAt?: unknown }).boxAt !== undefined)) {
     const shownIds = shownIdsNow();
     if (shownIds.length) body = { ...body, shownIds };
@@ -198,7 +212,7 @@ async function callApi<T = unknown>(path: string, body?: unknown, method?: strin
   try {
     res = await fetch(path, {
       method: method ?? (body === undefined ? "GET" : "POST"),
-      headers: { "x-timezone": Intl.DateTimeFormat().resolvedOptions().timeZone, ...(body === undefined ? {} : { "content-type": "application/json" }), "x-tab": TAB, ...(PAGE_LOAD ? { "x-load": PAGE_LOAD } : {}), ...(PAGE_USER ? { "x-uid": PAGE_USER } : {}), ...(PAGE_SCOPE ? { "x-page": PAGE_SCOPE } : {}), ...(press && PAGE_SCOPE ? { "x-press": "1" } : {}) /* (§380 J) a new copy waits for it */ },
+      headers: { "x-timezone": Intl.DateTimeFormat().resolvedOptions().timeZone, ...(body === undefined ? {} : { "content-type": "application/json" }), "x-tab": TAB, ...(PAGE_LOAD ? { "x-load": PAGE_LOAD } : {}), ...(PAGE_USER ? { "x-uid": PAGE_USER } : {}), ...(PAGE_SCOPE ? { "x-page": PAGE_SCOPE } : {}), ...(press && PAGE_SCOPE ? { "x-press": "1" } : {}) /* a new copy waits for it */ },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch {
@@ -207,7 +221,7 @@ async function callApi<T = unknown>(path: string, body?: unknown, method?: strin
   }
   const data = await res.json().catch(() => null);
   if (!res.ok) {
-    // (Owner, Nov 11, §380) This copy of the page was opened somewhere else: the press is refused with the one line and the tab goes to the dashboard.
+    // This copy of the page was opened somewhere else: the press is refused with the one line and the tab goes to the dashboard.
     if (data?.error?.code === PAGE_MOVED_CODE) {
       leaveMovedPage();
       throw new ApiError(res.status, PAGE_MOVED_CODE, String(data.error.message ?? ""), data.error);
@@ -221,18 +235,18 @@ async function callApi<T = unknown>(path: string, body?: unknown, method?: strin
         window.location.href = "/app";
       }
     }
-    // (Batch 35 §20) With `next` (the tab comes back to this page after signing in), and only once.
+    // With `next` (the tab comes back to this page after signing in), and only once.
     if (res.status === 401 && typeof window !== "undefined") toLogin(data?.error?.code === "deleted");
-    // (Design doc 2; owner, Oct 27) A press refused because the account is suspended or on a payment / chargeback hold (or one that started the hold, a declined payment): on to the
+    // A press refused because the account is suspended or on a payment / chargeback hold (or one that started the hold, a declined payment): on to the
     // TOP of the dashboard, where a blue box names the press that didn't go through and says how to resume.
     // The team stopped (or paused) the test: back to the test, where its banner names the press that failed.
     if ((data?.error?.code === "admin_stopped" || data?.error?.code === "admin_paused") && typeof window !== "undefined" && typeof data.error.failed === "string") {
-      // (Owner, Nov 4, §172) A Pay refused on a test the team paused (its path doesn't name the test) carries the test's id.
+      // A Pay refused on a test the team paused (its path doesn't name the test) carries the test's id.
       const m = /\/api\/tests\/([^/]+)\//.exec(path);
       const testId = m?.[1] ?? (typeof data.error.testId === "string" ? data.error.testId : "");
       if (testId) window.location.href = `/app/tests/${testId}?failed=${encodeURIComponent(data.error.failed)}`;
     }
-    // (Owner, Oct 28, batch 16 section 24) The test stopped, closed or the tester's work was ended while this page was open: a press of what's gone (Send,
+    // The test stopped, closed or the tester's work was ended while this page was open: a press of what's gone (Send,
     // Switch / Keep, a call action, an upload) reloads the session page at its TOP, where the stopped line names the press.
     if (data?.error?.code === "work_over" && typeof window !== "undefined" && typeof data.error.failed === "string") {
       const m = /\/api\/sessions\/([^/]+)\//.exec(path);
@@ -242,19 +256,19 @@ async function callApi<T = unknown>(path: string, body?: unknown, method?: strin
       window.location.href = `/app?failed=${encodeURIComponent(data.error.failed)}`;
     }
     const e = data?.error;
-    rememberReply(e); // (Owner, Nov 5, §270) the refusal's and its stop lines' green links
+    rememberReply(e); // the refusal's and its stop lines' green links
     LAST_PRESS = typeof e?.press === "string" ? e.press : pressLabelOf(path, body);
-    // (Batch 27 section 1) The server refused for an open offer (an old page that hasn't shown it too): up to the Switch / Keep box (it loads if the page lacks it).
+    // The server refused for an open offer (an old page that hasn't shown it too): up to the Switch / Keep box (it loads if the page lacks it).
     if (e?.code === ANSWER_TERMS_CODE && typeof window !== "undefined") window.dispatchEvent(new Event(ANSWER_TERMS_EVENT));
-    // (Owner, Nov 6, §302) The server refused for an NDA change not yet acknowledged (an old page too): up to the NDA notice (it loads if the page lacks it).
+    // The server refused for an NDA change not yet acknowledged (an old page too): up to the NDA notice (it loads if the page lacks it).
     if (e?.code === NDA_BLOCK_CODE && typeof window !== "undefined") window.dispatchEvent(new Event(NDA_BLOCK_EVENT));
-    // (Batch 17 section 13) A tester's stop box says whether their Alerts is Off (the box then drops "Turn off alerts").
+    // A tester's stop box says whether their Alerts is Off (the box then drops "Turn off alerts").
     if (e?.code === "stop_once" && typeof e.alertsOff === "boolean") setTesterAlertsOff(e.alertsOff);
-    // (Batch 20 section 8) ... and the Alerts button and the other boxes on the page follow what the server says.
+    //... and the Alerts button and the other boxes on the page follow what the server says.
     if (e?.code === "stop_once" && typeof e.alertsOff === "boolean") publishTesterAlertsOff(e.alertsOff, false);
-    // (Owner, Oct 29, batch 28 §9) A press refused because the state changed (a block, a stop, a pause, an ended call, a closed request, already paid…): the page
+    // A press refused because the state changed (a block, a stop, a pause, an ended call, a closed request, already paid…): the page
     // redraws at once, as its poll would (AutoRefresh; typed text kept), so the dead buttons go and the new state shows.
-    // (Owner, Oct 29, batch 29 §36) If the redraw takes the pressed button away, its refusal line stays where the button was (KeptRefusal, root layout) until the
+    // If the redraw takes the pressed button away, its refusal line stays where the button was (KeptRefusal, root layout) until the
     // next press or about 10 seconds: "Your Join call didn't go through: this call isn't available."
     if (res.status === 409 && e?.code !== "stop_once" && e?.code !== ANSWER_TERMS_CODE && e?.code !== NDA_BLOCK_CODE && body !== undefined && typeof window !== "undefined") {
       if (typeof e?.message === "string") keepRefusal(LAST_PRESS, e.message);
@@ -274,7 +288,7 @@ async function callApi<T = unknown>(path: string, body?: unknown, method?: strin
   return data as T;
 }
 
-/** (Batch 15 section 41, C1) A press id: a v4 UUID (the server accepts nothing else). Works where crypto.randomUUID doesn't (plain http on a LAN). */
+/** A press id: a v4 UUID (the server accepts nothing else). Works where crypto.randomUUID doesn't (plain http on a LAN). */
 export function newPressId(): string {
   const c = globalThis.crypto as Crypto;
   if (typeof c.randomUUID === "function") return c.randomUUID();
