@@ -176,17 +176,19 @@ export const stopsWithAlertsOff = (e: TestEventLike) => ALERTS_OFF_KINDS.has(e.k
 /**
  * The rule a tester's stop box was built under, sent with it (`liveRule`): with Alerts Off, a line the page picks up
  * while the box is open joins it only if it would have stopped this press (marked `forced` in the live feed, or a payment line on the press's own part); a
- * developer payment on another part never joins. Alerts On: no rule, every line joins.
+ * developer payment on another part never joins. Alerts On: every line joins.
+ * (Owner, Nov 28) Sent whatever her Alerts: the open box follows her Alerts as they are NOW (lib/live.ts ruleNow), so it needs what the press is about (`part`)
+ * even when built with Alerts On. `ordinaryTerms` (Rate, Leave): an offer is never a reason for them with Alerts Off, so it never joins their box then.
  */
-export const liveRuleOf = (off: boolean, part?: string) => (off ? { liveRule: { off: true, ...(part ? { part } : {}) } } : {});
+export const liveRuleOf = (off: boolean, part?: string, ordinaryTerms?: boolean) => ({ liveRule: { off, ...(part ? { part } : {}), ...(ordinaryTerms ? { ordinaryTerms: true } : {}) } });
 /**
  * What every tester stop box carries, whoever builds it (the gate, the session route's stop-moment box, Switch / Keep's "changed the terms
  * again" box): her Alerts (`alertsOff`) and the rule the box was built under (`liveRule`, with the part the press is about). Without it, a box with
  * Alerts Off would take in every live line, a developer payment on another part included.
  */
-export async function testerBoxRule(testerId: string, part?: string) {
+export async function testerBoxRule(testerId: string, part?: string, ordinaryTerms?: boolean) {
   const off = !!(await db.user.findUnique({ where: { id: testerId }, select: { testerAlertsOff: true } }))?.testerAlertsOff;
-  return { alertsOff: off, ...liveRuleOf(off, part) };
+  return { alertsOff: off, ...liveRuleOf(off, part, ordinaryTerms) };
 }
 
 // "nda": the NDA changed (its own notice), an ordinary kind (Alerts on).
@@ -242,7 +244,7 @@ export async function testerGate(testerId: string, contractId: string, testId: s
   // A page whose questions are out of date: its lines always stop the press, marked forced.
   const stale = (opts.staleQuestions ?? []).map((e) => ({ ...e, forced: true }));
   // Her Alerts, read once: the Alerts Off filter below and the rule every box here carries (`alertsOff`, `liveRule` with the press's part).
-  const rule = await testerBoxRule(testerId, pressPart);
+  const rule = await testerBoxRule(testerId, pressPart, opts.ordinaryTerms);
 
   // The one time: what the page has shown up to. A second press sends its box's latest time; a first press the page's seen marker (its render, moved on by
   // what the live notice showed).

@@ -303,15 +303,16 @@ export const devForced = (c: TestEventLike & { contractId?: string | null }, pre
 /**
  * The rule a developer's stop box was built under, sent with it (`liveRule`): this test's Alerts ticks and what the press is about. A line
  * the page picks up while the box is open joins it only if devKeeps (lib/pressForce.ts) would have kept it for this press: a type ticked off in Alerts joins
- * only when it always stops this press (a charge or dispute about its tester, …). Nothing ticked off: no rule, every line joins, as before.
+ * only when it always stops this press (a charge or dispute about its tester, …). Nothing ticked off: every line joins, as before.
+ * (Owner, Nov 28) Sent whatever the ticks, with the test (`testId`): the open box follows that test's Alerts as they are NOW (lib/live.ts ruleNow), so a
+ * "Don't stop me for …" chip ticked (or a type unticked) while it is open applies to the lines that come next.
  */
 export async function devBoxRule(testId: string, press: Press | undefined, tx: Tx | typeof db = db) {
   const ignored = (await tx.test.findUnique({ where: { id: testId }, select: { ignoredAlerts: true } }))?.ignoredAlerts ?? [];
-  if (!ignored.length) return {};
   // What the press answers never matters here (a line it answers was never a live line's question).
   const { answers: _answers, ...about } = press ?? { acts: [], keys: [] };
   void _answers;
-  return { liveRule: { ignored, press: about } };
+  return { liveRule: { ignored, press: about, testId } };
 }
 
 

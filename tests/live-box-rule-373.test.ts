@@ -96,15 +96,16 @@ describe("§373 tester: a line the page picks up joins an open stop box only by 
     expect(texts).not.toContain("Nora Lane paid you $10.00 more for your recording");
   });
 
-  it("Alerts On: the box has no rule and every line joins, as before", async () => {
+  // (Owner, Nov 28) The box carries its rule with Alerts On too (what the press is about: an open box follows the Alerts as they are now); every line joins.
+  it("Alerts On: the box's rule says Alerts On (with the press's part) and every line joins, as before", async () => {
     const w = await world(false);
     const loaded = seen();
     await settle();
     const box = await addStopped(w, loaded);
     expect(box.alertsOff).toBe(false);
-    expect(box.liveRule).toBeUndefined();
+    expect(box.liveRule).toEqual({ off: false, part: w.written.id });
     const rule = liveRuleOf(box as Record<string, unknown>);
-    expect(rule).toBeNull();
+    expect(rule).toEqual({ off: false, part: w.written.id });
     await settle();
     expect((await more(w, w.rec.id, "10.00")).status).toBe(200);
     await settle();
@@ -163,10 +164,11 @@ describe("§373 developer: the same, by the test's Alerts ticks and what the pre
     expect(boxKeeps(anas, first.rule)).toBe(false);
   });
 
-  it("nothing ticked off: the box has no rule and every line joins, as before", async () => {
+  // (Owner, Nov 28) The box carries its rule with nothing ticked off too (what the press is about, and its test: an open box follows the ticks as they are now).
+  it("nothing ticked off: the box's rule ticks nothing off and every line joins, as before", async () => {
     const { s, loaded, data, rule } = await devBox([], { acts: ["end-early"], keys: [] });
-    expect(data.liveRule).toBeUndefined();
-    expect(rule).toBeNull();
+    expect(data.liveRule).toEqual({ ignored: [], press: { acts: ["end-early"], keys: [] }, testId: s.testId });
+    expect(rule).toEqual({ ignored: [], press: { acts: ["end-early"], keys: [] }, testId: s.testId });
     await logEvent(s.testId, "joined", "Cleo Park joined");
     await settle();
     expect(boxKeeps(line(await live(`test:${s.testId}`, s.dev.cookie, loaded), "Cleo Park joined"), rule)).toBe(true);

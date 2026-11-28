@@ -2,6 +2,8 @@ import { useEffect, useRef } from "react";
 import type { Change } from "@/components/ChangesBox";
 import type { Press } from "@/lib/server/live";
 import { devKeeps } from "./pressForce";
+import { TERMS_OFFER_BOX } from "./lineAnchors";
+import { alertsTestNow, ignoredAlertsNow, onAlertsChange, testerAlertsOffNow } from "./testerAlerts";
 
 // The page's "seen" marker moves forward as the live top notice shows changes: every button sends
 // the later of the page's own render time and the last time the notice showed everything.
@@ -149,47 +151,94 @@ export function sameMoment(c: Change) {
 }
 
 /**
- * The rule a stop box was built under, as the server sent it with the box (`liveRule`): a tester's press with Alerts Off (`off`, and the
- * part the press is about), or a developer's press with Alerts types ticked off (`ignored`, and what the press is about). No rule: every line stopped it.
+ * The rule a stop box was built under, as the server sent it with the box (`liveRule`): a tester's press (`off`: her Alerts then; the part the press is about;
+ * `ordinaryTerms` for Rate and Leave), or a developer's press (`ignored`: the test's Alerts types ticked off then; what the press is about; the test). No rule:
+ * every line joins.
+ * (Owner, Nov 28) An open box applies the Alerts as they are NOW (ruleNow): of the server's rule it keeps only what the press is about.
  */
-export type LiveRule = { off: true; part?: string } | { ignored: string[]; press: Press };
+export type LiveRule = { off: boolean; part?: string; ordinaryTerms?: boolean } | { ignored: string[]; press: Press; testId?: string };
 export function liveRuleOf(data: Record<string, unknown> | null | undefined): LiveRule | null {
   const r = data?.liveRule as Record<string, unknown> | undefined;
   if (!r || typeof r !== "object") return null;
-  if (r.off === true) return { off: true, ...(typeof r.part === "string" && r.part ? { part: r.part } : {}) };
+  if (typeof r.off === "boolean") return { off: r.off, ...(typeof r.part === "string" && r.part ? { part: r.part } : {}), ...(r.ordinaryTerms === true ? { ordinaryTerms: true } : {}) };
   const press = r.press as Press | undefined;
-  if (Array.isArray(r.ignored) && press && Array.isArray(press.acts) && Array.isArray(press.keys)) return { ignored: r.ignored.map(String), press };
+  if (Array.isArray(r.ignored) && press && Array.isArray(press.acts) && Array.isArray(press.keys))
+    return { ignored: r.ignored.map(String), press, ...(typeof r.testId === "string" && r.testId ? { testId: r.testId } : {}) };
   return null;
 }
 /**
+ * (Owner, Nov 28) The box's rule with the Alerts as this tab hears them now (lib/testerAlerts.ts): the tester's Alerts Off, or the test's ticked-off types
+ * (the box's own test, else the page's). Nothing heard yet: the setting the box was built under.
+ */
+export function ruleNow(rule?: LiveRule | null): LiveRule | null {
+  if (!rule) return null;
+  if ("off" in rule) {
+    const off = testerAlertsOffNow();
+    return off === null || off === rule.off ? rule : { ...rule, off };
+  }
+  const testId = rule.testId || alertsTestNow();
+  const ignored = testId ? ignoredAlertsNow(testId) : null;
+  return ignored ? { ...rule, ignored } : rule;
+}
+/** A tester's offer line ("… offered you new terms: Switch or Keep them"): it opens the offer box. (The session page's live feed leaves offers out today: this
+ * keeps an ordinaryTerms box right should one ever come.) */
+const isOffer = (c: Change) => c.kind === "terms" || c.link === TERMS_OFFER_BOX;
+/**
  * Whether a line the page picked up joins an open stop box: only if the server would have put it in that box, by
- * the rule the box was built under. Tester, Alerts Off: a line that stops whatever the press (`forced`) or a payment on the press's own part; a
- * developer payment on another part never joins. Developer:
- * the same devKeeps the server ran. A line that doesn't join is not in the box and never moves its time (`boxAt`).
+ * the rule given (ruleNow: the box's press under the Alerts now). Tester, Alerts Off: a line that stops whatever the press (`forced`) or a payment on the
+ * press's own part; a developer payment on another part never joins; for Rate and Leave (`ordinaryTerms`) never an offer (an ordinary change for them).
+ * Tester, Alerts On: every line. Developer: the same devKeeps the server ran. A line that doesn't join is not in the box and never moves its time (`boxAt`).
  */
 export function boxKeeps(c: Change, rule?: LiveRule | null): boolean {
   if (!rule) return true;
-  if ("off" in rule) return !!c.forced || (!!rule.part && c.part === rule.part);
+  if ("off" in rule) {
+    if (!rule.off) return true;
+    if (rule.ordinaryTerms && isOffer(c)) return false;
+    return !!c.forced || (!!rule.part && c.part === rule.part);
+  }
   if (!c.alert || !rule.ignored.includes(c.alert)) return true;
   return !!c.facts && devKeeps({ ...c.facts, text: c.text, createdAt: new Date(c.at) }, new Set(rule.ignored), rule.press);
 }
 
-/** While a stop box is open, new changes the page picks up are added to it. `rule`: the rule that box was built under (boxKeeps). */
+/** The most lines an open box keeps aside (left out under the Alerts then) in case the Alerts change while it is open. */
+export const LEFT_OUT_MAX = 100;
+/**
+ * While a stop box is open, new changes the page picks up are added to it. `rule`: the rule that box was built under (boxKeeps), applied with the Alerts as
+ * they are now (ruleNow). (Owner, Nov 28) The lines it leaves out while open are kept aside: when the Alerts change while it is open, those the new setting
+ * keeps join then (lines already in the box stay).
+ */
 export function useLiveAppend(open: boolean, add: (added: Change[]) => void, rule?: LiveRule | null) {
   const cb = useRef(add);
   cb.current = add;
-  const ruleNow = useRef(rule);
-  ruleNow.current = rule;
+  const ruleRef = useRef(rule);
+  ruleRef.current = rule;
   useEffect(() => {
     if (!open) return;
+    // This open box's left-out lines (newest last).
+    let left: Change[] = [];
     // Quiet live-box lines (a tester's Switch, …) never join a stop box.
     const on = (e: Event) => {
       const added = ((e as CustomEvent<Change[]>).detail ?? []).filter((c) => !c.quiet);
-      // Only the lines the box's own rule keeps.
-      const kept = added.filter((c) => boxKeeps(c, ruleNow.current));
+      // Only the lines the box's rule keeps under the Alerts now.
+      const r = ruleNow(ruleRef.current);
+      const kept = added.filter((c) => boxKeeps(c, r));
+      left = [...left, ...added.filter((c) => !kept.includes(c))].slice(-LEFT_OUT_MAX);
       if (kept.length) cb.current(kept);
     };
+    // The Alerts changed: the left-out lines the new setting keeps join now.
+    const changed = () => {
+      if (!left.length) return;
+      const r = ruleNow(ruleRef.current);
+      const kept = left.filter((c) => boxKeeps(c, r));
+      if (!kept.length) return;
+      left = left.filter((c) => !kept.includes(c));
+      cb.current(kept);
+    };
     window.addEventListener(LIVE_EVENT, on);
-    return () => window.removeEventListener(LIVE_EVENT, on);
+    const stop = onAlertsChange(changed);
+    return () => {
+      window.removeEventListener(LIVE_EVENT, on);
+      stop();
+    };
   }, [open]);
 }

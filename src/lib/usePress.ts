@@ -94,7 +94,7 @@ export function usePress(seenAt: string, onStop?: (data: Record<string, unknown>
   // When the box last updated (the stop, or a line added live): the next press goes ahead only if nothing new
   // happened since.
   const [boxAt, setBoxAt] = useCarried(carry, "boxAt", "");
-  // The rule the server built the box under (Alerts Off, Alerts types ticked off): lines added live follow it.
+  // The rule the server built the box under: lines added live follow what the press is about under the Alerts as they are now (lib/live.ts ruleNow).
   const [rule, setRule] = useCarried<LiveRule | null>(carry, "liveRule", null);
 
   /**

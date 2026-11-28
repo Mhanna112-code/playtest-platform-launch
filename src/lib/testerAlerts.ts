@@ -35,6 +35,8 @@ export const setTesterAlertsOff = (off: boolean) => {
   OFF = off;
 };
 export const testerAlertsAreOff = () => OFF === true;
+/** The tester's Alerts Off as this tab last heard it, or null when it has heard nothing yet. */
+export const testerAlertsOffNow = (): boolean | null => OFF;
 /** The tester's Alerts as saved or heard from the server: every toggle and box chip in this tab follows, and (`share`, after a save here) this browser's other tabs. */
 export function publishTesterAlertsOff(off: boolean, share = true) {
   const changed = OFF !== off;
@@ -116,6 +118,21 @@ function listen() {
   if (listening || typeof window === "undefined") return;
   listening = true;
   window.addEventListener("storage", onStorage);
+}
+
+/**
+ * (Owner, Nov 28) Calls `fn` whenever this tab hears the tester's Alerts or a test's developer Alerts change (a save here, another tab, the page's poll):
+ * an open stop box applies the setting as it is now (lib/live.ts useLiveAppend). Returns the function that stops listening.
+ */
+export function onAlertsChange(fn: () => void): () => void {
+  if (typeof window === "undefined") return () => {};
+  listen();
+  window.addEventListener(TESTER_EVENT, fn);
+  window.addEventListener(DEV_EVENT, fn);
+  return () => {
+    window.removeEventListener(TESTER_EVENT, fn);
+    window.removeEventListener(DEV_EVENT, fn);
+  };
 }
 
 /** One test's developer ignored types as shown now. `start`: what the page was drawn with (it seeds the tab; a refreshed page's newer value replaces it), and

@@ -69,6 +69,8 @@ describe("batch 35 §93: tester Rate uses every shared tester stop", () => {
     expect(first.body.error?.code).toBe("stop_once");
     expect(texts(first)).toEqual([expect.stringMatching(/^You added to your answer to “.+” in another tab$/)]); // (§167) it names the question
     expect(first.body.error.alertsOff).toBe(true);
+    // (Owner, Nov 28) Rate's box carries `ordinaryTerms`: with Alerts Off an offer picked up live never joins it.
+    expect(first.body.error.liveRule).toEqual({ off: true, ordinaryTerms: true });
     expect((await rate(x, loaded, { confirmed: true, boxAt: first.body.error.now })).status).toBe(200);
   });
 

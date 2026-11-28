@@ -106,7 +106,8 @@ describe("§374 the stop-moment box (Dispute on a page opened before the stop) c
     expect(d0.body.error!.liveRule).toEqual({ off: true, part: w.written.id });
   });
 
-  it("Alerts On: the stop-moment box has no rule and every line joins, as before", async () => {
+  // (Owner, Nov 28) The rule is sent with Alerts On too (with the Dispute's part): an open box follows the Alerts as they are now.
+  it("Alerts On: the stop-moment box's rule says Alerts On and every line joins, as before", async () => {
     const w = await world(false);
     await settle();
     const loaded = seen();
@@ -116,7 +117,7 @@ describe("§374 the stop-moment box (Dispute on a page opened before the stop) c
     const d0 = (await sact(w.sessionId, "dispute", w.tester.cookie, { kind: "submission", id: w.written.id, reason: WHY, seenAt: loaded })) as Res;
     expect(d0.body.error?.code, JSON.stringify(d0.body)).toBe("stop_once");
     expect(d0.body.error!.alertsOff).toBe(false);
-    expect(d0.body.error!.liveRule).toBeUndefined();
+    expect(d0.body.error!.liveRule).toEqual({ off: false, part: w.written.id });
     await settle();
     expect((await more(w, w.rec.id, "1.00")).status).toBe(200);
     await settle();

@@ -4,7 +4,7 @@ import { useCarried } from "./pressCarry";
 import { liveRuleOf, mergeChanges, useLiveAppend, type LiveRule } from "./live";
 import type { Change } from "@/components/ChangesBox";
 
-export type StopBox = { changes: Change[]; tail: string; top: boolean; now: string; /** the rule the server built it under: lines added live follow it */ rule?: LiveRule | null };
+export type StopBox = { changes: Change[]; tail: string; top: boolean; now: string; /** the rule the server built it under: lines added live follow what the press is about under the Alerts as they are now (lib/live.ts ruleNow) */ rule?: LiveRule | null };
 
 /**
  * A stop-once refusal from the server. The box shows under the pressed button, scrolled into view the "nearest" way.

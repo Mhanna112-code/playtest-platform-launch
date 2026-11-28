@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { act, atHours, joined, sact, seen, settle, setup } from "./fixtures";
+import { GET as liveGET } from "@/app/api/live/route";
+import { boxKeeps, liveRuleOf } from "@/lib/live";
+import type { Change } from "@/components/ChangesBox";
+import { json, req } from "./helpers";
 
 // (Owner, Nov 28) Leave behaves like every other button on its second press: the press made while its stop box is open sends the box's latest time (boxAt), and
 // the server stops it again only for something new since then that the box's rule would stop for (Alerts On: any ordinary change, a new offer too, since Leave
@@ -92,10 +96,21 @@ describe("Leave's second press (owner, Nov 28)", () => {
     const onFirst = await sact(on.sessionId, "leave", on.tester.cookie, { seenAt: loaded });
     const offFirst = await sact(off.sessionId, "leave", off.tester.cookie, { seenAt: loaded, tab: "B" });
     for (const r of [onFirst, offFirst]) expect(r.body.error?.code, JSON.stringify(r.body)).toBe("stop_once");
+    // (Owner, Nov 28) Leave's box carries `ordinaryTerms`: with Alerts Off an offer the page picks up live never joins it (lib/live.ts boxKeeps).
+    expect(onFirst.body.error.liveRule).toEqual({ off: false, ordinaryTerms: true });
+    expect(offFirst.body.error.liveRule).toEqual({ off: true, ordinaryTerms: true });
     await settle();
     expect((await edit(testId, dev.cookie, { writtenCents: "12.00" })).status).toBe(200);
     expect(await db.termsOffer.count({ where: { contractId: { in: [on.sessionId, off.sessionId] }, status: "open" } })).toBe(2);
     await settle();
+    // The session page's live feed leaves the offer out (it has its own box), so it never reaches an open box from there; were one to come, Ben's box
+    // (Alerts Off, Leave) would leave it out and Ana's (Alerts On) would take it in.
+    const feed = async (j: { sessionId: string; tester: { cookie: string } }) =>
+      (await json(await liveGET(req(`/api/live?scope=session:${j.sessionId}&since=${encodeURIComponent(loaded)}`, { cookie: j.tester.cookie, method: "GET", headers: { "x-tab": "t-page" } })))).body.changes as Change[];
+    for (const j of [on, off]) expect((await feed(j)).some((c) => /offered you new terms/.test(c.text))).toBe(false);
+    const offer = { text: "Nora Lane offered you new terms: Switch or Keep them", at: new Date().toISOString(), link: "terms-offer", forced: true };
+    expect(boxKeeps(offer, liveRuleOf(onFirst.body.error))).toBe(true);
+    expect(boxKeeps(offer, liveRuleOf(offFirst.body.error))).toBe(false);
     const onSecond = await sact(on.sessionId, "leave", on.tester.cookie, { seenAt: loaded, confirmed: true, boxAt: onFirst.body.error.now });
     expect(onSecond.body.error?.code, JSON.stringify(onSecond.body)).toBe("stop_once");
     expect(texts(onSecond)).toEqual([expect.stringMatching(/offered you new terms: Switch or Keep them/)]);
