@@ -2100,7 +2100,7 @@ export async function chooseOutcome(tester: { id: string; email: string; name: s
   };
   await capNow();
   try {
-    await testerTermsGate(contractId, displayName(dev), body, s.id);
+    await testerTermsGate(contractId, displayName(dev), body);
   } catch (e) {
     // A Pay can finish after the first refusal check but before the change gate.
     // If this piece is now settled, the second press cannot act: refuse it now.
@@ -2260,7 +2260,7 @@ async function chooseCallOutcome(tester: { id: string; email: string; name: stri
   // (Owner, Nov 27, shared rule 4) Nothing left to charge is a refusal: before the stop-once box (and again after it, below).
   if (body.choice === "charge" && (await callChargeCap(x)).cents === 0) throw new HttpError(409, "paid_in_full", "There's nothing left to charge for this call (the $500 for calls on this test is used).");
   try {
-    await testerTermsGate(contractId, displayName(dev), body, x.id);
+    await testerTermsGate(contractId, displayName(dev), body);
   } catch (e) {
     if (e instanceof HttpError && e.code === "stop_once") await chargeRefusals({ callId: x.id }, displayName(dev), await db.review.findUnique({ where: { callId: x.id } }), `your call on ${callAtFor(x.startsAt, c.tester)}`);
     throw e;

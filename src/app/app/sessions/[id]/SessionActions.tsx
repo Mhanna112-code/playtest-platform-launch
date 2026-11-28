@@ -11,6 +11,7 @@ import { useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNod
 import { createPortal } from "react-dom";
 import { api, ApiError, errOf, FIELD, isFieldError, offerShown, PRESS_REFUSED_EVENT } from "@/lib/client";
 import { pressRefusal, stopBox, useStopBox } from "@/lib/topStop";
+import { mergeChanges, useLiveAppend } from "@/lib/live";
 import { DISCARD_ALL_LABEL, DraftButton, DraftTag, USE_SAVED_ALL_LABEL, useKept, useKeptUnits } from "@/lib/useKept";
 import { NOTES_UNIT, answerUnit, sentUnits, type Units } from "@/lib/draftUnits";
 import { ConfirmButton } from "@/components/ConfirmButton";
@@ -552,18 +553,28 @@ export function WrittenAddForm({ sessionId, seenAt, canSend = true, known = [], 
 export function LeaveButton({ sessionId, seenAt, title, notice }: { sessionId: string; seenAt: string; title: string; /** (Owner, Nov 5, §268) the open-terms notice (information only) */ notice?: ReactNode }) {
   const [err, setErr] = useState("");
   const [box, setBox] = useStopBox();
-  const [confirmed, setConfirmed] = useState(false);
+  // (Owner, Nov 28) Leave's second press works like every other button's (lib/usePress.ts): a press while its stop box is open sends the box's latest time
+  // (`boxAt`: the stop's own time, moved on by each line that joins the open box live under the box's rule), and the server stops it again only for something
+  // new since then that the box's rule would stop for. Once the box is gone (the press went through), the next press is a first press again.
+  const [boxAt, setBoxAt] = useState("");
+  useLiveAppend(box != null, (added) => {
+    const newest = added.map((a) => a.at).sort().pop();
+    if (newest) setBoxAt((b) => (b && b > newest ? b : newest));
+  }, box?.rule);
   const fin = useFinished();
-  const leave = () =>
-    api(`/api/sessions/${sessionId}/leave`, { seenAt, confirmed })
-      .then(() => { setBox(null); fin.finish("You left this test."); })
+  const leave = () => {
+    const again = box != null;
+    return api(`/api/sessions/${sessionId}/leave`, { seenAt, confirmed: again, ...(again && boxAt ? { boxAt } : {}) })
+      .then(() => { setBox(null); setBoxAt(""); fin.finish("You left this test."); })
       .catch((e) => {
         const sb = stopBox(e);
         if (sb) {
-          setBox(sb);
-          setConfirmed(true);
+          // A stop after a stop adds its new lines to the box, which now dates from this stop.
+          setBox((b) => (b && again ? { ...sb, changes: mergeChanges(b.changes, sb.changes) } : sb));
+          setBoxAt(sb.now);
         } else setErr(errOf(e));
       });
+  };
   return (
     <div className="space-y-2">
       <ConfirmButton live disabled={fin.done} className="btn-secondary px-3 py-1.5 text-sm text-rose-200" title={`Are you sure you want to leave “${title}”?`} confirmLabel="Leave this test" onConfirm={leave}

@@ -81,7 +81,7 @@ export function useFinished(onFresh?: () => void) {
  * A panel's presses: sends the page's "seen" marker. If the server stops once, the box lists the changes directly under
  * the pressed button (its key) and the next press is sent as confirmed. A refusal shows in the same place.
  */
-export function usePress(seenAt: string, onStop?: (data: Record<string, unknown>) => void, opts: { once?: boolean; /** (batch 35 §41) the redraw after a finished press landed: empty the box */ onFresh?: () => void; /** (batch 35 §75) each key is its own press: another
+export function usePress(seenAt: string, onStop?: (data: Record<string, unknown>) => void, opts: { /** (batch 35 §41) the redraw after a finished press landed: empty the box */ onFresh?: () => void; /** (batch 35 §75) each key is its own press: another
   key's box never confirms (or merges into) this one, and pressing another key clears it */ perKey?: boolean;
   /** (§371) the button's part (lib/pressCarry.ts): a redraw that swaps this panel for a new one mid-press still shows the press's box or refusal (and its
    * "done" line) under the button of the panel shown now */ carry?: string } = {}) {
@@ -92,7 +92,7 @@ export function usePress(seenAt: string, onStop?: (data: Record<string, unknown>
   const [at, setAt] = useCarried(carry, "at", "");
   const [errData, setErrData] = useCarried<Record<string, unknown>>(carry, "errData", NO_DATA);
   // (Owner) When the box last updated (the stop, or a line added live): the next press goes ahead only if nothing new
-  // happened since. Leave and Block (opts.once) still stop just once.
+  // happened since.
   const [boxAt, setBoxAt] = useCarried(carry, "boxAt", "");
   // (Owner, Nov 10, §373) The rule the server built the box under (Alerts Off, Alerts types ticked off): lines added live follow it.
   const [rule, setRule] = useCarried<LiveRule | null>(carry, "liveRule", null);
@@ -106,7 +106,7 @@ export function usePress(seenAt: string, onStop?: (data: Record<string, unknown>
     const again = changes != null && (!opts.perKey || key === at);
     if (!again && opts.perKey) setChanges(null);
     try {
-      const r = await api<T>(path, { ...body, seenAt, confirmed: again || body.confirmed === true, ...(again && !opts.once && boxAt ? { boxAt } : {}) });
+      const r = await api<T>(path, { ...body, seenAt, confirmed: again || body.confirmed === true, ...(again && boxAt ? { boxAt } : {}) });
       setChanges(null);
       const note = (r as { note?: unknown } | null)?.note;
       if (typeof note === "string") setError(note); // shown under the button (blue)

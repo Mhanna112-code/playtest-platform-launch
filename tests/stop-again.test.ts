@@ -4,7 +4,7 @@ import { makeUser } from "./helpers";
 import { joined, act, sact, setup } from "./fixtures";
 
 // (Owner, NEXT-UI 12) The second press goes ahead only if nothing new happened since the box last updated; otherwise it
-// stops again with just the new lines. The tester's Leave and Block still stop once.
+// stops again with just the new lines. (Owner, Nov 28) The tester's Leave too (tests/leave-second-press.test.ts); Block never stops.
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 describe("stop again when something new happened since the box", () => {
@@ -72,7 +72,7 @@ describe("stop again when something new happened since the box", () => {
     expect(await db.callRequest.count({ where: { contractId: b.sessionId } })).toBe(1);
   });
 
-  it("the tester's Leave still stops just once (no box time sent)", async () => {
+  it("a second Leave press with no box time (a page from before Nov 28) still goes ahead", async () => {
     const { testId } = await setup();
     const { tester, sessionId } = await joined(testId);
     expect((await sact(sessionId, "leave", tester.cookie, { seenAt: new Date(Date.now() - 1000).toISOString(), confirmed: true })).status).toBe(200);

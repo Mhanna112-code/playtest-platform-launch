@@ -52,7 +52,8 @@ describe("§362 a payment on the same part stops Send / Add / Dispute once, what
     expect((await more(w, w.written.id)).status).toBe(200);
     await settle();
     await expect(testerGate(w.tester.user.id, w.sessionId, w.testId, { seenAt: loaded, loadedAt: loaded }, undefined, { piece: w.written.id })).rejects.toMatchObject({ code: "stop_once", data: { changes: [expect.objectContaining({ forced: true })] } });
-    const charge = testerGate(w.tester.user.id, w.sessionId, w.testId, { seenAt: loaded, loadedAt: loaded }, undefined, { owedPiece: w.written.id });
+    // Charge / Let it go's gate passes no part (its old `owedPiece` option was never read, and is gone).
+    const charge = testerGate(w.tester.user.id, w.sessionId, w.testId, { seenAt: loaded, loadedAt: loaded });
     if (off) await expect(charge).resolves.toBeUndefined();
     else await expect(charge).rejects.toMatchObject({ code: "stop_once" });
   });
