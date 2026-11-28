@@ -220,6 +220,13 @@ async function deliver(row0: Row & { attempts?: number; giveUpAt: Date; recipien
     await expireDue(now, row.id);
     return false;
   }
+  // (Owner, Nov 11) A call reminder whose call was cancelled since (a leave, a pause, a block, either side's Cancel): expired too, never sent; not a failure.
+  const callKey = /^call(?:24|15):(.+)$/.exec(row.reminderKey ?? "");
+  if (callKey && (await db.call.findUnique({ where: { id: callKey[1] }, select: { status: true } }))?.status !== "booked") {
+    const r = await db.emailQueue.updateMany({ where: { id: row.id, status: "pending" }, data: { status: "expired", lastError: "", errorKind: "", nextTryAt: now } });
+    if (r.count) await endIncidentIfClear();
+    return false;
+  }
   const r: Answer = k ? await post(row, k) : { ok: false, status: 0, body: NO_EMAIL_KEY };
   if (r.ok) {
     await db.emailQueue.update({ where: { id: row.id }, data: { status: "sent", sentAt: now, lastTriedAt: now, attempts: { increment: 1 }, lastError: "", errorKind: "", nextTryAt: now } });

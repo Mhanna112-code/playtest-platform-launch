@@ -72,6 +72,20 @@ describe("§383 7a: a sent-at-once reminder expires at its own moment", () => {
     expect(await db.notification.count({ where: { userId: u.user.id, text: { startsWith: "Your call with Nora Lane" } } })).toBe(1);
   });
 
+  it("a call reminder whose call is no longer booked is expired, never sent, on any try (Owner, Nov 11)", async () => {
+    const posts = resend(() => true);
+    const u = await makeUser({ tester: true });
+    const t0 = new Date();
+    // Its call no longer booked (here no such call at all: after any cancellation its status isn't "booked").
+    await notify(u.user.email, "Your call with Nora Lane on “Harbor Run” starts at 3:00 PM.", ["Your call starts soon."], "/app", { recipientId: u.user.id, now: true, always: true, reminder: "call24:no-such-call", expiresAt: new Date(t0.getTime() + 20 * H) });
+    const row = await db.emailQueue.findFirstOrThrow({ where: { recipientId: u.user.id } });
+    expect(posts).toHaveLength(0); // never sent, although Resend works and the call's start is ahead
+    expect(row.status).toBe("expired");
+    expect(await db.appState.findUnique({ where: { key: EMAIL_INCIDENT_KEY } })).toBeNull();
+    await retryEmails(new Date(t0.getTime() + 10 * 60_000));
+    expect(posts).toHaveLength(0);
+  });
+
   it("the call reminder expires at the call's start", () => {
     const calls = fs.readFileSync(path.resolve(__dirname, "../src/lib/server/calls.ts"), "utf8");
     expect(calls.match(/now: true, always: true, expiresAt: call\.startsAt/g)).toHaveLength(2);
