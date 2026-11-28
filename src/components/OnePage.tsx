@@ -2,7 +2,8 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { TAB, leaveMovedPage, pageScope, pageUser, resetMovedPage, setPageScope } from "@/lib/client";
-import { lockForClaim, onPressIdle, pressInFlight, releaseAll } from "@/lib/pageLock";
+import { lockForClaim, onPressIdle, pressInFlight, pressOnItsWay, releaseAll } from "@/lib/pageLock";
+import { prevTab, watchPageLeft } from "@/lib/sameTab";
 import { flushKept } from "@/lib/useKept";
 import { HANDOVER_LINE, HANDOVER_OPEN_NOW } from "@/lib/pageClaim";
 import { LIVE_TICK, rideLiveClock } from "@/lib/liveSync";
@@ -29,6 +30,9 @@ const post = (path: string, body: Record<string, unknown>) =>
  * (Owner, Nov 12: the new copy is locked from its first draw until its claim answers) Until then its presses would name no page (x-page) and so go unchecked,
  * possibly while the old copy's press is still on its way. Claimed: unlocked. Waiting: stays locked, with the wait line. The claim failed (an error, offline):
  * unlocked, the page stays usable. Back (`pageshow` persisted) re-claims the same way. This lock is not a press (lib/pageLock.ts lockForClaim): nobody waits for it.
+ * (Owner, Nov 28) The same browser tab never waits for itself: a press that ends with a full page load (Edit's Save, ...) gets a new tab id on the next load, so
+ * the claim names the load this tab showed before (`prev`, lib/sameTab.ts) and takes the page at once. And a copy going away (pagehide) whose press already
+ * answered lets go of its busy mark (a copy waiting elsewhere takes the page at once); a press still on its way keeps it (the server may yet change the page).
  */
 export function OnePage({ scope, poll = false }: { scope: string; /** (§380 K) a page with no poll of its own (AutoRefresh) asks on the live beat whether it was opened somewhere else */ poll?: boolean }) {
   const router = useRouter();
@@ -37,6 +41,7 @@ export function OnePage({ scope, poll = false }: { scope: string; /** (§380 K) 
   useEffect(() => {
     let alive = true;
     let run = 0;
+    watchPageLeft();
     /** The newest claim's lock: let go at once when this copy goes away (its claim stops asking). */
     let freeClaim: (() => void) | null = null;
     let channel: BroadcastChannel | null = null;
@@ -76,7 +81,8 @@ export function OnePage({ scope, poll = false }: { scope: string; /** (§380 K) 
       let now = false;
       let waited = false;
       for (;;) {
-        const r = await post("/api/page-claim", { scope, ...(now ? { now: true } : {}) });
+        const prev = prevTab();
+        const r = await post("/api/page-claim", { scope, ...(prev ? { prev } : {}), ...(now ? { now: true } : {}) });
         if (!alive || mine !== run) return;
         // Only a claim that landed names the page: a press or poll before it never reads as an older copy's.
         if (r?.claimed === true) return hold(waited);
@@ -142,6 +148,12 @@ export function OnePage({ scope, poll = false }: { scope: string; /** (§380 K) 
       });
     };
     window.addEventListener("pageshow", onShow);
+    // Going away (a full navigation after a press, a reload, closing): a press that already answered is no longer waited for. Not while handing over (it does).
+    const onHide = () => {
+      if (pageScope() !== scope || handing || pressOnItsWay()) return;
+      void post("/api/page-handover", { scope, release: true });
+    };
+    window.addEventListener("pagehide", onHide);
     // (§380 K) A page with no poll of its own: another browser or device opening it is learned on the live beat.
     const ask = async () => {
       if (pageScope() !== scope || document.visibilityState === "hidden") return;
@@ -159,6 +171,7 @@ export function OnePage({ scope, poll = false }: { scope: string; /** (§380 K) 
       channel?.removeEventListener("message", onMessage);
       channel?.close();
       window.removeEventListener("pageshow", onShow);
+      window.removeEventListener("pagehide", onHide);
       if (pageScope() === scope) setPageScope("");
     };
   }, [scope, poll, router]);

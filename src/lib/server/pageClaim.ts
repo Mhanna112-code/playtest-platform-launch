@@ -20,11 +20,15 @@ export type ClaimAnswer = { claimed: true } | { claimed: false; waiting: true; w
  * Opening the page (§380 J): this tab takes it at once, unless the copy holding it has a press on its way (its "busy" mark, fresh): then this tab waits for it,
  * asking again until the old copy hands over, at most HANDOVER_CAP_MS from its first ask (an old copy closed or asleep never answers: taken over then).
  * `now`: "Open now" (no more waiting). The same tab asking again (a reload, Back) simply holds it.
+ * (Owner, Nov 28) `prev`: the load this same browser tab showed just before (a full page load gets a new tab id, lib/sameTab.ts). When that load still holds
+ * the page, this is the same tab moving on (Edit's Save reloading Edit, ...): it takes the page at once, never waiting for its own press. Another copy (another
+ * tab, browser or device) never names the holder, so it still waits for a press on its way.
  */
-export async function claimPage(userId: string, scope: string, tab: string, opts: { now?: boolean } = {}): Promise<ClaimAnswer> {
+export async function claimPage(userId: string, scope: string, tab: string, opts: { now?: boolean; prev?: string } = {}): Promise<ClaimAnswer> {
   if (!isScope(scope) || !tab) throw new HttpError(400, "bad_request", "Something went wrong sending that. Reload the page and try again.");
   if (!(await ownsScope(userId, scope))) throw new HttpError(404, "not_found", "Not found.");
   const tabId = tab.slice(0, 64);
+  const prev = (opts.prev ?? "").slice(0, 64);
   return db.$transaction(async (tx) => {
     const now = new Date();
     const where = { userId_scope: { userId, scope } };
@@ -35,7 +39,7 @@ export async function claimPage(userId: string, scope: string, tab: string, opts
     // Two copies asking at once take turns on the claim's row.
     const rows = await tx.$queryRaw<{ tabId: string; busy: boolean; beatAt: Date | null; wantTab: string; wantAt: Date | null }[]>`SELECT "tabId", busy, "beatAt", "wantTab", "wantAt" FROM "PageClaim" WHERE "userId" = ${userId} AND scope = ${scope} FOR UPDATE`;
     const c = rows[0];
-    if (!c || c.tabId === tabId || opts.now) return take();
+    if (!c || c.tabId === tabId || opts.now || (prev && c.tabId === prev)) return take();
     const busy = c.busy && !!c.beatAt && now.getTime() - c.beatAt.getTime() < BUSY_STALE_MS;
     if (!busy) return take();
     if (c.wantTab !== tabId || !c.wantAt) {

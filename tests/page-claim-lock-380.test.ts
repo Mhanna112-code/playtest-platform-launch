@@ -20,6 +20,7 @@ let createRoot: typeof import("react-dom/client").createRoot;
 let OnePage: typeof import("@/components/OnePage").OnePage;
 let client: typeof import("@/lib/client");
 let lock: typeof import("@/lib/pageLock");
+let sameTab: typeof import("@/lib/sameTab");
 let HANDOVER_LINE: string;
 let dom: ReturnType<typeof installMiniDom>;
 
@@ -44,7 +45,11 @@ beforeAll(async () => {
       sent.push({ url, body, headers });
       return new Promise<Response>((ok, fail) => claims.push({ body, answer: (r) => (r ? ok(json(r.status, r.data)) : fail(new TypeError("Failed to fetch"))) }));
     }
-    if (url.startsWith("/api/kept") || url.startsWith("/api/page-handover")) return json(200, {});
+    if (url.startsWith("/api/page-handover")) {
+      sent.push({ url, body, headers });
+      return json(200, {});
+    }
+    if (url.startsWith("/api/kept")) return json(200, {});
     if (url.startsWith("/api/")) {
       sent.push({ url, body, headers });
       return json(200, { ok: true });
@@ -59,6 +64,7 @@ beforeAll(async () => {
   ({ HANDOVER_LINE } = await import("@/lib/pageClaim"));
   client = await import("@/lib/client");
   lock = await import("@/lib/pageLock");
+  sameTab = await import("@/lib/sameTab");
 });
 
 afterAll(() => {
@@ -238,3 +244,46 @@ describe("§380 J: the new copy is locked from its first draw until its claim an
 });
 
 // The old copy's own handover (onPressIdle, pressInFlight) and the claim's server side: tests/page-handover-380.test.ts.
+
+describe("(owner, Nov 28) the same tab never waits for itself after a press that loads the page again", () => {
+  const note = () => sessionStorage.getItem(sameTab.PREV_TAB_KEY);
+  const hide = () => act(async () => { (dom.win as EventTarget).dispatchEvent(Object.assign(new Event("pagehide"), { persisted: false })); });
+  const releases = () => sent.filter((s) => s.url === "/api/page-handover" && s.body.release === true);
+
+  it("the next load in this tab names the load it showed before in its claim (read once): the server lets it take the page at once", async () => {
+    sessionStorage.setItem(sameTab.PREV_TAB_KEY, JSON.stringify({ tab: "load1", at: Date.now() }));
+    sameTab.resetSameTab(); // a fresh page
+    const p = await mount();
+    expect(claims[0].body).toEqual({ scope: SCOPE, prev: "load1" });
+    expect(note()).toBeNull();
+    await p.answer({ status: 200, data: { claimed: true } });
+    expect(locked()).toBe(false);
+    await p.done();
+    // A load with no note (another tab, a first visit) names nothing: the §380 J wait applies.
+    sameTab.resetSameTab();
+    const q = await mount();
+    expect(claims[0].body).toEqual({ scope: SCOPE });
+    await q.answer({ status: 200, data: { claimed: true } });
+    await q.done();
+  });
+
+  it("going away after its press answered (Edit's Save loading the page again): names itself in the tab and lets go of the busy mark; a press still on its way keeps it", async () => {
+    const p = await mount();
+    await p.answer({ status: 200, data: { claimed: true } });
+    await p.press(); // answered: only its redraw left
+    expect(lock.pressInFlight()).toBe(true);
+    await hide();
+    expect(JSON.parse(note()!).tab).toBe(client.TAB);
+    expect(releases().map((s) => [s.body.scope, s.headers["x-tab"]])).toEqual([[SCOPE, client.TAB]]);
+    // A press still waiting for the server's answer: the busy mark stays (a copy elsewhere waits for it, at most the cap).
+    sent = [];
+    lock.pressStarted();
+    await hide();
+    expect(releases()).toEqual([]);
+    expect(JSON.parse(note()!).tab).toBe(client.TAB); // the same tab's next load still takes the page at once
+    lock.releaseAll();
+    await p.done();
+    sessionStorage.removeItem(sameTab.PREV_TAB_KEY);
+    sameTab.resetSameTab();
+  });
+});

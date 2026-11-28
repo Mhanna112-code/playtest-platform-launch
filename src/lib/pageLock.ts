@@ -157,6 +157,8 @@ export function redrawLanded() {
 export const pageLocked = () => !!engagedOn;
 /** (§380 J) A press of this page is on its way, or its redraw hasn't landed yet: a new copy of the page waits for it before taking over. */
 export const pressInFlight = () => presses > 0 || redraw || !!grace;
+/** (Owner, Nov 28) A press of this page still waits for the server's answer (its redraw aside): a copy going away keeps its busy mark then (OnePage). */
+export const pressOnItsWay = () => presses > 0;
 
 /** (§380 J) Told when the page's presses are all over (answered, and their redraw landed): a one-at-a-time page then says so (OnePage), or hands over. */
 const idle = new Set<() => void>();
