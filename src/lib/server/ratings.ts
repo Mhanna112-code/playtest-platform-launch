@@ -8,7 +8,7 @@ import { isUniqueClash } from "./passwords";
 import { HttpError } from "./http";
 import { bell, notify } from "./notify";
 import { finishedAndRatedLine, ratedYouLine, ratingClosedLine, RATE_CHARGE_FIRST, RATE_INACTIVE, RATE_MY_DISPUTE, RATE_TEST_PAUSED, chargeIsOpen, chargeOpensAt, ratePendingLine, rateOpensOnLine, rateOpensReviewLine, rateTheirDisputeLine, type TestEventLike } from "@/lib/rules";
-import { cancelCallsAhead, lockTest, ownContract, ownTest, recordEvent, spotOpened } from "./tests";
+import { callsGoneTail, cancelCallsAhead, lockTest, ownContract, ownTest, recordEvent, spotOpened, tellDevCancelled, withTail, type CancelledCall } from "./tests";
 import { seenOf, unanswered, tabOf, testerPaymentChanges } from "./live";
 import { FINISHED_PART_REASON, payMoreLine, TESTER_CALL_KINDS, testerChanges, testerGate } from "./testerGate";
 import { devPauseMoments, devStopSince, loadedOf, stopBox } from "./stopMoment";
@@ -318,6 +318,7 @@ export async function testerRate(tester: { id: string; name: string; email: stri
   if (state.kind !== "open") refuse(state, `You already rated ${displayName(c0.test.developer)}.`, { gone: RF.STOPPED_CAUSE, own: RF.ACCOUNT_PAUSED_CAUSE }); // (batch 29 section 13) a Rate made in another tab: a plain refusal
   await testerRateGate(tester.id, contractId, c0.testId, body);
   const r = readRating(body); // (Owner, Nov 11, §386 C) the stars and the comment after the refusals and the box
+  let gone: CancelledCall[] = [];
   await db.$transaction(async (tx) => {
     await lockTest(tx, c0.testId);
     await assertRatingAccounts(tx, tester.id, c0.test.developerId, RF.stoppedPressLine("Rate"));
@@ -327,16 +328,19 @@ export async function testerRate(tester: { id: string; name: string; email: stri
     if (wasWorking) {
       await tx.contract.update({ where: { id: c.id }, data: { status: "left", endKind: "rated", endedAt: new Date() } });
       await (await import("./accessKeys")).releaseTesterKeys(tx, c.id);
-      await cancelCallsAhead(tx, [c.id], `${displayName(tester)} finished ${pronouns(tester.pronoun).poss} part.`);
+      gone = await cancelCallsAhead(tx, [c.id], `${displayName(tester)} finished ${pronouns(tester.pronoun).poss} part.`);
       await closeOffersOfEnded(tx, [c.id]); // (batch 35 §118) rating ends the part: its open new-terms offer closes
       // (Owner, Oct 29, batch 24 section 2) Said in the tester's terms: they finished their part (Leave and a suspension's removal keep "the tester left").
       await tx.callRequest.updateMany({ where: { contractId: c.id, status: "pending" }, data: { status: "closed", closedReason: FINISHED_PART_REASON, decidedAt: new Date() } });
     }
     // (Owner, Oct 28, batch 20 section 24) A working tester who rates is leaving: one line ("Testers leaving"). One whose part had ended: "ff rated you" (Ratings from
     // testers). Either stops the developer's presses once; never the stars (the blind reveal).
-    if (wasWorking) await recordEvent(tx, c.testId, "left", `${finishedAndRatedLine(displayName(tester), tester.pronoun)}`, true, {}, c.id, "", testerRow(c.id)); // (Owner, Nov 6, §284) the place the line opens
+    // (Owner, Nov 11, §390 a) With the calls her finishing cancelled: "Ana Silva finished her part (rated you); your call on … was cancelled".
+    if (wasWorking) await recordEvent(tx, c.testId, "left", withTail(finishedAndRatedLine(displayName(tester), tester.pronoun), callsGoneTail(gone.map((x) => x.startsAt))), true, {}, c.id, "", testerRow(c.id)); // (Owner, Nov 6, §284) the place the line opens
     else await recordEvent(tx, c.testId, "rated", `${ratedYouLine(displayName(tester))}`, false, {}, c.id, "", testerRow(c.id));
   }).catch(ratedOnce(`You already rated ${displayName(c0.test.developer)}.`));
+  // (§390 a) The developer's bell for each call it cancelled (a rating has no bell of its own: the stars stay blind).
+  await tellDevCancelled(gone, `${displayName(tester)} finished ${pronouns(tester.pronoun).poss} part`);
   // (Batch 17 section 16) The developer's Rate (and its 14 days) opens once everything this tester sent is settled too: now, or when the last piece is.
   await maybeOpenDevRating(contractId);
   await spotOpened(c0.testId);

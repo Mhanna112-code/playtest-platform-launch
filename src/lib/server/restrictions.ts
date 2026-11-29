@@ -4,7 +4,7 @@ import { displayName, fmtDateTime, money, pronouns } from "@/lib/server/dateForm
 import { callCancelledLine, repeatDue, utcDayNo } from "@/lib/rules";
 import { HttpError } from "./http";
 import { adminUsers, bell, notify } from "./notify";
-import { cancelCallsAhead, recordEvent, spotOpened, tellCancelled } from "./tests";
+import { callsGoneTail, cancelCallsAhead, devCallsGoneTail, devCancelledLive, recordEvent, spotOpened, tellCancelled, withTail } from "./tests";
 import { closeRequests } from "./requests";
 import { chargeDeferred, markPaused, resumeTests, shiftAfterPause, tellTestersPaused } from "./holds";
 import { accountEvent } from "./reports";
@@ -44,6 +44,8 @@ export async function cancelCallsNearPause(devId: string, now = new Date(), test
     await notify(c.contract.tester.email, line, [line], `/app/sessions/${c.contractId}#call-${c.id}`, { about: c.contract.test.developerId });
     const devLine = callCancelledLine(c.startsAt, "paused", c.contract.test.title).replace("Your call", `Your call with ${displayName(c.contract.tester)}`);
     await notify(c.contract.test.developer.email, devLine, [devLine], `/app/tests/${c.contract.testId}#call-${c.id}`);
+    // (Owner, Nov 11, §390 a) And the developer's live line (the tester's is read from the call itself, testerChanges).
+    await devCancelledLive(db, [{ testId: c.contract.testId, contractId: c.contractId, callId: c.id, tester: displayName(c.contract.tester), startsAt: c.startsAt }], "the test is paused");
   }
   return n;
 }
@@ -83,12 +85,12 @@ async function removeTester(u: { id: string; name: string; email: string; pronou
       const list = await cancelCallsAhead(tx, [c.id], `${who} left the test.`);
       await closeOffersOfEnded(tx, [c.id]); // (batch 35 §118)
       await tx.callRequest.updateMany({ where: { contractId: c.id, status: "pending" }, data: { status: "closed", closedReason: "the tester left", decidedAt: new Date() } });
-      // Developers only ever see "left" (never why).
-      await recordEvent(tx, c.testId, "left", `${who} left the test`, true, {}, c.id, "", testerRow(c.id)); // (Owner, Nov 6, §284) the place the line opens
+      // Developers only ever see "left" (never why). (Owner, Nov 11, §390 a) With the calls it cancelled: "… left the test; your call on … was cancelled".
+      await recordEvent(tx, c.testId, "left", withTail(`${who} left the test`, callsGoneTail(list.map((x) => x.startsAt))), true, {}, c.id, "", testerRow(c.id)); // (Owner, Nov 6, §284) the place the line opens
       return list;
     });
     await tellCancelled(cancelled, "ended");
-    await notify(c.test.developer.email, `${who} left “${c.test.title}”`, [`${who} left your test “${c.test.title}”. Work ${pronouns(u.pronoun).subj} already sent still waits for your review.`], `/app/tests/${c.testId}#tester-${c.id}`, { about: u.id, testId: c.testId }); // (Owner, Nov 6, §308) a plain per-test line: the test's own "Harbor Run · N updates" stack
+    await notify(c.test.developer.email, withTail(`${who} left “${c.test.title}”`, callsGoneTail(cancelled.map((x) => x.startsAt))), [`${who} left your test “${c.test.title}”. Work ${pronouns(u.pronoun).subj} already sent still waits for your review.`], `/app/tests/${c.testId}#tester-${c.id}`, { about: u.id, testId: c.testId }); // (Owner, Nov 6, §308) a plain per-test line: the test's own "Harbor Run · N updates" stack
     await spotOpened(c.testId);
   }
   await db.application.updateMany({ where: { testerId: u.id, status: "pending" }, data: { status: "withdrawn", decidedAt: new Date() } });
@@ -546,7 +548,8 @@ export async function adminStopTest(testId: string, note: string, adminId: strin
   await tellCancelled(cancelled, "stopped");
   await (await import("./invites")).tellInvitesClosed(invitesClosed); // (batch 30 §6) never who
   for (const c of cs) await notify(c.tester.email, `“${c.test.title}” was stopped`, [`“${c.test.title}” was stopped. Work you already sent is still reviewed and paid. Calls ahead are cancelled.`], `/app/sessions/${c.id}`, { group: "tstopped" });
-  await notify(t.developer.email, `The team stopped “${t.title}”`, [`The team stopped “${t.title}”${note ? `: ${note}` : "."}`, "What testers sent still waits for you to pay. Contact us in Settings if you think this is a mistake."], `/app/tests/${testId}`, { always: true, group: "payhold" }); // (batch 29 §33) in the day's "Payments and holds" entry with the hold lines
+  // (Owner, Nov 11, §390 a) With the calls the stop cancelled: "The team stopped “…”; your call with Ana Silva on … was cancelled".
+  await notify(t.developer.email, withTail(`The team stopped “${t.title}”`, devCallsGoneTail(cancelled)), [`The team stopped “${t.title}”${note ? `: ${note}` : "."}`, "What testers sent still waits for you to pay. Contact us in Settings if you think this is a mistake."], `/app/tests/${testId}`, { always: true, group: "payhold" }); // (batch 29 §33) in the day's "Payments and holds" entry with the hold lines
   return { ok: true };
 }
 

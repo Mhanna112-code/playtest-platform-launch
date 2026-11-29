@@ -85,7 +85,7 @@ export async function blockUser(me: { id: string; email: string; name: string },
     await tx.contract.updateMany({ where: { id: { in: contracts.map((c) => c.id) }, status: "working" }, data: { status: "ended", endKind: "blocked", endedAt: now, endReason: "" } });
     for (const c of contracts) await (await import("./accessKeys")).releaseTesterKeys(tx, c.id);
     // Calls ahead between them are cancelled in the same step (a Join call or a booking after it reads them cancelled); one in progress ends just after.
-    const ahead = await tx.call.findMany({ where: { contractId: { in: contracts.map((c) => c.id) }, status: "booked", startsAt: { gt: now } }, select: { id: true, slotId: true } });
+    const ahead = await tx.call.findMany({ where: { contractId: { in: contracts.map((c) => c.id) }, status: "booked", startsAt: { gt: now } }, select: { id: true, slotId: true, contractId: true, startsAt: true } });
     await tx.call.updateMany({ where: { id: { in: ahead.map((x) => x.id) }, status: "booked" }, data: { status: "cancelled", cancelledBy: "system", cancelledAt: now, cancelNote: "" } });
     await tx.callSlot.updateMany({ where: { id: { in: ahead.map((x) => x.slotId) } }, data: { status: "removed" } });
     const invitesClosed = await (await import("./invites")).openInviteIds(between, tx);
@@ -98,7 +98,11 @@ export async function blockUser(me: { id: string; email: string; name: string },
       apps.push(...theirs);
     }
     if (apps.length) await tx.application.updateMany({ where: { id: { in: apps.map((a) => a.id) } }, data: { status: "closed", closedReason: "blocked", decidedAt: now } });
-    return { contracts, invitesClosed, apps };
+    // (Owner, Nov 11, §390 a) A developer the tester blocked: the live line for each call it cancelled (neutral, never "blocked"). A blocked tester's page reads
+    // her session's end (the calls' own lines are left to it: batch 16 §24).
+    const { devCancelledLive } = await import("./tests");
+    for (const c of contracts.filter((x) => x.testerId === me.id)) await devCancelledLive(tx, ahead.filter((a) => a.contractId === c.id).map((a) => ({ testId: c.testId, contractId: c.id, callId: a.id, tester: displayName(c.tester), startsAt: a.startsAt })));
+    return { contracts, invitesClosed, apps, ahead };
   }, { maxWait: 20_000, timeout: 30_000 }).catch((e) => {
     if (isUniqueClash(e)) return null; // (§380) the other Block of the same moment did it: silent
     throw e;
@@ -110,9 +114,12 @@ export async function blockUser(me: { id: string; email: string; name: string },
     const by = c.testerId === me.id ? "tester" : "developer";
     const { endCallForBlock } = await import("./calls");
     for (const call of await db.call.findMany({ where: { contractId: c.id, status: "booked", startsAt: { lte: now }, endedAt: null, measuredAt: null, actualMinutes: null } })) await endCallForBlock(call.id, by, now);
-    // Neutral lines for the blocked side (never "blocked").
-    if (c.testerId === otherId) await notify(c.tester.email, `Your session on ${c.test.title} ended.`, [`Your session on ${c.test.title} ended. Work you sent is still reviewed.`], `/app/sessions/${c.id}`);
-    else await notify(c.test.developer.email, `${displayName(c.tester)}'s session on ${c.test.title} ended.`, [`${displayName(c.tester)}'s session on ${c.test.title} ended.`], `/app/tests/${c.testId}#tester-${c.id}`);
+    // Neutral lines for the blocked side (never "blocked"). (Owner, Nov 11, §390 a) With the calls it cancelled: "Your session on Harbor Run ended; your call on
+    // … was cancelled."
+    const { callsGoneTail, withTail } = await import("./tests");
+    const tail = callsGoneTail(done.ahead.filter((a) => a.contractId === c.id).map((a) => a.startsAt));
+    if (c.testerId === otherId) await notify(c.tester.email, `${withTail(`Your session on ${c.test.title} ended`, tail)}.`, [`${withTail(`Your session on ${c.test.title} ended`, tail)}. Work you sent is still reviewed.`], `/app/sessions/${c.id}`);
+    else await notify(c.test.developer.email, `${withTail(`${displayName(c.tester)}'s session on ${c.test.title} ended`, tail)}.`, [`${withTail(`${displayName(c.tester)}'s session on ${c.test.title} ended`, tail)}.`], `/app/tests/${c.testId}#tester-${c.id}`);
   }
   await (await import("./requests")).closeRequests({ contractIds: ended.map((c) => c.id) }, "the session ended");
   await closeOffersOfEnded(db, ended.map((c) => c.id), now); // (batch 35 §118) the part ended: its offer closes

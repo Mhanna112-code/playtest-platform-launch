@@ -373,6 +373,8 @@ async function applyOutage(o: { startAt: Date; endAt: Date; ms: number }, opts: 
     const line = `Your call on ${T(c.startsAt)} was missed because the site was down. Nothing is charged; you can request a new time.`;
     await notify(c.contract.tester.email, line, [line], `/app/sessions/${c.contractId}#call-${c.id}`);
     await notify(c.contract.test.developer.email, line.replace("Your call", `Your call with ${displayName(c.contract.tester)}`), [line], `/app/tests/${c.contract.testId}#call-${c.id}`);
+    // (Owner, Nov 11, §390 a) And the developer's live line (the tester's is read from the call itself, testerChanges).
+    await (await import("./tests")).devCancelledLive(db, [{ testId: c.contract.testId, contractId: c.contractId, callId: c.id, tester: displayName(c.contract.tester), startsAt: c.startsAt }], "the site was down");
   }
   // One bell for everyone with something running.
   if (opts.quiet) return;

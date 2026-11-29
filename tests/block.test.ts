@@ -46,7 +46,8 @@ describe("block", () => {
   it("the developer blocks: session ends (neutral line), calls cancelled, sent work still payable, chat closed, no booking or invites", async () => {
     const { dev, testId, tester, sessionId, slots } = await withCall();
     expect((await block(dev.cookie, tester.user.id)).body).toMatchObject({ blocked: true, ended: 1 });
-    expect(await db.notification.count({ where: { userId: tester.user.id, text: "Your session on Harbor Run ended." } })).toBe(1);
+    // (Owner, Nov 11, §390 a) The neutral line names the call it cancelled: "Your session on Harbor Run ended; your call on … was cancelled."
+    expect(await db.notification.count({ where: { userId: tester.user.id, text: { startsWith: "Your session on Harbor Run ended; your call on " }, AND: { text: { endsWith: " was cancelled." } } } })).toBe(1);
     expect(await db.notification.count({ where: { userId: tester.user.id, text: { contains: "block" } } })).toBe(0); // never revealed
     expect((await db.call.findFirstOrThrow({ where: { contractId: sessionId } })).status).toBe("cancelled");
     expect((await sact(sessionId, "written", tester.cookie, { answers: ["x", "y"] })).body.error.message).toBe("Your part in this test has ended, so your Send Answers didn't go through."); // (§364 item 3: neutral, never says block)

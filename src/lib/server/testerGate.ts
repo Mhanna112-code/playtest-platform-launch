@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { displayName, fmtDateTime, money, pronouns } from "@/lib/server/dateFormat";
-import { TESTER_CHOICE_REASONS, partWhen, stopOnce, type TestEventLike } from "@/lib/rules";
+import { COULD_NOT_CONNECT, NOBODY_JOINED, TESTER_CHOICE_REASONS, partWhen, stopOnce, type TestEventLike } from "@/lib/rules";
 import { rowsOf } from "@/lib/callRows";
 import { HttpError } from "./http";
 import { keyGivenToYouLine } from "@/lib/keys";
@@ -35,7 +35,9 @@ export const CLOSED_BY_PAUSE = new Set(["the test is paused"]);
 /** (Owner, Nov 11, §379 item 5) Its one wording, the bell's and the top box's: "Nora Lane's call request for Fri, Nov 13, 3:00 PM was cancelled". */
 export const devRequestCancelledLine = (dev: string, when: string, on = "") => `${dev}'s call request${on} for ${when} was cancelled`;
 /** (Owner, Nov 11, §379 item 5) A booked call the system cancelled names why, as the bell does ("… was cancelled because the test is paused"). */
-const CANCEL_NOTE_WHY: Record<string, string> = { "The test is paused.": "the test is paused", "The test was stopped.": "the test was stopped", "The developer ended the work early.": "your session was ended" };
+const CANCEL_NOTE_WHY: Record<string, string> = { "The test is paused.": "the test is paused", "The test was stopped.": "the test was stopped", "The developer ended the work early.": "your session was ended",
+  // (Owner, Nov 11, §390 a) An outage and nobody joining name theirs too.
+  "missed because the site was down": "the site was down", [NOBODY_JOINED]: "nobody joined", [COULD_NOT_CONNECT]: "the call couldn't connect" };
 /**
  * (Owner, Nov 6, §286) Whether the developer's request closed for this reason is a line in the tester's top box ("The call time with Nora Lane on … is no longer
  * available"): never one her own press closed (CLOSED_BY_TESTER), one the stop, a closure or an early end closed (its own line says it), nor one a booking dropped

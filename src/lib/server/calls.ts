@@ -443,6 +443,8 @@ async function cancelNobodyJoined(id: string, now: Date, note = NOBODY_JOINED) {
   // (Batch 15 section 42) A call that's over links to its row (#call-<id>): the tester's Live session / the developer's tester row, Had or Cancelled (§209).
   await notify(call.contract.tester.email, line, [line, "Nothing is charged."], `/app/sessions/${call.contractId}#call-${call.id}`);
   await notify(call.contract.test.developer.email, line.replace("Your call", `Your call with ${displayName(call.contract.tester)}`), [line, "Nothing is charged."], `/app/tests/${call.contract.testId}#call-${call.id}`);
+  // (Owner, Nov 11, §390 a) And the developer's live line (the tester's is read from the call itself, testerChanges).
+  await (await import("./tests")).devCancelledLive(db, [{ testId: call.contract.testId, contractId: call.contractId, callId: call.id, tester: displayName(call.contract.tester), startsAt: call.startsAt }], note === NOBODY_JOINED ? "nobody joined" : "the call couldn't connect");
 }
 
 /**

@@ -5,7 +5,7 @@ import { PAUSE_CLOSE_DAYS, liftsWhen, pauseClosedReason, pauseClosesAt, type Pau
 import { andList, dayIn } from "@/lib/rules";
 import { HttpError } from "./http";
 import { notify } from "./notify";
-import { cancelCallsAhead, recordEvent, tellCancelled } from "./tests";
+import { cancelCallsAhead, devCallsGoneTail, recordEvent, tellCancelled } from "./tests";
 import { checkFrom, liftRefusal, presserOf, stopIfChanged, stoppedRefusal, testChangesSince, type AdminSeen } from "./adminRace";
 import { closeOffersOfEnded } from "./offerClose";
 
@@ -48,7 +48,9 @@ export async function closePausedTest(testId: string, by: "daily" | "admin", now
   await (await import("./invites")).tellInvitesClosed(invitesClosed); // (batch 30 §6)
   for (const c of cs) await notify(c.tester.email, `“${c.test.title}” ended`, [`“${c.test.title}” ended. Work you already sent is still reviewed and paid. Calls ahead are cancelled.`], `/app/sessions/${c.id}`, { group: "tstopped" });
   // (A system explanation, never a typed reason: it stays in the line.)
-  await notify(t.developer.email, `“${t.title}” was closed. ${reason}`, [`“${t.title}” was closed. ${reason}`, "What testers already sent still waits for you to pay. Contact us in Settings if you think this is a mistake."], `/app/tests/${testId}`, { always: true, group: "payhold" }); // (batch 29 §33) in the day's "Payments and holds" entry with the hold lines
+  // (Owner, Nov 11, §390 a) With the calls the closure cancelled: "… Your call with Ana Silva on … was cancelled."
+  const callsGone = devCallsGoneTail(cancelled);
+  await notify(t.developer.email, `“${t.title}” was closed. ${reason}${callsGone ? ` ${callsGone.charAt(0).toUpperCase()}${callsGone.slice(1)}.` : ""}`, [`“${t.title}” was closed. ${reason}`, "What testers already sent still waits for you to pay. Contact us in Settings if you think this is a mistake."], `/app/tests/${testId}`, { always: true, group: "payhold" }); // (batch 29 §33) in the day's "Payments and holds" entry with the hold lines
   return { closed: true, testers: cs.length };
 }
 

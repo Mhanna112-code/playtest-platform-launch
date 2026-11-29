@@ -856,17 +856,42 @@ export async function devGateIfSeen(testId: string, body: Record<string, unknown
 
 /** Calls ahead are cancelled (no charge) when a tester's work ends. Their offered times open again for others. */
 export async function cancelCallsAhead(tx: Tx, contractIds: string[], note: string, after = new Date()) {
-  const ahead = await tx.call.findMany({ where: { contractId: { in: contractIds }, status: "booked", startsAt: { gt: after } }, include: { contract: { include: { tester: true, test: { select: { title: true } } } } } });
+  const ahead = await tx.call.findMany({ where: { contractId: { in: contractIds }, status: "booked", startsAt: { gt: after } }, include: { contract: { include: { tester: true, test: { select: { id: true, title: true, developer: { select: { id: true, email: true } } } } } } } });
   for (const c of ahead) {
     await tx.call.update({ where: { id: c.id }, data: { status: "cancelled", cancelledBy: "system", cancelledAt: new Date(), cancelNote: note } });
     await tx.callSlot.update({ where: { id: c.slotId }, data: { status: "removed" } });
   }
-  return ahead.map((c) => ({ email: c.contract.tester.email, startsAt: c.startsAt, contractId: c.contractId, title: c.contract.test.title, callId: c.id }));
+  return ahead.map((c) => ({ email: c.contract.tester.email, startsAt: c.startsAt, contractId: c.contractId, title: c.contract.test.title, callId: c.id, testId: c.contract.test.id, tester: displayName(c.contract.tester), testerId: c.contract.testerId, devEmail: c.contract.test.developer.email, devId: c.contract.test.developer.id }));
 }
+export type CancelledCall = Awaited<ReturnType<typeof cancelCallsAhead>>[number];
 
 /** Tell each tester their booked call was cancelled (never any fault). */
 export async function tellCancelled(list: { email: string; startsAt: Date; contractId: string; title: string; callId?: string }[], why: Parameters<typeof callCancelledLine>[1]) {
   for (const c of list) await notify(c.email, callCancelledLine(c.startsAt, why, c.title), [callCancelledLine(c.startsAt, why, c.title)], `/app/sessions/${c.contractId}${c.callId ? `#call-${c.callId}` : ""}`);
+}
+
+// ---------- (Owner, Nov 11, §390 a) Every cancelled call is told to whoever didn't cancel it ----------
+// Whatever cancels a booked call (the other side's Cancel, a tester leaving, rating or being removed, a block, a pause, a stop, a closure, an outage, nobody
+// joining), the person who did NOT cause it gets a bell line naming the call (its date and time in their zone) and the test, merged into the line they already
+// get when there is one ("Ana Silva left “Harbor Run”; your call on Sat, Nov 28, 8:59 PM CST was cancelled"), and the live line in their open pages (a stop-once
+// reason under the usual rules; batch 16 §24: one caused by a stop, a closure or an early end is not a stop reason by itself, its stopped / ended line is).
+
+/** "your call on Sat, Nov 28, 8:59 PM CST was cancelled" / "your calls on … and … were cancelled" (times are tokens: each reader's zone). */
+export const callsGoneTail = (starts: Date[]) => (!starts.length ? "" : starts.length === 1 ? `your call on ${T(starts[0])} was cancelled` : `your calls on ${andList(starts.map((d) => T(d)))} were cancelled`);
+/** The developer's: "your call with Ana Silva on … was cancelled" / "your calls with Ana Silva on … and with Ben Ward on … were cancelled". */
+export const devCallsGoneTail = (list: { tester: string; startsAt: Date }[]) =>
+  !list.length ? "" : `your call${list.length === 1 ? "" : "s"} ${andList(list.map((c, i) => `${i === 0 || list[i - 1].tester !== c.tester ? `with ${c.tester} ` : ""}on ${T(c.startsAt)}`))} ${list.length === 1 ? "was" : "were"} cancelled`;
+/** A line merged with its tail: "Ana Silva left “Harbor Run”; your call on … was cancelled". */
+export const withTail = (line: string, tail: string) => (tail ? `${line}; ${tail}` : line);
+/** The developer's own line for one call: "Your call with Ana Silva on “Harbor Run” on Sat, Nov 28, 8:59 PM CST was cancelled because the test ended". */
+export const devCallCancelledLine = (tester: string, startsAt: Date, title: string | null, why = "") => `Your call with ${tester}${title ? ` on “${title}”` : ""} on ${T(startsAt)} was cancelled${why ? ` because ${why}` : ""}`;
+/** Each call's developer told (bell), one line per call. */
+export async function tellDevCancelled(list: CancelledCall[], why: string) {
+  for (const c of list) await notify(c.devEmail, devCallCancelledLine(c.tester, c.startsAt, c.title, why), [devCallCancelledLine(c.tester, c.startsAt, c.title, why)], `/app/tests/${c.testId}#call-${c.callId}`, { recipientId: c.devId, testId: c.testId });
+}
+/** The developer's live line for each call (a "cancelled" event: a stop-once reason in their open pages, like the tester's own Cancel). */
+export async function devCancelledLive(tx: Tx | typeof db, list: { testId: string; contractId: string; callId: string; tester: string; startsAt: Date }[], why = "") {
+  for (const c of list) await tx.testEvent.create({ data: { testId: c.testId, kind: "cancelled", text: devCallCancelledLine(c.tester, c.startsAt, null, why), contractId: c.contractId, link: `call-${c.callId}` } });
 }
 
 export async function stopTest(dev: U, testId: string, body: Record<string, unknown>) {
@@ -1244,14 +1269,16 @@ export async function leaveTest(tester: U, contractId: string, body: Record<stri
     if (sessionRefusal(c, { openUntil: null }, displayName(c0.test.developer))) return null; // (§380) ended a moment ago: silent too
     await tx.contract.update({ where: { id: c.id }, data: { status: "left", endedAt: new Date() } });
     await (await import("./accessKeys")).releaseTesterKeys(tx, c.id);
-    await cancelCallsAhead(tx, [c.id], `${displayName(tester)} left the test.`);
+    const gone = await cancelCallsAhead(tx, [c.id], `${displayName(tester)} left the test.`);
     await closeOffersOfEnded(tx, [c.id]); // (batch 35 §118) leaving ends the part: its open new-terms offer closes
     await tx.callRequest.updateMany({ where: { contractId: c.id, status: "pending" }, data: { status: "closed", closedReason: "the tester left", decidedAt: new Date() } });
-    await recordEvent(tx, c.testId, "left", `${displayName(tester)} left the test`, true, {}, c.id, "", testerRow(c.id)); // (Owner, Nov 6, §284) the place the line opens
-    return c;
+    // (Owner, Nov 11, §390 a) The developer's live line and bell name the calls her leaving cancelled: "Ana Silva left the test; your call on … was cancelled".
+    const tail = callsGoneTail(gone.map((x) => x.startsAt));
+    await recordEvent(tx, c.testId, "left", withTail(`${displayName(tester)} left the test`, tail), true, {}, c.id, "", testerRow(c.id)); // (Owner, Nov 6, §284) the place the line opens
+    return { ...c, tail };
   });
   if (!c) return { left: true, already: true };
-  await notify(c0.test.developer.email, `${displayName(tester)} left “${c.test.title}”`, [`${displayName(tester)} left your test “${c.test.title}”. Work ${pronouns(tester.pronoun).subj} already sent still waits for your review.`], `/app/tests/${c.testId}#tester-${c.id}`, { about: tester.id, testId: c.testId }); // (Owner, Nov 6, §308) a plain per-test line: the test's own "Harbor Run · N updates" stack
+  await notify(c0.test.developer.email, withTail(`${displayName(tester)} left “${c.test.title}”`, c.tail), [`${displayName(tester)} left your test “${c.test.title}”. Work ${pronouns(tester.pronoun).subj} already sent still waits for your review.`], `/app/tests/${c.testId}#tester-${c.id}`, { about: tester.id, testId: c.testId }); // (Owner, Nov 6, §308) a plain per-test line: the test's own "Harbor Run · N updates" stack
   await spotOpened(c.testId);
   return { left: true };
 }

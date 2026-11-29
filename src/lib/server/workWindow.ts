@@ -72,6 +72,8 @@ export async function afterWorkClosed(testId: string, result: NonNullable<Awaite
   for (const c of result.ending) await notify(c.tester.email, `“${c.test.title}” ended`, [`“${c.test.title}” ended. Work you already sent is still reviewed and paid. Calls ahead are cancelled.`], `/app/sessions/${c.id}`, { recipientId: c.testerId, group: "tstopped" });
   await (await import("./calls")).endCallsAtWorkDeadline(testId, result.at, now);
   await (await import("./tests")).tellCancelled(result.cancelled, "closed");
+  // (Owner, Nov 11, §390 a) The developer didn't cause it either: their bell names each call.
+  await (await import("./tests")).tellDevCancelled(result.cancelled, "the test ended");
 }
 
 /** Checked on the live beat as well as daily, so unattended tests also finish. */

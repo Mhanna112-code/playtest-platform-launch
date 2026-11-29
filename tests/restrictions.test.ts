@@ -1,3 +1,4 @@
+import { fmtIn, renderTimes } from "@/lib/tz";
 import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
@@ -122,7 +123,8 @@ describe("a suspended tester (design doc 2 and 11.4)", () => {
     for (const id of [ana.sessionId, sess2]) expect(await db.contract.findUniqueOrThrow({ where: { id } })).toMatchObject({ status: "left", endKind: "suspended" });
     expect((await db.call.findUniqueOrThrow({ where: { id: call.id } })).status).toBe("cancelled");
     const lines = (await db.testEvent.findMany({ where: { testId: open.testId, kind: "left" } })).map((e) => e.text);
-    expect(lines).toEqual(["Ana Silva left the test"]); // never why
+    // Never why; (Owner, Nov 11, §390 a) with the call it cancelled.
+    expect(lines.map((l) => renderTimes(l, "UTC"))).toEqual([`Ana Silva left the test; your call on ${fmtIn("UTC", call.startsAt)} was cancelled`]);
     expect((await sact(ana.sessionId, "written", ana.tester.cookie, { answers: ["x", "y"] })).body.error.code).toBe("suspended");
     expect((await sact(ana.sessionId, "written", ana.tester.cookie, { answers: ["x", "y"] })).body.error.failed).toBe("Your Send Answers on Harbor Run didn't go through"); // (§235)
 
