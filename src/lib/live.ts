@@ -128,21 +128,37 @@ export const clearListed = () => {
   listedPath = herePath();
 };
 export const wasShownInBox = (c: Change) => shownInBox.has(ck(c));
-/** Adds newly picked-up changes to an open box, skipping any it already lists. */
+/**
+ * Adds newly picked-up changes to a box's lines, skipping any it already lists. Called by LiveTop (its own lines), by every open stop box as live
+ * lines join it, and by a stop box a further press adds lines to (usePress, topStop, TestForm, SessionActions and the other forms' boxes).
+ *   1. The box's lines without those a new keyed line replaces (withoutReplaced).
+ *   2. Each new keyed line covers what the line it replaces covered too (coveringReplaced).
+ *   3. The box's lines, then the new lines it doesn't have yet: not the same time and text, and not the same moment in other words (sameMoment).
+ */
 export function mergeChanges(old: Change[], added: Change[]) {
-  // A keyed line (one per ticked tester's needs) replaces the box's earlier line with that key: one line per tester, its latest time.
-  const keys = new Set(added.map((c) => c.key).filter(Boolean));
-  const kept = old.filter((c) => !c.key || !keys.has(c.key));
-  // The one listing line replacing an earlier one covers what that one covered too (See it marks the union).
-  added = added.map((c) => {
-    const was = c.key ? old.filter((o) => o.key === c.key && o.keys?.length) : [];
-    return was.length ? { ...c, keys: [...new Set([...was.flatMap((o) => o.keys!), ...(c.keys ?? [])])] } : c;
-  });
+  // 1. Replaced lines out.
+  const kept = withoutReplaced(old, added);
+  // 2. Covering what they covered.
+  added = coveringReplaced(old, added);
+  // 3. Only new lines join.
   const have = new Set(kept.map(ck));
   // The same moment from two places reads as one line: the server's "This test was stopped at 3:22 PM." and the live
   // update's "This test was stopped" (shown "· 3:22 PM") within the same minute. The box keeps its own wording.
   const same = new Set(kept.map(sameMoment));
   return [...kept, ...added.filter((c) => !have.has(ck(c)) && !same.has(sameMoment(c)))];
+}
+/** mergeChanges step 1: a keyed line (one per ticked tester's needs, the one listing line) replaces the box's earlier line with that key: one line per
+ * key, its latest time. */
+function withoutReplaced(old: Change[], added: Change[]) {
+  const keys = new Set(added.map((c) => c.key).filter(Boolean));
+  return old.filter((c) => !c.key || !keys.has(c.key));
+}
+/** mergeChanges step 2: the one listing line replacing an earlier one covers what that one covered too (See it marks the union of their `keys`). */
+function coveringReplaced(old: Change[], added: Change[]) {
+  return added.map((c) => {
+    const was = c.key ? old.filter((o) => o.key === c.key && o.keys?.length) : [];
+    return was.length ? { ...c, keys: [...new Set([...was.flatMap((o) => o.keys!), ...(c.keys ?? [])])] } : c;
+  });
 }
 /** A line's text without a closing " at 3:22 PM." (and its full stop), with its minute: two lines that say the same moment match. */
 export function sameMoment(c: Change) {
@@ -154,9 +170,11 @@ export function sameMoment(c: Change) {
  * The rule a stop box was built under, as the server sent it with the box (`liveRule`): a tester's press (`off`: her Alerts then; the part the press is about;
  * `ordinaryTerms` for Rate and Leave), or a developer's press (`ignored`: the test's Alerts types ticked off then; what the press is about; the test). No rule:
  * every line joins.
- * (Owner, Nov 28) An open box applies the Alerts as they are NOW (ruleNow): of the server's rule it keeps only what the press is about.
+ * An open box applies the Alerts as they are NOW (ruleNow): of the server's rule it keeps only what the press is about.
  */
 export type LiveRule = { off: boolean; part?: string; ordinaryTerms?: boolean } | { ignored: string[]; press: Press; testId?: string };
+/** Reads the rule from a stop box's data (the 409 answer's `liveRule`; null: none, every line joins). Called by usePress, topStop and TestForm when a
+ * stop box opens. The server side builds a tester's with lib/server/testerGate.ts liveRuleOf (through testerBoxRule). */
 export function liveRuleOf(data: Record<string, unknown> | null | undefined): LiveRule | null {
   const r = data?.liveRule as Record<string, unknown> | undefined;
   if (!r || typeof r !== "object") return null;
@@ -167,8 +185,11 @@ export function liveRuleOf(data: Record<string, unknown> | null | undefined): Li
   return null;
 }
 /**
- * (Owner, Nov 28) The box's rule with the Alerts as this tab hears them now (lib/testerAlerts.ts): the tester's Alerts Off, or the test's ticked-off types
- * (the box's own test, else the page's). Nothing heard yet: the setting the box was built under.
+ * The box's rule with the Alerts as this tab hears them now (lib/testerAlerts.ts): the tester's Alerts Off, or the test's ticked-off types
+ * (the box's own test, else the page's). Nothing heard yet: the setting the box was built under. Called by useLiveAppend on every live line and
+ * every Alerts change while a box is open.
+ * Tester's rule: only `off` changes; `part` and `ordinaryTerms` (what the press is about) stay as the server sent them.
+ * Developer's rule: only `ignored` changes; `press` and `testId` stay.
  */
 export function ruleNow(rule?: LiveRule | null): LiveRule | null {
   if (!rule) return null;
@@ -185,9 +206,13 @@ export function ruleNow(rule?: LiveRule | null): LiveRule | null {
 const isOffer = (c: Change) => c.kind === "terms" || c.link === TERMS_OFFER_BOX;
 /**
  * Whether a line the page picked up joins an open stop box: only if the server would have put it in that box, by
- * the rule given (ruleNow: the box's press under the Alerts now). Tester, Alerts Off: a line that stops whatever the press (`forced`) or a payment on the
- * press's own part; a developer payment on another part never joins; for Rate and Leave (`ordinaryTerms`) never an offer (an ordinary change for them).
- * Tester, Alerts On: every line. Developer: the same devKeeps the server ran. A line that doesn't join is not in the box and never moves its time (`boxAt`).
+ * the rule given (ruleNow: the box's press under the Alerts now). Called by useLiveAppend.
+ *   - No rule: every line joins.
+ *   - Tester, Alerts On: every line.
+ *   - Tester, Alerts Off: for Rate and Leave (`ordinaryTerms`) never an offer (an ordinary change for them); otherwise a line that stops whatever the press
+ *     (`forced`) or a payment on the press's own part (`part`); a developer payment on another part never joins.
+ *   - Developer: a line no ticked-off Alerts type covers joins; one that is covered joins only if devKeeps (the same check the server ran) keeps it.
+ * A line that doesn't join is not in the box and never moves its time (`boxAt`).
  */
 export function boxKeeps(c: Change, rule?: LiveRule | null): boolean {
   if (!rule) return true;
@@ -204,8 +229,13 @@ export function boxKeeps(c: Change, rule?: LiveRule | null): boolean {
 export const LEFT_OUT_MAX = 100;
 /**
  * While a stop box is open, new changes the page picks up are added to it. `rule`: the rule that box was built under (boxKeeps), applied with the Alerts as
- * they are now (ruleNow). (Owner, Nov 28) The lines it leaves out while open are kept aside: when the Alerts change while it is open, those the new setting
- * keeps join then (lines already in the box stay).
+ * they are now (ruleNow). The lines it leaves out while open are kept aside: when the Alerts change while it is open, those the new setting
+ * keeps join then (lines already in the box stay). Called by the open boxes (usePress, topStop, TestForm, SessionActions, JoinBox, LiveNotices) with `add`
+ * adding lines to the box.
+ *   1. A live line arrives (LIVE_EVENT, from LiveTop's announce): quiet lines out; the rest that boxKeeps keeps under ruleNow join; the others go aside
+ *      (the newest LEFT_OUT_MAX).
+ *   2. The Alerts change (onAlertsChange): the lines aside that boxKeeps now keeps join, and leave the aside list.
+ *   3. The box closes: both listeners go, and the aside list with them.
  */
 export function useLiveAppend(open: boolean, add: (added: Change[]) => void, rule?: LiveRule | null) {
   const cb = useRef(add);

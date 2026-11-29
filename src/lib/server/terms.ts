@@ -58,6 +58,7 @@ export const PART_ENDED_TERMS = "Your part in this test has ended, so your Switc
 
 /**
  * The NDA block: an NDA change the tester hasn't acknowledged refuses every press of theirs on the test (Rate and Leave never come here).
+ * Called by answerTermsFirst (the presses that check new terms) and ndaBlockFirst (the session route).
  * Every change blocks (added, removed or changed), refused like an open contract change: one line, "Acknowledge the NDA change first.", and
  * the page goes up to the NDA notice and marks it (`sessionId`: a Join call away from the session page links there).
  * Flow: a soft refusal (409 NDA_BLOCK_CODE): after the press's final refusals, before its stop-once box.
@@ -119,6 +120,10 @@ export const openOffer = (contractId: string) => db.termsOffer.findFirst({ where
  * gets through), from an old page that hasn't shown the offer too, and with Alerts Off (an offer is about the tester's own contract). A newer Save replaces the
  * offer (still blocked until the newest is answered); an offer whose work closed (the test stopped or closed, the tester's work ended, they left) blocks nothing.
  *
+ * Callers: Send Answers, Add to this answer and a recording's Send / Add (tests.ts softRefusals, in the one pass), Charge / Let it go (holds.ts),
+ * Dispute (payments.ts disputeRefusalsFirst), Request a time, Accept / Decline / Withdraw and Cancel a set of calls (requests.ts), Cancel call (calls.ts),
+ * Join call (blocks.ts). The session route also runs the NDA block first (ndaBlockFirst) for its presses but Rate, Leave, the notice, the pill, an upload
+ * under way and the one-pass presses.
  * Flow: the soft refusals a press makes after its final ones and before its stop-once box.
  *   1. No contract, or a part that is over (testerRefusal): nothing here (the press's own final refusal says it).
  *   2. An NDA change not acknowledged: 409 NDA_BLOCK_CODE (ndaBlockCheck).

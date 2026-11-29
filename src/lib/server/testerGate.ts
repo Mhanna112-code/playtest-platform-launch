@@ -39,12 +39,55 @@ export const testerSeesClosed = (reason: string) => !CLOSED_BY_TESTER.has(reason
 const byTheEnd = (c: { status: string; endedAt: Date | null }, at: Date | null) => c.status === "ended" && !!c.endedAt && !!at && Math.abs(at.getTime() - c.endedAt.getTime()) < 60_000;
 
 /**
- * The tester's changes on this session since `since` (the live box's lines, and what the gate judges). `openOffersOnly`: the gate's own reading, where an
- * offer already replaced by a newer one never stops a press (the live box and the rejoin lines drop offer lines anyway).
+ * The tester's changes on this session since `since`: every line her live box, her stop boxes and her rejoin lines can show, oldest first.
+ * Callers: testerGate (what a press stops for, with `openOffersOnly`), the live route (api/live, the session page's top box: it drops the offer lines) and
+ * joining.ts (the lines shown when she rejoins: it drops the offer lines too).
+ * `openOffersOnly`: the gate's own reading, where an offer already replaced by a newer one never stops a press.
+ * `tab` / `page`: which tab and which one-at-a-time page is asking (her own presses from them are not lines here).
+ *
+ * How it works:
+ *   1. Read the session's rows (sessionRows): the contract, the dispute sides, then the offers, reviews, cancelled calls and call requests together.
+ *   2. Build the lines one kind at a time, each from its own helper below, in this order: dispute sides, offers, reviews (Pay and reject), Pay more,
+ *      the developer's call requests, the developer's answers to her requests, dropped requests, cancelled calls, a key given, the NDA changed, listing
+ *      saves, her payments, her own presses in other tabs.
+ *   3. Sort them by time (a stable sort: lines with the same time keep that order).
+ * Each line carries the place on the session page it is about (`link`): the top box opens it, ignored (greyed) lines too. The lines are built from the rows
+ * themselves at read time, so older changes get their place the same way.
  */
 export async function testerChanges(testerId: string, contractId: string, testId: string, since: Date, tab = "", /** the one-at-a-time page asking */ page = "", opts: { openOffersOnly?: boolean } = {}): Promise<TestEventLike[]> {
-  const c = await db.contract.findUniqueOrThrow({ where: { id: contractId }, include: { test: { include: { developer: true } } } });
+  // 1. The rows.
+  const { c, sides, offers, reviews, calls, devReqs, mine } = await sessionRows(contractId, since, opts);
   const dev = displayName(c.test.developer);
+  // 2. The lines, one kind at a time.
+  const out: TestEventLike[] = [];
+  out.push(...disputeSideLines(sides, dev, c.test.developer.pronoun));
+  out.push(...offerLines(offers, dev));
+  out.push(...(await reviewLines(contractId, reviews, dev)));
+  // The kind of each of her parts (written answers or a recording): the Pay more lines and her own-press lines name the part by it.
+  const kinds = new Map((await db.submission.findMany({ where: { contractId }, select: { id: true, kind: true } })).map((x) => [x.id, x.kind]));
+  out.push(...(await payMoreLines(contractId, since, dev, kinds)));
+  out.push(...devRequestLines(devReqs, since, dev));
+  out.push(...answeredRequestLines(mine, dev));
+  out.push(...(await droppedRequestLines(testId, contractId, since)));
+  out.push(...cancelledCallLines(calls, c, dev));
+  out.push(...(await keyGivenLines(testId, contractId, since, dev, c.test.title)));
+  out.push(...ndaChangedLines(c, since, dev));
+  // The listing's info (title, description, devices, languages) changed: one line per save.
+  out.push(...(await listingSaveLines(testId, since, testerId, "session")));
+  // Her own payments: delayed, or a delayed one that went through; the team's decision on her dispute.
+  out.push(...(await testerPaymentChanges(testerId, contractId, since)));
+  out.push(...(await ownPressLines(testerId, testId, since, tab, page, kinds)));
+  // 3. Oldest first.
+  return out.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+}
+
+/**
+ * The rows testerChanges reads first (called only by it), with the same queries in the same order: the contract with its test and developer; the
+ * disputes the developer added a side to since `since`; then, together, the offers, the reviews, the calls cancelled by someone other than her, the
+ * developer's call requests that changed and her own requests the developer answered.
+ */
+async function sessionRows(contractId: string, since: Date, opts: { openOffersOnly?: boolean }) {
+  const c = await db.contract.findUniqueOrThrow({ where: { id: contractId }, include: { test: { include: { developer: true } } } });
   // The developer added their side to this tester's dispute: a stop-once reason for Dispute and the other buttons.
   const sides = await db.dispute.findMany({ where: { contractId, devSideAt: { gt: since } }, include: { submission: { select: { kind: true } }, call: { select: { startsAt: true } } } });
   const [offers, reviews, calls, devReqs, mine] = await Promise.all([
@@ -55,81 +98,168 @@ export async function testerChanges(testerId: string, contractId: string, testId
     db.callRequest.findMany({ where: { contractId, fromSide: "developer", updatedAt: { gt: since } } }),
     db.callRequest.findMany({ where: { contractId, fromSide: "tester", status: { in: ["booked", "declined"] }, decidedAt: { gt: since } } }),
   ]);
+  return { c, sides, offers, reviews, calls, devReqs, mine };
+}
+type SessionRows = Awaited<ReturnType<typeof sessionRows>>;
+
+/**
+ * The developer added their side to one of her disputes: "Nora Lane added her side to your dispute about your live call on …" (devSideLine).
+ * Called by testerChanges. It stops every press of hers once (disputeChange). Links to the disputed part's row.
+ */
+function disputeSideLines(sides: SessionRows["sides"], dev: string, pronoun: string | null): TestEventLike[] {
   const out: TestEventLike[] = [];
-  // Each line carries the place on the session page it is about (`link`): the top box opens it, ignored (greyed) lines too. These lines are
-  // built from the rows themselves at read time, so older changes get their place the same way.
-  for (const d of sides) out.push({ kind: "dispute", text: devSideLine(dev, c.test.developer.pronoun, d.call ? fmtDateTime(d.call.startsAt) : null, d.submission?.kind), createdAt: d.devSideAt!, link: testerPartRow({ kind: d.submission?.kind, callId: d.callId }) });
-  // The offer is a consequence for a working tester; its fields are the listing's one line ("See it") and the offer box, never a list here.
-  // No "below": in a stop box under Leave (and other buttons) the Switch / Keep box is ABOVE the line, so the wording names no position
-  // (the same line in the stop boxes and the top box; the bell has its own "<dev> updated the listing: …").
+  for (const d of sides) out.push({ kind: "dispute", text: devSideLine(dev, pronoun, d.call ? fmtDateTime(d.call.startsAt) : null, d.submission?.kind), createdAt: d.devSideAt!, link: testerPartRow({ kind: d.submission?.kind, callId: d.callId }) });
+  return out;
+}
+
+/**
+ * New terms offered: "Nora Lane offered you new terms: Switch or Keep them", linking to the offer box. Called by testerChanges.
+ * The offer is a consequence for a working tester; its fields are the listing's one line ("See it") and the offer box, never a list here.
+ * No "below": in a stop box under Leave (and other buttons) the Switch / Keep box is ABOVE the line, so the wording names no position
+ * (the same line in the stop boxes and the top box; the bell has its own "<dev> updated the listing: …").
+ */
+function offerLines(offers: SessionRows["offers"], dev: string): TestEventLike[] {
+  const out: TestEventLike[] = [];
   for (const o of offers) out.push({ kind: "terms", text: `${dev} offered you new terms: Switch or Keep them`, createdAt: o.createdAt, item: o.id, link: TERMS_OFFER_BOX });
+  return out;
+}
+
+/**
+ * The developer's review of one of her parts: "Nora Lane paid $15.00 for your live call on Tue, Oct 27, 8:00 AM", "Nora Lane rejected your written
+ * answers", or "The team closed your recording for $0". Called by testerChanges.
+ *   1. Read which parts have a payment still owed (failed, with an owed-until date, not settled) and which were paid late (settled).
+ *   2. Skip a Pay on such a part: its "delayed" line and, when it goes through, its paid line come from the payment (testerPaymentChanges). A reject is
+ *      never skipped.
+ *   3. One line per other review, linking to the part's row.
+ */
+async function reviewLines(contractId: string, reviews: SessionRows["reviews"], dev: string): Promise<TestEventLike[]> {
+  // 1. Owed and paid-late parts.
   const owed = await db.payment.findMany({ where: { contractId, status: "failed", owedUntil: { not: null }, settledAt: null }, select: { submissionId: true, callId: true } });
   const owedKeys = new Set(owed.map((p) => p.submissionId ?? p.callId));
   const settledLate = await db.payment.findMany({ where: { contractId, settledAt: { not: null } }, select: { submissionId: true, callId: true } });
   const lateKeys = new Set(settledLate.map((p) => p.submissionId ?? p.callId));
+  const out: TestEventLike[] = [];
   for (const r of reviews) {
-    // Owed (or paid late): the "delayed" line and, when it goes through, the paid line come from the payment.
+    // 2. Owed (or paid late): the "delayed" line and, when it goes through, the paid line come from the payment.
     if (!r.rejected && (owedKeys.has(r.submissionId ?? r.callId) || lateKeys.has(r.submissionId ?? r.callId))) continue;
-    // Which call: "Nora Lane paid $15.00 for your live call on Tue, Oct 27, 8:00 AM".
+    // 3. Which call: "Nora Lane paid $15.00 for your live call on Tue, Oct 27, 8:00 AM".
     const what = r.callId ? `your ${partWhen("live call", r.call ? fmtDateTime(r.call.startsAt) : null)}` : `your ${r.submission?.kind === "recording" ? "recording" : "written answers"}`;
     // The team's $0 closure is the team's, never the developer's.
     out.push({ kind: r.rejected ? "rejected" : "paid", text: r.rejected ? `${dev} rejected ${what}` : r.teamClosedById ? `The team closed ${what} for $0` : `${dev} paid ${money(r.amountCents)} for ${what}`, createdAt: r.createdAt, piece: (r.submissionId ?? r.callId) || undefined, link: testerPartRow({ kind: r.submission?.kind, callId: r.callId }) });
   }
-  // A Pay more (Payment kind "extra") is a "paid" change too, read from the payments (it has no Review): it stops a tester press and shows in the stop box
-  // and the live box. Charged (or charged before payouts are set up).
-  const kinds = new Map((await db.submission.findMany({ where: { contractId }, select: { id: true, kind: true } })).map((x) => [x.id, x.kind]));
+  return out;
+}
+
+/**
+ * The developer's Pay more (a Payment of kind "extra", charged or charged before payouts are set up): "Nora Lane paid you $5.00 more for your live call
+ * on Tue, Oct 27, 8:00 AM" (payMoreLine). Called by testerChanges. It is a "paid" change read from the payments (it has no Review): it stops a tester press
+ * and shows in the stop box and the live box. `kinds`: each part's kind (written answers or recording), read by testerChanges.
+ */
+async function payMoreLines(contractId: string, since: Date, dev: string, kinds: Map<string, string>): Promise<TestEventLike[]> {
+  // When each of her calls starts: a Pay more on a call names it.
   const starts = new Map((await db.call.findMany({ where: { contractId }, select: { id: true, startsAt: true } })).map((x) => [x.id, x.startsAt]));
+  const out: TestEventLike[] = [];
   for (const p of await db.payment.findMany({ where: { contractId, kind: "extra", createdAt: { gt: since }, status: { in: ["charged", "not_set_up"] } }, orderBy: { createdAt: "asc" } })) {
     // A Pay more on a call names it: "Nora Lane paid you $5.00 more for your live call on Tue, Oct 27, 8:00 AM".
     const at = p.callId ? starts.get(p.callId) : undefined;
     out.push({ kind: "paid", text: payMoreLine(dev, p.amountCents, p.callId ? partWhen("live call", at ? fmtDateTime(at) : null) : kinds.get(p.submissionId ?? "") === "recording" ? "recording" : "written answers"), createdAt: p.createdAt, piece: (p.submissionId ?? p.callId) || undefined, link: testerPartRow({ kind: kinds.get(p.submissionId ?? ""), callId: p.callId }) });
   }
+  return out;
+}
+
+/**
+ * The developer's own call requests to her that changed since `since`, one line each by its state. Called by testerChanges. Each links to the request's
+ * row in her Call requests box (once it has left: withdrawn, taken, closed, the box: lineFallbacks).
+ *   - New and still waiting: "Nora Lane requested a call for …" (`item`: an Accept / Decline of that request never stops for it).
+ *   - Withdrawn by the developer: treated like a cancel, "Nora Lane's call request for Fri, Nov 13, 3:00 PM was cancelled" (a stop-once line). Answering it
+ *     is one refusal ("Nora Lane withdrew this request, so your Accept didn't go through.").
+ *   - Taken by another tester: "… was cancelled: another tester took it" (a stop-once line).
+ *   - Closed by a pause or a hold: a quiet line (shown, never a stop), "… was cancelled".
+ *   - Closed for another reason she should see (testerSeesClosed): "The call time with Nora Lane on … is no longer available".
+ *   - Anything else gives no line: one dropped when a call was booked has its own line (droppedRequestLines); booked or declined by her is her own action.
+ */
+function devRequestLines(devReqs: SessionRows["devReqs"], since: Date, dev: string): TestEventLike[] {
+  const out: TestEventLike[] = [];
   for (const r of devReqs) {
     const when = fmtDateTime(r.startsAt);
     const what = requestWords(r, when);
-    // The request's row in her Call requests box; once it has left (withdrawn, taken, closed), the box (lineFallbacks).
     const link = requestRow(r.id);
     if (r.status === "pending" && r.createdAt > since) out.push({ kind: "requested", text: `${dev} requested ${what}`, createdAt: r.createdAt, item: r.id, link });
-    // The developer withdrawing their request is treated like a cancel: a stop-once line (as taken / closed),
-    // "Nora Lane's call request for Fri, Nov 13, 3:00 PM was cancelled". Answering it is one refusal ("Nora Lane withdrew this request, so your Accept didn't go
-    // through.").
     else if (r.status === "withdrawn") out.push({ kind: "requested", text: devRequestCancelledLine(dev, when), createdAt: r.updatedAt, link });
-    // Another tester booked it: "Nora Lane's call request for Fri, Nov 13, 3:00 PM was cancelled: another tester took it" (a stop-once line).
     else if (r.status === "taken") out.push({ kind: "requested", text: `${devRequestCancelledLine(dev, when)}: another tester took it`, createdAt: r.updatedAt, link });
-    // One dropped when a call was booked has its own line (below), never this one too.
-    // Closed by a pause or a hold: a quiet line (shown, never a stop), "Nora Lane's call request for … was cancelled".
     else if (r.status === "closed" && CLOSED_BY_PAUSE.has(r.closedReason)) out.push({ kind: DROP_KINDS.devQuiet, text: devRequestCancelledLine(dev, when), createdAt: r.updatedAt, link });
     else if (r.status === "closed" && testerSeesClosed(r.closedReason)) out.push({ kind: "requested", text: `The call time with ${dev} on ${when} is no longer available`, createdAt: r.updatedAt, link });
-    // booked / declined by the tester themselves: their own action
   }
+  return out;
+}
+
+/**
+ * The developer's answers to her own call requests: declined ("Nora Lane declined your call request for …", linking to her request's row, or the box once it
+ * has left), booked by the same time asked on both sides ("Booked: Nora Lane asked for the same time, …") or accepted ("Nora Lane accepted your call request:
+ * …"), both linking to the call's row. Called by testerChanges.
+ */
+function answeredRequestLines(mine: SessionRows["mine"], dev: string): TestEventLike[] {
+  const out: TestEventLike[] = [];
   for (const r of mine) {
     const when = fmtDateTime(r.startsAt);
-    // Declined: her request's row (or the box once it has left); booked: the call's row.
     const link = r.status !== "declined" && r.callId ? callRow(r.callId) : requestRow(r.id);
     if (r.status === "declined") out.push({ kind: "requested", text: `${dev} declined your call request for ${when}`, createdAt: r.decidedAt!, link });
     else if (r.closedReason === "matched") out.push({ kind: "booked", text: `Booked: ${dev} asked for the same time, ${when}`, createdAt: r.decidedAt!, link });
     else out.push({ kind: "booked", text: `${dev} accepted your call request: ${rowsOf(r).length === 1 && rowsOf(r)[0].repeat !== "once" ? requestWords(r, when) : when}`, createdAt: r.decidedAt!, link });
   }
-  // A request of this session dropped (or a time taken out of it) when a call was booked: "Nora Lane's request for … closed: she is no longer
-  // free at that time" (a call change, ordinary Alerts); the tester's own (her booking, or the one she was told about) is a quiet live-box line ("… closed: you
-  // have another call at that time"), never a stop.
+  return out;
+}
+
+/**
+ * Requests of this session dropped (or a time taken out of one) when a call was booked, read from the test events. Called by testerChanges.
+ * Both kinds are quiet live-box lines here, never a stop: the developer's request ("Nora Lane's request for … closed: she is no longer free at that
+ * time") comes with a bell instead, and her own ("… closed: you have another call at that time") is her own booking or one she was told about.
+ * Each links to its own place, else her Call requests box.
+ */
+async function droppedRequestLines(testId: string, contractId: string, since: Date): Promise<TestEventLike[]> {
+  const out: TestEventLike[] = [];
   for (const e of await db.testEvent.findMany({ where: { testId, contractId, kind: { in: [DROP_KINDS.testerClosed, DROP_KINDS.testerQuiet] }, createdAt: { gt: since } }, orderBy: { createdAt: "asc" } }))
-    // Both quiet now: the developer's side of it ("Nora Lane's request for … closed: she is no longer free") comes with a bell instead.
     out.push({ kind: DROP_KINDS.devQuiet, text: e.text, createdAt: e.createdAt, link: e.link || TESTER_REQUESTS_BOX });
-  // A real call change keeps stopping once (Alerts On); one the system cancelled names why, like the bell.
+  return out;
+}
+
+/**
+ * Her booked calls cancelled by the developer or the system: "Your call with Nora Lane on … was cancelled", and when the system cancelled it, why ("… because
+ * the test is paused": CANCEL_NOTE_WHY, like the bell). Called by testerChanges. A real call change keeps stopping once (Alerts On). Calls the system
+ * cancelled at the moment her work ended (byTheEnd) give no line: the end's own line says it. Each links to the call's row.
+ */
+function cancelledCallLines(calls: SessionRows["calls"], c: { status: string; endedAt: Date | null }, dev: string): TestEventLike[] {
+  const out: TestEventLike[] = [];
   for (const call of calls.filter((x) => !(x.cancelledBy === "system" && byTheEnd(c, x.cancelledAt)))) out.push({ kind: "cancelled", text: `Your call with ${dev} on ${fmtDateTime(call.startsAt)} was cancelled${call.cancelledBy === "system" && CANCEL_NOTE_WHY[call.cancelNote] ? ` because ${CANCEL_NOTE_WHY[call.cancelNote]}` : ""}`, createdAt: call.cancelledAt!, link: callRow(call.id) });
-  // The developer's Save gave this tester a key (the test had none when they joined): "<dev> gave you an access key for “<test>”" (the key is in its box).
-  for (const e of await db.testEvent.findMany({ where: { testId, kind: KEY_GIVEN, contractId, createdAt: { gt: since } } })) out.push({ kind: "keygiven", text: keyGivenToYouLine(dev, c.test.title), createdAt: e.createdAt });
-  // The NDA changed (its own notice): an ordinary line (Alerts on, not yet shown), apart from the block it makes.
-  // "<developer> changed the NDA" whatever the kind, linking to the notice (its Acknowledge button).
-  if (c.ndaChangedAt && c.ndaChangedAt > since) out.push({ kind: "nda", text: ndaChangedLine(dev), createdAt: c.ndaChangedAt, link: NDA_NOTICE });
-  // The listing's info (title, description, devices, languages) changed: one line per save.
-  out.push(...(await listingSaveLines(testId, since, testerId, "session")));
-  out.push(...(await testerPaymentChanges(testerId, contractId, since)));
-  // Her own action in another tab opens what it touched (a request, a call, a part).
-  // On the session page (one page at a time): only her own actions from other pages (the join page, an invite's No thanks).
-  out.push(...(await ownChanges(testerId, testId, since, tab, db, page)).map((o) => { const link = ownLink(o.about?.k, (s) => testerPartRow({ kind: kinds.get(s) })); return link ? { ...o, link } : o; }));
-  return out.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  return out;
+}
+
+/**
+ * The developer's Save gave her an access key (the test had none when she joined): "Nora Lane gave you an access key for “<test>”" (the key is in its box).
+ * Called by testerChanges; one line per key-given event since `since`.
+ */
+async function keyGivenLines(testId: string, contractId: string, since: Date, dev: string, title: string): Promise<TestEventLike[]> {
+  const out: TestEventLike[] = [];
+  for (const e of await db.testEvent.findMany({ where: { testId, kind: KEY_GIVEN, contractId, createdAt: { gt: since } } })) out.push({ kind: "keygiven", text: keyGivenToYouLine(dev, title), createdAt: e.createdAt });
+  return out;
+}
+
+/**
+ * The NDA changed since `since` (the contract's ndaChangedAt): "<developer> changed the NDA" whatever the kind of change, linking to the NDA notice (its
+ * Acknowledge button). Called by testerChanges. An ordinary line (it stops once only with Alerts On, and only if not yet shown), apart from the block the
+ * change makes (terms.ts ndaBlockCheck refuses her presses until she acknowledges it).
+ */
+function ndaChangedLines(c: { ndaChangedAt: Date | null }, since: Date, dev: string): TestEventLike[] {
+  return c.ndaChangedAt && c.ndaChangedAt > since ? [{ kind: "nda", text: ndaChangedLine(dev), createdAt: c.ndaChangedAt, link: NDA_NOTICE }] : [];
+}
+
+/**
+ * Her own presses in another tab (ownChanges), each opening what it touched (a request, a call, a part: ownLink). Called by testerChanges.
+ * On the session page (one page at a time, `page`): only her own presses from other pages (the join page, an invite's No thanks).
+ * `kinds`: each part's kind, so a line about a part links to that part's row.
+ */
+async function ownPressLines(testerId: string, testId: string, since: Date, tab: string, page: string, kinds: Map<string, string>): Promise<TestEventLike[]> {
+  return (await ownChanges(testerId, testId, since, tab, db, page)).map((o) => { const link = ownLink(o.about?.k, (s) => testerPartRow({ kind: kinds.get(s) })); return link ? { ...o, link } : o; });
 }
 
 /**
@@ -174,11 +304,12 @@ export const disputeChange = (e: TestEventLike) => e.kind === "dispute" || (e.ki
  */
 export const stopsWithAlertsOff = (e: TestEventLike) => ALERTS_OFF_KINDS.has(e.kind) || disputeChange(e);
 /**
- * The rule a tester's stop box was built under, sent with it (`liveRule`): with Alerts Off, a line the page picks up
- * while the box is open joins it only if it would have stopped this press (marked `forced` in the live feed, or a payment line on the press's own part); a
- * developer payment on another part never joins. Alerts On: every line joins.
- * (Owner, Nov 28) Sent whatever her Alerts: the open box follows her Alerts as they are NOW (lib/live.ts ruleNow), so it needs what the press is about (`part`)
- * even when built with Alerts On. `ordinaryTerms` (Rate, Leave): an offer is never a reason for them with Alerts Off, so it never joins their box then.
+ * The rule a tester's stop box was built under, sent with it (`liveRule`). Called by testerBoxRule (every tester stop box).
+ * With Alerts Off, a line the page picks up while the box is open joins it only if it would have stopped this press (marked `forced` in the live feed,
+ * or a payment line on the press's own part); a developer payment on another part never joins. Alerts On: every line joins.
+ * Sent whatever her Alerts: the open box follows her Alerts as they are NOW (lib/live.ts ruleNow), so it needs what the press is about (`part`)
+ * even when built with Alerts On. `ordinaryTerms` (Rate, Leave): an offer is never a reason for them with Alerts Off, so it never joins their box then
+ * (lib/live.ts boxKeeps).
  */
 export const liveRuleOf = (off: boolean, part?: string, ordinaryTerms?: boolean) => ({ liveRule: { off, ...(part ? { part } : {}), ...(ordinaryTerms ? { ordinaryTerms: true } : {}) } });
 /**
@@ -191,7 +322,10 @@ export async function testerBoxRule(testerId: string, part?: string, ordinaryTer
   return { alertsOff: off, ...liveRuleOf(off, part, ordinaryTerms) };
 }
 
-// "nda": the NDA changed (its own notice), an ordinary kind (Alerts on).
+/**
+ * The kinds of line that can stop a tester's press once (testerGate's STOP_KINDS, with "renamed" and "keygiven"). "nda": the NDA changed (its own notice,
+ * testerChanges' ndaChangedLines), an ordinary kind: it stops only with Alerts On. The NDA block itself is not a line: it is a refusal (terms.ts ndaBlockCheck).
+ */
 const KINDS = ["terms", "paid", "rejected", "cancelled", "booked", "requested", "info", "payment", "admin", "own", "dispute", "nda"];
 /** The kinds of line that can stop a tester's press (any other kind, e.g. a quiet dropped-request line, never does). A rename stops nothing on its own (below). */
 const STOP_KINDS = new Set([...KINDS, "renamed", "keygiven"]);

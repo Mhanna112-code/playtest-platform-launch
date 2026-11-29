@@ -90,10 +90,17 @@ async function pausedRefusal(userId: string, contractId: string, action: string,
  * The remaining session actions that check for an unseen end of work.
  * Flow: the route's stop-once box, after every refusal and before the press's own function: a stop or end of her work the page hasn't shown (and no box listed)
  * → ONE box with it and the lines testerGate would add for this press (piece for Dispute, skipTerms for Switch / Keep); nothing unseen → the press goes on.
+ *   1. Only for MOMENT_ACTIONS.
+ *   2. The stop or end of her work since the page loaded (testerStopSince), unless a stop box on this page already listed it; none: return.
+ *   3. The press's own lines: run testerGate and keep the box it would throw (its lines, `top`, her Alerts and its live rule).
+ *   4. The gate added no lines: stopBox throws the stop alone, with her Alerts and the rule (testerBoxRule).
+ *   5. Otherwise throw ONE box: the stop (forced) and the gate's lines, oldest first, with the gate's `top`, Alerts and rule.
  */
 const MOMENT_ACTIONS = new Set(["dispute", "cancel-call", "cancel-set", "request-time", "answer-request", "terms"]);
 async function stateMoment(contractId: string, action: string, body: Record<string, unknown>) {
+  // 1. Only these presses.
   if (!MOMENT_ACTIONS.has(action)) return;
+  // 2. An unseen stop or end of her work.
   const loaded = loadedOf(body);
   const stop = await testerStopSince(contractId, loaded);
   // A moment a stop box on this page already listed is seen: the press follows its usual gate.
@@ -104,6 +111,7 @@ async function stateMoment(contractId: string, action: string, body: Record<stri
   // The part the press is about: Dispute's piece (submission or call id). Its own gate stops for a developer payment on that part whatever
   // the Alerts (lib/server/payments.ts), so this box lists one too, and its rule lets one picked up live join it; a payment on another part never does.
   const part = action === "dispute" && typeof body.id === "string" && body.id ? body.id : undefined;
+  // 3. The lines testerGate would stop this press for.
   let more: { text: string; at: Date | string }[] = [];
   let extra: Record<string, unknown> = {};
   if (c) {
@@ -117,9 +125,10 @@ async function stateMoment(contractId: string, action: string, body: Record<stri
       } else throw e;
     }
   }
-  // The gate added no lines: the box is the stop alone, and still carries her Alerts and its rule (without them, with Alerts Off it would take in
+  // 4. The gate added no lines: the box is the stop alone, and still carries her Alerts and its rule (without them, with Alerts Off it would take in
   // every live line, a payment on another part included).
   if (!more.length) stopBox(found, c ? await testerBoxRule(c.testerId, part) : {});
+  // 5. The stop with the gate's lines.
   const lines = [...found.map((m) => ({ text: m.text, at: m.createdAt, ...sidOf(m), kind: "stop", forced: true })), ...more].sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
   throw new HttpError(409, "stop_once", "Press again to go ahead.", { changes: lines, tail: "Press again to go ahead.", ...extra });
 }

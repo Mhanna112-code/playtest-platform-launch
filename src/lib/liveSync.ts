@@ -1,14 +1,16 @@
 /**
- * (Owner, Oct 31, batch 35 §37) One check, not two. A page's redraw (AutoRefresh's fingerprint poll, JoinWatch on the join page) and the live "Updated" box
- * (LiveTop, with its "1 new update ↑" pill) used to run their own 20-second timers: they drifted, and a redraw from elsewhere (tab focus, a press, another
- * component) could change rows and buttons up to 20 s before the box's line said why. Now:
- * - ONE timer per page (this clock, running while anything rides it) beats every 20 s; each beat is the "live-tick" event every check listens to, so the
- *   redraw's poll and the box's check run as one tick.
+ * One check, not two: the page's live clock and how the redraw and the live box stay in step.
+ * A page's redraw (AutoRefresh's fingerprint poll, JoinWatch on the join page) and the live "Updated" box (LiveTop, with its "1 new update ↑" pill) run
+ * on one shared beat, so a redraw from elsewhere (tab focus, a press, another component) never changes rows and buttons long before the box's line says why:
+ * - ONE timer per page (this clock, running while anything rides it: rideLiveClock) beats every 20 s; each beat is the "live-tick" event every check
+ *   listens to, so the redraw's poll and the box's check run as one tick (liveBeat also beats at once: focus, a page shown again, a refused press).
  * - Whenever the page redraws (its server render time, LiveTop's `seenAt`, changes), the box checks at once (LiveTop).
  * - Whenever the box finds new lines, it asks the page to redraw at once (`askRedraw`); the page's redraw driver answers (`onBoxLines`). While that redraw is
  *   on its way the box holds its new lines and shows them, with the pill, when the redraw lands (at most a few seconds later if it never lands), so the rows
- *   and the line change in the same moment.
+ *   and the line change in the same moment (`boxSync`, the box's side).
  * Steady state (nothing changes): one beat every 20 s and no other request.
+ * Used by LiveTop (boxSync, whileRedrawn), AutoRefresh and JoinWatch (the redraw drivers: onBoxLines, noteRedrawAsked), JoinBox (announcedWithRedraw) and
+ * the page's other live parts that ride the beat (InvitePanel, AccountRefresh, OnePage, BankCheck).
  */
 export const LIVE_EVERY = 20_000;
 export const LIVE_TICK = "live-tick";
@@ -20,7 +22,10 @@ let timer: ReturnType<typeof setInterval> | null = null;
 let riders = 0;
 let lastBeat = 0;
 
-/** A beat now: every check on the page runs (the redraw's poll, the box, the page's other live parts). Two calls in the same moment make one beat. */
+/**
+ * A beat now: every check on the page runs (the redraw's poll, the box, the page's other live parts). Two calls in the same moment make one beat.
+ * Called by the clock every 20 s, and by AutoRefresh (tab focus, a page shown again from the back/forward cache, a refused press) and BankCheck.
+ */
 export function liveBeat() {
   const now = Date.now();
   if (now - lastBeat < 250) return;
@@ -100,9 +105,14 @@ export function whileRedrawn(redrawn: boolean, run: () => void) {
 }
 
 /**
- * The box's side (LiveTop): when the page last drew, and the new lines held for the redraw they asked for. `drawn` on every redraw (held lines show then, as
- * having come with it); `lines` when a check that started at `started` found new lines: shown at once if the page drew during that check, otherwise the page is
- * asked to redraw and they show when it lands (or after `hold` ms if it never does; at once when nothing on the page redraws, e.g. Edit).
+ * The box's side (LiveTop): when the page last drew, and the new lines held for the redraw they asked for.
+ * - `drawn` on every redraw: held lines show then, as having come with it.
+ * - `lines` when a check that started at `started` found new lines, in this order:
+ *   1. the page drew during that check: shown at once, as redrawn;
+ *   2. nothing on the page redraws now (e.g. Edit, or the bank's check is open): shown at once, not redrawn;
+ *   3. otherwise the page is redrawing: any lines still held from an earlier check show now, and these are held until the redraw lands (`drawn`) or
+ *      `hold` ms pass, whichever comes first.
+ * - `stop` on unmount: drops what it holds without showing it (LiveTop hands those lines over to the next box).
  */
 export function boxSync(hold = HOLD_FOR_REDRAW) {
   let drawn = 0;

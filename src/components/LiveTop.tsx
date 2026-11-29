@@ -35,7 +35,18 @@ export function LiveNoticeText({ line: l, testId }: { line: Change; testId?: str
  * The live top notice: one box at the top of the page listing every change since the page was opened
  * (new terms, payments, call changes, listing edits, your own actions in another tab), newest first, as the page's
  * 20-second refresh picks them up. Shown changes count as seen: the page's buttons then send a later "seen" marker.
- * It checks on the page's one 20-second beat (lib/liveSync.ts), at once whenever the page redraws, and a new line redraws the page at once.
+ * Used by the session page, the test page and Edit, the join page and the tester's dashboard (`scope`: "session:<id>", "test:<id>", "listing:<id>",
+ * "invites:me"; the api/live route reads the lines for each).
+ *
+ * When it checks (`tick`, inside the main effect below):
+ *   - on the page's one 20-second beat (lib/liveSync.ts LIVE_TICK; the redraw poll, AutoRefresh, rides the same beat);
+ *   - at once whenever the page redraws (a new `seenAt`, the server render time: the poll's redraw, a press, focus, another part of the page);
+ *   - at once at mount when it takes over from the same scope's box drawn just before it (lib/live.ts takeOver), from the time that box had shown up to.
+ * A check that finds new lines asks the page to redraw at once and shows them as the redraw lands, so the rows and the line change together.
+ *
+ * How it moves the page's seen time (lib/live.ts, what every press sends as `seenAt`): each check that shows its lines moves it to the server's `now`
+ * (setShownOnPage when there were new lines, setShown when none). On unmount it clears it for this scope and hands over to the next box the time up
+ * to which it showed every line (`shownTo`, or just before the first line it still held).
  */
 export function LiveTop({ scope, seenAt, seeIt, contractLink }: { scope: string; seenAt: string; seeIt?: string; contractLink?: "scroll" | { testId: string } }) {
   const [lines, setLines] = useState<Change[]>([]);
@@ -134,35 +145,64 @@ export function LiveTop({ scope, seenAt, seeIt, contractLink }: { scope: string;
 
   useEffect(() => {
     let alive = true;
+    /** Step 1, fetch: every line on this page's scope since `since` (the page-open time, or earlier after a takeover), and the server's `now` (the time up to
+     * which those lines cover everything). Null when offline (the next beat tries again). */
+    const fetchLines = () => api<{ changes: Change[]; now: string }>(`/api/live?scope=${encodeURIComponent(scope)}&since=${encodeURIComponent(since.current)}`).catch(() => null);
+    /** Step 2, find new lines: those this box hasn't had before (by time and text); from now on they count as known. */
+    const newLinesOf = (changes: Change[]) => {
+      const added = changes.filter((c) => !known.current.has(key(c)));
+      added.forEach((c) => known.current.add(key(c)));
+      return added;
+    };
+    /**
+     * Step 3, apply (shown): the new lines join the box, a fresh one raises the pill, the page's seen time moves to the server's `now`, and an open stop box
+     * under a button hears of them (announce). `redrawn`: they came with the page's redraw (a listener that would redraw for them needn't: whileRedrawn).
+     * How the seen time moves: with new lines, setShownOnPage (shown on the page counts as seen at once, call changes too: no stop box for them afterwards);
+     * with none, setShown (nothing new, everything up to `now` was already on the page). This box's own shownTo moves to `now` too (handed over on unmount).
+     */
+    const showLines = (added: Change[], r: { now: string }, redrawn: boolean) => {
+      if (!alive) return;
+      held.current = held.current.filter((c) => !added.includes(c));
+      if (time0(r.now) > time0(shownTo.current)) shownTo.current = r.now;
+      // A keyed line (the one listing line) replaces the box's earlier one, covering its fields too.
+      if (added.length) setLines((old) => mergeChanges(old, added));
+      // Only a live update nobody pressed for is announced (lines a stop box showed are quiet); each one raises the pill when the box is out of view.
+      // Ignored (greyed) Alerts lines count as updates too, since they still show.
+      const fresh = added.filter((c) => !wasShownInBox(c));
+      if (fresh.length) announceFresh(fresh.length, key(fresh[fresh.length - 1]));
+      // Shown on the page (the redraw, the pill up or the box in view): seen at once, so no stop notice for it afterwards.
+      unseenUpTo.current = "";
+      if (added.length) setShownOnPage(scope, r.now);
+      else setShown(scope, r.now);
+      whileRedrawn(redrawn, () => announce(added));
+    };
+    /**
+     * One live check. It runs on the page's 20-second beat (LIVE_TICK, below), at once whenever the page redraws (the `seenAt` effect above: a poll's
+     * redraw, a press, focus, another part of the page), and once at mount when this box takes over from one drawn in its place (`tookOver`).
+     *   1. Fetch (fetchLines); offline or unmounted: stop.
+     *   2. Find the new lines (newLinesOf).
+     *   3. Show them (showLines), by one of three branches:
+     *      a. No new lines: apply at once (only the seen time moves).
+     *      b. A takeover check whose lines all date from before this render: they came with the redraw that just mounted this box; apply at once, as redrawn.
+     *      c. Otherwise: hold them and ask the page to redraw (liveSync boxSync.lines); they show as the redraw lands (at once if the page already drew
+     *         during this check; after a few seconds if no redraw comes; at once if nothing on the page redraws).
+     */
     const tick = async (tookOver = false) => {
       const started = Date.now();
-      const r = await api<{ changes: Change[]; now: string }>(`/api/live?scope=${encodeURIComponent(scope)}&since=${encodeURIComponent(since.current)}`).catch(() => null);
+      // 1. Fetch.
+      const r = await fetchLines();
       if (!r || !alive) return;
-      const added = r.changes.filter((c) => !known.current.has(key(c)));
-      added.forEach((c) => known.current.add(key(c)));
-      const apply = (redrawn: boolean) => {
-        if (!alive) return;
-        held.current = held.current.filter((c) => !added.includes(c));
-        if (time0(r.now) > time0(shownTo.current)) shownTo.current = r.now;
-        // A keyed line (the one listing line) replaces the box's earlier one, covering its fields too.
-        if (added.length) setLines((old) => mergeChanges(old, added));
-        // Only a live update nobody pressed for is announced (lines a stop box showed are quiet); each one raises the pill when the box is out of view.
-        // Ignored (greyed) Alerts lines count as updates too, since they still show.
-        const fresh = added.filter((c) => !wasShownInBox(c));
-        if (fresh.length) announceFresh(fresh.length, key(fresh[fresh.length - 1]));
-        // Shown on the page (the redraw, the pill up or the box in view): seen at once, so no stop notice for it afterwards.
-        unseenUpTo.current = "";
-        if (added.length) setShownOnPage(scope, r.now);
-        else setShown(scope, r.now);
-        whileRedrawn(redrawn, () => announce(added));
-      };
-      // New lines redraw the page at once and show as it lands (at once if it already redrew during this check).
+      // 2. The new lines.
+      const added = newLinesOf(r.changes);
+      // 3. Show them, by branch.
+      const apply = (redrawn: boolean) => showLines(added, r, redrawn);
       // The first check of a box drawn again in place of the old one: lines from before this render came with the redraw that just landed.
       const cameWithRedraw = tookOver && added.every((c) => time0(c.at) <= time0(drawnWith.current));
+      // Held until they show (handed over to the next box if this one goes first).
       if (!cameWithRedraw) held.current.push(...added);
-      if (!added.length) apply(false);
-      else if (cameWithRedraw) apply(true);
-      else sync.lines(started, apply);
+      if (!added.length) apply(false); // a.
+      else if (cameWithRedraw) apply(true); // b.
+      else sync.lines(started, apply); // c. New lines redraw the page at once and show as it lands.
     };
     check.current = tick;
     // No timer of its own: the page's one 20-second clock beats for the box and the redraw together.
