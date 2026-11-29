@@ -61,10 +61,21 @@ export function pauseClosesAt(dev: Dev, test: Tst): { at: Date; since: Date; ext
 
 const fmt = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 
-/** The developer's countdown: "Closes on Nov 2 unless your account is cleared". */
+/**
+ * (Owner, Nov 11, §390 c) What lifts each pause, in the developer's words: the team's pause "the team lifts the pause", a payment hold "you pay what you owe", a
+ * chargeback hold "you finish the steps", a suspension "your account is cleared" (each cause its own words: a team pause never reads as the suspension's).
+ */
+export const LIFTS: Record<PauseCause, string> = { team: "the team lifts the pause", hold: "you pay what you owe", chargeback: "you finish the steps", suspension: "your account is cleared" };
+/** Every cause still pausing it, joined: `first` (the pause the line is about) leads, then the account's (hold, chargeback, suspension), then the team's. */
+export function liftsWhen(causes: PauseCause[], first?: PauseCause) {
+  const order: PauseCause[] = [...(first ? [first] : []), "hold", "chargeback", "suspension", "team"];
+  const words = [...new Set(order.filter((c) => causes.includes(c)).map((c) => LIFTS[c]))];
+  return words.length ? words.join(" and ") : LIFTS.team;
+}
+
+/** The developer's countdown: "Closes on Nov 2 unless you pay what you owe" / "… unless the team lifts the pause" (each cause its own words, §390 c). */
 export function pauseCountdownLine(at: Date, causes: PauseCause[]) {
-  const accountCaused = causes.some((c) => c !== "team");
-  return `Closes on ${fmt(at)} unless ${accountCaused ? "your account is cleared" : "the team lifts the pause"}`;
+  return `Closes on ${fmt(at)} unless ${liftsWhen(causes)}`;
 }
 
 /** The sentence the developer is told when a paused test is closed (testers only read that the test ended). */

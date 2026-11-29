@@ -455,7 +455,7 @@ export async function pauseTest(adminId: string, testId: string, note: string, s
   const dev = await db.user.findUniqueOrThrow({ where: { id: t.developerId } });
   // (Owner, Nov 6, §310b) The developer's line names the closing date in the paused line's words ("The team paused “…”: it closes on <date> unless the team lifts
   // the pause"). (§313a) There is no separate per-test paused line any more.
-  const closes = (await import("./pauseClosure")).closesUnless(dev, await db.test.findUniqueOrThrow({ where: { id: testId } }));
+  const closes = (await import("./pauseClosure")).closesUnless(dev, await db.test.findUniqueOrThrow({ where: { id: testId } }), "team"); // (§390 c) the team's pause leads
   const pausedLine = `The team paused “${t.title}”${closes ? `: it ${closes}` : ""}`;
   // (Owner, Nov 6, §295) Its testers read "“<test>” is paused" (never why), unless the developer's own hold or suspension was pausing it already.
   if (!dev.holdStartedAt && !dev.devSuspendedAt) await tellTestersPaused([testId]);

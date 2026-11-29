@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 import { T } from "@/lib/tz";
 import { displayName } from "@/lib/format";
-import { PAUSE_CLOSE_DAYS, pauseClosedReason, pauseClosesAt } from "@/lib/pause";
+import { PAUSE_CLOSE_DAYS, liftsWhen, pauseClosedReason, pauseClosesAt, type PauseCause } from "@/lib/pause";
 import { andList, dayIn } from "@/lib/rules";
 import { HttpError } from "./http";
 import { notify } from "./notify";
@@ -104,7 +104,7 @@ export async function extendPauseClosure(testId: string, days: unknown, now = ne
   const at = new Date(info.at.getTime() + n * DAY);
   await db.test.update({ where: { id: testId }, data: { pauseCloseAt: at, pauseCloseSetAt: now } });
   // (Owner, Nov 6, §299) Like the team's pause: `always` (with email Off too, in the morning email), in the same "Payments and holds" stack.
-  await notify(t.developer.email, `“${t.title}” will close later`, [`The team moved the date “${t.title}” closes to ${T(at, "date")} (it stays paused until your account is cleared).`], `/app/tests/${testId}`, { always: true, group: "payhold" });
+  await notify(t.developer.email, `“${t.title}” will close later`, [`The team moved the date “${t.title}” closes to ${T(at, "date")} (it stays paused until ${liftsWhen(info.causes)}).`] /* (§390 c) its own causes' words */, `/app/tests/${testId}`, { always: true, group: "payhold" });
   return { ok: true, closesAt: at.toISOString() };
 }
 
@@ -122,20 +122,15 @@ export async function pausedTestsForAdmin() {
 
 const day = (d: Date) => T(d, "date"); // (batch 15 section 11) in the reader's own zone
 
-/** What lifts the pause, in the developer's words (an account cause wins over the team's pause). */
-function liftsWhen(causes: ReturnType<typeof pauseClosesAt> extends infer R ? (R extends { causes: infer C } ? C : never) : never) {
-  if (causes.includes("hold") || causes.includes("chargeback")) return "you pay what you owe";
-  if (causes.includes("suspension")) return "your account is cleared";
-  return "the team lifts the pause";
-}
-
 /**
  * (Owner, Nov 6, §310b) "closes on <date> unless <what lifts it>": the paused line's own words, in the team pause's line ("The team paused “…”: it closes on
- * … unless the team lifts the pause"), so the two read the same. Null when the test isn't paused.
+ * … unless the team lifts the pause"), so the two read the same. Null when the test isn't paused. (Owner, Nov 11, §390 c) `first`: the pause the line is about
+ * leads ("The team paused …: it closes on Nov 25 unless the team lifts the pause", never the suspension's "unless your account is cleared" alone); a cause
+ * still on with it is named after it ("… unless the team lifts the pause and your account is cleared").
  */
-export function closesUnless(dev: Parameters<typeof pauseClosesAt>[0], test: Parameters<typeof pauseClosesAt>[1]) {
+export function closesUnless(dev: Parameters<typeof pauseClosesAt>[0], test: Parameters<typeof pauseClosesAt>[1], first?: PauseCause) {
   const info = pauseClosesAt(dev, test);
-  return info ? `closes on ${day(info.at)} unless ${liftsWhen(info.causes)}` : null;
+  return info ? `closes on ${day(info.at)} unless ${liftsWhen(info.causes, first)}` : null;
 }
 
 /** (§313a) How many test names a line lists before "and N more" (like the other lines that list names). */

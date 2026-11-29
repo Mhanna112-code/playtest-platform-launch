@@ -39,10 +39,12 @@ describe("paused tests close after 7 days (pure helpers)", () => {
     expect(pauseClosesAt(dev({ holdStartedAt: hold, holdReason: "chargeback" }), test())!.causes).toEqual(["chargeback"]);
   });
 
-  it("reads 'Closes on Nov 2 unless your account is cleared'", () => {
+  it("reads 'Closes on Nov 2 unless …' in each cause's own words (§390 c)", () => {
     const at = new Date(2026, 10, 2, 12);
-    expect(pauseCountdownLine(at, ["hold"])).toBe("Closes on Nov 2 unless your account is cleared");
-    expect(pauseCountdownLine(at, ["suspension", "team"])).toBe("Closes on Nov 2 unless your account is cleared");
+    expect(pauseCountdownLine(at, ["suspension"])).toBe("Closes on Nov 2 unless your account is cleared");
+    expect(pauseCountdownLine(at, ["hold"])).toBe("Closes on Nov 2 unless you pay what you owe");
+    expect(pauseCountdownLine(at, ["chargeback"])).toBe("Closes on Nov 2 unless you finish the steps");
+    expect(pauseCountdownLine(at, ["suspension", "team"])).toBe("Closes on Nov 2 unless your account is cleared and the team lifts the pause");
     expect(pauseCountdownLine(at, ["team"])).toBe("Closes on Nov 2 unless the team lifts the pause");
   });
 });
