@@ -29,7 +29,8 @@ function simulate(joinedAt: Date, dueAt: Date) {
 
 describe("each tester is reminded before their own deadline (section 1)", () => {
   const joinedAt = new Date("2026-11-06T15:00:00Z");
-  for (const [days, marks] of [[40, ["1m", "1w", "3d", "1d"]], [10, ["1w", "3d", "1d"]], [2, ["1d"]]] as const) {
+  // (Owner, Nov 29 2026) The review reminders' marks: 3 weeks and 2 weeks too.
+  for (const [days, marks] of [[40, ["1m", "3w", "2w", "1w", "3d", "1d"]], [25, ["3w", "2w", "1w", "3d", "1d"]], [10, ["1w", "3d", "1d"]], [2, ["1d"]]] as const) {
     it(`a tester joining with ${days} days gets ${marks.join(", ")}`, () => {
       const dueAt = R.dueFromJoin(joinedAt, days);
       expect(R.deadlineMarksFor(joinedAt, dueAt).map((m) => m.mark)).toEqual(marks);

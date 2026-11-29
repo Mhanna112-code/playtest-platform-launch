@@ -21,8 +21,8 @@ type Series = { name: string; due: (date: Date, now: Date, rec: string[], tz?: s
 /** The four countdowns, each as one function of (date, now, recorded); "date" = the plain line naming only the date (no mark). */
 const SERIES: Series[] = [
   { name: "review", due: (d, now, rec, tz) => { const r = R.reviewMarkDue(SENT, d, now, rec, tz); return { send: r.send?.mark ?? null, record: r.record }; }, key: R.reviewMarkKey, three: "3d", last: "1d", all: ["2w", "1w", "3d", "1d"] },
-  { name: "own deadline", due: (d, now, rec, tz) => { const r = R.ownDeadlineMarkDue({ id: "c1", joinedAt: SENT, dueAt: d }, rec, now, tz); return { send: r.send?.mark ?? null, record: r.record }; }, key: (d) => R.deadlineMarkKey("c1", d), three: "3d", last: "1d", all: ["1w", "3d", "1d"] },
-  { name: "Open until", due: (d, now, rec, tz) => { const r = R.openUntilMarkDue({ openUntil: d, createdAt: SENT }, rec, now, tz); return { send: r.send?.mark ?? null, record: r.record }; }, key: R.openUntilMarkKey, three: "3d", last: "1d", all: ["1w", "3d", "1d"] },
+  { name: "own deadline", due: (d, now, rec, tz) => { const r = R.ownDeadlineMarkDue({ id: "c1", joinedAt: SENT, dueAt: d }, rec, now, tz); return { send: r.send?.mark ?? null, record: r.record }; }, key: (d) => R.deadlineMarkKey("c1", d), three: "3d", last: "1d", all: ["2w", "1w", "3d", "1d"] },
+  { name: "Open until", due: (d, now, rec, tz) => { const r = R.openUntilMarkDue({ openUntil: d, createdAt: SENT }, rec, now, tz); return { send: r.send?.mark ?? null, record: r.record }; }, key: R.openUntilMarkKey, three: "3d", last: "1d", all: ["2w", "1w", "3d", "1d"] },
   {
     name: "Closing soon",
     due: (d, now, rec, tz) => {
@@ -141,7 +141,8 @@ describe("(Owner, Nov 27 2026) a countdown's fresh line when the date shown move
     for (const s of SERIES.slice(1)) {
       it(`${s.name}: no mark passed for the new date: the plain line naming it at once, then its marks on schedule`, () => {
         const t = track(s);
-        expect(t.daily(D, "2026-11-13")).toEqual(s.all.slice(0, 1));
+        // (Owner, Nov 29 2026) The marks up to 1 week (own deadline and Open until now start at 2 weeks, like the review reminders).
+        expect(t.daily(D, "2026-11-13")).toEqual(s.all.slice(0, s.all.indexOf(s.name === "Closing soon" ? "7" : "1w") + 1));
         const far = at("2026-12-31T12:00:00Z");
         expect(t.run(far, at("2026-11-13T14:00:00Z"))).toBe("date");
         expect(t.run(far, at("2026-11-13T18:00:00Z"))).toBeNull(); // never twice
@@ -151,7 +152,7 @@ describe("(Owner, Nov 27 2026) a countdown's fresh line when the date shown move
           const m = t.run(far, new Date(d));
           if (m) sent.push(m);
         }
-        expect(sent).toEqual([month, ...s.all]);
+        expect(sent).toEqual([month, ...(s.name === "Closing soon" ? [] : ["3w"]), ...s.all]);
       });
     }
 

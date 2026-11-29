@@ -1652,7 +1652,8 @@ export function countdownDue(deadline: Date | null, now: Date, sent: string[], s
 
 /**
  * (Owner, Oct 30, batch 15 section 2) The developer's review reminders, the same for listed and unlisted parts: 1 month before the review date (only when it was more than
- * a month away at sending), then 3 weeks, 2 weeks and 1 week, 3 days and 1 day before. (The other countdowns, such as Open until's heads-ups, keep MARKS.)
+ * a month away at sending), then 3 weeks, 2 weeks and 1 week, 3 days and 1 day before. (Owner, Nov 29 2026) Open until's heads-ups and the tester's own deadline
+ * count down on these marks too (openUntilMarkDue, deadlineMarksFor); MARKS is kept for the bare legacy marks recorded before §311g.
  */
 export const REVIEW_MARKS = [
   { mark: "1m", ms: 30 * DAY_MS, label: "in 1 month" },
@@ -1733,35 +1734,41 @@ export function reviewMarkDue(sentAt: Date, reviewDate: Date, now: Date, recorde
 /** (§311g) The key prefix of Open until's heads-up marks for one Open until, kept in Test.notifiedMarks (beside the testers' "due:" marks). */
 export const openUntilMarkKey = (openUntil: Date) => `open:${openUntil.getTime()}:`;
 /**
- * (Owner, Nov 6, §311g) Open until's heads-up due now (1 month, only when Open until was more than a month after the test was made; 1 week, 3 days, 1 day) and what
+ * (Owner, Nov 6, §311g; owner, Nov 29 2026: the review reminders' marks) Open until's heads-up due now (1 month, 3 weeks and 2 weeks, each only when Open until
+ * was further than that after the test was made; 1 week, 3 days, 1 day) and what
  * to record, keyed by the Open until it counts to (datedMarkDue): moving Open until (Edit, a pause, an outage) re-arms the marks still ahead. Bare marks ("1w",
  * from before §311g) count as sent for an earlier Open until. (Owner, Nov 27 2026; replaces Dec 2026's "without §367's fresh line") An Open until moved to a
  * later day (in the developer's zone `tz`) than the one the last heads-up named: ONE fresh heads-up at the next daily run naming it. Its line names only the date
  * ("closes to new testers on Nov 22"), so it is sent even when none of its marks has passed for the new date (`send` is then DATE_LINE). Moved within the same day: nothing.
  */
-export function openUntilMarkDue(t: { openUntil: Date | null; createdAt: Date }, recorded: string[], now: Date, tz?: string | null): { send: ((typeof MARKS)[number] & { at: Date }) | typeof DATE_LINE | null; record: string[] } {
+export function openUntilMarkDue(t: { openUntil: Date | null; createdAt: Date }, recorded: string[], now: Date, tz?: string | null): { send: ReviewMark | typeof DATE_LINE | null; record: string[] } {
   if (!t.openUntil) return { send: null, record: [] as string[] };
   const date = t.openUntil;
-  const marks = MARKS.filter((m) => m.mark !== "1m" || date.getTime() - t.createdAt.getTime() > m.ms).map((m) => ({ ...m, at: new Date(date.getTime() - m.ms) }));
+  // (Owner, Nov 29 2026) The month, 3-week and 2-week marks only when Open until was further away than that when the test was made (as the month always was).
+  const marks = REVIEW_MARKS.filter((m) => !FAR_MARKS.has(m.mark) || date.getTime() - t.createdAt.getTime() > m.ms).map((m) => ({ ...m, at: new Date(date.getTime() - m.ms) }));
   const mine = recorded.filter((x) => x.startsWith("open:") || MARKS.some((m) => m.mark === x));
   const due = datedMarkDue(openUntilMarkKey(date), mine, marks, date, now, { tz, plain: DATE_LINE.mark });
   return { send: due.plain ? DATE_LINE : due.send, record: due.record };
 }
 
 /**
- * (Owner, Oct 28, batch 16 section 1) A working tester's own deadline reminders: 1 month, 1 week, 3 days and 1 day before THEIR deadline (dueAt). The same rule as the
+ * (Owner, Oct 28, batch 16 section 1; owner, Nov 29 2026: the review reminders' marks) A working tester's own deadline reminders: 1 month, 3 weeks, 2 weeks,
+ * 1 week, 3 days and 1 day before THEIR deadline (dueAt). The same rule as the
  * review reminders (reviewMarksFor): only marks still ahead when they joined; the month only when the deadline was more than a month away then. (Owner, Dec 2026;
  * replaces "none within 24 hours of joining" and §295's 1-day exception) A mark within 24 hours of joining is kept too: joined Dec 14, 1:46 PM with a Dec 17
  * deadline gives the 3-day line at the next morning run, then the 1-day line. Every tester gets the same tester days from joining (batch 15 section 18), so on
- * one test every tester gets the same set: 10 days per tester gives 1 week, 3 days and 1 day; 45 days gives all four; 2 days gives 1 day.
+ * one test every tester gets the same set: 10 days per tester gives 1 week, 3 days and 1 day; 25 days gives 3 weeks, 2 weeks, 1 week, 3 days and 1 day;
+ * 45 days gives all six; 2 days gives 1 day.
  */
 export function deadlineMarksFor(joinedAt: Date, dueAt: Date) {
   const away = dueAt.getTime() - joinedAt.getTime();
   // (Owner, Nov 6, §295) The last mark (1 day before) is always kept, even when it had passed at joining: a tester whose deadline is within a day when she joins (or
   // whose tester days are 1) gets that one line at the daily job's next run. (Owner, Dec 2026) Every other mark still ahead at joining is kept (no 24-hour skip).
-  return MARKS.filter((m) => (m.mark !== "1m" || away > m.ms) && (m.mark === LAST_MARK || dueAt.getTime() - m.ms >= joinedAt.getTime())).map((m) => ({ ...m, at: new Date(dueAt.getTime() - m.ms) }));
+  return REVIEW_MARKS.filter((m) => (m.mark !== "1m" || away > m.ms) && (m.mark === LAST_MARK || dueAt.getTime() - m.ms >= joinedAt.getTime())).map((m) => ({ ...m, at: new Date(dueAt.getTime() - m.ms) }));
 }
-const LAST_MARK = MARKS[MARKS.length - 1].mark;
+const LAST_MARK = REVIEW_MARKS[REVIEW_MARKS.length - 1].mark;
+/** (Owner, Nov 29 2026) Open until's marks that need Open until to have been further away than them when the test was made. */
+const FAR_MARKS = new Set(["1m", "3w", "2w"]);
 /** The key prefix of one contract's sent deadline marks for one deadline, kept in Test.notifiedMarks (Open until's own marks there are "open:<ms>:<mark>" since §311g). */
 export const deadlineMarkKey = (contractId: string, dueAt: Date) => `due:${contractId}:${dueAt.getTime()}:`;
 /**
@@ -1773,7 +1780,7 @@ export const deadlineMarkKey = (contractId: string, dueAt: Date) => `due:${contr
  * named: ONE fresh line at the next daily run naming it. Her line names only the date ("Your deadline on “X” is Nov 22"), so it is sent even when none of its marks
  * has passed for the new deadline (`send` is then DATE_LINE). Moved within the same day: nothing. (The rounding of a moved deadline to the end of its day stays.)
  */
-export function ownDeadlineMarkDue(c: { id: string; joinedAt: Date; dueAt: Date }, recorded: string[], now: Date, tz?: string | null): { send: (typeof MARKS)[number] | typeof DATE_LINE | null; record: string[] } {
+export function ownDeadlineMarkDue(c: { id: string; joinedAt: Date; dueAt: Date }, recorded: string[], now: Date, tz?: string | null): { send: (typeof REVIEW_MARKS)[number] | typeof DATE_LINE | null; record: string[] } {
   // The deadline moved: what's already behind the new one is recorded, never sent. (Owner, Nov 6, §295) Except the latest mark passed when it was never sent for
   // an earlier deadline of hers: a mark that came due between the move and this run (a pause moves a deadline to the end of a later day, and the daily job runs once
   // a day) was swallowed, and a tester 20 hours from her deadline got no reminder. (§311g) The same rule as every dated countdown (datedMarkDue). A rejoin starts
@@ -1781,7 +1788,7 @@ export function ownDeadlineMarkDue(c: { id: string; joinedAt: Date; dueAt: Date 
   // (Owner, Nov 27 2026; replaces Dec 2026's §367 "after her last mark") Her deadline moved to a later day than her last line named: ONE fresh line naming the
   // new date at the next run (datedMarkDue), keyed by the new deadline so never twice; the same day: nothing.
   const due = datedMarkDue(deadlineMarkKey(c.id, c.dueAt), recorded.filter((x) => x.startsWith(`due:${c.id}:`)), deadlineMarksFor(c.joinedAt, c.dueAt), c.dueAt, now, { tz, plain: DATE_LINE.mark });
-  return { send: due.plain ? DATE_LINE : due.send ? MARKS.find((m) => m.mark === due.send!.mark)! : null, record: due.record };
+  return { send: due.plain ? DATE_LINE : due.send ? REVIEW_MARKS.find((m) => m.mark === due.send!.mark)! : null, record: due.record };
 }
 /** (§311g) A contract's recorded deadline marks dropped (a rejoin: a fresh deadline whose reminders start over). */
 export const forgetDeadlineMarks = (recorded: string[], contractId: string) => recorded.filter((x) => !x.startsWith(`due:${contractId}:`));
