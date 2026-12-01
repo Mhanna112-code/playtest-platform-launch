@@ -9,7 +9,7 @@ import { joined, setup } from "./fixtures";
 import { DAY, pay, sentWork } from "./b15";
 
 // (Owner, Nov 11, §383) The repeating reminders: the FIRST line still comes from the 5-minute sweep at once; the REPEATS come only from the daily job, a UTC
-// calendar day (or 3) after the last one and at least 12 hours later (repeatDue).
+// calendar day (or 3) after the last one and at least 12 hours later (repeatDue). (§390 e) The money lines every 3 days.
 
 const H = 3_600_000;
 /** `day` UTC days after the epoch, at `hours` (09:00 is the daily job's time). */
@@ -21,33 +21,48 @@ async function at<T>(when: Date, job: (now: Date) => Promise<T>) {
   await db.notification.updateMany({ where: { createdAt: { gte: new Date(real.getTime() - 1000), lte: new Date(Date.now() + 60_000) } }, data: { createdAt: when } });
 }
 
-describe("§383 daily money lines: first from the sweep, repeats only from the daily job by calendar day", () => {
-  it("Charge or let go and Pay now: a 22:00 first line isn't repeated at 09:00 the next morning; one a day after that, never from the sweep", async () => {
+describe("§383 / §390 e money lines: first from the sweep, repeats every 3 days from the daily job by calendar day", () => {
+  // (Owner, Nov 11, §390 e; was daily) The tester's "Charge or let go" and the developer's "Pay now" repeat every 3 days, like the Rate reminders.
+  it("Charge or let go and Pay now: day 0 (the sweep), then days 3 and 6 from the daily job; nothing on days 1, 2, 4, 5; never from the sweep; a later closing date: a fresh line at once", async () => {
     const w = await sentWork();
     const opens = R.chargeOpensAt(w.sub, { openUntil: null, status: "open" }, await db.contract.findUniqueOrThrow({ where: { id: w.sessionId } }))!;
     const D = R.utcDayNo(opens) + 1;
     const closes = (await pieceCloseOut({ submissionId: w.sub.id }, on(D, 22)))!;
-    expect(closes.getTime()).toBeGreaterThan(on(D + 4, 0).getTime()); // the piece stays open all along
+    expect(closes.getTime()).toBeGreaterThan(on(D + 9, 0).getTime()); // the piece stays open all along
     const count = async () => [
       await db.notification.count({ where: { userId: w.tester.user.id, reminderKey: "chargeday" } }),
       await db.notification.count({ where: { userId: w.dev.user.id, reminderKey: "paynow" } }),
     ];
-    await at(on(D, 22), (now) => runSweep(now)); // Charge opens: both first lines at once, from the sweep
+    await at(on(D, 22), (now) => runSweep(now)); // day 0: Charge opens, both first lines at once, from the sweep
     expect(await count()).toEqual([1, 1]);
     await at(on(D, 23), (now) => runSweep(now));
     await at(on(D + 1, 9), (now) => runSweep(now)); // the sweep never repeats
     expect(await count()).toEqual([1, 1]);
-    await at(on(D + 1, 9), runDaily); // 11 hours after the first line: no repeat yet
+    await at(on(D + 1, 9), runDaily); // day 1: nothing
+    await at(on(D + 2, 9), runDaily); // day 2: nothing
     expect(await count()).toEqual([1, 1]);
-    await at(on(D + 2, 9), (now) => runSweep(now));
+    await at(on(D + 3, 9), (now) => runSweep(now));
     expect(await count()).toEqual([1, 1]);
-    await at(on(D + 2, 9), runDaily); // the next calendar day, 35 hours later
+    await at(on(D + 3, 9), runDaily); // day 3: 3 calendar days later
     expect(await count()).toEqual([2, 2]);
-    await at(on(D + 2, 20), runDaily); // never twice in a day
+    await at(on(D + 3, 20), runDaily); // never twice in a day
+    await at(on(D + 4, 9), runDaily);
+    await at(on(D + 5, 9), runDaily); // days 4 and 5: nothing
     expect(await count()).toEqual([2, 2]);
-    await at(new Date(on(D + 3, 9).getTime() - 10 * 60_000), runDaily); // a daily run a little earlier than yesterday's: still due (no drift)
+    await at(new Date(on(D + 6, 9).getTime() - 10 * 60_000), runDaily); // day 6, a little earlier than day 3's run: still due (no drift)
     expect(await count()).toEqual([3, 3]);
-  }, 180_000);
+    // (§367) The piece's Charge closing date moves later (an outage inside its window): the tester's fresh line at once, then every 3 days from it.
+    const outage = await db.outage.create({ data: { startAt: on(D + 6, 12), endAt: on(D + 6, 14), ms: 2 * H } });
+    try {
+      await at(on(D + 7, 9), runDaily);
+      expect(await count()).toEqual([4, 3]);
+      await at(on(D + 8, 9), runDaily);
+      await at(on(D + 9, 9), runDaily); // the developer's 3 days from day 6; the tester's from her fresh line (day 7) only on day 10
+      expect(await count()).toEqual([4, 4]);
+    } finally {
+      await db.outage.delete({ where: { id: outage.id } });
+    }
+  }, 240_000);
 });
 
 describe("§383 payout waiting: first at once, every 3 calendar days from the daily job", () => {

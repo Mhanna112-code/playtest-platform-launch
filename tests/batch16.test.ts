@@ -125,7 +125,11 @@ describe("B) reminders", () => {
     expect(offer.groupKey).toBe("charge");
     await cron(); // the same day: not again
     expect((await lines(tester.user.id)).filter((l) => l.groupKey === "charge").length).toBe(1);
+    // (Owner, Nov 11, §390 e; was the next day) Every 3 days.
     await db.notification.updateMany({ where: { userId: tester.user.id, reminderKey: "chargeday" }, data: { createdAt: new Date(Date.now() - DAY) } });
+    await cron();
+    expect((await lines(tester.user.id)).filter((l) => l.groupKey === "charge").length).toBe(1);
+    await db.notification.updateMany({ where: { userId: tester.user.id, reminderKey: "chargeday" }, data: { createdAt: new Date(Date.now() - 3 * DAY) } });
     await cron();
     expect((await lines(tester.user.id)).filter((l) => l.groupKey === "charge").length).toBe(2);
     void dev;

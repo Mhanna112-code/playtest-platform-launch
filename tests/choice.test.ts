@@ -72,8 +72,11 @@ describe("Charge / Let it go at day 14", () => {
   it("reminders every 3 days and never an automatic charge; (batch 6) during a hold a Charge is added to what is owed", async () => {
     const { tester, sessionId, sub, dev } = await waiting14();
     await cron();
-    // (Batch 29 §22) No "Reminder: …" every 3 days any more: the one "Charge or let go" line comes again the next day.
+    // (Batch 29 §22) No "Reminder: …" lines: the one "Charge or let go" line comes again; (Owner, Nov 11, §390 e) every 3 days, not the next day.
     await db.notification.updateMany({ where: { userId: tester.user.id, reminderKey: "chargeday" }, data: { createdAt: new Date(Date.now() - 86_400_000) } });
+    await cron();
+    expect(await db.notification.count({ where: { userId: tester.user.id, text: { startsWith: "Charge or let go: your written answers" } } })).toBe(1);
+    await db.notification.updateMany({ where: { userId: tester.user.id, reminderKey: "chargeday" }, data: { createdAt: new Date(Date.now() - 3 * 86_400_000) } });
     await cron();
     expect(await db.notification.count({ where: { userId: tester.user.id, text: { startsWith: "Charge or let go: your written answers" } } })).toBe(2);
     expect(await db.notification.count({ where: { userId: tester.user.id, text: { startsWith: "Reminder: Nora Lane didn't review" } } })).toBe(0);

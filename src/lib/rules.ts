@@ -1516,6 +1516,12 @@ export const utcDayNo = (d: Date) => Math.floor(d.getTime() / 86_400_000);
  * was `everyDays` or more UTC calendar days earlier AND at least 12 hours ago. By calendar day, so the daily job (09:00 UTC) never drifts an hour earlier each
  * day or sends twice in one day (it replaces the 23 h / 20 h / 3 days − 1 h / 1-hour-slack windows).
  */
+/**
+ * (Owner, Nov 11, §390 e; replaces daily) The tester's "Charge or let go" line, the developer's "Pay now" line and a piece's own "… wasn't reviewed by …: pay it"
+ * line repeat every 3 days, like the Rate reminders: the first when the piece opens (the sweep too), then repeatDue(last, now, MONEY_LINE_EVERY_DAYS) from the
+ * daily job only.
+ */
+export const MONEY_LINE_EVERY_DAYS = 3;
 export function repeatDue(last: Date | null | undefined, now: Date, everyDays = 1) {
   if (!last) return true;
   return utcDayNo(now) - utcDayNo(last) >= everyDays && now.getTime() - last.getTime() >= REPEAT_MIN_GAP_MS;

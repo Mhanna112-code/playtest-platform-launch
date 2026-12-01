@@ -32,7 +32,7 @@ describe("notification schedule", { timeout: 120_000 }, () => {
     expect(await db.notification.count({ where: { userId: tester.user.id, text: { startsWith: "Work sent:" } } })).toBe(0);
   });
 
-  it("the developer is told 1 month / 1 week / 3 days / 1 day before Charge would open (skipping any already past), then daily after it opens", async () => {
+  it("the developer is told 1 month / 1 week / 3 days / 1 day before Charge would open (skipping any already past), then every 3 days after it opens (§390 e; was daily)", async () => {
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
     await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
@@ -66,6 +66,9 @@ describe("notification schedule", { timeout: 120_000 }, () => {
     expect(await n("Pay now: Ana's written answers on “Harbor Run”")).toBe(1);
     expect((await db.submission.findUniqueOrThrow({ where: { id: sub.id } })).choiceOfferedAt).not.toBeNull();
     await db.notification.updateMany({ where: { userId: dev.user.id, reminderKey: "paynow" }, data: { createdAt: new Date(Date.now() - DAY) } });
+    await cron();
+    expect(await n("Pay now: ")).toBe(1); // (§390 e) not the next day
+    await db.notification.updateMany({ where: { userId: dev.user.id, reminderKey: "paynow" }, data: { createdAt: new Date(Date.now() - 3 * DAY) } });
     await cron();
     expect(await n("Pay now: ")).toBe(2);
   });

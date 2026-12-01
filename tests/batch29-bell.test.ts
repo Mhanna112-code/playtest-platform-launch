@@ -200,7 +200,7 @@ describe("§22 closing soon (developer) and the tester's one daily Charge line",
     expect(mail.text).toContain("Pay now: 2 pieces");
   });
 
-  it("the tester: one piece gives its line daily until settled; two tests give one line; nothing open gives none", async () => {
+  it("the tester: one piece gives its line every 3 days until settled (§390 e; was daily); two tests give one line; nothing open gives none", async () => {
     const one = await setup();
     const a = await sent(one.testId);
     await db.user.update({ where: { id: a.tester.user.id }, data: { emailPref: "off" } });
@@ -213,12 +213,15 @@ describe("§22 closing soon (developer) and the tester's one daily Charge line",
     expect((await mine())[0].text).toMatch(/^Charge or let go: your written answers on “Harbor Run” \(\$10\.00, by [A-Z][a-z]{2} \d{1,2}\)$/);
     expect(await db.outboxEmail.count({ where: { to: a.tester.user.email, text: { contains: (await mine())[0].text } } })).toBe(1);
     expect((await lines(a.tester.user.id)).some((l) => /didn't review your/.test(l.text))).toBe(false);
-    // The next day: again. Settled (let go): none after that.
+    // (§390 e) Not the next day; 3 days later, again. Settled (let go): none after that.
     await db.notification.updateMany({ where: { userId: a.tester.user.id, reminderKey: "chargeday" }, data: { createdAt: ago(1) } });
+    await cron();
+    expect(await mine()).toHaveLength(1);
+    await db.notification.updateMany({ where: { userId: a.tester.user.id, reminderKey: "chargeday" }, data: { createdAt: ago(3) } });
     await cron();
     expect(await mine()).toHaveLength(2);
     expect((await sact(a.sessionId, "choose", a.tester.cookie, { submissionId: a.sub.id, choice: "letgo", seenAt: seen(), confirmed: true })).status).toBe(200);
-    await db.notification.updateMany({ where: { userId: a.tester.user.id, reminderKey: "chargeday" }, data: { createdAt: ago(1) } });
+    await db.notification.updateMany({ where: { userId: a.tester.user.id, reminderKey: "chargeday" }, data: { createdAt: ago(3) } });
     await cron();
     expect(await mine()).toHaveLength(2);
     // Two tests (two developers), one tester: ONE line.

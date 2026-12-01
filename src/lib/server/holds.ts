@@ -9,7 +9,7 @@ import { T } from "@/lib/tz";
 import { APPS_WAITING_GROUP } from "@/lib/bell";
 import { db } from "@/lib/db";
 import { callAtFor, displayName, fmtDate, fmtDateTime, money, pronouns, toCents } from "@/lib/server/dateFormat";
-import { owedReceiptWhat, pressAgainLine, bankChangedLine, reviewFirstLine, CHARGEBACKS_REVIEW_FROM, OWED_ALL_WAITING, OWED_BANK_WAITING, reservedAddedLine, AUTO_CHARGED_CALL, AUTO_NOTHING_CALL, UNLISTED_CALL_CLOSED, UNLISTED_CALL_TAIL, AUTO_CHARGE_NO_CHOICE, MIN_CHARGE_CENTS, CHARGE_TICK_CENTS, chargeTickLine, chargeClosedLine, CLOSE_OUT_REMINDER_DAYS, testerPayable, HOLD_APPROVAL_AFTER, MANY_HOLDS_LABEL, autoPayFor, chargeAmount, paidMeanwhileLine, CHARGED_BY_TESTER, byTesterChoice, openUntilMarkDue, datedMarkDue, ownDeadlineMarkDue, reviewMarkDue, INVITE_REMIND_DAYS, repeatDue, utcDayNo, REPEAT_MIN_GAP_MS, failedLine, joinClosingLine, ownDeadlineLine, LET_GO_BY_TESTER, REVIEW_DAYS, chargeIsOpen, chargeOpensAt, pauseShiftMs, PAYABLE_TESTER, PIECE_LOCKED, ownChargeWaitingLine, chargedByTester, chargebackWonRefundLine, chargebackWonLine, CHARGEBACK_FEE_CENTS, chargebackOwedLine, chargebackReversedLine, bankLoweredLine, bankRaisedLine, raiseNote, raiseOf, raiseName, RAISE_NOTE } from "@/lib/rules";
+import { owedReceiptWhat, pressAgainLine, bankChangedLine, reviewFirstLine, CHARGEBACKS_REVIEW_FROM, OWED_ALL_WAITING, OWED_BANK_WAITING, reservedAddedLine, AUTO_CHARGED_CALL, AUTO_NOTHING_CALL, UNLISTED_CALL_CLOSED, UNLISTED_CALL_TAIL, AUTO_CHARGE_NO_CHOICE, MIN_CHARGE_CENTS, CHARGE_TICK_CENTS, chargeTickLine, chargeClosedLine, CLOSE_OUT_REMINDER_DAYS, testerPayable, HOLD_APPROVAL_AFTER, MANY_HOLDS_LABEL, autoPayFor, chargeAmount, paidMeanwhileLine, CHARGED_BY_TESTER, byTesterChoice, openUntilMarkDue, datedMarkDue, ownDeadlineMarkDue, reviewMarkDue, INVITE_REMIND_DAYS, MONEY_LINE_EVERY_DAYS, repeatDue, utcDayNo, REPEAT_MIN_GAP_MS, failedLine, joinClosingLine, ownDeadlineLine, LET_GO_BY_TESTER, REVIEW_DAYS, chargeIsOpen, chargeOpensAt, pauseShiftMs, PAYABLE_TESTER, PIECE_LOCKED, ownChargeWaitingLine, chargedByTester, chargebackWonRefundLine, chargebackWonLine, CHARGEBACK_FEE_CENTS, chargebackOwedLine, chargebackReversedLine, bankLoweredLine, bankRaisedLine, raiseNote, raiseOf, raiseName, RAISE_NOTE } from "@/lib/rules";
 import { HttpError } from "./http";
 import { adminUsers, bell, notify, renderFor, sendSummaries, teamEmails } from "./notify";
 import { appUrl } from "./auth";
@@ -1567,11 +1567,11 @@ async function openCharges(now: Date, co: CloseOuts, /** (§383) the daily job: 
     // (Batch 17 §19) Once the piece's Pay closed there's no "pay it" line; once its Charge closed (the tester's side) Charge is never offered or reminded.
     const payShut = await co.payClosed({ submissionId: s.id }), chargeShut = await co.chargeClosed({ submissionId: s.id });
     if (payShut && chargeShut) continue;
-    // (Owner, Oct 29, batch 29 §31) While the tester can charge or let it go, the developer's daily line is ONE "Pay now" line across all their tests (payNowLines).
-    // With no Charge for the tester (a deleted tester, or their Charge closed) the piece keeps its own daily "… wasn't reviewed by <date>: pay it." (batch 28).
-    // (Owner, Nov 11, §383) The first at once (the sweep too); the repeats only from the daily job, a calendar day after the last (repeatDue).
+    // (Owner, Oct 29, batch 29 §31) While the tester can charge or let it go, the developer's line is ONE "Pay now" line across all their tests (payNowLines).
+    // With no Charge for the tester (a deleted tester, or their Charge closed) the piece keeps its own "… wasn't reviewed by <date>: pay it." (batch 28).
+    // (Owner, Nov 11, §383) The first at once (the sweep too); the repeats only from the daily job (repeatDue). (§390 e) Every 3 days, like the "Pay now" line.
     const gone = !!c.tester.deletedAt;
-    if (!payShut && (gone || chargeShut) && (!s.devRemindedAt || (repeats && repeatDue(s.devRemindedAt, now)))) {
+    if (!payShut && (gone || chargeShut) && (!s.devRemindedAt || (repeats && repeatDue(s.devRemindedAt, now, MONEY_LINE_EVERY_DAYS)))) {
       const line = unreviewedLine(c.test.title, displayName(c.tester), s.kind === "recording" ? "recording" : "written answers", chargeOpensAt(s, c.test, c, now)!, null, c.tester.pronoun);
       await db.$transaction(async (tx) => { // (§383) the line and its "reminded" time together
         await bell(c.test.developerId, line, `/app/tests/${c.testId}#piece-${s.id}`, undefined, { group: "unreviewed", reminder: `unreviewed:${s.id}`, always: true }, tx); // (§311d) morning email even with Off
@@ -1819,16 +1819,17 @@ const lastLineAt = async (userId: string, key: string) => (await db.notification
 /** (§383) The mark a piece gets once a "Pay now" line has named it (in its devMarks, beside the "tc:" and review marks). */
 const PAY_NOW_MARK = "pn";
 /**
- * (Owner, Nov 11, §383) Is a daily money line due? The FIRST line, when a piece is new to the series (`fresh`: its Charge opened since the last line), goes at
- * once, from the sweep too, unless this person already had that line today (UTC): one line a day, as before. The REPEATS come only from the daily job (`repeats`),
- * a calendar day after the last line and at least 12 hours later (repeatDue).
+ * (Owner, Nov 11, §383) Is a money line due? The FIRST line, when a piece is new to the series (`fresh`: its Charge opened since the last line), goes at once, from
+ * the sweep too, unless this person already had that line today (UTC). The REPEATS come only from the daily job (`repeats`): (Owner, Nov 11, §390 e; was daily)
+ * every 3 days, 3 UTC calendar days after the last line and at least 12 hours later (repeatDue, MONEY_LINE_EVERY_DAYS), like the Rate reminders.
  */
-const dailyLineDue = (last: Date | null, fresh: boolean, repeats: boolean, now: Date) =>
-  (fresh && (!last || utcDayNo(last) !== utcDayNo(now))) || (repeats && repeatDue(last, now, 1));
+const moneyLineDue = (last: Date | null, fresh: boolean, repeats: boolean, now: Date) =>
+  (fresh && (!last || utcDayNo(last) !== utcDayNo(now))) || (repeats && repeatDue(last, now, MONEY_LINE_EVERY_DAYS));
 
 /**
- * (Owner, Oct 29, batch 29 §31; replaces the per-piece daily "“<test>”: <tester>'s <part> wasn't reviewed by <date>: …" line) ONE bell line a day across all the
- * developer's tests, on every day at least one listed piece is past its review date and still unpaid (open to the tester's Charge), opening Needs you on the dashboard.
+ * (Owner, Oct 29, batch 29 §31; replaces the per-piece daily "“<test>”: <tester>'s <part> wasn't reviewed by <date>: …" line) ONE bell line across all the
+ * developer's tests while at least one listed piece is past its review date and still unpaid (open to the tester's Charge), opening Needs you on the dashboard:
+ * (Owner, Nov 11, §390 e; was every day) the first when a piece opens, then every 3 days.
  * It stops when nothing is past its review date. Listed calls aren't in it (charged automatically, batch 28 §21); unlisted work isn't either. Emailed whatever the
  * setting (money). Waits while the test is paused, like the line it replaces.
  */
@@ -1845,8 +1846,8 @@ async function payNowLines(now: Date, co: CloseOuts, /** (§383) the daily job: 
     const last = await lastLineAt(devId, "paynow");
     const fresh = list.filter((p) => !p.marks.includes(PAY_NOW_MARK) && (!last || !p.offered || p.offered.getTime() > last.getTime()));
     const unnamed = list.filter((p) => !p.marks.includes(PAY_NOW_MARK));
-    if (!dailyLineDue(last, fresh.length > 0, repeats, now)) {
-      // A piece whose Charge opened on a day that already had its line: named in the next daily line (a repeat), never a second line today.
+    if (!moneyLineDue(last, fresh.length > 0, repeats, now)) {
+      // A piece whose Charge opened on a day that already had its line: named in the next line (a repeat), never a second line today.
       for (const p of fresh) await db.submission.update({ where: { id: p.id }, data: { devMarks: { push: PAY_NOW_MARK } } });
       continue;
     }
@@ -1860,8 +1861,9 @@ async function payNowLines(now: Date, co: CloseOuts, /** (§383) the daily job: 
 
 /**
  * (Owner, Oct 29, batch 29 §22; replaces "<dev> didn't review your <part> in 7 days: charge $X or let it go", its reminders every 3 days and the 3-day / 1-day "Charge or
- * let go of your work on “<test>” by <date>") ONE bell line a day across all the tester's tests, on every day they have at least one piece open to Charge or Let it go,
- * opening the dashboard's "Charge or cancel" box. The first comes the day a piece's Charge opens; it stops when nothing is open. Emailed whatever the setting (money);
+ * let go of your work on “<test>” by <date>") ONE bell line across all the tester's tests while they have at least one piece open to Charge or Let it go,
+ * opening the dashboard's "Charge or cancel" box. The first comes the day a piece's Charge opens; (Owner, Nov 11, §390 e; was every day) then every 3 days; it
+ * stops when nothing is open. Emailed whatever the setting (money);
  * waits while the tester side is suspended. Never names a hold, a suspension or a failure.
  */
 async function testerChargeLines(now: Date, co: CloseOuts, /** (§383) the daily job: the repeats too */ repeats: boolean) {
@@ -1875,13 +1877,13 @@ async function testerChargeLines(now: Date, co: CloseOuts, /** (§383) the daily
   }
   for (const [testerId, list] of byTester) {
     // (Owner, Nov 9, §367) A piece's Charge closing date moved LATER than the date her last line named (a pause or its lift, an outage, Open until extended, a
-    // rejoin): ONE fresh line now naming the new date, even within the day; then the daily line goes on. Each piece keeps the date its last line named ("tc:<ms>").
+    // rejoin): ONE fresh line now naming the new date, even within the day; then the repeats go on (§390 e: every 3 days from it). Each piece keeps the date its last line named ("tc:<ms>").
     const moved = list.some((p) => { const n = chargeNamed(p.marks); return !!n && !!p.closes && p.closes.getTime() > n; }); // ("tc:0": no date named yet, never "moved")
     // (Owner, Nov 11, §383) New to the series: a piece no line named yet (no "tc:" mark; "tc:0" when it had no closing date), whose Charge opened after the last line.
     const last = await lastLineAt(testerId, "chargeday");
     const fresh = list.filter((p) => chargeNamed(p.marks) == null && (!last || !p.offered || p.offered.getTime() > last.getTime()));
-    if (!moved && !dailyLineDue(last, fresh.length > 0, repeats, now)) {
-      // Opened on a day that already had its line: named in the next daily line, never a second line today (the date it will name is recorded now).
+    if (!moved && !moneyLineDue(last, fresh.length > 0, repeats, now)) {
+      // Opened on a day that already had its line: named in the next line, never a second line today (the date it will name is recorded now).
       for (const p of fresh) await db.submission.update({ where: { id: p.id }, data: { devMarks: { push: `tc:${p.closes?.getTime() ?? 0}` } } });
       continue;
     }
