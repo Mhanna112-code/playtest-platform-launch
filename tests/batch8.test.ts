@@ -347,7 +347,8 @@ describe("batch 8 item 6: free during launch", () => {
 
 describe("batch 8 item 7: admin", () => {
   it("each user row shows the subscription state; (batch 11) the settings only show the configured free-until date", async () => {
-    const now = new Date();
+    // Its own clock (the renewal date is 20 days after it), never the machine's: the laptop clock moves past fixed dates.
+    const now = new Date("2026-11-11T12:00:00Z");
     const base = { subscriptionRenewsAt: new Date("2026-12-01T00:00:00Z"), subscriptionCanceling: false };
     expect(S.adminSubLine({ subscriptionStatus: "none", subscriptionRenewsAt: null, subscriptionCanceling: false }, now)).toBe("free plan");
     expect(S.adminSubLine({ ...base, subscriptionStatus: "active" }, now)).toBe("subscribed, renews Dec 1, 2026");
