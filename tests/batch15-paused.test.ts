@@ -48,7 +48,7 @@ describe("the restricted view (sections 29 and 37)", () => {
     expect(allowedLine(false, { nextRound: false })).toBe("You can still pay for work testers already sent, chat with them, rate testers, and read their answers.");
     expect(allowedLine(false, { nextRound: true })).toMatch(/, and start a Next round\.$/);
     expect(src("app/app/tests/[id]/page.tsx")).toContain("<RestrictedCalls testId={t.id}");
-    expect(src("app/app/tests/[id]/TopPanel.tsx")).toContain("`Done: you stopped ${p.title}.`");
+    expect(src("app/app/tests/[id]/TopPanel.tsx")).toContain("`Done: you stopped ${p.title}.${r.done ? "); // (§390 d) then how many open invites the Stop closed
   });
 
   // (Batch 29 section 11) End early and Stop now follow the running test's stop-once rules too: the suspension and the tester's change stop them once.

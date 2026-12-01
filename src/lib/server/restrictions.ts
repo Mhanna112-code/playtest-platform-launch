@@ -196,11 +196,12 @@ export async function suspendAccount(adminId: string, userId: string, note: stri
   };
   if (u[f.at]) await alreadyErr(); // (§386 C) already suspended: before the note's own mistakes
   check?.();
+  let invitesClosed = 0;
   const claimed = await db.user.updateMany({ where: { id: userId, [f.at]: null, deletedAt: null }, data: { [f.at]: new Date(), [f.note]: note, [f.by]: adminId, [f.back]: null } });
   if (claimed.count !== 1) await alreadyErr();
   await accountEvent(userId, "suspended", adminId, note, side);
   if (side === "developer" && u.isDeveloper) {
-    await markPaused({ developerId: userId }); // (batch 9) one clock per paused test
+    invitesClosed = await markPaused({ developerId: userId }); // (batch 9) one clock per paused test; (§390 d) its invites closed, said in the line below
     await pauseDeveloper(u);
     // (Owner, Nov 6, §295) Their testers read "“<test>” is paused": each test no other cause (a hold, the team's pause) was pausing already.
     if (!u.holdStartedAt) await tellTestersPaused((await db.test.findMany({ where: { developerId: userId, status: "open", workEndedAt: null, adminPausedAt: null }, select: { id: true } })).map((t) => t.id));
@@ -212,7 +213,8 @@ export async function suspendAccount(adminId: string, userId: string, note: stri
   if (side === "tester" && u.isTester) await removeTester(u, "suspended");
   // (Owner, Nov 6, §313a) The developer side's line names each paused test's closing date (it was this line plus one "<test> is paused and closes on …" per test).
   const closing = side === "developer" && u.isDeveloper ? await (await import("./pauseClosure")).pausedClosingWords(userId) : null;
-  await notify(u.email, closing ? `${sidePausedLine(side)}: ${closing} unless your account is cleared` : sidePausedLine(side), [`${sidePausedLine(side)}. Contact us in Settings if you think this is a mistake.`], "/app/help", { side, always: true, group: "admindecision" });
+  const invites = (await import("./invites")).invitesClosedTail(invitesClosed); // (§390 d)
+  await notify(u.email, `${closing ? `${sidePausedLine(side)}: ${closing} unless your account is cleared` : sidePausedLine(side)}${invites ? `; ${invites}` : ""}`, [`${sidePausedLine(side)}. Contact us in Settings if you think this is a mistake.`], "/app/help", { side, always: true, group: "admindecision" });
   return { ok: true, side };
 }
 
@@ -436,7 +438,7 @@ export async function pauseTest(adminId: string, testId: string, note: string, s
   const from = checkFrom(seen);
   if (from) stopIfChanged("Pause", await testChangesSince(testId, adminId, from, seen?.tab));
   check?.();
-  await markPaused({ id: testId }); // (batch 9) one clock per paused test: kept if a hold or suspension already paused it
+  const invitesClosed = await markPaused({ id: testId }); // (batch 9) one clock per paused test: kept if a hold or suspension already paused it
   // (Batch 34 §1) Two admins at once: the test is locked, so the second reads the first's pause and is refused naming them.
   await db.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${testId} FOR UPDATE`;
@@ -458,7 +460,8 @@ export async function pauseTest(adminId: string, testId: string, note: string, s
   // (Owner, Nov 6, §310b) The developer's line names the closing date in the paused line's words ("The team paused “…”: it closes on <date> unless the team lifts
   // the pause"). (§313a) There is no separate per-test paused line any more.
   const closes = (await import("./pauseClosure")).closesUnless(dev, await db.test.findUniqueOrThrow({ where: { id: testId } }), "team"); // (§390 c) the team's pause leads
-  const pausedLine = `The team paused “${t.title}”${closes ? `: it ${closes}` : ""}`;
+  // (Owner, Nov 11, §390 d) And how many open invites the pause closed: "…: it closes on Dec 5 unless the team lifts the pause; 3 open invites were closed".
+  const pausedLine = withTail(`The team paused “${t.title}”${closes ? `: it ${closes}` : ""}`, (await import("./invites")).invitesClosedTail(invitesClosed));
   // (Owner, Nov 6, §295) Its testers read "“<test>” is paused" (never why), unless the developer's own hold or suspension was pausing it already.
   if (!dev.holdStartedAt && !dev.devSuspendedAt) await tellTestersPaused([testId]);
   // (Batch 15 section 20) Never the note in the bell line: it says what happened; the note is on the test page. (Owner, Nov 6, §299) The longer text below is
@@ -549,7 +552,7 @@ export async function adminStopTest(testId: string, note: string, adminId: strin
   await (await import("./invites")).tellInvitesClosed(invitesClosed); // (batch 30 §6) never who
   for (const c of cs) await notify(c.tester.email, `“${c.test.title}” was stopped`, [`“${c.test.title}” was stopped. Work you already sent is still reviewed and paid. Calls ahead are cancelled.`], `/app/sessions/${c.id}`, { group: "tstopped" });
   // (Owner, Nov 11, §390 a) With the calls the stop cancelled: "The team stopped “…”; your call with Ana Silva on … was cancelled".
-  await notify(t.developer.email, withTail(`The team stopped “${t.title}”`, devCallsGoneTail(cancelled)), [`The team stopped “${t.title}”${note ? `: ${note}` : "."}`, "What testers sent still waits for you to pay. Contact us in Settings if you think this is a mistake."], `/app/tests/${testId}`, { always: true, group: "payhold" }); // (batch 29 §33) in the day's "Payments and holds" entry with the hold lines
+  await notify(t.developer.email, withTail(withTail(`The team stopped “${t.title}”`, devCallsGoneTail(cancelled)), (await import("./invites")).invitesClosedTail(invitesClosed.length)) /* (§390 d) */, [`The team stopped “${t.title}”${note ? `: ${note}` : "."}`, "What testers sent still waits for you to pay. Contact us in Settings if you think this is a mistake."], `/app/tests/${testId}`, { always: true, group: "payhold" }); // (batch 29 §33) in the day's "Payments and holds" entry with the hold lines
   return { ok: true };
 }
 

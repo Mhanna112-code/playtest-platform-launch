@@ -935,7 +935,9 @@ export async function stopTest(dev: U, testId: string, body: Record<string, unkn
   // (Batch 17 §15) The reason in full in the email, never in the bell line.
   for (const c of contracts)
     await notify(c.tester.email, `“${c.test.title}” was stopped`, [`${displayName(dev)} stopped “${c.test.title}”: “${reason}”`, "Your work on it has ended. Work you already sent is still reviewed and paid. Calls ahead are cancelled."], `/app/sessions/${c.id}`, { group: "tstopped" });
-  return { stopped: true, testers: contracts.length };
+  // (Owner, Nov 11, §390 d) The developer's own Stop says how many open invites it closed (its done line): "You stopped the test; 3 open invites were closed."
+  const invites = (await import("./invites")).invitesClosedTail(invitesClosed.length);
+  return { stopped: true, testers: contracts.length, ...(invites ? { done: `${withTail("You stopped the test", invites)}.` } : {}) };
 }
 
 /**

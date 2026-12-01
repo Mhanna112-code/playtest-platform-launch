@@ -114,10 +114,11 @@ export function TopPanel(p: { timeZone?: string | null; joinClosedLine?: string;
     // (Batch 15 section 29) A restricted developer's Stop / End early: the dashboard top says it's done.
     // (Owner, Oct 31, batch 35 §72) Only while the account is still restricted: reinstated meanwhile, the page just redraws here with the full view.
     else if (p.doneTo && (action === "stop" || action === "end-early") && (await stillRestricted()))
-      window.location.href = `${p.doneTo}?done=${encodeURIComponent(action === "stop" ? `Done: you stopped ${p.title}.` : `Done: you ended ${endedCount(r.count ?? chosenIds.length)} work on ${p.title}.`)}`;
+      window.location.href = `${p.doneTo}?done=${encodeURIComponent(action === "stop" ? `Done: you stopped ${p.title}.${r.done ? ` ${r.done.replace(/^You stopped the test; /, "").replace(/^./, (x) => x.toUpperCase())}` : ""}` : `Done: you ended ${endedCount(r.count ?? chosenIds.length)} work on ${p.title}.`)}`;
     // (Batch 35 §40, §41) Everything else redraws the page in place; the buttons stay greyed until it has.
     // (§278) Some ticked testers were already out: the done line names whose work ended, their refusal lines beside it.
-    else finish(action === "end-early" && r.gone?.length ? (r.done ?? "") : "");
+    // (§390 d) Stop: how many open invites it closed ("You stopped the test; 3 open invites were closed.").
+    else finish((action === "end-early" && r.gone?.length) || action === "stop" ? (r.done ?? "") : "");
     return true;
   }
 

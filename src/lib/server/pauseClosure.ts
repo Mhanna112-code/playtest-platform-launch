@@ -49,8 +49,9 @@ export async function closePausedTest(testId: string, by: "daily" | "admin", now
   for (const c of cs) await notify(c.tester.email, `“${c.test.title}” ended`, [`“${c.test.title}” ended. Work you already sent is still reviewed and paid. Calls ahead are cancelled.`], `/app/sessions/${c.id}`, { group: "tstopped" });
   // (A system explanation, never a typed reason: it stays in the line.)
   // (Owner, Nov 11, §390 a) With the calls the closure cancelled: "… Your call with Ana Silva on … was cancelled."
-  const callsGone = devCallsGoneTail(cancelled);
-  await notify(t.developer.email, `“${t.title}” was closed. ${reason}${callsGone ? ` ${callsGone.charAt(0).toUpperCase()}${callsGone.slice(1)}.` : ""}`, [`“${t.title}” was closed. ${reason}`, "What testers already sent still waits for you to pay. Contact us in Settings if you think this is a mistake."], `/app/tests/${testId}`, { always: true, group: "payhold" }); // (batch 29 §33) in the day's "Payments and holds" entry with the hold lines
+  // (Owner, Nov 11, §390 d) And how many open invites it closed: "… 3 open invites were closed."
+  const sentence = (x: string) => (x ? ` ${x.charAt(0).toUpperCase()}${x.slice(1)}.` : "");
+  await notify(t.developer.email, `“${t.title}” was closed. ${reason}${sentence(devCallsGoneTail(cancelled))}${sentence((await import("./invites")).invitesClosedTail(invitesClosed.length))}`, [`“${t.title}” was closed. ${reason}`, "What testers already sent still waits for you to pay. Contact us in Settings if you think this is a mistake."], `/app/tests/${testId}`, { always: true, group: "payhold" }); // (batch 29 §33) in the day's "Payments and holds" entry with the hold lines
   return { closed: true, testers: cs.length };
 }
 

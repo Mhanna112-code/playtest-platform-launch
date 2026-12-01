@@ -587,3 +587,6 @@ export async function testerRowInfo(devId: string, test: { devices: string[]; la
     return [p.id, { seen: { devices: p.profile?.devices ?? [], languages: p.profile?.languages ?? [], rating: r.n ? Number(r.avg.toFixed(1)) : null }, tag: doesntListTag(test, p.profile), detail: withYouText(r.n ? r.avg : null, new Set(together.filter((c) => c.testerId === p.id).map((c) => c.testId)).size, r.n), changedAt: new Date(Math.max(p.profile?.updatedAt.getTime() ?? 0, r.at?.getTime() ?? 0)).toISOString() }] as const;
   })));
 }
+
+/** (Owner, Nov 11, §390 d) The developer's pause / stop / closure line says how many open invites it closed: "3 open invites were closed" (none: ""). */
+export const invitesClosedTail = (n: number) => (n <= 0 ? "" : n === 1 ? "1 open invite was closed" : `${n} open invites were closed`);
